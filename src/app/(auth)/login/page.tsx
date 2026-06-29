@@ -40,11 +40,11 @@ export default function LoginPage() {
           <form action={formAction} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Usuário</Label>
-              <Input id="email" name="email" type="text" required autoComplete="username" placeholder="voce@buildflow.com" />
+              <Input id="email" name="email" type="text" required autoComplete="username" placeholder="Digite seu usuário" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
-              <Input id="password" name="password" type="password" required autoComplete="current-password" placeholder="••••••" />
+              <Input id="password" name="password" type="password" required autoComplete="current-password" placeholder="Digite sua senha" />
             </div>
             {state && !state.ok && (
               <div className="animate-slide-down rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
