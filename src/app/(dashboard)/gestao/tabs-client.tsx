@@ -141,7 +141,7 @@ function OperationPanel({ rows }: { rows: OpRow[] }) {
       </div>
       <CsvImport
         title="Importar operações via CSV"
-        description="Cadastre várias operações de uma vez enviando um arquivo."
+        description="Cadastre várias operações de uma vez enviando um arquivo .csv."
         columns={["codigo", "nome"]}
         sample={["OP01", "Venda balcão"]}
         action={importOperationsCsv}
@@ -319,9 +319,9 @@ function CustomersPanel({ customers }: { customers: ClienteRow[] }) {
     <div className="space-y-4">
       <CsvImport
         title="Importar clientes via CSV"
-        description="Cadastre várias clientes de uma vez enviando um arquivo."
+        description="Cadastro rápido em lote. Colunas: código e nome. Código duplicado é ignorado."
         columns={["codigo", "nome"]}
-        sample={["Loja do João", "12345678000190", "85999990000", "joao@loja.com", "Rua A, 100", "Fortaleza", "Cliente atacado"]}
+        sample={["CLI-0001", "Loja do João"]}
         action={importCustomersCsv}
       />
       <ClientesManager customers={customers} />

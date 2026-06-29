@@ -65,7 +65,7 @@ export function NovoPedidoForm({
     start(async () => {
       const r = await shrinkImageToBase64(file, { maxDimension: 1600, quality: 0.8 });
       if (r.error) { setProofError(r.error); setProofBase64(""); return; }
-      setProofBase64(r.base64);
+      setProofBase64(r.base64 ?? "");
     });
   }
 

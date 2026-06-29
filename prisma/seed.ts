@@ -89,11 +89,11 @@ async function main() {
 
   // ---- Clientes ----
   const clientes = [
-    { name: "Construtora Alfa", document: "11222333000144", city: "Fortaleza", address: "Av. Beira Mar, 1000", phone: "85999990000" },
-    { name: "Obras Beta Ltda", document: "55666777000188", city: "Caucaia", address: "Rua das Flores, 250", phone: "85988887777" },
+    { code: "CLI-0001", name: "Construtora Alfa" },
+    { code: "CLI-0002", name: "Obras Beta Ltda" },
   ];
   for (const c of clientes) {
-    await prisma.customer.upsert({ where: { document: c.document }, update: {}, create: c });
+    await prisma.customer.upsert({ where: { code: c.code }, update: {}, create: c });
   }
 
   console.log("Seed v2 concluido. Login: senha padrao 123456");

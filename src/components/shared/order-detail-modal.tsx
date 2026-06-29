@@ -73,7 +73,7 @@ export function OrderDetailModal({
     (async () => {
       const r = await shrinkImageToBase64(file, { maxDimension: 1600, quality: 0.8 });
       if (r.error) { setNfBusy(false); setNfMsg({ ok: false, text: r.error }); return; }
-      const res = await uploadInvoiceBase64({ orderId: order.id, base64: r.base64 });
+      const res = await uploadInvoiceBase64({ orderId: order.id, base64: r.base64 ?? "" });
       setNfBusy(false);
       if (res.ok) {
         setNfMsg({ ok: true, text: "Nota Fiscal anexada." });
