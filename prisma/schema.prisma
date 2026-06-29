@@ -1,0 +1,386 @@
+// Build.Flow - schema v2 (PostgreSQL)
+// Regra de ouro: imagens/arquivos NUNCA viram blob. So o caminho (String).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================================================
+// USUARIOS / PERFIS
+// ===========================================================================
+
+enum Role {
+  GESTAO
+  VENDAS
+  FINANCEIRO
+  LOGISTICA
+  MOTORISTA
+}
+
+// Modelo de venda do vendedor: trava o escopo de tudo que ele vende.
+enum SalesModel {
+  VAREJO
+  ATACADO
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  // Obrigatorio para VENDAS; null para os demais perfis.
+  salesModel SalesModel?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ordersAsSeller Order[]        @relation("OrderSeller")
+  deliveries     Delivery[]     @relation("DeliveryDriver")
+  notifications  Notification[]
+  salesGoals     SalesGoal[]
+
+  @@index([role])
+}
+
+// ===========================================================================
+// CADASTROS DE APOIO (gerenciados pela Gestao)
+// ===========================================================================
+
+model Store {
+  id        String   @id @default(cuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
+
+model OrderType {
+  id        String   @id @default(cuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
+
+model Operation {
+  id        String   @id @default(cuid())
+  code      String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
+
+model ShippingMethod {
+  id        String   @id @default(cuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
+
+model PaymentMethod {
+  id        String   @id @default(cuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
+
+model Bank {
+  id        String   @id @default(cuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  orders Order[]
+}
+
+// CNPJ da empresa (cadastro do Financeiro). Vinculado ao pedido na analise.
+model Cnpj {
+  id        String   @id @default(cuid())
+  // Razao social / apelido para exibir no select.
+  name      String
+  // Numero do CNPJ (somente digitos ou formatado). Unico.
+  document  String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([active])
+}
+
+model PaymentStatusOption {
+  id          String             @id @default(cuid())
+  name        String
+  disposition PaymentDisposition
+  active      Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  orders      Order[]
+}
+
+enum PaymentDisposition {
+  APROVA
+  INTERROMPE
+}
+
+// ===========================================================================
+// CLIENTES
+// ===========================================================================
+
+model Customer {
+  id        String   @id @default(cuid())
+  // Codigo do cliente (unico, obrigatorio).
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([name])
+}
+
+// ===========================================================================
+// PRODUTOS / ESTOQUE
+// ===========================================================================
+
+model Product {
+  id        String   @id @default(cuid())
+  sku       String   @unique
+  name      String
+  price     Decimal  @db.Decimal(10, 2)
+  stock     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems OrderItem[]
+
+  @@index([active])
+}
+
+// ===========================================================================
+// PEDIDOS
+// ===========================================================================
+
+enum OrderStatus {
+  EM_ANALISE
+  AGUARDANDO_IMPRESSAO
+  SEPARANDO
+  PENDENTE
+  CONFERINDO
+  EMBALANDO
+  EMBALADO
+  PROCESSANDO
+  PROCESSADO
+  ENVIADO
+  EM_ROTA
+  ENTREGUE
+  CONCLUIDO
+  ESTORNO
+  ESTORNO_PARCIAL
+  CANCELADO
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  orderNumber   String
+  comandaNumber String?
+  status        OrderStatus @default(EM_ANALISE)
+
+  store       Store     @relation(fields: [storeId], references: [id])
+  storeId     String
+  orderType   OrderType @relation(fields: [orderTypeId], references: [id])
+  orderTypeId String
+  operation   Operation @relation(fields: [operationId], references: [id])
+  operationId String
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId String
+
+  seller   User   @relation("OrderSeller", fields: [sellerId], references: [id])
+  sellerId String
+
+  paymentMethod    PaymentMethod  @relation(fields: [paymentMethodId], references: [id])
+  paymentMethodId  String
+  shippingMethod   ShippingMethod @relation(fields: [shippingMethodId], references: [id])
+  shippingMethodId String
+
+  // Banco da transação (selecionado no formulário de vendas).
+  bank   Bank?   @relation(fields: [bankId], references: [id])
+  bankId String?
+
+  paymentStatus   PaymentStatusOption? @relation(fields: [paymentStatusId], references: [id])
+  paymentStatusId String?
+
+  // CNPJ vinculado ao pedido pelo Financeiro (obrigatorio antes de aprovar).
+  cnpj   Cnpj?   @relation(fields: [cnpjId], references: [id])
+  cnpjId String?
+
+  // Codigo de rastreio informado na transicao para PROCESSADO (opcional).
+  trackingCode String?
+
+  // Vinculo opcional a uma campanha (meta por volume de itens).
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+  campaignId String?
+  // Quantidade de itens que este pedido contribui para a campanha.
+  itemCount  Int       @default(0)
+
+  orderValue Decimal @default(0) @db.Decimal(10, 2)
+  freight    Decimal @default(0) @db.Decimal(10, 2)
+  total      Decimal @default(0) @db.Decimal(10, 2)
+
+  paymentProofPath String?
+  invoicePath      String?
+
+  notes String?
+
+  items    OrderItem[]
+  delivery Delivery?
+  history  OrderStatusHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([sellerId])
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([campaignId])
+  @@index([cnpjId])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  product   Product @relation(fields: [productId], references: [id])
+  productId String
+  quantity  Int
+  unitPrice Decimal @db.Decimal(10, 2)
+
+  @@index([orderId])
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(cuid())
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  status    OrderStatus
+  changedBy String?
+  note      String?
+  createdAt DateTime    @default(now())
+
+  @@index([orderId])
+}
+
+// ===========================================================================
+// ENTREGA / MOTORISTAS
+// ===========================================================================
+
+enum DeliveryStatus {
+  AGUARDANDO
+  ATRIBUIDA
+  EM_ROTA
+  ENTREGUE
+  FALHOU
+}
+
+model Delivery {
+  id     String         @id @default(cuid())
+  status DeliveryStatus @default(AGUARDANDO)
+
+  order   Order  @relation(fields: [orderId], references: [id])
+  orderId String @unique
+
+  driver   User?   @relation("DeliveryDriver", fields: [driverId], references: [id])
+  driverId String?
+
+  assignedAt  DateTime?
+  startedAt   DateTime?
+  deliveredAt DateTime?
+  failReason  String?
+
+  proofs Proof[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([driverId])
+}
+
+model Proof {
+  id         String   @id @default(cuid())
+  delivery   Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  deliveryId String
+  filePath   String
+  width      Int?
+  height     Int?
+  sizeBytes  Int?
+  createdAt  DateTime @default(now())
+
+  @@index([deliveryId])
+}
+
+// ===========================================================================
+// NOTIFICACOES
+// ===========================================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  message   String
+  orderId   String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+// ===========================================================================
+// METAS E CAMPANHAS (Rank de Vendas)
+// ===========================================================================
+
+// Meta financeira individual (por usuario, mes/ano, escopo).
+model SalesGoal {
+  id        String     @id @default(cuid())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  amount    Decimal    @db.Decimal(12, 2) // meta em R$ (usada quando Geral)
+  // Meta por quantidade de itens. Usada quando a meta é vinculada a Campanha.
+  targetItems Int?
+  month     Int        // 1-12
+  year      Int
+  scope     SalesModel // ATACADO ou VAREJO
+  // null = meta Geral; preenchido = meta vinculada a uma Campanha.
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignId String?
+  createdAt DateTime   @default(now())
+
+  @@unique([userId, month, year, scope])
+  @@index([month, year])
+  @@index([campaignId])
+}
+
+// Campanha: apenas o nome (cadastro simples). As metas vinculadas
+// a ela ficam em SalesGoal (campo campaignId).
+model Campaign {
+  id         String   @id @default(cuid())
+  name       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  orders Order[]
+  goals  SalesGoal[]
+}

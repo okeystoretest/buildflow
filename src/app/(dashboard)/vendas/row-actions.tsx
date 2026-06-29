@@ -1,0 +1,93 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Pencil, Trash2 } from "lucide-react";
+import { deleteOrder } from "@/lib/actions/orders";
+import { Button } from "@/components/ui/button";
+
+/**
+ * Ações de pedido na tela de Vendas (Editar / Excluir).
+ * Renderizado APENAS para usuários GESTAO (controle feito no page.tsx server-side).
+ */
+export function VendaRowActions({
+  orderId,
+  orderNumber,
+}: {
+  orderId: string;
+  orderNumber: string;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function remove() {
+    setError(null);
+    start(async () => {
+      const res = await deleteOrder(orderId);
+      if (res.ok) {
+        setConfirming(false);
+        router.refresh();
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-end gap-1.5">
+        <Button asChild variant="outline" size="icon" className="h-8 w-8" title="Editar pedido">
+          <Link href={`/vendas/${orderId}/editar`}>
+            <Pencil className="h-4 w-4" />
+          </Link>
+        </Button>
+        <Button
+          variant="destructive"
+          size="icon"
+          className="h-8 w-8"
+          title="Excluir pedido"
+          onClick={() => setConfirming(true)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {confirming && (
+        <Modal onClose={() => setConfirming(false)}>
+          <h2 className="mb-1 text-lg font-bold">Excluir pedido</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Tem certeza que deseja excluir o pedido {orderNumber}? Esta ação não pode ser desfeita.
+          </p>
+          {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirming(false)} disabled={pending}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={remove} disabled={pending}>
+              {pending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}

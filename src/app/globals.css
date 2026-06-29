@@ -1,0 +1,118 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ===== LIGHT MODE ===== off-white suave, menos brilho/cansaço ===== */
+    --background: 220 24% 95%;      /* fundo levemente azulado, não branco */
+    --foreground: 217 30% 20%;      /* texto escuro suave, não preto */
+    --card: 220 30% 98.5%;          /* card off-white (não branco puro) */
+    --card-foreground: 217 30% 20%;
+    --popover: 220 30% 98.5%;
+    --popover-foreground: 217 30% 20%;
+
+    --primary: 204 68% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 18% 91%;
+    --secondary-foreground: 217 30% 22%;
+    --muted: 220 18% 91%;
+    --muted-foreground: 217 12% 45%;
+    --accent: 204 55% 92%;
+    --accent-foreground: 204 70% 28%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 16% 85%;
+    --input: 220 16% 85%;
+    --ring: 204 68% 50%;
+    --radius: 0.625rem;
+
+    --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  .dark {
+    /* ===== DARK MODE ===== cinza-azulado profundo, conforto de leitura */
+    --background: 222 28% 9%;       /* #11151f near-navy, nao preto puro */
+    --foreground: 215 20% 89%;      /* texto suave, nao branco puro */
+    --card: 222 24% 13%;            /* #181d29 superficie elevada */
+    --card-foreground: 215 20% 89%;
+    --popover: 222 24% 13%;
+    --popover-foreground: 215 20% 89%;
+
+    --primary: 204 75% 58%;         /* azul levemente mais claro p/ contraste */
+    --primary-foreground: 222 28% 9%;
+    --secondary: 222 18% 18%;
+    --secondary-foreground: 215 20% 89%;
+    --muted: 222 18% 18%;
+    --muted-foreground: 217 14% 60%;
+    --accent: 204 60% 20%;
+    --accent-foreground: 204 75% 80%;
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 16% 22%;
+    --input: 222 16% 22%;
+    --ring: 204 75% 58%;
+  }
+
+  * { @apply border-border; }
+
+  html { color-scheme: light dark; }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Transicao suave ao trocar de tema */
+  body, .theme-transition * {
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease;
+  }
+
+  .font-data { font-family: var(--font-mono); font-feature-settings: "tnum"; }
+}
+
+@layer utilities {
+  /* ===== ANIMACOES ===== */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slide-down {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-in { animation: fade-in 0.3s ease both; }
+  .animate-fade-in-up { animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .animate-scale-in { animation: scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .animate-slide-down { animation: slide-down 0.2s ease both; }
+
+  /* stagger: aplicar delay incremental via style inline */
+  .card-hover {
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
