@@ -69,7 +69,7 @@ export function EditarPedidoForm({
 
       <div className="space-y-1.5">
         <Label>Observações</Label>
-        <Input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="Opcional" />
+        <Input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="Escreva suas observações aqui..." />
       </div>
 
       <p className="text-sm text-muted-foreground">Total: <span className="font-data font-semibold text-foreground">R$ {total.toFixed(2)}</span></p>

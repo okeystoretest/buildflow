@@ -229,17 +229,17 @@ function UsersPanel({ users }: { users: UserRow[] }) {
           <div className="space-y-1">
             <Label>Nome</Label>
             <Input placeholder="Ex: Maria Souza" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-            <FieldHint>Nome completo que aparece nos relatórios.</FieldHint>
+            <FieldHint>Nome completo do usuário.</FieldHint>
           </div>
           <div className="space-y-1">
             <Label>Usuário</Label>
             <Input placeholder="Ex: maria@buildflow.com" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-            <FieldHint>É o login de acesso ao sistema (deve ser único).</FieldHint>
+            <FieldHint>Login de acesso ao sistema (deve ser único).</FieldHint>
           </div>
           <div className="space-y-1">
             <Label>Senha</Label>
             <Input placeholder="Mínimo 6 caracteres" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
-            <FieldHint>O usuário pode alterar depois com você.</FieldHint>
+            <FieldHint>Senha de acesso ao sistema (mínimo 6 caracteres).</FieldHint>
           </div>
           <div className="space-y-1">
             <Label>Perfil</Label>
@@ -251,7 +251,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
               <option value="LOGISTICA">Logística</option>
               <option value="MOTORISTA">Motorista</option>
             </select>
-            <FieldHint>Define o que o usuário pode acessar.</FieldHint>
+            <FieldHint>Define quais funcionalidades o usuário pode acessar.</FieldHint>
           </div>
           {f.role === "VENDAS" && (
             <div className="space-y-1">

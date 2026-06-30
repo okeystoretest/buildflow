@@ -69,7 +69,7 @@ export function RankBoard({ initial }: { initial: RankData }) {
 
       {/* 3 colunas de ranking */}
       <div className="grid min-h-0 grid-cols-1 gap-2.5 lg:grid-cols-3" style={{ flex: "1 1 55%" }}>
-        <RankPanel title="Progresso Geral de Vendedores" rows={data.rankGeral} showTrophy hideValue />
+        <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue />
         <RankPanel title="Varejo" rows={data.rankVarejo} showTrophy compact />
         <RankPanel title="Atacado" rows={data.rankAtacado} showTrophy compact />
       </div>
@@ -78,7 +78,7 @@ export function RankBoard({ initial }: { initial: RankData }) {
       <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3" style={{ flex: "1 1 45%" }}>
         <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-base font-semibold">Performance em</span>
+            <span className="text-base font-semibold">Performance na</span>
             {data.campaignPerf.length > 0 && (
               <select className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
                 value={campSel} onChange={(e) => setCampSel(e.target.value)}>

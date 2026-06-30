@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition, useRef, useCallback, useEffect } from "react";
+import { useState, useTransition, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Maximize2, Minimize2, ChevronDown } from "lucide-react";
+import { Maximize2, Minimize2, ChevronDown, Search } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
 import { STATUS_LABEL, STATUS_STYLE, nextStatus } from "@/lib/order-flow";
 import { OrderCard, type OrderCardData } from "@/components/shared/order-card";
@@ -31,11 +31,22 @@ export function KanbanBoard({
 }) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
+  // Busca rápida por comanda, nº do pedido, cliente ou vendedor.
+  const [query, setQuery] = useState("");
+  const visibleCards = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter((c) =>
+      [c.comandaNumber, c.orderNumber, c.customerName, c.sellerName]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [query, cards]);
   // Coluna cujas comandas excedentes (além das 3 primeiras) estão sendo exibidas no modal.
   const [overflowStatus, setOverflowStatus] = useState<OrderStatus | null>(null);
   const [isFull, setIsFull] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const byStatus = (status: OrderStatus) => cards.filter((c) => c.status === status);
+  const byStatus = (status: OrderStatus) => visibleCards.filter((c) => c.status === status);
 
   // ---- Tela cheia (mesma lógica do Rank de Vendas) ----
   const toggleFull = useCallback(async () => {
@@ -137,7 +148,16 @@ export function KanbanBoard({
 
   return (
     <div ref={rootRef} className={wrapClass}>
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <div className="relative w-full max-w-xs">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <input
+            className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-sm"
+            placeholder="Buscar comanda, pedido ou cliente..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
         <Button variant="outline" size="sm" onClick={toggleFull}>
           {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           <span className="hidden sm:inline">{isFull ? "Sair da tela cheia" : "Tela cheia"}</span>

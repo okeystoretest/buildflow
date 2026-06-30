@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatBRL } from "@/lib/utils";
 import { shrinkImageToBase64 } from "@/lib/client-image";
+import { isTroca } from "@/lib/validations/order";
 
 interface Opt { id: string; name: string; }
 
@@ -71,6 +72,10 @@ export function NovoPedidoForm({
 
   const total = (orderValue || 0) + (freight || 0);
 
+  // Tipo "Troca" dispensa o comprovante de pagamento (anexo opcional).
+  const orderTypeName = orderTypes.find((t) => t.id === orderTypeId)?.name ?? "";
+  const trocaSemAnexo = isTroca(orderTypeName);
+
   const filteredCustomers = useMemo(() => {
     const q = customerSearch.toLowerCase().trim();
     if (!q) return customers.slice(0, 6);
@@ -87,6 +92,7 @@ export function NovoPedidoForm({
         paymentMethodId, shippingMethodId, orderValue, freight,
         bankId,
         notes: notes || undefined,
+        orderTypeName,
         campaignId: inCampaign ? campaignId : undefined,
         itemCount: inCampaign ? itemCount : 0,
         paymentProofBase64: proofBase64 || undefined,
@@ -97,9 +103,10 @@ export function NovoPedidoForm({
   }
 
   const campaignOk = !inCampaign || (campaignId && itemCount > 0);
-  // Anexo obrigatório: sem comprovante, não salva.
+  // Anexo obrigatório, EXCETO quando o tipo for "Troca".
   const temAnexo = !!proofBase64;
-  const podeEnviar = orderNumber && storeId && orderTypeId && operationId && customerId && paymentMethodId && shippingMethodId && bankId && orderValue > 0 && campaignOk && temAnexo;
+  const anexoOk = trocaSemAnexo || temAnexo;
+  const podeEnviar = orderNumber && storeId && orderTypeId && operationId && customerId && paymentMethodId && shippingMethodId && bankId && orderValue > 0 && campaignOk && anexoOk;
 
   return (
     <div className="space-y-5">
@@ -130,7 +137,7 @@ export function NovoPedidoForm({
             <div className="relative">
               <Input placeholder="Buscar cliente..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
               {customerSearch && (
-                <div className="absolute z-10 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg">
+                <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-xl">
                   {filteredCustomers.map((c) => (
                     <button key={c.id} className="block w-full px-3 py-2 text-left text-sm hover:bg-secondary"
                       onClick={() => { setCustomerId(c.id); setCustomerSearch(""); }}>{c.name}</button>
@@ -185,19 +192,22 @@ export function NovoPedidoForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Comprovante de pagamento *</Label>
+        <Label>Comprovante de pagamento {trocaSemAnexo ? "(opcional p/ Troca)" : "*"}</Label>
         <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
           onChange={onProof}
           className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-vendas file:px-4 file:py-2 file:text-sm file:font-medium file:text-vendas-fg hover:file:opacity-90" />
         <p className="text-xs text-muted-foreground">
-          Obrigatório. A imagem é convertida para .webp no servidor. {proofName && <span className="text-foreground">Selecionado: {proofName}</span>}
+          {trocaSemAnexo
+            ? "Tipo \"Troca\": anexo não é exigido."
+            : "Envio de comprovante obrigatório."}{" "}
+          {proofName && <span className="text-foreground">Selecionado: {proofName}</span>}
         </p>
         {proofError && <p className="text-sm text-destructive">{proofError}</p>}
       </div>
 
       <div className="space-y-1.5">
         <Label>Observações</Label>
-        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" />
+        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Escreva suas observações aqui..." />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">

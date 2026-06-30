@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { formatBRL } from "@/lib/utils";
 import { BackButton } from "@/components/shared/back-button";
 import { HistoricoFiltros } from "./filtros-client";
+import { HistoricoList, type HistoricoItem } from "./historico-list";
 
 function firstDayOfMonth(): string {
   const d = new Date();
@@ -42,6 +43,19 @@ export default async function HistoricoPage({
     orderBy: { updatedAt: "desc" },
   });
 
+  const items: HistoricoItem[] = orders.map((o) => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    comandaNumber: o.comandaNumber,
+    customerName: o.customer.name,
+    total: formatBRL(o.total.toString()),
+    driverName: o.delivery?.driver?.name ?? null,
+    paymentProofPath: o.paymentProofPath,
+    invoicePath: o.invoicePath,
+    trackingCode: o.trackingCode,
+    proofs: (o.delivery?.proofs ?? []).map((p) => ({ id: p.id, filePath: p.filePath })),
+  }));
+
   return (
     <div className="space-y-6">
       <BackButton href="/vendas" />
@@ -57,35 +71,7 @@ export default async function HistoricoPage({
         <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido no período/filtro.</CardContent></Card>
       )}
 
-      {orders.map((o) => (
-        <Card key={o.id} className="animate-fade-in-up">
-          <CardHeader>
-            <CardTitle className="text-base">
-              Pedido {o.orderNumber}{o.comandaNumber && ` · Comanda ${o.comandaNumber}`} — {o.customer.name}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p className="font-data">Total: {formatBRL(o.total.toString())}</p>
-            <p>Motorista: {o.delivery?.driver?.name ?? "—"}</p>
-            <div className="flex flex-wrap gap-4">
-              {o.paymentProofPath && <a href={o.paymentProofPath} target="_blank" rel="noreferrer" className="text-primary underline">Comprovante pagamento</a>}
-              {o.invoicePath && <a href={o.invoicePath} target="_blank" rel="noreferrer" className="text-primary underline">Nota Fiscal</a>}
-            </div>
-            {o.delivery && o.delivery.proofs.length > 0 && (
-              <div>
-                <p className="mb-1 font-medium">Comprovante de entrega:</p>
-                <div className="flex gap-2">
-                  {o.delivery.proofs.map((p: { id: string; filePath: string }) => (
-                    <a key={p.id} href={p.filePath} target="_blank" rel="noreferrer">
-                      <img src={p.filePath} alt="entrega" className="h-28 w-28 rounded-lg object-cover" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+      <HistoricoList orders={items} />
     </div>
   );
 }

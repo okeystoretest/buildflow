@@ -16,9 +16,21 @@ export const createOrderSchema = z.object({
   // Campanha opcional + quantidade de itens (volume) quando vinculado.
   campaignId: z.string().optional(),
   itemCount: z.coerce.number().int().nonnegative().default(0),
-  // Comprovante de pagamento (data URL base64) — OBRIGATÓRIO. Processado p/ .webp.
-  paymentProofBase64: z.string().min(1, "Anexe o comprovante de pagamento."),
-});
+  // Nome do tipo de pedido (ex.: "Troca"). Usado para a regra de anexo.
+  orderTypeName: z.string().optional(),
+  // Comprovante de pagamento (data URL base64). Opcional no schema;
+  // a obrigatoriedade é aplicada condicionalmente abaixo (dispensada na Troca).
+  paymentProofBase64: z.string().optional(),
+})
+  .refine(
+    (d) => isTroca(d.orderTypeName) || !!(d.paymentProofBase64 && d.paymentProofBase64.length > 0),
+    { message: "Anexe o comprovante de pagamento.", path: ["paymentProofBase64"] },
+  );
+
+// "Troca" dispensa anexo (NF e comprovante). Comparação tolerante a acentos/caixa.
+export function isTroca(orderTypeName?: string | null): boolean {
+  return (orderTypeName ?? "").trim().toLowerCase() === "troca";
+}
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 

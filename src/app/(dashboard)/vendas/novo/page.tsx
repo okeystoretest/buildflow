@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackButton } from "@/components/shared/back-button";
+import { sortOperationsByCode } from "@/lib/utils";
 import { NovoPedidoForm } from "./form";
 
 export default async function NovoPedidoPage() {
@@ -13,7 +14,7 @@ export default async function NovoPedidoPage() {
       prisma.customer.findMany({ orderBy: { name: "asc" } }),
       prisma.store.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.orderType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-      prisma.operation.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+      prisma.operation.findMany({ where: { active: true } }),
       prisma.paymentMethod.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.shippingMethod.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.bank.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
@@ -35,7 +36,7 @@ export default async function NovoPedidoPage() {
             customers={customers.map((c) => ({ id: c.id, name: c.name }))}
             stores={stores.map((s) => ({ id: s.id, name: s.name }))}
             orderTypes={orderTypes.map((t) => ({ id: t.id, name: t.name }))}
-            operations={operations.map((o) => ({ id: o.id, name: `${o.code} - ${o.name}` }))}
+            operations={sortOperationsByCode(operations).map((o) => ({ id: o.id, name: `${o.code} - ${o.name}` }))}
             paymentMethods={paymentMethods.map((p) => ({ id: p.id, name: p.name }))}
             shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name }))}
             banks={banks.map((b) => ({ id: b.id, name: b.name }))}
