@@ -353,6 +353,11 @@ model Notification {
 // ===========================================================================
 
 // Meta financeira individual (por usuario, mes/ano, escopo).
+// IMPORTANTE: a unicidade NAO usa @@unique aqui porque o Prisma nao suporta
+// indice unico PARCIAL (com WHERE). A regra correta vive na migration SQL:
+//   - Meta GERAL    (campaignId NULL):     unica por (user, mes, ano, escopo)
+//   - Meta CAMPANHA (campaignId NOT NULL): unica por (user, mes, ano, escopo, campanha)
+// Assim a Geral e as varias metas de Campanha convivem sem se sobrescrever.
 model SalesGoal {
   id        String     @id @default(cuid())
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -368,7 +373,7 @@ model SalesGoal {
   campaignId String?
   createdAt DateTime   @default(now())
 
-  @@unique([userId, month, year, scope])
+  @@index([userId, month, year])
   @@index([month, year])
   @@index([campaignId])
 }

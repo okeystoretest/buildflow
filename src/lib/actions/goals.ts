@@ -9,6 +9,12 @@ import type { SalesModel } from "@prisma/client";
 // ===========================================================================
 // METAS FINANCEIRAS (SalesGoal)
 // Meta Geral (campaignId = null) ou vinculada a uma Campanha ativa.
+//
+// REGRA: Geral e Campanhas convivem por (user, mes, ano, escopo).
+//  - Geral:    unica por (user, mes, ano, escopo)            -> campaignId NULL
+//  - Campanha: unica por (user, mes, ano, escopo, campanha)  -> campaignId NOT NULL
+// Por isso a busca da meta existente SEMPRE considera o campaignId. Antes ela
+// ignorava a campanha e por isso uma meta de campanha sobrescrevia a Geral.
 // ===========================================================================
 
 export async function createSalesGoal(args: {
@@ -24,6 +30,7 @@ export async function createSalesGoal(args: {
     await requireRoleAction(["GESTAO"]);
     if (!args.userId) return actionError("Selecione o vendedor.");
     if (args.month < 1 || args.month > 12) return actionError("Mês inválido.");
+    if (!(args.year > 2000)) return actionError("Ano inválido.");
 
     const campaignId = args.campaignId || null;
 
@@ -45,27 +52,48 @@ export async function createSalesGoal(args: {
       if (!(amount > 0)) return actionError("Informe um valor de meta válido.");
     }
 
-    // upsert pela chave unica (user, mes, ano, escopo)
+    // Busca a meta existente considerando o campaignId. Isto e o conserto:
+    //  - Geral    -> procura registro com o MESMO campaignId NULL.
+    //  - Campanha -> procura registro com o MESMO campaignId daquela campanha.
+    // Uma nao acha a outra; portanto nao se sobrescrevem.
     const existing = await prisma.salesGoal.findFirst({
-      where: { userId: args.userId, month: args.month, year: args.year, scope: args.scope },
+      where: {
+        userId: args.userId,
+        month: args.month,
+        year: args.year,
+        scope: args.scope,
+        campaignId, // null para Geral, id para Campanha
+      },
     });
+
     if (existing) {
+      // Atualiza apenas a meta daquele tipo (mesma campanha ou a Geral).
       await prisma.salesGoal.update({
         where: { id: existing.id },
-        data: { amount, targetItems, campaignId },
+        data: { amount, targetItems },
       });
     } else {
       await prisma.salesGoal.create({
         data: {
-          userId: args.userId, amount, targetItems,
-          month: args.month, year: args.year, scope: args.scope, campaignId,
+          userId: args.userId,
+          amount,
+          targetItems,
+          month: args.month,
+          year: args.year,
+          scope: args.scope,
+          campaignId,
         },
       });
     }
+
     revalidatePath("/gestao");
     revalidatePath("/dashboard");
     return actionOk(undefined);
   } catch (err) {
+    // P2002 = violacao de indice unico (corrida/concorrencia). Mensagem clara.
+    if (err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2002") {
+      return actionError("Já existe uma meta desse tipo para esse vendedor neste período.");
+    }
     return actionError(err instanceof Error ? err.message : "Erro ao salvar meta.");
   }
 }
