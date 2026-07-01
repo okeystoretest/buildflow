@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   createSimple, toggleSimple, renameSimple, deleteSimple,
@@ -40,6 +40,8 @@ export function GestaoTabs(props: {
   sellers: SellerOpt[]; goals: GoalRow[]; campaigns: CampaignRow[]; activeCampaigns: CampaignOpt[];
   customers: ClienteRow[];
   currentMonth: number; currentYear: number;
+  // Periodo das metas exibidas (pode ser um mes passado no modo historico).
+  goalPeriodMonth: number; goalPeriodYear: number; isCurrentGoalPeriod: boolean;
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Usuários");
 
@@ -56,7 +58,7 @@ export function GestaoTabs(props: {
 
       {tab === "Usuários" && <UsersPanel users={props.users} />}
       {tab === "Clientes" && <CustomersPanel customers={props.customers} />}
-      {tab === "Metas" && <GoalsPanel sellers={props.sellers} goals={props.goals} activeCampaigns={props.activeCampaigns} month={props.currentMonth} year={props.currentYear} />}
+      {tab === "Metas" && <GoalsPanel sellers={props.sellers} goals={props.goals} activeCampaigns={props.activeCampaigns} month={props.currentMonth} year={props.currentYear} periodMonth={props.goalPeriodMonth} periodYear={props.goalPeriodYear} isCurrentPeriod={props.isCurrentGoalPeriod} />}
       {tab === "Campanhas" && <CampaignsPanel campaigns={props.campaigns} />}
       {tab === "Lojas" && <SimplePanel entity="store" rows={props.stores} label="loja" />}
       {tab === "Tipos de Pedido" && <SimplePanel entity="orderType" rows={props.orderTypes} label="tipo de pedido" />}
@@ -233,7 +235,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
           </div>
           <div className="space-y-1">
             <Label>Usuário</Label>
-            <Input placeholder="Ex: maria@buildflow.com" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+            <Input placeholder="Ex: Maria#BF" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
             <FieldHint>Login de acesso ao sistema (deve ser único).</FieldHint>
           </div>
           <div className="space-y-1">
@@ -276,7 +278,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
         title="Importar usuários via CSV"
         description="Cadastro em lote. Perfil aceita: Gestao, Vendas, Financeiro, Logistica, Motorista. Modelo (Varejo/Atacado) só para Vendas."
         columns={["nome", "usuario", "senha", "perfil", "modelo"]}
-        sample={["Maria Souza", "maria@buildflow.com", "senha123", "Vendas", "Varejo"]}
+        sample={["Maria Souza", "Maria#bBF", "senha123", "Vendas", "Varejo"]}
         action={importUsersCsv}
       />
 
@@ -331,8 +333,9 @@ function CustomersPanel({ customers }: { customers: ClienteRow[] }) {
 
 
 // ===== Painel de Metas financeiras =====
-function GoalsPanel({ sellers, goals, activeCampaigns, month, year }: {
+function GoalsPanel({ sellers, goals, activeCampaigns, month, year, periodMonth, periodYear, isCurrentPeriod }: {
   sellers: SellerOpt[]; goals: GoalRow[]; activeCampaigns: CampaignOpt[]; month: number; year: number;
+  periodMonth: number; periodYear: number; isCurrentPeriod: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -344,6 +347,29 @@ function GoalsPanel({ sellers, goals, activeCampaigns, month, year }: {
   // "" = Geral; senao = id da campanha vinculada.
   const [campaignId, setCampaignId] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Seletores do periodo do HISTORICO (navegam via querystring, sem apagar nada).
+  const [histM, setHistM] = useState(periodMonth);
+  const [histY, setHistY] = useState(periodYear);
+
+  const MESES = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  ];
+  const nowYear = new Date().getFullYear();
+  const anos = Array.from({ length: 5 }, (_, i) => nowYear - i);
+
+  // Ao navegar o historico, o formulario de cadastro acompanha o periodo.
+  useEffect(() => { setM(periodMonth); setY(periodYear); }, [periodMonth, periodYear]);
+
+  function verPeriodo(mm: number, yy: number) {
+    setHistM(mm); setHistY(yy);
+    router.push(`/gestao?goalMonth=${mm}&goalYear=${yy}`);
+  }
+  function voltarAtual() {
+    const now = new Date();
+    verPeriodo(now.getMonth() + 1, now.getFullYear());
+  }
 
   // Geral usa valor (R$); Campanha usa quantidade de itens.
   const isCampaign = campaignId !== "";
@@ -376,6 +402,27 @@ function GoalsPanel({ sellers, goals, activeCampaigns, month, year }: {
         <strong> Campanha</strong> ativa (quantidade de itens). O escopo (Varejo/Atacado)
         segue o Modelo de Venda do vendedor.
       </p>
+
+      {/* Barra de histórico: navega entre meses sem apagar metas antigas. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-secondary/30 p-2">
+        <span className="text-sm font-medium">Período exibido:</span>
+        <select className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+          value={histM} onChange={(e) => verPeriodo(Number(e.target.value), histY)}>
+          {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
+        </select>
+        <select className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+          value={histY} onChange={(e) => verPeriodo(histM, Number(e.target.value))}>
+          {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        {!isCurrentPeriod && (
+          <>
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-500">
+              Histórico
+            </span>
+            <Button variant="outline" size="sm" onClick={voltarAtual}>Voltar ao mês atual</Button>
+          </>
+        )}
+      </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
         <select className="h-10 rounded-lg border border-input bg-background px-2 text-sm"
           value={userId} onChange={(e) => setUserId(e.target.value)}>
@@ -424,7 +471,7 @@ function GoalsPanel({ sellers, goals, activeCampaigns, month, year }: {
               </td>
             </tr>
           ))}
-          {goals.length === 0 && <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">Nenhuma meta no mês atual.</td></tr>}
+          {goals.length === 0 && <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">Nenhuma meta em {String(periodMonth).padStart(2, "0")}/{periodYear}.</td></tr>}
         </tbody>
       </table>
     </div>

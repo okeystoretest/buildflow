@@ -3,10 +3,24 @@ import { requireRole } from "@/lib/auth";
 import { GestaoTabs } from "./tabs-client";
 import { sortOperationsByCode } from "@/lib/utils";
 
-export default async function GestaoPage() {
+export default async function GestaoPage({
+  searchParams,
+}: {
+  searchParams?: { goalMonth?: string; goalYear?: string };
+}) {
   await requireRole(["GESTAO"]);
 
   const now = new Date();
+  const curMonth = now.getMonth() + 1;
+  const curYear = now.getFullYear();
+
+  // Periodo das metas exibidas. Vem da URL (?goalMonth&goalYear) para permitir
+  // consultar historico de meses passados. Sem parametro, usa o mes corrente.
+  const gm = Number(searchParams?.goalMonth);
+  const gy = Number(searchParams?.goalYear);
+  const goalMonth = gm >= 1 && gm <= 12 ? gm : curMonth;
+  const goalYear = gy > 2000 && gy < 3000 ? gy : curYear;
+
   const [users, stores, orderTypes, operations, shippingMethods, goals, campaigns, customers] =
     await Promise.all([
       prisma.user.findMany({ orderBy: { name: "asc" } }),
@@ -15,8 +29,9 @@ export default async function GestaoPage() {
       prisma.operation.findMany({}),
       prisma.shippingMethod.findMany({ orderBy: { name: "asc" } }),
       prisma.salesGoal.findMany({
-        where: { month: now.getMonth() + 1, year: now.getFullYear() },
+        where: { month: goalMonth, year: goalYear },
         include: { user: true, campaign: true },
+        orderBy: [{ user: { name: "asc" } }, { campaignId: "asc" }],
       }),
       prisma.campaign.findMany({ orderBy: { createdAt: "desc" } }),
       prisma.customer.findMany({ orderBy: { name: "asc" } }),
@@ -25,6 +40,8 @@ export default async function GestaoPage() {
   const activeCampaigns = campaigns.filter((c) => c.active);
 
   const sellers = users.filter((u) => u.role === "VENDAS");
+
+  const isCurrentPeriod = goalMonth === curMonth && goalYear === curYear;
 
   return (
     <div className="space-y-4">
@@ -40,8 +57,11 @@ export default async function GestaoPage() {
         campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, active: c.active }))}
         activeCampaigns={activeCampaigns.map((c) => ({ id: c.id, name: c.name }))}
         customers={customers.map((c) => ({ id: c.id, code: c.code, name: c.name }))}
-        currentMonth={now.getMonth() + 1}
-        currentYear={now.getFullYear()}
+        currentMonth={curMonth}
+        currentYear={curYear}
+        goalPeriodMonth={goalMonth}
+        goalPeriodYear={goalYear}
+        isCurrentGoalPeriod={isCurrentPeriod}
       />
     </div>
   );

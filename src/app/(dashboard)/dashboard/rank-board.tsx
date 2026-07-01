@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { RefreshCw, Target, TrendingUp, BarChart3, Flame, Trophy, Maximize2, Minimize2 } from "lucide-react";
+import { RefreshCw, Target, TrendingUp, BarChart3, Flame, Trophy, Maximize2, Minimize2, CalendarClock } from "lucide-react";
 import { formatBRL, tierColor, tierText } from "@/lib/utils";
 import type { RankData, RankRow, CampaignPerf } from "@/lib/rank-data";
 
 const REFRESH_MS = 30 * 60 * 1000; // 30 minutos
+
+const MESES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
 
 export function RankBoard({ initial }: { initial: RankData }) {
   const [data, setData] = useState<RankData>(initial);
@@ -13,20 +18,42 @@ export function RankBoard({ initial }: { initial: RankData }) {
   const [lastSync, setLastSync] = useState<Date>(new Date());
   const [campSel, setCampSel] = useState<string>(initial.campaignPerf[0]?.id ?? "");
   const [isFull, setIsFull] = useState(false);
+  // Periodo selecionado. Comeca no periodo que veio do servidor (corrente).
+  const [selMonth, setSelMonth] = useState<number>(initial.month);
+  const [selYear, setSelYear] = useState<number>(initial.year);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const refresh = useCallback(async () => {
+  // Busca os dados de um periodo especifico (ou o corrente).
+  const fetchPeriod = useCallback(async (month: number, year: number) => {
     setRefreshing(true);
     try {
-      const res = await fetch("/api/rank", { cache: "no-store" });
+      const res = await fetch(`/api/rank?month=${month}&year=${year}`, { cache: "no-store" });
       if (res.ok) { setData(await res.json()); setLastSync(new Date()); }
     } finally { setRefreshing(false); }
   }, []);
 
+  const refresh = useCallback(() => fetchPeriod(selMonth, selYear), [fetchPeriod, selMonth, selYear]);
+
+  // Ao trocar mes/ano nos seletores, recarrega o periodo.
+  function changePeriod(month: number, year: number) {
+    setSelMonth(month);
+    setSelYear(year);
+    fetchPeriod(month, year);
+  }
+
+  // Volta para o mes corrente.
+  function goCurrent() {
+    const now = new Date();
+    changePeriod(now.getMonth() + 1, now.getFullYear());
+  }
+
+  // Auto-refresh SOMENTE no periodo corrente (telao ao vivo). Em periodos
+  // passados os dados sao fechados, nao precisa ficar recarregando.
   useEffect(() => {
-    const id = setInterval(refresh, REFRESH_MS);
+    if (!data.isCurrent) return;
+    const id = setInterval(() => fetchPeriod(selMonth, selYear), REFRESH_MS);
     return () => clearInterval(id);
-  }, [refresh]);
+  }, [data.isCurrent, fetchPeriod, selMonth, selYear]);
 
   // Tela cheia nativa do navegador (oculta a barra superior do app).
   const toggleFull = useCallback(async () => {
@@ -50,16 +77,58 @@ export function RankBoard({ initial }: { initial: RankData }) {
   const campPerf = data.campaignPerf.find((c) => c.id === campSel) ?? data.campaignPerf[0];
   const campTotalVol = data.campaigns.find((c) => c.id === campSel) ?? data.campaigns[0];
 
+  // Anos disponiveis no seletor: do ano atual voltando 4 anos.
+  const nowYear = new Date().getFullYear();
+  const anos = Array.from({ length: 5 }, (_, i) => nowYear - i);
+
   const wrapClass = isFull
     ? "flex h-screen flex-col gap-2.5 overflow-hidden bg-background p-3"
     : "flex h-[calc(100vh-7rem)] flex-col gap-2.5 overflow-hidden";
 
   return (
     <div ref={rootRef} className={wrapClass}>
+      {/* Barra de filtro de periodo */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="h-4 w-4 text-muted-foreground" />
+          <select className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+            value={selMonth} onChange={(e) => changePeriod(Number(e.target.value), selYear)}>
+            {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
+          </select>
+          <select className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+            value={selYear} onChange={(e) => changePeriod(selMonth, Number(e.target.value))}>
+            {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          {!data.isCurrent && (
+            <>
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-500">
+                Histórico
+              </span>
+              <button onClick={goCurrent}
+                className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
+                Voltar ao mês atual
+              </button>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button onClick={refresh}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            {lastSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+          </button>
+          <button onClick={toggleFull} aria-label="Tela cheia"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
+            {isFull ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">{isFull ? "Sair" : "Tela cheia"}</span>
+          </button>
+        </div>
+      </div>
+
       {/* KPIs */}
       <div className="grid shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-4">
         <MetaGeralKpi meta={data.metaGeral} realizado={data.realizadoGeral} pct={data.metaGeralPct} />
-        <Kpi icon={<TrendingUp className="h-5 w-5" />} label="Maior Venda Semanal"
+        <Kpi icon={<TrendingUp className="h-5 w-5" />} label={data.isCurrent ? "Maior Venda Semanal" : "Maior Venda no Mês"}
           value={data.maiorSemana ? formatBRL(data.maiorSemana.total) : "—"} sub={data.maiorSemana?.nome ?? `${String(data.month).padStart(2,"0")}/${data.year}`} subClass="text-vendas" />
         <Kpi icon={<BarChart3 className="h-5 w-5" />} label="Maior Venda Mensal"
           value={data.maiorMes ? formatBRL(data.maiorMes.total) : "—"} sub={data.maiorMes?.nome ?? "—"} />
@@ -85,18 +154,6 @@ export function RankBoard({ initial }: { initial: RankData }) {
                 {data.campaignPerf.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             )}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button onClick={refresh}
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              {lastSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-            </button>
-            <button onClick={toggleFull} aria-label="Tela cheia"
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-              {isFull ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-              <span className="hidden sm:inline">{isFull ? "Sair" : "Tela cheia"}</span>
-            </button>
           </div>
         </div>
         <PerfTable perf={campPerf} />

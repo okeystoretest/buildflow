@@ -24,8 +24,9 @@ export interface CampaignPerf {
 export interface RankData {
   month: number;
   year: number;
+  isCurrent: boolean;     // true = mês/ano corrente (habilita "semana" e auto-refresh)
   metaGeral: number;
-  realizadoGeral: number; // soma faturada no MÊS corrente (base do progresso)
+  realizadoGeral: number; // soma faturada no período selecionado (base do progresso)
   metaGeralPct: number;   // progresso da meta geral (realizadoGeral / metaGeral)
   goalsCount: number;
   maiorSemana: { total: number; nome: string } | null;
@@ -38,12 +39,35 @@ export interface RankData {
   updatedAt: string;
 }
 
+// Parametro opcional de periodo. Sem ele, usa o mes/ano corrente.
+export interface RankPeriod {
+  month?: number; // 1-12
+  year?: number;
+}
+
 // Calcula todos os dados do Rank de Vendas. Usado pela pagina e pela API.
-export async function computeRankData(): Promise<RankData> {
+// Se `period` vier com month/year validos, calcula para aquele mes fechado
+// (do dia 1 ao ultimo dia do mes). Sem period, usa o mes corrente com a
+// janela de "semana atual" ativa.
+export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const inicioMes = new Date(year, now.getMonth(), 1);
+  const curMonth = now.getMonth() + 1;
+  const curYear = now.getFullYear();
+
+  // Valida e resolve o periodo alvo.
+  const month =
+    period?.month && period.month >= 1 && period.month <= 12 ? period.month : curMonth;
+  const year =
+    period?.year && period.year > 2000 && period.year < 3000 ? period.year : curYear;
+
+  const isCurrent = month === curMonth && year === curYear;
+
+  // Janela do mes alvo: [inicioMes, fimMes).
+  const inicioMes = new Date(year, month - 1, 1);
+  const fimMes = new Date(year, month, 1); // primeiro dia do mes seguinte
+
+  // "Semana" so faz sentido no mes corrente. Em meses passados, a janela de
+  // semana vira o mes inteiro (maiorSemana passa a refletir o mes fechado).
   const inicioSemana = new Date(now);
   inicioSemana.setDate(now.getDate() - now.getDay());
   inicioSemana.setHours(0, 0, 0, 0);
@@ -61,9 +85,17 @@ export async function computeRankData(): Promise<RankData> {
   const goalsGerais = goals.filter((g) => !g.campaignId);
   const metaGeral = goalsGerais.reduce((a, g) => a + Number(g.amount), 0);
 
-  const doMes = faturados.filter((o) => new Date(o.createdAt) >= inicioMes);
-  const daSemana = faturados.filter((o) => new Date(o.createdAt) >= inicioSemana);
-  // Progresso da Meta Geral: realizado é o faturado no MÊS corrente (mesma
+  // Pedidos do mes alvo: entre inicio e fim do mes selecionado.
+  const doMes = faturados.filter((o) => {
+    const d = new Date(o.createdAt);
+    return d >= inicioMes && d < fimMes;
+  });
+  // "daSemana": no mes corrente = ultima semana; em mes passado = mes inteiro.
+  const daSemana = isCurrent
+    ? faturados.filter((o) => new Date(o.createdAt) >= inicioSemana)
+    : doMes;
+
+  // Progresso da Meta Geral: realizado é o faturado no MÊS selecionado (mesma
   // janela da meta), não o acumulado histórico. Evita % inflado.
   const realizadoGeral = doMes.reduce((a, o) => a + Number(o.total), 0);
   const metaGeralPct = metaGeral > 0 ? Math.round((realizadoGeral / metaGeral) * 100) : 0;
@@ -73,8 +105,8 @@ export async function computeRankData(): Promise<RankData> {
       return !acc || t > acc.total ? { total: t, nome: o.seller.name } : acc;
     }, null);
 
-  // Acumula por vendedor SOMENTE o faturado no mês corrente, para casar com a
-  // meta mensal e o progresso ficar correto.
+  // Acumula por vendedor SOMENTE o faturado no mês selecionado, para casar com
+  // a meta mensal e o progresso ficar correto.
   const porVendedor = new Map<string, { nome: string; scope: string | null; total: number }>();
   for (const o of doMes) {
     const cur = porVendedor.get(o.sellerId) ?? { nome: o.seller.name, scope: o.seller.salesModel, total: 0 };
@@ -106,12 +138,21 @@ export async function computeRankData(): Promise<RankData> {
     orderBy: { name: "asc" },
   });
 
-  const campaigns: CampaignData[] = campaignsRaw.map((c) => ({
-    id: c.id,
-    name: c.name,
-    volume: c.orders.reduce((a: number, o: any) => a + (o.itemCount ?? 0), 0),
-    receita: c.orders.reduce((a: number, o: any) => a + Number(o.total), 0),
-  }));
+  // Filtra pedidos da campanha pelo mes selecionado (mesma janela do rank).
+  const noMes = (dt: Date | string) => {
+    const d = new Date(dt);
+    return d >= inicioMes && d < fimMes;
+  };
+
+  const campaigns: CampaignData[] = campaignsRaw.map((c) => {
+    const ordersMes = c.orders.filter((o: any) => noMes(o.createdAt));
+    return {
+      id: c.id,
+      name: c.name,
+      volume: ordersMes.reduce((a: number, o: any) => a + (o.itemCount ?? 0), 0),
+      receita: ordersMes.reduce((a: number, o: any) => a + Number(o.total), 0),
+    };
+  });
 
   // Performance por campanha (linha por vendedor com meta vinculada ou venda).
   const campaignPerf: CampaignPerf[] = campaignsRaw.map((c: any) => {
@@ -122,8 +163,9 @@ export async function computeRankData(): Promise<RankData> {
       cur.meta += g.targetItems ?? 0;
       porVend.set(g.userId, cur);
     }
-    // soma pedidos vinculados a campanha
+    // soma pedidos vinculados a campanha, apenas os do mes selecionado
     for (const o of c.orders) {
+      if (!noMes(o.createdAt)) continue;
       const cur = porVend.get(o.sellerId) ?? { nome: o.seller.name, meta: 0, qtd: 0, valor: 0 };
       cur.qtd += o.itemCount ?? 0;
       cur.valor += Number(o.total);
@@ -139,7 +181,8 @@ export async function computeRankData(): Promise<RankData> {
   });
 
   return {
-    month, year, metaGeral, realizadoGeral, metaGeralPct, goalsCount: goalsGerais.length,
+    month, year, isCurrent,
+    metaGeral, realizadoGeral, metaGeralPct, goalsCount: goalsGerais.length,
     maiorSemana: maior(daSemana), maiorMes: maior(doMes),
     rankGeral: buildRank(null), rankVarejo: buildRank("VAREJO"), rankAtacado: buildRank("ATACADO"),
     campaigns, campaignPerf, updatedAt: new Date().toISOString(),
