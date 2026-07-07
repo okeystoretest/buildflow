@@ -13,7 +13,7 @@ interface NavItem { href: string; label: string; icon: React.ReactNode; roles: R
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Rank de Vendas", icon: <LayoutDashboard className="h-4 w-4" />, roles: ["GESTAO"] },
-  { href: "/fluxo", label: "Fluxo de Pedidos", icon: <KanbanSquare className="h-4 w-4" />, roles: ["GESTAO", "VENDAS", "FINANCEIRO", "LOGISTICA"] },
+  { href: "/fluxo", label: "Fluxo de Pedidos", icon: <KanbanSquare className="h-4 w-4" />, roles: ["GESTAO", "VENDAS", "FINANCEIRO"] },
   { href: "/vendas", label: "Vendas", icon: <ShoppingCart className="h-4 w-4" />, roles: ["GESTAO", "VENDAS"] },
   { href: "/financeiro", label: "Financeiro", icon: <Wallet className="h-4 w-4" />, roles: ["GESTAO", "FINANCEIRO"] },
   { href: "/logistica", label: "Logística", icon: <PackageCheck className="h-4 w-4" />, roles: ["GESTAO", "LOGISTICA"] },

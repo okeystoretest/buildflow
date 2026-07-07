@@ -11,6 +11,7 @@ export interface OrderCardData {
   orderNumber: string;
   comandaNumber: string | null;
   customerName: string;
+  customerCode?: string | null;
   sellerName: string;
   total?: string;
   hasInvoice: boolean;
@@ -22,10 +23,14 @@ export function OrderCard({
   data,
   onClick,
   style,
+  action,
 }: {
   data: OrderCardData;
   onClick?: () => void;
   style?: React.CSSProperties;
+  // Slot de acao renderizado DENTRO do card (ex.: seta de mudar status).
+  // Fica fora da area clicavel principal para nao abrir o modal por engano.
+  action?: React.ReactNode;
 }) {
   const s = STATUS_STYLE[data.status];
   // Alerta visual: processando sem NF
@@ -37,8 +42,7 @@ export function OrderCard({
     : { rotulo: "Pedido", valor: data.orderNumber };
 
   return (
-    <button
-      onClick={onClick}
+    <div
       style={style}
       className={cn(
         "card-hover group w-full rounded-xl border bg-card p-3 text-left shadow-sm animate-fade-in-up",
@@ -47,41 +51,51 @@ export function OrderCard({
           : "border-border hover:border-primary/40 hover:shadow-md",
       )}
     >
-      {/* topo: indicador de status + numero principal */}
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={cn("h-2 w-2 shrink-0 rounded-full", s.dot)} />
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{principal.rotulo}</p>
-            <p className="font-data text-sm font-semibold leading-none truncate">{principal.valor}</p>
+      {/* Area clicavel que abre o modal (todo o corpo do card). */}
+      <button onClick={onClick} className="block w-full text-left">
+        {/* topo: indicador de status + numero principal */}
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={cn("h-2 w-2 shrink-0 rounded-full", s.dot)} />
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{principal.rotulo}</p>
+              <p className="font-data text-sm font-semibold leading-none truncate">{principal.valor}</p>
+            </div>
           </div>
+          {data.total && (
+            <span className="font-data text-sm font-semibold text-foreground/90 shrink-0">{data.total}</span>
+          )}
         </div>
-        {data.total && (
-          <span className="font-data text-sm font-semibold text-foreground/90 shrink-0">{data.total}</span>
-        )}
-      </div>
 
-      {/* corpo: cliente + vendedora */}
-      <div className="space-y-1 text-xs text-muted-foreground">
-        <p className="flex items-center gap-1.5 truncate">
-          <User className="h-3 w-3 shrink-0" /> {data.customerName}
-        </p>
-        <p className="flex items-center gap-1.5 truncate">
-          <Tag className="h-3 w-3 shrink-0" /> {data.sellerName}
-        </p>
-      </div>
+        {/* corpo: cliente (com codigo) + vendedora */}
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <p className="flex items-center gap-1.5 truncate">
+            <User className="h-3 w-3 shrink-0" />
+            <span className="truncate">{data.customerName}</span>
+            {data.customerCode && (
+              <span className="font-data shrink-0 rounded bg-secondary px-1 text-[10px] text-foreground/70">
+                {data.customerCode}
+              </span>
+            )}
+          </p>
+          <p className="flex items-center gap-1.5 truncate">
+            <Tag className="h-3 w-3 shrink-0" /> {data.sellerName}
+          </p>
+        </div>
+      </button>
 
-      {/* rodape: sinais (NF, comprovante) + alerta */}
+      {/* rodape: sinais (NF, comprovante) + alerta + acao (seta de status) */}
       <div className="mt-2 flex items-center gap-2 border-t border-border/60 pt-2">
         <Signal active={data.hasPaymentProof} icon={<Receipt className="h-3 w-3" />} label="Comprov." />
         <Signal active={data.hasInvoice} icon={<FileText className="h-3 w-3" />} label="NF" />
         {alerta && (
-          <span className="ml-auto rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+          <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-semibold text-destructive">
             Sem NF
           </span>
         )}
+        {action && <span className="ml-auto shrink-0">{action}</span>}
       </div>
-    </button>
+    </div>
   );
 }
 

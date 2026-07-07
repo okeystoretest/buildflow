@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Maximize2, Minimize2, ChevronDown, Search } from "lucide-react";
+import { Maximize2, Minimize2, ChevronDown, Search, ChevronRight } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
 import { STATUS_LABEL, STATUS_STYLE, nextStatus } from "@/lib/order-flow";
 import { OrderCard, type OrderCardData } from "@/components/shared/order-card";
@@ -146,6 +146,73 @@ export function KanbanBoard({
     ? "flex h-screen flex-col gap-3 overflow-auto bg-background p-4"
     : "space-y-3";
 
+  // Divisão em dois estágios. O 1º vai até "Embalando" (fim da preparação);
+  // o 2º começa em "Embalado". Se por algum motivo "Embalado" não estiver nas
+  // colunas, tudo cai no estágio 1 (fallback seguro).
+  const splitIdx = columns.indexOf("EMBALADO");
+  const stage1 = splitIdx >= 0 ? columns.slice(0, splitIdx) : columns;
+  const stage2 = splitIdx >= 0 ? columns.slice(splitIdx) : [];
+
+  // Renderiza uma coluna do Kanban (header colorido + até 3 cards, sem scroll).
+  function renderColumn(status: OrderStatus) {
+    const list = byStatus(status);
+    const s = STATUS_STYLE[status];
+    // Sinalizacao especial de cabecalho:
+    //  - Aguardando Impressao: sempre AMARELO (alerta de fila para impressao).
+    //  - Pendente: VERMELHO quando ha cards (prioridade critica).
+    let headerClass = s.header;
+    if (status === "AGUARDANDO_IMPRESSAO") {
+      headerClass = "bg-yellow-400/25 text-yellow-800 dark:text-yellow-200 border-yellow-500";
+    } else if (status === "PENDENTE" && list.length > 0) {
+      headerClass = "bg-red-600/90 text-white border-red-700";
+    }
+    return (
+      <div key={status} className="flex flex-col">
+        {/* Header colorido conforme o status (cor distinta por etapa). */}
+        <div className={`mb-2 flex items-center justify-between rounded-lg border px-2.5 py-1.5 ${headerClass}`}>
+          <span className="flex items-center gap-1.5 text-xs font-semibold leading-tight">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${s.dot}`} />
+            <span className="truncate">{STATUS_LABEL[status]}</span>
+          </span>
+          <span className="font-data ml-1 shrink-0 rounded-full bg-background/60 px-1.5 text-[11px]">
+            {list.length}
+          </span>
+        </div>
+        {/* Layout fixo: no máximo 3 cards, sem barra de rolagem. */}
+        <div className="flex flex-col gap-2 pr-0.5">
+          {list.slice(0, 3).map((card, i) => (
+            <OrderCard
+              key={card.id}
+              data={card}
+              onClick={() => setOpenId(card.id)}
+              style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
+              action={
+                advance?.enabled && nextStatus(card.status) ? (
+                  <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />
+                ) : undefined
+              }
+            />
+          ))}
+          {list.length > 3 && (
+            <button
+              type="button"
+              onClick={() => setOverflowStatus(status)}
+              className="mt-0.5 flex flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-border/70 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+            >
+              <ChevronDown className="h-4 w-4 animate-bounce" />
+              <span>+{list.length - 3} comandas</span>
+            </button>
+          )}
+          {list.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border/50 py-4 text-center text-[11px] text-muted-foreground/50">
+              Vazio
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div ref={rootRef} className={wrapClass}>
       <div className="flex items-center justify-between gap-3">
@@ -166,60 +233,17 @@ export function KanbanBoard({
 
       {error && <p className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">{error}</p>}
 
-      {/* Grade: 6 colunas por linha no desktop. */}
+      {/* Dois estágios do fluxo, cada um com barra full-width:
+          Estágio 1: até "Embalando" (fim da preparação).
+          Estágio 2: de "Embalado" em diante (expedição/entrega). */}
+      <StageBar label="1º Estágio · Preparação" />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {columns.map((status) => {
-          const list = byStatus(status);
-          const s = STATUS_STYLE[status];
-          return (
-            <div key={status} className="flex flex-col">
-              {/* Header colorido conforme o status (cor distinta por etapa). */}
-              <div className={`mb-2 flex items-center justify-between rounded-lg border px-2.5 py-1.5 ${s.header}`}>
-                <span className="flex items-center gap-1.5 text-xs font-semibold leading-tight">
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${s.dot}`} />
-                  <span className="truncate">{STATUS_LABEL[status]}</span>
-                </span>
-                <span className="font-data ml-1 shrink-0 rounded-full bg-background/60 px-1.5 text-[11px]">
-                  {list.length}
-                </span>
-              </div>
-              {/* Altura fixa para ~3 cards empilhados; scroll só se exceder.
-                  Em Logística o card tem botão Avançar, então some um pouco. */}
-              <div className={`flex flex-col gap-2 overflow-y-auto pr-0.5 ${advance?.enabled ? "max-h-[468px]" : "max-h-[372px]"}`}>
-                {list.slice(0, 3).map((card, i) => (
-                  <div key={card.id} className="space-y-1">
-                    <OrderCard
-                      data={card}
-                      onClick={() => setOpenId(card.id)}
-                      style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
-                    />
-                    {advance?.enabled && nextStatus(card.status) && (
-                      <Button variant="distribuicao" size="sm" className="h-7 w-full text-[11px]"
-                        onClick={() => handleAdvance(card)} disabled={pending}>
-                        Avançar
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                {list.length > 3 && (
-                  <button
-                    type="button"
-                    onClick={() => setOverflowStatus(status)}
-                    className="mt-0.5 flex flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-border/70 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
-                  >
-                    <ChevronDown className="h-4 w-4 animate-bounce" />
-                    <span>+{list.length - 3} comandas</span>
-                  </button>
-                )}
-                {list.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-border/50 py-4 text-center text-[11px] text-muted-foreground/50">
-                    Vazio
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {stage1.map((status) => renderColumn(status))}
+      </div>
+
+      <StageBar label="2º Estágio · Expedição" className="mt-4" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {stage2.map((status) => renderColumn(status))}
       </div>
 
       {openId && <OrderDetailModal orderId={openId} onClose={() => setOpenId(null)} canManage={canManage} />}
@@ -239,18 +263,16 @@ export function KanbanBoard({
             </div>
             <div className="-mr-2 max-h-[60vh] space-y-2 overflow-y-auto pr-2">
               {rest.map((card) => (
-                <div key={card.id} className="space-y-1">
-                  <OrderCard
-                    data={card}
-                    onClick={() => { setOverflowStatus(null); setOpenId(card.id); }}
-                  />
-                  {advance?.enabled && nextStatus(card.status) && (
-                    <Button variant="distribuicao" size="sm" className="h-7 w-full text-[11px]"
-                      onClick={() => handleAdvance(card)} disabled={pending}>
-                      Avançar
-                    </Button>
-                  )}
-                </div>
+                <OrderCard
+                  key={card.id}
+                  data={card}
+                  onClick={() => { setOverflowStatus(null); setOpenId(card.id); }}
+                  action={
+                    advance?.enabled && nextStatus(card.status) ? (
+                      <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />
+                    ) : undefined
+                  }
+                />
               ))}
             </div>
           </Modal>
@@ -339,6 +361,35 @@ export function KanbanBoard({
         </Modal>
       )}
     </div>
+  );
+}
+
+// Barra divisória de estágio: atravessa toda a largura do board (todas as
+// colunas), separando visualmente o 1º do 2º estágio do fluxo.
+function StageBar({ label, className = "" }: { label: string; className?: string }) {
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <span className="h-px flex-1 bg-distribuicao/40" />
+      <span className="rounded-full bg-distribuicao/15 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-distribuicao">
+        {label}
+      </span>
+      <span className="h-px flex-1 bg-distribuicao/40" />
+    </div>
+  );
+}
+
+function StatusArrow({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label="Avançar status"
+      title="Avançar status"
+      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-distribuicao text-distribuicao-fg shadow-sm transition-transform hover:scale-105 disabled:opacity-50"
+    >
+      <ChevronRight className="h-4 w-4" />
+    </button>
   );
 }
 

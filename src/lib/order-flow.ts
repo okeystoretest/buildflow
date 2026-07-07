@@ -75,9 +75,16 @@ export const STATUS_SETOR: Record<OrderStatus, Setor> = {
   CANCELADO: "FINANCEIRO",
 };
 
-// Status visiveis para o motorista (restricao de dashboard do doc).
+// Status visiveis para o motorista: fluxo logistico restrito.
+// Apenas Enviado -> Em Rota -> Entregue. Estagios anteriores nao aparecem.
 export const MOTORISTA_VISIBLE: OrderStatus[] = [
-  "PROCESSANDO",
+  "ENVIADO",
+  "EM_ROTA",
+  "ENTREGUE",
+];
+
+// Colunas do fluxo do motorista, na ordem de progressao.
+export const MOTORISTA_COLUMNS: OrderStatus[] = [
   "ENVIADO",
   "EM_ROTA",
   "ENTREGUE",
@@ -112,7 +119,7 @@ export interface StatusStyle {
 
 export const STATUS_STYLE: Record<OrderStatus, StatusStyle> = {
   EM_ANALISE:           { label: "Em Análise",          badge: "bg-muted text-muted-foreground",     dot: "bg-slate-600",      header: "bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/40" },
-  AGUARDANDO_IMPRESSAO: { label: "Aguardando Impressão", badge: "bg-primary/15 text-primary",        dot: "bg-sky-600",        header: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/40" },
+  AGUARDANDO_IMPRESSAO: { label: "Aguardando Impressão", badge: "bg-primary/15 text-primary",        dot: "bg-yellow-500",        header: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/40" },
   SEPARANDO:            { label: "Separando",           badge: "bg-primary/15 text-primary",        dot: "bg-cyan-600",       header: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/40" },
   PENDENTE:             { label: "Pendente",            badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400",     dot: "bg-amber-600",      header: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40" },
   CONFERINDO:           { label: "Conferindo",          badge: "bg-primary/15 text-primary",        dot: "bg-teal-600",       header: "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/40" },

@@ -24,6 +24,7 @@ export default async function LogisticaPage() {
     comandaNumber: o.comandaNumber,
     sellerName: o.seller.name,
     customerName: o.customer.name,
+    customerCode: o.customer.code,
     total: formatBRL(o.total.toString()),
     approvedByFinance: o.comandaNumber != null,
     hasInvoice: o.invoicePath != null,

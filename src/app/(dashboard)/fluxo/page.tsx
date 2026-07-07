@@ -4,12 +4,14 @@ import { DASHBOARD_COLUMNS } from "@/lib/order-flow";
 import { KanbanBoard, type KanbanCard } from "@/components/shared/kanban-board";
 import { formatBRL } from "@/lib/utils";
 
-// Fluxo de pedidos: acessivel a todos os setores, exceto motorista.
+// Fluxo de pedidos GLOBAL: Gestão, Vendas e Financeiro.
+// Logística NÃO tem acesso ao fluxo global — usa apenas o painel restrito
+// em /logistica (com as operações específicas do setor).
 export default async function FluxoPage() {
-  const session = await requireRole(["GESTAO", "VENDAS", "FINANCEIRO", "LOGISTICA"]);
+  const session = await requireRole(["GESTAO", "VENDAS", "FINANCEIRO"]);
 
   // Restrição de escopo: vendedor(a) vê só os próprios pedidos.
-  // Os demais setores (Gestão, Financeiro, Logística) veem todos.
+  // Os demais setores (Gestão, Financeiro) veem todos.
   const orders = await prisma.order.findMany({
     where: session.role === "VENDAS" ? { sellerId: session.userId } : {},
     include: { customer: true, seller: true },
@@ -23,6 +25,7 @@ export default async function FluxoPage() {
     comandaNumber: o.comandaNumber,
     sellerName: o.seller.name,
     customerName: o.customer.name,
+    customerCode: o.customer.code,
     total: formatBRL(o.total.toString()),
     approvedByFinance: o.comandaNumber != null,
     hasInvoice: o.invoicePath != null,

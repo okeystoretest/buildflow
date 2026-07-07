@@ -144,3 +144,50 @@ export async function assignDriverToOrder(args: {
     return actionError(msg);
   }
 }
+
+/**
+ * Resolve uma pendência: registra (opcionalmente) um comentário de resolução
+ * no histórico e AVANÇA o pedido do status PENDENTE para o próximo do fluxo
+ * (CONFERINDO). Tudo dentro de uma transação — comentário e mudança de status
+ * andam juntos ou nenhum acontece.
+ */
+export async function resolvePendency(args: {
+  orderId: string;
+  resolutionNote?: string; // comentário opcional descrevendo a resolução
+}): Promise<ActionResult<{ status: OrderStatus }>> {
+  try {
+    const session = await requireRoleAction(["LOGISTICA", "GESTAO"]);
+
+    const order = await prisma.order.findUnique({ where: { id: args.orderId } });
+    if (!order) return actionError("Pedido nao encontrado.");
+    if (order.status !== "PENDENTE") {
+      return actionError("Só é possível resolver pedidos que estão em Pendente.");
+    }
+
+    const target = nextStatus("PENDENTE"); // CONFERINDO
+    if (!target) return actionError("Não há próximo status após Pendente.");
+
+    const note = args.resolutionNote?.trim();
+
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({ where: { id: order.id }, data: { status: target } });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          status: target,
+          changedBy: session.userId,
+          note: note ? `Pendência resolvida: ${note}` : "Pendência resolvida",
+        },
+      });
+    });
+
+    revalidatePath("/logistica");
+    revalidatePath("/fluxo");
+    revalidatePath("/dashboard");
+    revalidatePath("/motorista");
+    return actionOk({ status: target });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao resolver pendência.";
+    return actionError(msg);
+  }
+}
