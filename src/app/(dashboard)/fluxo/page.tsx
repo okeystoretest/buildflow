@@ -18,6 +18,19 @@ export default async function FluxoPage() {
     orderBy: { createdAt: "desc" },
   });
 
+  // Momento em que cada pedido entrou em ENTREGUE (para sumir do fluxo após 15 min).
+  const entregues = orders.filter((o) => o.status === "ENTREGUE").map((o) => o.id);
+  const deliveredHist = entregues.length
+    ? await prisma.orderStatusHistory.findMany({
+        where: { orderId: { in: entregues }, status: "ENTREGUE" },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+  const deliveredAtById = new Map<string, string>();
+  for (const h of deliveredHist) {
+    if (!deliveredAtById.has(h.orderId)) deliveredAtById.set(h.orderId, h.createdAt.toISOString());
+  }
+
   const cards: KanbanCard[] = orders.map((o) => ({
     id: o.id,
     status: o.status,
@@ -30,6 +43,7 @@ export default async function FluxoPage() {
     approvedByFinance: o.comandaNumber != null,
     hasInvoice: o.invoicePath != null,
     hasPaymentProof: o.paymentProofPath != null,
+    deliveredAt: deliveredAtById.get(o.id) ?? null,
   }));
 
   return (
@@ -38,7 +52,7 @@ export default async function FluxoPage() {
         <h1 className="text-2xl font-bold">Fluxo de Pedidos</h1>
         <p className="text-sm text-muted-foreground">Acompanhamento de todos os pedidos por status.</p>
       </div>
-      <KanbanBoard cards={cards} columns={DASHBOARD_COLUMNS} canManage={session.role === "GESTAO"} />
+      <KanbanBoard cards={cards} columns={DASHBOARD_COLUMNS} canManage={session.role === "GESTAO"} userRole={session.role} />
     </div>
   );
 }

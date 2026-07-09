@@ -44,6 +44,7 @@ model User {
   deliveries     Delivery[]     @relation("DeliveryDriver")
   notifications  Notification[]
   salesGoals     SalesGoal[]
+  dailyTasks     DailyTask[]
 
   @@index([role])
 }
@@ -388,4 +389,37 @@ model Campaign {
 
   orders Order[]
   goals  SalesGoal[]
+}
+
+// ===========================================================================
+// TAREFAS DIARIAS (Kanban da vendedora)
+// ===========================================================================
+
+// Status do quadro de tarefas: A Fazer -> Fazendo -> Concluida.
+enum TaskStatus {
+  A_FAZER
+  FAZENDO
+  CONCLUIDA
+}
+
+// Tarefa diaria de uma vendedora. Kanban pessoal (cada uma ve as proprias;
+// a Gestao ve todas). "category" e texto livre digitado pela vendedora.
+model DailyTask {
+  id        String     @id @default(cuid())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  title     String
+  // Horarios do dia em texto "HH:MM" (simples; a tarefa e do dia corrente).
+  startTime String?
+  endTime   String?
+  category  String?
+  notes     String?
+  status    TaskStatus @default(A_FAZER)
+  // Ordem manual dentro da coluna (para reordenacao futura; menor = topo).
+  position  Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([userId, status])
+  @@index([createdAt])
 }

@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button";
 
 export interface KanbanCard extends OrderCardData {}
 
+// Janela de permanência de um card ENTREGUE no fluxo ativo: 15 minutos.
+const DELIVERED_TTL_MS = 15 * 60 * 1000;
+
 interface AdvanceConfig {
   enabled: boolean;
   drivers: { id: string; name: string }[];
@@ -21,6 +24,7 @@ export function KanbanBoard({
   columns,
   advance,
   canManage = false,
+  userRole,
 }: {
   cards: KanbanCard[];
   columns: OrderStatus[];
@@ -28,25 +32,58 @@ export function KanbanBoard({
   advance?: AdvanceConfig;
   // Quando true (Gestão), o modal exibe editar/excluir pedido.
   canManage?: boolean;
+  // Papel do usuário atual — controla regras de permissão de avanço por status.
+  userRole?: "GESTAO" | "VENDAS" | "FINANCEIRO" | "LOGISTICA" | "MOTORISTA";
 }) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
   // Busca rápida por comanda, nº do pedido, cliente ou vendedor.
   const [query, setQuery] = useState("");
+
+  // "Relógio" interno: avança de minuto em minuto para reavaliar quais cards
+  // ENTREGUE já passaram dos 15 min e devem sumir do fluxo — sem reload.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30_000); // 30s
+    return () => clearInterval(id);
+  }, []);
+
+  // Janela de permanência de um card ENTREGUE no fluxo ativo: 15 minutos.
   const visibleCards = useMemo(() => {
+    // 1) Some com ENTREGUE que já passou de 15 min desde a entrega.
+    const afterTtl = cards.filter((c) => {
+      if (c.status !== "ENTREGUE") return true;
+      if (!c.deliveredAt) return true; // sem timestamp: mantém (não some sozinho)
+      return nowTick - new Date(c.deliveredAt).getTime() < DELIVERED_TTL_MS;
+    });
+    // 2) Aplica a busca por texto.
     const q = query.trim().toLowerCase();
-    if (!q) return cards;
-    return cards.filter((c) =>
+    if (!q) return afterTtl;
+    return afterTtl.filter((c) =>
       [c.comandaNumber, c.orderNumber, c.customerName, c.sellerName]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     );
-  }, [query, cards]);
+  }, [query, cards, nowTick]);
   // Coluna cujas comandas excedentes (além das 3 primeiras) estão sendo exibidas no modal.
   const [overflowStatus, setOverflowStatus] = useState<OrderStatus | null>(null);
   const [isFull, setIsFull] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const byStatus = (status: OrderStatus) => visibleCards.filter((c) => c.status === status);
+
+  // Regra de permissão de avanço por status:
+  //  - EM_ANALISE só avança por FINANCEIRO (ou GESTAO). Logística NÃO vê a seta.
+  //  - Demais status seguem o advance normal da Logística.
+  const canAdvanceCard = useCallback(
+    (card: KanbanCard): boolean => {
+      if (!advance?.enabled || !nextStatus(card.status)) return false;
+      if (card.status === "EM_ANALISE" && userRole !== "FINANCEIRO" && userRole !== "GESTAO") {
+        return false;
+      }
+      return true;
+    },
+    [advance?.enabled, userRole],
+  );
 
   // ---- Tela cheia (mesma lógica do Rank de Vendas) ----
   const toggleFull = useCallback(async () => {
@@ -187,7 +224,7 @@ export function KanbanBoard({
               onClick={() => setOpenId(card.id)}
               style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
               action={
-                advance?.enabled && nextStatus(card.status) ? (
+                canAdvanceCard(card) ? (
                   <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />
                 ) : undefined
               }
@@ -268,7 +305,7 @@ export function KanbanBoard({
                   data={card}
                   onClick={() => { setOverflowStatus(null); setOpenId(card.id); }}
                   action={
-                    advance?.enabled && nextStatus(card.status) ? (
+                    canAdvanceCard(card) ? (
                       <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />
                     ) : undefined
                   }

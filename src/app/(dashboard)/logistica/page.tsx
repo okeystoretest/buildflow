@@ -17,6 +17,19 @@ export default async function LogisticaPage() {
     prisma.user.findMany({ where: { role: "MOTORISTA", active: true }, select: { id: true, name: true } }),
   ]);
 
+  // Momento em que cada pedido entrou em ENTREGUE (para sumir do fluxo após 15 min).
+  const entregues = orders.filter((o) => o.status === "ENTREGUE").map((o) => o.id);
+  const deliveredHist = entregues.length
+    ? await prisma.orderStatusHistory.findMany({
+        where: { orderId: { in: entregues }, status: "ENTREGUE" },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+  const deliveredAtById = new Map<string, string>();
+  for (const h of deliveredHist) {
+    if (!deliveredAtById.has(h.orderId)) deliveredAtById.set(h.orderId, h.createdAt.toISOString());
+  }
+
   const cards: KanbanCard[] = orders.map((o) => ({
     id: o.id,
     status: o.status,
@@ -29,6 +42,7 @@ export default async function LogisticaPage() {
     approvedByFinance: o.comandaNumber != null,
     hasInvoice: o.invoicePath != null,
     hasPaymentProof: o.paymentProofPath != null,
+    deliveredAt: deliveredAtById.get(o.id) ?? null,
   }));
 
   return (
@@ -39,7 +53,7 @@ export default async function LogisticaPage() {
           Acompanhe o status dos pedidos e avance manualmente os que estão prontos para entrega.
         </p>
       </div>
-      <KanbanBoard cards={cards} columns={DASHBOARD_COLUMNS} advance={{ enabled: true, drivers }} canManage={session.role === "GESTAO"} />
+      <KanbanBoard cards={cards} columns={DASHBOARD_COLUMNS} advance={{ enabled: true, drivers }} canManage={session.role === "GESTAO"} userRole={session.role} />
     </div>
   );
 }

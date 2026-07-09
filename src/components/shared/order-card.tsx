@@ -17,6 +17,8 @@ export interface OrderCardData {
   hasInvoice: boolean;
   hasPaymentProof?: boolean;
   approvedByFinance: boolean;
+  // ISO da entrada em ENTREGUE (usado para sumir do fluxo após 15 min).
+  deliveredAt?: string | null;
 }
 
 export function OrderCard({
@@ -36,8 +38,8 @@ export function OrderCard({
   // Alerta visual: processando sem NF
   const alerta = data.status === "PROCESSANDO" && !data.hasInvoice;
 
-  // Regra de exibicao: antes da aprovacao mostra pedido; depois, comanda.
-  const principal = data.approvedByFinance && data.comandaNumber
+  // Regra de exibicao: se ja existe comanda, ela tem prioridade; senao, pedido.
+  const principal = data.comandaNumber
     ? { rotulo: "Comanda", valor: data.comandaNumber }
     : { rotulo: "Pedido", valor: data.orderNumber };
 

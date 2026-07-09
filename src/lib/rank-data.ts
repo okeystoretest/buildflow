@@ -14,6 +14,7 @@ export interface CampaignPerfRow {
   meta: number;   // meta de itens do vendedor vinculada a esta campanha
   qtd: number;    // peças vendidas pelo vendedor em pedidos desta campanha
   valor: number;  // R$ gerado por esse vendedor na campanha
+  comissao: number; // R$ de comissão da campanha (itens × taxa do escopo)
   pct: number;    // % da meta de itens (qtd / meta)
 }
 export interface CampaignPerf {
@@ -50,6 +51,13 @@ export interface RankPeriod {
 // (do dia 1 ao ultimo dia do mes). Sem period, usa o mes corrente com a
 // janela de "semana atual" ativa.
 export async function computeRankData(period?: RankPeriod): Promise<RankData> {
+  // Comissão de campanha por ITEM, conforme o modelo de venda da vendedora.
+  // Regra de negócio: Varejo R$5,00/item · Atacado R$2,50/item.
+  const COMISSAO_POR_ITEM: Record<"VAREJO" | "ATACADO", number> = {
+    VAREJO: 5,
+    ATACADO: 2.5,
+  };
+
   const now = new Date();
   const curMonth = now.getMonth() + 1;
   const curYear = now.getFullYear();
@@ -156,17 +164,17 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
 
   // Performance por campanha (linha por vendedor com meta vinculada ou venda).
   const campaignPerf: CampaignPerf[] = campaignsRaw.map((c: any) => {
-    const porVend = new Map<string, { nome: string; meta: number; qtd: number; valor: number }>();
+    const porVend = new Map<string, { nome: string; scope: "VAREJO" | "ATACADO" | null; meta: number; qtd: number; valor: number }>();
     // inicia pelos vendedores com meta vinculada a esta campanha (meta = itens)
     for (const g of c.goals) {
-      const cur = porVend.get(g.userId) ?? { nome: g.user.name, meta: 0, qtd: 0, valor: 0 };
+      const cur = porVend.get(g.userId) ?? { nome: g.user.name, scope: g.user.salesModel ?? null, meta: 0, qtd: 0, valor: 0 };
       cur.meta += g.targetItems ?? 0;
       porVend.set(g.userId, cur);
     }
     // soma pedidos vinculados a campanha, apenas os do mes selecionado
     for (const o of c.orders) {
       if (!noMes(o.createdAt)) continue;
-      const cur = porVend.get(o.sellerId) ?? { nome: o.seller.name, meta: 0, qtd: 0, valor: 0 };
+      const cur = porVend.get(o.sellerId) ?? { nome: o.seller.name, scope: o.seller.salesModel ?? null, meta: 0, qtd: 0, valor: 0 };
       cur.qtd += o.itemCount ?? 0;
       cur.valor += Number(o.total);
       porVend.set(o.sellerId, cur);
@@ -174,7 +182,10 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     const rows: CampaignPerfRow[] = [...porVend.values()]
       .map((v) => {
         const pct = v.meta > 0 ? Math.round((v.qtd / v.meta) * 100) : 0;
-        return { nome: v.nome, meta: v.meta, qtd: v.qtd, valor: v.valor, pct };
+        // Comissão = itens da campanha × taxa do escopo da vendedora.
+        const taxa = v.scope ? COMISSAO_POR_ITEM[v.scope] : 0;
+        const comissao = v.qtd * taxa;
+        return { nome: v.nome, meta: v.meta, qtd: v.qtd, valor: v.valor, comissao, pct };
       })
       .sort((a, b) => b.pct - a.pct || b.qtd - a.qtd);
     return { id: c.id, name: c.name, rows };

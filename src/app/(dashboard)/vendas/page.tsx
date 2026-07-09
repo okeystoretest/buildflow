@@ -29,6 +29,7 @@ export default async function VendasPage() {
         <h1 className="text-2xl font-bold text-vendas">Vendas</h1>
         <div className="flex gap-2">
           <Button asChild variant="outline"><Link href="/vendas/clientes">Clientes</Link></Button>
+          <Button asChild variant="outline"><Link href="/vendas/tarefas">Tarefas Diárias</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/historico">Histórico</Link></Button>
           <Button asChild variant="vendas"><Link href="/vendas/novo">Novo pedido</Link></Button>
         </div>

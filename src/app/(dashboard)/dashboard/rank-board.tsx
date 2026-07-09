@@ -128,11 +128,11 @@ export function RankBoard({ initial }: { initial: RankData }) {
       {/* KPIs */}
       <div className="grid shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-4">
         <MetaGeralKpi meta={data.metaGeral} realizado={data.realizadoGeral} pct={data.metaGeralPct} />
-        <Kpi icon={<TrendingUp className="h-5 w-5" />} label={data.isCurrent ? "Maior Venda Semanal" : "Maior Venda no Mês"}
+        <Kpi icon={<TrendingUp className="h-5 w-5" />} iconClass="text-emerald-500" label={data.isCurrent ? "Maior Venda Semanal" : "Maior Venda no Mês"}
           value={data.maiorSemana ? formatBRL(data.maiorSemana.total) : "—"} sub={data.maiorSemana?.nome ?? `${String(data.month).padStart(2,"0")}/${data.year}`} subClass="text-vendas" />
-        <Kpi icon={<BarChart3 className="h-5 w-5" />} label="Maior Venda Mensal"
+        <Kpi icon={<BarChart3 className="h-5 w-5" />} iconClass="text-sky-500" label="Maior Venda Mensal"
           value={data.maiorMes ? formatBRL(data.maiorMes.total) : "—"} sub={data.maiorMes?.nome ?? "—"} />
-        <Kpi icon={<Flame className="h-5 w-5" />} label={`Total por Campanha${campTotalVol ? " · " + campTotalVol.name : ""}`}
+        <Kpi icon={<Flame className="h-5 w-5" />} iconClass="text-orange-500" label={`Total por Campanha${campTotalVol ? " · " + campTotalVol.name : ""}`}
           value={String(campTotalVol?.volume ?? 0)} sub="peças" />
       </div>
 
@@ -172,7 +172,7 @@ function MetaGeralKpi({ meta, realizado, pct }: { meta: number; realizado: numbe
           <p className="font-data mt-1 truncate text-2xl font-bold">{formatBRL(meta)}</p>
           <p className="font-data truncate text-sm text-vendas">{formatBRL(realizado)} no mês</p>
         </div>
-        <span className="shrink-0 text-muted-foreground/60"><Target className="h-5 w-5" /></span>
+        <span className="shrink-0 text-primary"><Target className="h-5 w-5" /></span>
       </div>
       <div className="mt-2 flex items-center gap-2">
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
@@ -185,8 +185,8 @@ function MetaGeralKpi({ meta, realizado, pct }: { meta: number; realizado: numbe
   );
 }
 
-function Kpi({ icon, label, value, sub, subClass }: {
-  icon: React.ReactNode; label: string; value: string; sub: string; subClass?: string;
+function Kpi({ icon, iconClass, label, value, sub, subClass }: {
+  icon: React.ReactNode; iconClass?: string; label: string; value: string; sub: string; subClass?: string;
 }) {
   return (
     <div className="relative overflow-hidden rounded-xl border border-border bg-card p-3">
@@ -196,7 +196,7 @@ function Kpi({ icon, label, value, sub, subClass }: {
           <p className="font-data mt-1 truncate text-2xl font-bold">{value}</p>
           <p className={`font-data truncate text-sm ${subClass ?? "text-muted-foreground"}`}>{sub}</p>
         </div>
-        <span className="shrink-0 text-muted-foreground/60">{icon}</span>
+        <span className={`shrink-0 ${iconClass ?? "text-muted-foreground/60"}`}>{icon}</span>
       </div>
     </div>
   );
@@ -260,6 +260,7 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
             <th className="pb-1 pr-2 text-right">Meta</th>
             <th className="pb-1 pr-2 text-center">Qtd Peças</th>
             <th className="pb-1 pr-2 text-right">Valor</th>
+            <th className="pb-1 pr-2 text-right">Comissão</th>
             <th className="pb-1 pl-2" style={{ width: "28%" }}>Meta%</th>
           </tr>
         </thead>
@@ -275,6 +276,7 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
               <td className="py-1 pr-2 text-right font-data">{r.meta > 0 ? r.meta : "—"}</td>
               <td className="py-1 pr-2 text-center font-data">{r.qtd}</td>
               <td className="py-1 pr-2 text-right font-data">{formatBRL(r.valor)}</td>
+              <td className="py-1 pr-2 text-right font-data text-vendas">{formatBRL(r.comissao)}</td>
               <td className="py-1 pl-2">
                 <div className="flex items-center gap-2">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">

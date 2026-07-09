@@ -423,27 +423,46 @@ function GoalsPanel({ sellers, goals, activeCampaigns, month, year, periodMonth,
           </>
         )}
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
-        <select className="h-10 rounded-lg border border-input bg-background px-2 text-sm"
-          value={userId} onChange={(e) => setUserId(e.target.value)}>
-          <option value="">Vendedor...</option>
-          {sellers.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.salesModel === "ATACADO" ? "Atacado" : "Varejo"})</option>)}
-        </select>
-        <select className="h-10 rounded-lg border border-input bg-background px-2 text-sm"
-          value={campaignId} onChange={(e) => setCampaignId(e.target.value)}>
-          <option value="">Geral</option>
-          {activeCampaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <FieldHelp label="Vendedor" help="Quem recebe a meta. O escopo (Varejo/Atacado) vem do cadastro dele.">
+          <select className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"
+            value={userId} onChange={(e) => setUserId(e.target.value)}>
+            <option value="">Vendedor...</option>
+            {sellers.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.salesModel === "ATACADO" ? "Atacado" : "Varejo"})</option>)}
+          </select>
+        </FieldHelp>
+
+        <FieldHelp label="Vínculo" help="Geral = meta em R$. Campanha = meta por quantidade de itens.">
+          <select className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"
+            value={campaignId} onChange={(e) => setCampaignId(e.target.value)}>
+            <option value="">Geral</option>
+            {activeCampaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </FieldHelp>
+
         {isCampaign ? (
-          <Input type="number" min={1} step="1" placeholder="Qtd. de itens"
-            value={targetItems || ""} onChange={(e) => setTargetItems(Number(e.target.value))} />
+          <FieldHelp label="Qtd. de itens" help="Total de peças que o vendedor deve vender nesta campanha.">
+            <Input type="number" min={1} step="1" placeholder="Ex: 50"
+              value={targetItems || ""} onChange={(e) => setTargetItems(Number(e.target.value))} />
+          </FieldHelp>
         ) : (
-          <Input type="number" min={0} step="0.01" placeholder="Meta R$"
-            value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))} />
+          <FieldHelp label="Meta (R$)" help="Faturamento alvo do mês para este vendedor.">
+            <Input type="number" min={0} step="0.01" placeholder="Ex: 30000"
+              value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))} />
+          </FieldHelp>
         )}
-        <Input type="number" min={1} max={12} placeholder="Mês" value={m} onChange={(e) => setM(Number(e.target.value))} />
-        <Input type="number" placeholder="Ano" value={y} onChange={(e) => setY(Number(e.target.value))} />
-        <Button variant="brand" onClick={add} disabled={pending || !userId || !valido}>Salvar meta</Button>
+
+        <FieldHelp label="Mês" help="Mês de vigência (1 a 12).">
+          <Input type="number" min={1} max={12} placeholder="Mês" value={m} onChange={(e) => setM(Number(e.target.value))} />
+        </FieldHelp>
+
+        <FieldHelp label="Ano" help="Ano de vigência da meta.">
+          <Input type="number" placeholder="Ano" value={y} onChange={(e) => setY(Number(e.target.value))} />
+        </FieldHelp>
+
+        <div className="flex items-end">
+          <Button variant="brand" className="w-full" onClick={add} disabled={pending || !userId || !valido}>Salvar meta</Button>
+        </div>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <table className="w-full text-sm">
@@ -563,6 +582,18 @@ function CampaignsPanel({ campaigns }: { campaigns: CampaignRow[] }) {
           {campaigns.length === 0 && <tr><td colSpan={3} className="py-4 text-center text-muted-foreground">Nenhuma campanha.</td></tr>}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Campo de formulário com rótulo e texto de ajuda inline (melhora o
+// entendimento de cada campo no cadastro de metas).
+function FieldHelp({ label, help, children }: { label: string; help: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <label className="block text-xs font-medium text-foreground">{label}</label>
+      {children}
+      <p className="text-[11px] leading-tight text-muted-foreground">{help}</p>
     </div>
   );
 }

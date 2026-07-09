@@ -19,10 +19,16 @@ export async function advanceOrderStatus(args: {
   skipPendente?: boolean; // pula a etapa PENDENTE indo direto p/ a seguinte
 }): Promise<ActionResult<{ status: OrderStatus }>> {
   try {
-    const session = await requireRoleAction(["LOGISTICA", "GESTAO"]);
+    const session = await requireRoleAction(["LOGISTICA", "GESTAO", "FINANCEIRO"]);
 
     const order = await prisma.order.findUnique({ where: { id: args.orderId } });
     if (!order) return actionError("Pedido nao encontrado.");
+
+    // Regra de permissão: sair de EM_ANALISE é exclusivo do Financeiro (e Gestão).
+    // A Logística não avança o pedido enquanto estiver Em Análise.
+    if (order.status === "EM_ANALISE" && session.role !== "FINANCEIRO" && session.role !== "GESTAO") {
+      return actionError("Apenas o Financeiro pode avançar pedidos em Análise.");
+    }
 
     let target = args.to ?? nextStatus(order.status);
     if (!target) return actionError("Pedido ja no ultimo status do fluxo.");
