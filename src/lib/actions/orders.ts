@@ -43,9 +43,9 @@ export async function createOrder(
         operationId: input.operationId,
         customerId: input.customerId,
         sellerId: session.userId,
-        paymentMethodId: input.paymentMethodId,
+        // "Forma de Pagamento" e "Banco" ficam vazios na criacao:
+        // o FINANCEIRO os preenche na Analise de Pedidos antes de aprovar.
         shippingMethodId: input.shippingMethodId,
-        bankId: input.bankId,
         orderValue,
         freight,
         total,
@@ -122,9 +122,12 @@ export async function updateOrder(args: {
         storeId: args.storeId ?? order.storeId,
         orderTypeId: args.orderTypeId ?? order.orderTypeId,
         operationId: args.operationId ?? order.operationId,
-        paymentMethodId: args.paymentMethodId ?? order.paymentMethodId,
+        // FKs opcionais: string vazia vira NULL (senão a FK quebra).
+        paymentMethodId: args.paymentMethodId
+          ? args.paymentMethodId
+          : (args.paymentMethodId === "" ? null : order.paymentMethodId),
         shippingMethodId: args.shippingMethodId ?? order.shippingMethodId,
-        bankId: args.bankId ?? order.bankId,
+        bankId: args.bankId ? args.bankId : (args.bankId === "" ? null : order.bankId),
         orderValue,
         freight,
         total: orderValue + freight,

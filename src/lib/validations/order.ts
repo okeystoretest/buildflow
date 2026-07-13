@@ -6,9 +6,9 @@ export const createOrderSchema = z.object({
   orderTypeId: z.string().min(1, "Tipo de pedido obrigatorio."),
   operationId: z.string().min(1, "Operacao obrigatoria."),
   customerId: z.string().min(1, "Cliente obrigatorio."),
-  paymentMethodId: z.string().min(1, "Forma de pagamento obrigatoria."),
+  // NOTA: "Forma de Pagamento" e "Banco" NAO sao mais informados aqui.
+  // O FINANCEIRO os preenche na Analise de Pedidos antes de aprovar.
   shippingMethodId: z.string().min(1, "Forma de envio obrigatoria."),
-  bankId: z.string().min(1, "Banco obrigatório."),
   // Valor total do pedido informado diretamente (sem itens).
   orderValue: z.coerce.number().nonnegative("Valor invalido."),
   freight: z.coerce.number().nonnegative("Frete invalido.").default(0),

@@ -37,7 +37,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
               storeId: order.storeId,
               orderTypeId: order.orderTypeId,
               operationId: order.operationId,
-              paymentMethodId: order.paymentMethodId,
+              paymentMethodId: order.paymentMethodId ?? "",
               shippingMethodId: order.shippingMethodId,
               bankId: order.bankId ?? "",
               orderValue: Number(order.orderValue),

@@ -211,12 +211,15 @@ model Order {
   seller   User   @relation("OrderSeller", fields: [sellerId], references: [id])
   sellerId String
 
-  paymentMethod    PaymentMethod  @relation(fields: [paymentMethodId], references: [id])
-  paymentMethodId  String
+  // Forma de pagamento e Banco: preenchidos pelo FINANCEIRO na Analise de
+  // Pedidos (nao mais no formulario de Vendas). Por isso sao opcionais no
+  // cadastro; a obrigatoriedade e aplicada na hora de APROVAR o pedido.
+  paymentMethod    PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  paymentMethodId  String?
   shippingMethod   ShippingMethod @relation(fields: [shippingMethodId], references: [id])
   shippingMethodId String
 
-  // Banco da transação (selecionado no formulário de vendas).
+  // Banco da transação (selecionado pelo Financeiro).
   bank   Bank?   @relation(fields: [bankId], references: [id])
   bankId String?
 
@@ -240,7 +243,11 @@ model Order {
   freight    Decimal @default(0) @db.Decimal(10, 2)
   total      Decimal @default(0) @db.Decimal(10, 2)
 
+  // Comprovante enviado pela Vendedora na criacao do pedido.
   paymentProofPath String?
+  // Segundo comprovante, anexado pelo FINANCEIRO na Analise de Pedidos.
+  // Obrigatorio para aprovar. Visivel a todos ao expandir o card no fluxo.
+  paymentProof2Path String?
   invoicePath      String?
 
   notes String?

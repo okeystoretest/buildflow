@@ -1,9 +1,5 @@
-// Definicoes centrais do fluxo de status de pedidos (Build.Flow).
-// Fonte unica de verdade para ordem, rotulos, cores e transicoes.
-
 import type { OrderStatus } from "@prisma/client";
 
-// Ordem sequencial do ciclo de vida (status operacionais, sem excecoes).
 export const ORDER_FLOW: OrderStatus[] = [
   "EM_ANALISE",
   "AGUARDANDO_IMPRESSAO",
@@ -20,20 +16,16 @@ export const ORDER_FLOW: OrderStatus[] = [
   "CONCLUIDO",
 ];
 
-// Colunas do Dashboard principal: 12 status, SEM "Concluído"
-// (Concluído aparece apenas no Histórico do vendedor). Layout 2 linhas x 6.
 export const DASHBOARD_COLUMNS: OrderStatus[] = ORDER_FLOW.filter(
   (s) => s !== "CONCLUIDO",
 );
 
-// Estados de excecao (definidos pelo Financeiro).
 export const EXCEPTION_STATUSES: OrderStatus[] = [
   "ESTORNO",
   "ESTORNO_PARCIAL",
   "CANCELADO",
 ];
 
-// Rotulos legiveis em PT-BR.
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   EM_ANALISE: "Em Análise",
   AGUARDANDO_IMPRESSAO: "Aguardando Impressão",
@@ -53,7 +45,6 @@ export const STATUS_LABEL: Record<OrderStatus, string> = {
   CANCELADO: "Cancelado",
 };
 
-// Qual setor "possui" cada status (para colunas do Kanban e permissoes).
 export type Setor = "VENDAS" | "FINANCEIRO" | "LOGISTICA" | "MOTORISTA";
 
 export const STATUS_SETOR: Record<OrderStatus, Setor> = {
@@ -75,15 +66,12 @@ export const STATUS_SETOR: Record<OrderStatus, Setor> = {
   CANCELADO: "FINANCEIRO",
 };
 
-// Status visiveis para o motorista: fluxo logistico restrito.
-// Apenas Enviado -> Em Rota -> Entregue. Estagios anteriores nao aparecem.
 export const MOTORISTA_VISIBLE: OrderStatus[] = [
   "ENVIADO",
   "EM_ROTA",
   "ENTREGUE",
 ];
 
-// Colunas do fluxo do motorista, na ordem de progressao.
 export const MOTORISTA_COLUMNS: OrderStatus[] = [
   "ENVIADO",
   "EM_ROTA",

@@ -19,6 +19,7 @@ export async function GET(
       orderType: true,
       operation: true,
       paymentMethod: true,
+      bank: true,
       shippingMethod: true,
       paymentStatus: true,
       cnpj: true,

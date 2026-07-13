@@ -30,6 +30,15 @@ export default async function FinanceiroPage() {
     .filter((c) => c.active)
     .map((c) => ({ id: c.id, name: c.name, document: c.document }));
 
+  // Opções ativas para o Financeiro preencher no pedido (realocadas de Vendas).
+  const formasAtivas = paymentMethods
+    .filter((p) => p.active)
+    .map((p) => ({ id: p.id, name: p.name }));
+
+  const bancosAtivos = banks
+    .filter((b) => b.active)
+    .map((b) => ({ id: b.id, name: b.name }));
+
   return (
     <div className="space-y-6">
       <div>
@@ -76,6 +85,11 @@ export default async function FinanceiroPage() {
                 statusOptions={statusAtivos}
                 cnpjOptions={cnpjsAtivos}
                 currentCnpjId={o.cnpjId}
+                paymentMethods={formasAtivas}
+                banks={bancosAtivos}
+                currentPaymentMethodId={o.paymentMethodId}
+                currentBankId={o.bankId}
+                hasProof2={o.paymentProof2Path != null}
               />
             </div>
           ))}

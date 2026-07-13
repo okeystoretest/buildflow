@@ -21,6 +21,8 @@ interface OrderDetail {
   total: string;
   notes: string | null;
   paymentProofPath: string | null;
+  // Segundo comprovante, anexado pelo Financeiro. Visível a todos.
+  paymentProof2Path: string | null;
   invoicePath: string | null;
   trackingCode: string | null;
   cnpj: { name: string; document: string } | null;
@@ -29,7 +31,9 @@ interface OrderDetail {
   store: { name: string };
   orderType: { name: string };
   operation: { code: string; name: string };
-  paymentMethod: { name: string };
+  // Preenchidos pelo Financeiro: ficam nulos até a Análise de Pedidos.
+  paymentMethod: { name: string } | null;
+  bank: { name: string } | null;
   shippingMethod: { name: string };
   paymentStatus: { name: string } | null;
   delivery: {
@@ -244,7 +248,9 @@ export function OrderDetailModal({
               <Info label="Tipo" value={order.orderType.name} />
               {/* 1.3 - Operacao destacada em amarelo (#FFFF00). */}
               <Info label="Operação" value={`${order.operation.code} - ${order.operation.name}`} highlight />
-              <Info label="Pagamento" value={order.paymentMethod.name} />
+              {/* Pagamento e Banco são definidos pelo Financeiro na Análise. */}
+              <Info label="Pagamento" value={order.paymentMethod?.name ?? "—"} />
+              <Info label="Banco" value={order.bank?.name ?? "—"} />
               <Info label="Envio" value={order.shippingMethod.name} />
               <Info label="Status pgto" value={order.paymentStatus?.name ?? "—"} />
               <Info label="CNPJ" value={order.cnpj ? order.cnpj.name : "—"} />
@@ -315,6 +321,8 @@ export function OrderDetailModal({
             {!driverMode && (
               <div className="flex flex-wrap gap-4 text-sm">
                 <FileLink label="Comprovante pagamento" path={order.paymentProofPath} />
+                {/* Segundo comprovante (anexado pelo Financeiro) — visível a todos. */}
+                <FileLink label="2º Comprovante pagamento" path={order.paymentProof2Path} />
                 <FileLink label="Nota Fiscal" path={order.invoicePath} />
               </div>
             )}

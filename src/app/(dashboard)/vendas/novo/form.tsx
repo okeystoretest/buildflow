@@ -28,10 +28,10 @@ function Select({ label, value, onChange, options, placeholder }: {
 }
 
 export function NovoPedidoForm({
-  customers, stores, orderTypes, operations, paymentMethods, shippingMethods, banks, campaigns,
+  customers, stores, orderTypes, operations, shippingMethods, campaigns,
 }: {
   customers: Opt[]; stores: Opt[]; orderTypes: Opt[];
-  operations: Opt[]; paymentMethods: Opt[]; shippingMethods: Opt[]; banks: Opt[]; campaigns: Opt[];
+  operations: Opt[]; shippingMethods: Opt[]; campaigns: Opt[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -43,9 +43,7 @@ export function NovoPedidoForm({
   const [operationId, setOperationId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
-  const [paymentMethodId, setPaymentMethodId] = useState("");
   const [shippingMethodId, setShippingMethodId] = useState("");
-  const [bankId, setBankId] = useState("");
   const [orderValue, setOrderValue] = useState(0);
   const [freight, setFreight] = useState(0);
   const [notes, setNotes] = useState("");
@@ -89,8 +87,7 @@ export function NovoPedidoForm({
     start(async () => {
       const res = await createOrder({
         orderNumber, storeId, orderTypeId, operationId, customerId,
-        paymentMethodId, shippingMethodId, orderValue, freight,
-        bankId,
+        shippingMethodId, orderValue, freight,
         notes: notes || undefined,
         orderTypeName,
         campaignId: inCampaign ? campaignId : undefined,
@@ -106,7 +103,7 @@ export function NovoPedidoForm({
   // Anexo obrigatório, EXCETO quando o tipo for "Troca".
   const temAnexo = !!proofBase64;
   const anexoOk = trocaSemAnexo || temAnexo;
-  const podeEnviar = orderNumber && storeId && orderTypeId && operationId && customerId && paymentMethodId && shippingMethodId && bankId && orderValue > 0 && campaignOk && anexoOk;
+  const podeEnviar = orderNumber && storeId && orderTypeId && operationId && customerId && shippingMethodId && orderValue > 0 && campaignOk && anexoOk;
 
   return (
     <div className="space-y-5">
@@ -119,9 +116,9 @@ export function NovoPedidoForm({
         <Select label="Loja" value={storeId} onChange={setStoreId} options={stores} placeholder="Selecione..." />
         <Select label="Tipo de Pedido" value={orderTypeId} onChange={setOrderTypeId} options={orderTypes} placeholder="Selecione..." />
         <Select label="Código da Operação" value={operationId} onChange={setOperationId} options={operations} placeholder="Selecione..." />
-        <Select label="Forma de Pagamento" value={paymentMethodId} onChange={setPaymentMethodId} options={paymentMethods} placeholder="Selecione..." />
+        {/* "Forma de Pagamento" e "Banco" saíram daqui: agora são preenchidos
+            pelo Financeiro na tela de Análise de Pedidos. */}
         <Select label="Forma de Envio" value={shippingMethodId} onChange={setShippingMethodId} options={shippingMethods} placeholder="Selecione..." />
-        <Select label="Banco" value={bankId} onChange={setBankId} options={banks} placeholder="Selecione..." />
       </div>
 
       {/* Cliente + valores na mesma faixa */}
