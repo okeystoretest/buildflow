@@ -80,6 +80,11 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   inicioSemana.setDate(now.getDate() - now.getDay());
   inicioSemana.setHours(0, 0, 0, 0);
 
+  // Base de calculo: TODOS os pedidos faturados (comanda gerada), exceto os
+  // interrompidos. Nao ha filtro por campanha aqui de proposito:
+  // REGRA DE NEGOCIO -> vendas de itens de CAMPANHA tambem contam no valor
+  // total da Meta Geral (e no rank por vendedor). Nao adicionar filtro de
+  // campaignId nesta query, senao a meta geral passa a ignorar essas vendas.
   const faturados = await prisma.order.findMany({
     where: {
       comandaNumber: { not: null },
@@ -105,6 +110,8 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
 
   // Progresso da Meta Geral: realizado é o faturado no MÊS selecionado (mesma
   // janela da meta), não o acumulado histórico. Evita % inflado.
+  // Inclui os pedidos vinculados a CAMPANHA (regra de negocio): o valor da
+  // venda de campanha soma normalmente no realizado da meta geral.
   const realizadoGeral = doMes.reduce((a, o) => a + Number(o.total), 0);
   const metaGeralPct = metaGeral > 0 ? Math.round((realizadoGeral / metaGeral) * 100) : 0;
   const maior = (arr: typeof faturados) =>

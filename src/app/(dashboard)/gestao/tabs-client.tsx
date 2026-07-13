@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   createSimple, toggleSimple, renameSimple, deleteSimple,
   createOperation, renameOperation,
-  createUser, toggleUser, deleteUser,
+  createUser, updateUser, toggleUser, deleteUser,
 } from "@/lib/actions/management";
 import {
   createSalesGoal, deleteSalesGoal,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/actions/goals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CrudTable, type CrudRow } from "@/components/shared/crud-table";
@@ -198,21 +199,66 @@ function FieldHint({ children }: { children: React.ReactNode }) {
 function UsersPanel({ users }: { users: UserRow[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [f, setF] = useState({ name: "", email: "", password: "", role: "VENDAS" as Role, salesModel: "VAREJO" as SalesModel });
+  const EMPTY = { name: "", email: "", password: "", role: "VENDAS" as Role, salesModel: "VAREJO" as SalesModel };
+  const [f, setF] = useState(EMPTY);
+  // Quando != null, o formulario esta EDITANDO este usuario (em vez de criar).
+  const [editId, setEditId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
-  function add() {
+  const editando = editId !== null;
+
+  // Carrega o usuario no formulario para edicao. A senha fica em branco:
+  // preencher so se quiser trocar.
+  function startEdit(u: UserRow) {
+    setEditId(u.id);
+    setF({
+      name: u.name,
+      email: u.email,
+      password: "",
+      role: u.role as Role,
+      salesModel: (u.salesModel ?? "VAREJO") as SalesModel,
+    });
     setError(null);
+    setMsg(null);
+    // Leva o usuario ate o formulario (ele fica no topo do painel).
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    setEditId(null);
+    setF(EMPTY);
+    setError(null);
+    setMsg(null);
+  }
+
+  function save() {
+    setError(null);
+    setMsg(null);
     start(async () => {
-      const res = await createUser({
-        ...f,
-        salesModel: f.role === "VENDAS" ? f.salesModel : null,
-      });
-      if (res.ok) { setF({ name: "", email: "", password: "", role: "VENDAS", salesModel: "VAREJO" }); router.refresh(); }
-      else setError(res.error);
+      const salesModel = f.role === "VENDAS" ? f.salesModel : null;
+      const res = editId
+        ? await updateUser({
+            id: editId,
+            name: f.name,
+            email: f.email,
+            // Senha vazia = mantem a atual.
+            password: f.password.trim() || undefined,
+            role: f.role,
+            salesModel,
+          })
+        : await createUser({ ...f, salesModel });
+
+      if (res.ok) {
+        setMsg(editId ? "Usuário atualizado." : "Usuário criado.");
+        setEditId(null);
+        setF(EMPTY);
+        router.refresh();
+      } else setError(res.error);
     });
   }
+
   function toggle(id: string, active: boolean) {
     start(async () => { await toggleUser(id, !active); router.refresh(); });
   }
@@ -223,10 +269,20 @@ function UsersPanel({ users }: { users: UserRow[] }) {
     });
   }
 
+  // Ao criar, senha e obrigatoria. Ao editar, e opcional.
+  const podeSalvar = !!f.name && !!f.email && (editando || f.password.length >= 6);
+
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border p-4 space-y-3">
-        <p className="font-medium">Novo usuário</p>
+      <div className={`rounded-lg border p-4 space-y-3 ${editando ? "border-primary bg-primary/5" : "border-border"}`}>
+        <div className="flex items-center justify-between">
+          <p className="font-medium">{editando ? "Editar usuário" : "Novo usuário"}</p>
+          {editando && (
+            <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={pending}>
+              <X className="h-4 w-4" /> Cancelar edição
+            </Button>
+          )}
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">
             <Label>Nome</Label>
@@ -240,8 +296,16 @@ function UsersPanel({ users }: { users: UserRow[] }) {
           </div>
           <div className="space-y-1">
             <Label>Senha</Label>
-            <Input placeholder="Mínimo 6 caracteres" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
-            <FieldHint>Senha de acesso ao sistema (mínimo 6 caracteres).</FieldHint>
+            <PasswordInput
+              placeholder={editando ? "Deixe em branco para manter" : "Mínimo 6 caracteres"}
+              value={f.password}
+              onChange={(e) => setF({ ...f, password: e.target.value })}
+            />
+            <FieldHint>
+              {editando
+                ? "Preencha apenas se quiser trocar a senha (mín. 6 caracteres)."
+                : "Senha de acesso ao sistema (mínimo 6 caracteres)."}
+            </FieldHint>
           </div>
           <div className="space-y-1">
             <Label>Perfil</Label>
@@ -268,9 +332,12 @@ function UsersPanel({ users }: { users: UserRow[] }) {
           )}
         </div>
         <div>
-          <Button variant="brand" onClick={add} disabled={pending || !f.name || !f.email || !f.password}>Criar usuário</Button>
-          <FieldHint>Cria um único usuário. Para vários de uma vez, use a importação abaixo.</FieldHint>
+          <Button variant="brand" onClick={save} disabled={pending || !podeSalvar}>
+            {pending ? "Salvando..." : editando ? "Salvar alterações" : "Criar usuário"}
+          </Button>
+          {!editando && <FieldHint>Cria um único usuário. Para vários de uma vez, use a importação abaixo.</FieldHint>}
         </div>
+        {msg && <p className="text-sm text-motorista">{msg}</p>}
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 
@@ -288,7 +355,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
         </thead>
         <tbody>
           {users.map((u) => (
-            <tr key={u.id} className="border-b border-border last:border-0 hover:bg-secondary/50">
+            <tr key={u.id} className={`border-b border-border last:border-0 hover:bg-secondary/50 ${editId === u.id ? "bg-primary/5" : ""}`}>
               <td className="py-2 pr-4 font-medium">{u.name}</td>
               <td className="py-2 pr-4">{u.email}</td>
               <td className="py-2 pr-4">{u.role}</td>
@@ -296,6 +363,9 @@ function UsersPanel({ users }: { users: UserRow[] }) {
               <td className="py-2 pr-4">{u.active ? <Badge variant="motorista">Sim</Badge> : <Badge variant="secondary">Não</Badge>}</td>
               <td className="py-2 pr-4">
                 <div className="flex justify-end gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => startEdit(u)} disabled={pending} aria-label="Editar">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => toggle(u.id, u.active)} disabled={pending}>{u.active ? "Desativar" : "Ativar"}</Button>
                   {confirmDel === u.id ? (
                     <span className="flex items-center gap-1">
@@ -303,7 +373,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
                       <Button variant="ghost" size="sm" onClick={() => setConfirmDel(null)}>Não</Button>
                     </span>
                   ) : (
-                    <Button variant="ghost" size="icon" onClick={() => setConfirmDel(u.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => setConfirmDel(u.id)} aria-label="Excluir"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   )}
                 </div>
               </td>
@@ -314,7 +384,6 @@ function UsersPanel({ users }: { users: UserRow[] }) {
     </div>
   );
 }
-
 // ===== Painel de Clientes (Gestao) =====
 function CustomersPanel({ customers }: { customers: ClienteRow[] }) {
   return (

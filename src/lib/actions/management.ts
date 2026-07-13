@@ -164,8 +164,64 @@ export async function createUser(args: {
   }
 }
 
-export async function toggleUser(id: string, active: boolean): Promise<ActionResult<void>> {
+/**
+ * Edita um usuario existente (Gestao).
+ * A SENHA e opcional: se vier vazia, a senha atual e mantida.
+ */
+export async function updateUser(args: {
+  id: string;
+  name: string;
+  email: string;
+  password?: string; // vazio/undefined = nao altera
+  role: Role;
+  salesModel?: SalesModel | null;
+}): Promise<ActionResult<void>> {
   try {
+    await requireRoleAction(["GESTAO"]);
+
+    const user = await prisma.user.findUnique({ where: { id: args.id } });
+    if (!user) return actionError("Usuário não encontrado.");
+
+    if (!args.name.trim() || !args.email.trim()) {
+      return actionError("Preencha nome e usuário.");
+    }
+    // Se informou senha nova, ela precisa ter o tamanho minimo.
+    const novaSenha = args.password?.trim();
+    if (novaSenha && novaSenha.length < 6) {
+      return actionError("A nova senha deve ter no mínimo 6 caracteres.");
+    }
+    // Vendedor obrigatoriamente tem modelo de venda (Varejo/Atacado).
+    if (args.role === "VENDAS" && !args.salesModel) {
+      return actionError("Selecione o Modelo de Venda (Varejo ou Atacado) para o vendedor.");
+    }
+
+    // O login (email) deve continuar unico.
+    const email = args.email.trim();
+    if (email !== user.email) {
+      const exists = await prisma.user.findUnique({ where: { email } });
+      if (exists) return actionError("Já existe usuário com este login.");
+    }
+
+    await prisma.user.update({
+      where: { id: args.id },
+      data: {
+        name: args.name.trim(),
+        email,
+        role: args.role,
+        salesModel: args.role === "VENDAS" ? args.salesModel : null,
+        // Só regrava a senha quando uma nova foi informada.
+        ...(novaSenha ? { password: await hashPassword(novaSenha) } : {}),
+      },
+    });
+
+    revalidatePath("/gestao");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao editar usuário.");
+  }
+}
+
+export async function toggleUser(id: string, active: boolean): Promise<ActionResult<void>> {  try {
     await requireRoleAction(["GESTAO"]);
     await prisma.user.update({ where: { id }, data: { active } });
     revalidatePath("/gestao");

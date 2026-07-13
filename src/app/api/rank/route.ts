@@ -6,7 +6,8 @@ import { computeRankData } from "@/lib/rank-data";
 // Aceita ?month=1-12&year=YYYY para consultar periodos passados.
 export async function GET(req: Request) {
   const session = await getSession();
-  if (!session || session.role !== "GESTAO") {
+  // Rank liberado para GESTAO e VENDAS (a vendedora ve o quadro completo).
+  if (!session || (session.role !== "GESTAO" && session.role !== "VENDAS")) {
     return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   }
 

@@ -5,6 +5,7 @@ import { PackageCheck } from "lucide-react";
 import { login } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 function SubmitButton() {
@@ -44,7 +45,7 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
-              <Input id="password" name="password" type="password" required autoComplete="current-password" placeholder="Digite sua senha" />
+              <PasswordInput id="password" name="password" required autoComplete="current-password" placeholder="Digite sua senha" />
             </div>
             {state && !state.ok && (
               <div className="animate-slide-down rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
