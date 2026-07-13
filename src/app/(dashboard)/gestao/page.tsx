@@ -34,7 +34,9 @@ export default async function GestaoPage({
         orderBy: [{ user: { name: "asc" } }, { campaignId: "asc" }],
       }),
       prisma.campaign.findMany({ orderBy: { createdAt: "desc" } }),
-      prisma.customer.findMany({ orderBy: { name: "asc" } }),
+      // Base tem dezenas de milhares de clientes: aqui carregamos apenas uma
+      // amostra. A gestao completa (com busca e paginacao) fica em /vendas/clientes.
+      prisma.customer.findMany({ orderBy: { name: "asc" }, take: 20 }),
     ]);
 
   const activeCampaigns = campaigns.filter((c) => c.active);

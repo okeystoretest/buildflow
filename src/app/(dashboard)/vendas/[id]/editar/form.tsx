@@ -6,6 +6,7 @@ import { updateOrder } from "@/lib/actions/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CustomerCombobox, type CustomerOpt } from "@/components/shared/customer-combobox";
 
 interface Opt { id: string; name: string; }
 interface OrderData {
@@ -16,10 +17,10 @@ interface OrderData {
 }
 
 export function EditarPedidoForm({
-  order, customers, stores, orderTypes, operations, paymentMethods, shippingMethods, banks,
+  order, selectedCustomer, stores, orderTypes, operations, paymentMethods, shippingMethods, banks,
 }: {
   order: OrderData;
-  customers: Opt[]; stores: Opt[]; orderTypes: Opt[]; operations: Opt[];
+  selectedCustomer: CustomerOpt | null; stores: Opt[]; orderTypes: Opt[]; operations: Opt[];
   paymentMethods: Opt[]; shippingMethods: Opt[]; banks: Opt[];
 }) {
   const router = useRouter();
@@ -47,7 +48,10 @@ export function EditarPedidoForm({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Select label="Cliente" value={f.customerId} onChange={(v) => setF({ ...f, customerId: v })} options={customers} />
+        {/* Busca no servidor: nao carregamos a base inteira de clientes. */}
+        <CustomerCombobox label="Cliente" value={f.customerId}
+          onChange={(v) => setF({ ...f, customerId: v })}
+          initialSelected={selectedCustomer} />
         <Select label="Loja" value={f.storeId} onChange={(v) => setF({ ...f, storeId: v })} options={stores} />
         <Select label="Tipo de Pedido" value={f.orderTypeId} onChange={(v) => setF({ ...f, orderTypeId: v })} options={orderTypes} />
         <Select label="Operação" value={f.operationId} onChange={(v) => setF({ ...f, operationId: v })} options={operations} />

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Plus, X, Search } from "lucide-react";
+import { Pencil, Trash2, Plus, X } from "lucide-react";
 import { createCustomer, updateCustomer, deleteCustomer } from "@/lib/actions/sales";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,16 +25,11 @@ export function ClientesManager({ customers }: { customers: ClienteRow[] }) {
   const [showForm, setShowForm] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
 
-  // Filtro por código ou nome (client-side, instantâneo).
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter(
-      (c) => c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q),
-    );
-  }, [query, customers]);
+  // NOTA: a busca NAO e feita aqui. Com a lista paginada, filtrar no
+  // navegador so encontraria itens da pagina atual (o cliente da pagina 7
+  // "sumiria"). A busca acontece no SERVIDOR, via <SearchBox> (?q= na URL),
+  // e esta lista ja chega filtrada e paginada.
 
   function set(k: keyof Draft, v: string) { setDraft((p) => ({ ...p, [k]: v })); }
 
@@ -100,18 +95,7 @@ export function ClientesManager({ customers }: { customers: ClienteRow[] }) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex flex-wrap items-center justify-between gap-3">
-            <span>Clientes cadastrados</span>
-            <div className="relative w-full max-w-xs">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-8"
-                placeholder="Buscar por código ou nome..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-          </CardTitle>
+          <CardTitle>Clientes cadastrados</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -124,7 +108,7 @@ export function ClientesManager({ customers }: { customers: ClienteRow[] }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((c) => (
+                {customers.map((c) => (
                   <tr key={c.id} className="border-b border-border last:border-0 transition-colors hover:bg-secondary/50">
                     <td className="py-2 pr-4 font-data">{c.code}</td>
                     <td className="py-2 pr-4 font-medium">{c.name}</td>
@@ -147,7 +131,7 @@ export function ClientesManager({ customers }: { customers: ClienteRow[] }) {
                     </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && (
+                {customers.length === 0 && (
                   <tr><td colSpan={3} className="py-6 text-center text-muted-foreground">
                     {customers.length === 0 ? "Nenhum cliente cadastrado." : "Nenhum cliente encontrado para a busca."}
                   </td></tr>

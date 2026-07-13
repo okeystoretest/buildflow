@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createOrder } from "@/lib/actions/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CustomerCombobox } from "@/components/shared/customer-combobox";
 import { formatBRL } from "@/lib/utils";
 import { shrinkImageToBase64 } from "@/lib/client-image";
 import { isTroca } from "@/lib/validations/order";
@@ -28,9 +29,9 @@ function Select({ label, value, onChange, options, placeholder }: {
 }
 
 export function NovoPedidoForm({
-  customers, stores, orderTypes, operations, shippingMethods, campaigns,
+  stores, orderTypes, operations, shippingMethods, campaigns,
 }: {
-  customers: Opt[]; stores: Opt[]; orderTypes: Opt[];
+  stores: Opt[]; orderTypes: Opt[];
   operations: Opt[]; shippingMethods: Opt[]; campaigns: Opt[];
 }) {
   const router = useRouter();
@@ -42,7 +43,6 @@ export function NovoPedidoForm({
   const [orderTypeId, setOrderTypeId] = useState("");
   const [operationId, setOperationId] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [customerSearch, setCustomerSearch] = useState("");
   const [shippingMethodId, setShippingMethodId] = useState("");
   const [orderValue, setOrderValue] = useState(0);
   const [freight, setFreight] = useState(0);
@@ -73,14 +73,6 @@ export function NovoPedidoForm({
   // Tipo "Troca" dispensa o comprovante de pagamento (anexo opcional).
   const orderTypeName = orderTypes.find((t) => t.id === orderTypeId)?.name ?? "";
   const trocaSemAnexo = isTroca(orderTypeName);
-
-  const filteredCustomers = useMemo(() => {
-    const q = customerSearch.toLowerCase().trim();
-    if (!q) return customers.slice(0, 6);
-    return customers.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 6);
-  }, [customerSearch, customers]);
-
-  const selectedCustomer = customers.find((c) => c.id === customerId);
 
   function onSubmit() {
     setError(null);
@@ -123,27 +115,10 @@ export function NovoPedidoForm({
 
       {/* Cliente + valores na mesma faixa */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="space-y-1.5 lg:col-span-1">
-          <Label>Cliente</Label>
-          {selectedCustomer ? (
-            <div className="flex h-10 items-center justify-between rounded-lg border border-border px-3">
-              <span className="truncate text-sm font-medium">{selectedCustomer.name}</span>
-              <button className="text-xs text-primary hover:underline" onClick={() => { setCustomerId(""); setCustomerSearch(""); }}>Trocar</button>
-            </div>
-          ) : (
-            <div className="relative">
-              <Input placeholder="Buscar cliente..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
-              {customerSearch && (
-                <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-xl">
-                  {filteredCustomers.map((c) => (
-                    <button key={c.id} className="block w-full px-3 py-2 text-left text-sm hover:bg-secondary"
-                      onClick={() => { setCustomerId(c.id); setCustomerSearch(""); }}>{c.name}</button>
-                  ))}
-                  {filteredCustomers.length === 0 && <p className="px-3 py-2 text-sm text-muted-foreground">Nenhum encontrado.</p>}
-                </div>
-              )}
-            </div>
-          )}
+        <div className="lg:col-span-1">
+          {/* Busca no SERVIDOR: a base tem dezenas de milhares de clientes,
+              entao nunca carregamos todos no navegador. */}
+          <CustomerCombobox label="Cliente" value={customerId} onChange={setCustomerId} />
         </div>
         <div className="space-y-1.5">
           <Label>Valor Total do Pedido</Label>

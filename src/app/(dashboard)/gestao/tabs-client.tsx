@@ -395,6 +395,15 @@ function CustomersPanel({ customers }: { customers: ClienteRow[] }) {
         sample={["CLI-0001", "Loja do João"]}
         action={importCustomersCsv}
       />
+      {/* A base tem dezenas de milhares de clientes. Aqui mostramos apenas uma
+          amostra; a busca e a paginacao completas ficam na tela dedicada. */}
+      <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+        Mostrando apenas os primeiros clientes. Para buscar e navegar por toda a base,
+        use a tela{" "}
+        <a href="/vendas/clientes" className="font-semibold underline underline-offset-2">
+          Vendas › Clientes
+        </a>.
+      </div>
       <ClientesManager customers={customers} />
     </div>
   );

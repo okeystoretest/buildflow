@@ -5,6 +5,11 @@ import { formatBRL } from "@/lib/utils";
 import { BackButton } from "@/components/shared/back-button";
 import { HistoricoFiltros } from "./filtros-client";
 import { HistoricoList, type HistoricoItem } from "./historico-list";
+import { Pagination } from "@/components/shared/pagination";
+
+// Itens por pagina. O historico so cresce (todo pedido concluido fica aqui),
+// entao a consulta e paginada no banco em vez de trazer tudo.
+const PER_PAGE = 20;
 
 function firstDayOfMonth(): string {
   const d = new Date();
@@ -17,7 +22,7 @@ function todayStr(): string {
 export default async function HistoricoPage({
   searchParams,
 }: {
-  searchParams: { comanda?: string; de?: string; ate?: string };
+  searchParams: { comanda?: string; de?: string; ate?: string; page?: string };
 }) {
   const session = await requireRole(["VENDAS", "GESTAO"]);
 
@@ -25,23 +30,33 @@ export default async function HistoricoPage({
   const de = searchParams.de || firstDayOfMonth();
   const ate = searchParams.ate || todayStr();
   const comanda = searchParams.comanda?.trim() || "";
+  const page = Math.max(1, Number(searchParams.page ?? 1) || 1);
 
   const dataInicio = new Date(de + "T00:00:00");
   const dataFim = new Date(ate + "T23:59:59");
 
-  const orders = await prisma.order.findMany({
-    where: {
-      status: "CONCLUIDO",
-      ...(session.role === "GESTAO" ? {} : { sellerId: session.userId }),
-      updatedAt: { gte: dataInicio, lte: dataFim },
-      ...(comanda ? { comandaNumber: { contains: comanda, mode: "insensitive" } } : {}),
-    },
-    include: {
-      customer: true,
-      delivery: { include: { proofs: true, driver: true } },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
+  // O mesmo filtro serve para listar a pagina e para contar o total.
+  const where = {
+    status: "CONCLUIDO" as const,
+    ...(session.role === "GESTAO" ? {} : { sellerId: session.userId }),
+    updatedAt: { gte: dataInicio, lte: dataFim },
+    ...(comanda ? { comandaNumber: { contains: comanda, mode: "insensitive" as const } } : {}),
+  };
+
+  // As duas consultas correm em paralelo.
+  const [orders, total] = await Promise.all([
+    prisma.order.findMany({
+      where,
+      include: {
+        customer: true,
+        delivery: { include: { proofs: true, driver: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+      skip: (page - 1) * PER_PAGE,
+      take: PER_PAGE,
+    }),
+    prisma.order.count({ where }),
+  ]);
 
   const items: HistoricoItem[] = orders.map((o) => ({
     id: o.id,
@@ -64,14 +79,16 @@ export default async function HistoricoPage({
       <HistoricoFiltros defaultDe={de} defaultAte={ate} defaultComanda={comanda} />
 
       <p className="text-sm text-muted-foreground">
-        {orders.length} pedido(s) encontrado(s) entre {new Date(de).toLocaleDateString("pt-BR")} e {new Date(ate).toLocaleDateString("pt-BR")}.
+        {total} pedido(s) encontrado(s) entre {new Date(de).toLocaleDateString("pt-BR")} e {new Date(ate).toLocaleDateString("pt-BR")}.
       </p>
 
-      {orders.length === 0 && (
+      {total === 0 && (
         <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido no período/filtro.</CardContent></Card>
       )}
 
       <HistoricoList orders={items} />
+
+      <Pagination page={page} perPage={PER_PAGE} total={total} label="pedidos" />
     </div>
   );
 }

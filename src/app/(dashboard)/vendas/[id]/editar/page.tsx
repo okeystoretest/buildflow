@@ -10,10 +10,14 @@ import { EditarPedidoForm } from "./form";
 export default async function EditarPedidoPage({ params }: { params: { id: string } }) {
   await requireRole(["GESTAO"]);
 
-  const [order, customers, stores, orderTypes, operations, paymentMethods, shippingMethods, banks] =
+  // Nao carregamos todos os clientes (base tem dezenas de milhares).
+  // O combobox busca sob demanda; aqui so precisamos do cliente ATUAL do pedido.
+  const [order, stores, orderTypes, operations, paymentMethods, shippingMethods, banks] =
     await Promise.all([
-      prisma.order.findUnique({ where: { id: params.id } }),
-      prisma.customer.findMany({ orderBy: { name: "asc" } }),
+      prisma.order.findUnique({
+        where: { id: params.id },
+        include: { customer: true },
+      }),
       prisma.store.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.orderType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.operation.findMany({ where: { active: true } }),
@@ -44,7 +48,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
               freight: Number(order.freight),
               notes: order.notes ?? "",
             }}
-            customers={customers.map((c) => ({ id: c.id, name: c.name }))}
+            selectedCustomer={order.customer ? { id: order.customer.id, code: order.customer.code, name: order.customer.name } : null}
             stores={stores.map((s) => ({ id: s.id, name: s.name }))}
             orderTypes={orderTypes.map((s) => ({ id: s.id, name: s.name }))}
             operations={sortOperationsByCode(operations).map((o) => ({ id: o.id, name: `${o.code} - ${o.name}` }))}

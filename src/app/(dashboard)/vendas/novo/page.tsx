@@ -9,9 +9,11 @@ export default async function NovoPedidoPage() {
 
   await requireRole(["VENDAS", "GESTAO"]);
 
-  const [customers, stores, orderTypes, operations, shippingMethods, campaigns] =
+  // NOTA: a lista de clientes NAO e carregada aqui. Com dezenas de milhares
+  // de registros isso geraria um HTML gigante. O formulario usa o
+  // CustomerCombobox, que busca sob demanda em /api/customers/search.
+  const [stores, orderTypes, operations, shippingMethods, campaigns] =
     await Promise.all([
-      prisma.customer.findMany({ orderBy: { name: "asc" } }),
       prisma.store.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.orderType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.operation.findMany({ where: { active: true } }),
@@ -31,7 +33,6 @@ export default async function NovoPedidoPage() {
         <CardHeader><CardTitle>Dados do pedido</CardTitle></CardHeader>
         <CardContent>
           <NovoPedidoForm
-            customers={customers.map((c) => ({ id: c.id, name: c.name }))}
             stores={stores.map((s) => ({ id: s.id, name: s.name }))}
             orderTypes={orderTypes.map((t) => ({ id: t.id, name: t.name }))}
             operations={sortOperationsByCode(operations).map((o) => ({ id: o.id, name: `${o.code} - ${o.name}` }))}
