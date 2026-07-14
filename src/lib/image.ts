@@ -116,3 +116,59 @@ export function validateUpload(file: File, maxMb = 15): string | null {
   }
   return null;
 }
+
+/**
+ * Salva um PDF no disco, SEM passar pelo sharp.
+ *
+ * Por que separado: o sharp so entende imagem (raster). Um PDF e um documento
+ * vetorial/paginado — jogar no pipeline .webp() quebraria. Aqui o arquivo e
+ * gravado como esta, mantendo a mesma organizacao (<folder>/<ano>/<mes>) e a
+ * mesma regra do projeto: no banco vai apenas a STRING do caminho.
+ */
+export async function saveDocument(
+  input: Buffer,
+  opts: { folder?: string; fileName: string },
+): Promise<ProcessedImage> {
+  if (!input || input.length === 0) {
+    throw new Error("Arquivo vazio ou invalido.");
+  }
+
+  // Assinatura de PDF: os arquivos comecam com "%PDF" (25 50 44 46).
+  // Confere o conteudo real, nao so o nome/MIME informado pelo navegador.
+  const assinatura = input.subarray(0, 4).toString("ascii");
+  if (assinatura !== "%PDF") {
+    throw new Error("Arquivo nao e um PDF valido.");
+  }
+
+  const folder = opts.folder ?? "uploads";
+  const now = new Date();
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+
+  const destDirAbs = path.join(UPLOAD_DIR, folder, year, month);
+  await mkdir(destDirAbs, { recursive: true });
+
+  const safeName = opts.fileName.replace(/[^a-zA-Z0-9_-]/g, "") || `doc_${Date.now()}`;
+  const finalName = `${safeName}.pdf`;
+  const absolutePath = path.join(destDirAbs, finalName);
+
+  await writeFile(absolutePath, input);
+
+  const filePath = `${PUBLIC_BASE}/${folder}/${year}/${month}/${finalName}`.replace(
+    /\/+/g,
+    "/",
+  );
+
+  return {
+    filePath,
+    absolutePath,
+    width: null,   // PDF nao tem dimensao raster
+    height: null,
+    sizeBytes: input.length,
+  };
+}
+
+/** Detecta se o data-URL/base64 recebido e um PDF. */
+export function isPdfDataUrl(dataUrl: string): boolean {
+  return /^data:application\/pdf/i.test(dataUrl);
+}

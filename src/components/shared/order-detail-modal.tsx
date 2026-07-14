@@ -7,7 +7,7 @@ import { STATUS_LABEL } from "@/lib/order-flow";
 import { formatBRL } from "@/lib/utils";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { uploadInvoiceBase64 } from "@/lib/actions/sales";
-import { shrinkImageToBase64 } from "@/lib/client-image";
+import { prepareInvoiceFile } from "@/lib/client-image";
 import { Button } from "@/components/ui/button";
 import { Clock } from "lucide-react";
 
@@ -101,7 +101,8 @@ export function OrderDetailModal({
     if (!file || !order) return;
     setNfBusy(true);
     (async () => {
-      const r = await shrinkImageToBase64(file, { maxDimension: 1600, quality: 0.8 });
+      // Aceita imagem (vira .webp no servidor) ou PDF (salvo como esta).
+      const r = await prepareInvoiceFile(file, { maxDimension: 1600, quality: 0.8 });
       if (r.error) { setNfBusy(false); setNfMsg({ ok: false, text: r.error }); return; }
       const res = await uploadInvoiceBase64({ orderId: order.id, base64: r.base64 ?? "" });
       setNfBusy(false);
@@ -344,11 +345,11 @@ export function OrderDetailModal({
                         ⚠ Pedido em Processando sem Nota Fiscal. O avanço está bloqueado até anexar a NF.
                       </div>
                     )}
-                    <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.pdf"
                       onChange={onInvoiceFile} disabled={nfBusy}
                       className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-distribuicao file:px-4 file:py-2 file:text-sm file:font-medium file:text-distribuicao-fg hover:file:opacity-90" />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Clique para anexar a Nota Fiscal.{nfBusy && " Enviando..."}
+                      Clique para anexar a Nota Fiscal (imagem ou PDF).{nfBusy && " Enviando..."}
                     </p>
                     {nfMsg && <p className={`mt-1 text-sm ${nfMsg.ok ? "text-motorista" : "text-destructive"}`}>{nfMsg.text}</p>}
                   </>
@@ -446,9 +447,11 @@ function Info({ label, value, highlight }: { label: string; value: string; highl
 
 function FileLink({ label, path }: { label: string; path: string | null }) {
   if (!path) return <span className="text-muted-foreground">{label}: —</span>;
+  // A Nota Fiscal pode ser PDF; sinaliza para o usuario saber o que vai abrir.
+  const ehPdf = path.toLowerCase().endsWith(".pdf");
   return (
     <a href={path} target="_blank" rel="noreferrer" className="text-brand underline">
-      {label}
+      {label}{ehPdf && " (PDF)"}
     </a>
   );
 }

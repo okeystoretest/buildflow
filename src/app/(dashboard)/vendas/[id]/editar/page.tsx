@@ -6,9 +6,11 @@ import { BackButton } from "@/components/shared/back-button";
 import { sortOperationsByCode } from "@/lib/utils";
 import { EditarPedidoForm } from "./form";
 
-// Edição de pedido — exclusiva da Gestão.
+// Edição de pedido.
+// - GESTAO: edita qualquer pedido.
+// - VENDAS: edita apenas os PROPRIOS pedidos (escopo verificado abaixo).
 export default async function EditarPedidoPage({ params }: { params: { id: string } }) {
-  await requireRole(["GESTAO"]);
+  const session = await requireRole(["GESTAO", "VENDAS"]);
 
   // Nao carregamos todos os clientes (base tem dezenas de milhares).
   // O combobox busca sob demanda; aqui so precisamos do cliente ATUAL do pedido.
@@ -27,6 +29,12 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
     ]);
 
   if (!order) notFound();
+
+  // Trava de escopo: a vendedora nao pode abrir o pedido de outra pela URL.
+  // (O mesmo controle e repetido no servidor, dentro da action updateOrder.)
+  if (session.role === "VENDAS" && order.sellerId !== session.userId) {
+    notFound();
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -55,6 +63,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
             paymentMethods={paymentMethods.map((p) => ({ id: p.id, name: p.name }))}
             shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name }))}
             banks={banks.map((b) => ({ id: b.id, name: b.name }))}
+            canEditFinance={session.role === "GESTAO"}
           />
         </CardContent>
       </Card>

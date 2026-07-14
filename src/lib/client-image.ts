@@ -88,3 +88,44 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.src = src;
   });
 }
+
+// ---------------------------------------------------------------------------
+// Nota Fiscal: aceita IMAGEM ou PDF.
+// ---------------------------------------------------------------------------
+
+const MAX_PDF_MB = 15;
+
+/**
+ * Prepara o arquivo da Nota Fiscal para envio.
+ *
+ * - IMAGEM: encolhe no navegador (mesma logica de sempre); o servidor converte
+ *   para .webp com o sharp.
+ * - PDF: NAO passa por canvas/sharp (destruiria o documento). Apenas le em
+ *   base64 e envia; o servidor grava o arquivo como esta.
+ */
+export async function prepareInvoiceFile(
+  file: File,
+  opts: ShrinkOptions = {},
+): Promise<ShrinkResult | ShrinkError> {
+  const ehPdf =
+    file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+  if (ehPdf) {
+    if (file.size > MAX_PDF_MB * 1024 * 1024) {
+      return { error: `PDF muito grande. Limite: ${MAX_PDF_MB}MB.` };
+    }
+    try {
+      const dataUrl = await readAsDataUrl(file);
+      // Garante o prefixo correto para o servidor identificar o PDF.
+      const base64 = dataUrl.startsWith("data:application/pdf")
+        ? dataUrl
+        : dataUrl.replace(/^data:[^;]*;/, "data:application/pdf;");
+      return { base64 };
+    } catch {
+      return { error: "Nao foi possivel ler o PDF." };
+    }
+  }
+
+  // Nao e PDF: segue o caminho normal de imagem.
+  return shrinkImageToBase64(file, opts);
+}

@@ -18,10 +18,14 @@ interface OrderData {
 
 export function EditarPedidoForm({
   order, selectedCustomer, stores, orderTypes, operations, paymentMethods, shippingMethods, banks,
+  canEditFinance = false,
 }: {
   order: OrderData;
   selectedCustomer: CustomerOpt | null; stores: Opt[]; orderTypes: Opt[]; operations: Opt[];
   paymentMethods: Opt[]; shippingMethods: Opt[]; banks: Opt[];
+  // "Forma de Pagamento" e "Banco" pertencem ao FINANCEIRO (definidos na
+  // Analise de Pedidos). A vendedora nao mexe neles; a Gestao sim.
+  canEditFinance?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -34,11 +38,16 @@ export function EditarPedidoForm({
       const res = await updateOrder({
         id: f.id,
         customerId: f.customerId, storeId: f.storeId, orderTypeId: f.orderTypeId,
-        operationId: f.operationId, paymentMethodId: f.paymentMethodId,
-        shippingMethodId: f.shippingMethodId, bankId: f.bankId || undefined,
+        operationId: f.operationId,
+        shippingMethodId: f.shippingMethodId,
+        // Campos do Financeiro so vao no payload quando quem edita e a Gestao.
+        ...(canEditFinance
+          ? { paymentMethodId: f.paymentMethodId, bankId: f.bankId || undefined }
+          : {}),
         orderValue: f.orderValue, freight: f.freight, notes: f.notes,
       });
-      if (res.ok) { router.push("/fluxo"); router.refresh(); }
+      // A vendedora volta para a lista dela; a Gestao volta para o fluxo.
+      if (res.ok) { router.push(canEditFinance ? "/fluxo" : "/vendas"); router.refresh(); }
       else setError(res.error);
     });
   }
@@ -55,9 +64,14 @@ export function EditarPedidoForm({
         <Select label="Loja" value={f.storeId} onChange={(v) => setF({ ...f, storeId: v })} options={stores} />
         <Select label="Tipo de Pedido" value={f.orderTypeId} onChange={(v) => setF({ ...f, orderTypeId: v })} options={orderTypes} />
         <Select label="Operação" value={f.operationId} onChange={(v) => setF({ ...f, operationId: v })} options={operations} />
-        <Select label="Forma de Pagamento" value={f.paymentMethodId} onChange={(v) => setF({ ...f, paymentMethodId: v })} options={paymentMethods} />
+        {/* Campos do Financeiro: ocultos para a vendedora. */}
+        {canEditFinance && (
+          <Select label="Forma de Pagamento" value={f.paymentMethodId} onChange={(v) => setF({ ...f, paymentMethodId: v })} options={paymentMethods} />
+        )}
         <Select label="Forma de Envio" value={f.shippingMethodId} onChange={(v) => setF({ ...f, shippingMethodId: v })} options={shippingMethods} />
-        <Select label="Banco" value={f.bankId} onChange={(v) => setF({ ...f, bankId: v })} options={banks} placeholder="Selecione..." />
+        {canEditFinance && (
+          <Select label="Banco" value={f.bankId} onChange={(v) => setF({ ...f, bankId: v })} options={banks} placeholder="Selecione..." />
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">

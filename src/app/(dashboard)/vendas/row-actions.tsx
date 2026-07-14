@@ -8,15 +8,20 @@ import { deleteOrder } from "@/lib/actions/orders";
 import { Button } from "@/components/ui/button";
 
 /**
- * Ações de pedido na tela de Vendas (Editar / Excluir).
- * Renderizado APENAS para usuários GESTAO (controle feito no page.tsx server-side).
+ * Ações de pedido na tela de Vendas.
+ *
+ * - EDITAR: disponivel para a Gestao e para a vendedora (nos proprios pedidos).
+ * - EXCLUIR: exclusivo da GESTAO. A permissao vem por prop e e reforcada no
+ *   servidor (a action deleteOrder so aceita GESTAO).
  */
 export function VendaRowActions({
   orderId,
   orderNumber,
+  canDelete = false,
 }: {
   orderId: string;
   orderNumber: string;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -44,15 +49,17 @@ export function VendaRowActions({
             <Pencil className="h-4 w-4" />
           </Link>
         </Button>
-        <Button
-          variant="destructive"
-          size="icon"
-          className="h-8 w-8"
-          title="Excluir pedido"
-          onClick={() => setConfirming(true)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        {canDelete && (
+          <Button
+            variant="destructive"
+            size="icon"
+            className="h-8 w-8"
+            title="Excluir pedido"
+            onClick={() => setConfirming(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
       {confirming && (

@@ -107,13 +107,25 @@ export async function updateOrder(args: {
   notes?: string | null;
 }): Promise<ActionResult<void>> {
   try {
-    await requireRoleAction(["GESTAO"]);
+    // GESTAO edita qualquer pedido; VENDAS edita apenas os proprios.
+    const session = await requireRoleAction(["GESTAO", "VENDAS"]);
     const order = await prisma.order.findUnique({ where: { id: args.id } });
     if (!order) return actionError("Pedido não encontrado.");
+
+    // Trava de escopo no SERVIDOR (nao confiar so na tela): impede a vendedora
+    // de alterar o pedido de outra pessoa chamando a action diretamente.
+    if (session.role === "VENDAS" && order.sellerId !== session.userId) {
+      return actionError("Você só pode editar os seus próprios pedidos.");
+    }
 
     const orderValue = args.orderValue ?? Number(order.orderValue);
     const freight = args.freight ?? Number(order.freight);
     if (!(orderValue > 0)) return actionError("Valor do pedido inválido.");
+
+    // "Forma de Pagamento" e "Banco" sao do FINANCEIRO (definidos na Analise
+    // de Pedidos). A vendedora nunca os altera, mesmo que o payload venha
+    // adulterado — aqui simplesmente ignoramos o que ela mandar.
+    const podeMexerNoFinanceiro = session.role === "GESTAO";
 
     await prisma.order.update({
       where: { id: args.id },
@@ -123,11 +135,18 @@ export async function updateOrder(args: {
         orderTypeId: args.orderTypeId ?? order.orderTypeId,
         operationId: args.operationId ?? order.operationId,
         // FKs opcionais: string vazia vira NULL (senão a FK quebra).
-        paymentMethodId: args.paymentMethodId
-          ? args.paymentMethodId
-          : (args.paymentMethodId === "" ? null : order.paymentMethodId),
+        // Se quem edita NAO e a Gestao, mantemos o valor atual (ignora o payload).
+        paymentMethodId: !podeMexerNoFinanceiro
+          ? order.paymentMethodId
+          : args.paymentMethodId
+            ? args.paymentMethodId
+            : (args.paymentMethodId === "" ? null : order.paymentMethodId),
         shippingMethodId: args.shippingMethodId ?? order.shippingMethodId,
-        bankId: args.bankId ? args.bankId : (args.bankId === "" ? null : order.bankId),
+        bankId: !podeMexerNoFinanceiro
+          ? order.bankId
+          : args.bankId
+            ? args.bankId
+            : (args.bankId === "" ? null : order.bankId),
         orderValue,
         freight,
         total: orderValue + freight,

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
-import { processAndSaveImage, validateUpload } from "@/lib/image";
+import { processAndSaveImage, saveDocument, isPdfDataUrl, validateUpload } from "@/lib/image";
 import { createCustomerSchema, updateCustomerSchema } from "@/lib/validations/order";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 
@@ -104,7 +104,12 @@ export async function uploadInvoice(
 
 /**
  * Upload da Nota Fiscal a partir do Fluxo/Logística, clicando na comanda.
- * Recebe a imagem em base64 (data URL), converte para .webp e salva o caminho.
+ *
+ * Aceita IMAGEM (jpg/png/heic/webp) ou PDF:
+ *  - Imagem -> sharp converte para .webp (economiza disco da VPS).
+ *  - PDF    -> salvo como esta (o sharp nao processa PDF; converter perderia
+ *              o documento). Em ambos os casos, no banco vai so o CAMINHO.
+ *
  * Permitido a qualquer momento após a confirmação do pagamento (comanda gerada).
  */
 export async function uploadInvoiceBase64(args: {
@@ -123,15 +128,19 @@ export async function uploadInvoiceBase64(args: {
       return actionError("A Nota Fiscal só pode ser anexada após a confirmação do pagamento.");
     }
 
+    // Detecta o tipo ANTES de remover o prefixo "data:...;base64,".
+    const ehPdf = isPdfDataUrl(args.base64);
+
     const raw = args.base64.replace(/^data:[^;]+;base64,/, "");
     const buffer = Buffer.from(raw, "base64");
     if (buffer.length === 0) return actionError("Arquivo inválido.");
-    if (buffer.length > 15 * 1024 * 1024) return actionError("Imagem muito grande (máx. 15MB).");
+    if (buffer.length > 15 * 1024 * 1024) return actionError("Arquivo muito grande (máx. 15MB).");
 
-    const processed = await processAndSaveImage(buffer, {
-      folder: "notas-fiscais",
-      fileName: `${order.id}_invoicePath_${Date.now()}`,
-    });
+    const fileName = `${order.id}_invoicePath_${Date.now()}`;
+    const processed = ehPdf
+      ? await saveDocument(buffer, { folder: "notas-fiscais", fileName })
+      : await processAndSaveImage(buffer, { folder: "notas-fiscais", fileName });
+
     await prisma.order.update({
       where: { id: order.id },
       data: { invoicePath: processed.filePath },

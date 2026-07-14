@@ -47,7 +47,9 @@ export default async function VendasPage() {
                   <th className="py-2 pr-4">Cliente</th>
                   <th className="py-2 pr-4">Total</th>
                   <th className="py-2 pr-4">Status</th>
-                  {isGestao && <th className="py-2 pr-4 text-right">Ações</th>}
+                  {/* Acoes visiveis para todos: a vendedora pode EDITAR os proprios
+                      pedidos (a lista ja e restrita a eles). Excluir segue so na Gestao. */}
+                  <th className="py-2 pr-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -58,15 +60,13 @@ export default async function VendasPage() {
                     <td className="py-2 pr-4">{o.customer.name}</td>
                     <td className="py-2 pr-4">{formatBRL(o.total.toString())}</td>
                     <td className="py-2 pr-4"><StatusBadge status={o.status} /></td>
-                    {isGestao && (
-                      <td className="py-2 pr-4">
-                        <VendaRowActions orderId={o.id} orderNumber={o.orderNumber} />
-                      </td>
-                    )}
+                    <td className="py-2 pr-4">
+                      <VendaRowActions orderId={o.id} orderNumber={o.orderNumber} canDelete={isGestao} />
+                    </td>
                   </tr>
                 ))}
                 {orders.length === 0 && (
-                  <tr><td colSpan={isGestao ? 6 : 5} className="py-6 text-center text-muted-foreground">Nenhum pedido ainda.</td></tr>
+                  <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">Nenhum pedido ainda.</td></tr>
                 )}
               </tbody>
             </table>

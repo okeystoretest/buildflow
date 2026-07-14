@@ -18,9 +18,19 @@ export async function GET(
     }
     const abs = path.join(UPLOAD_DIR, rel);
     const file = await readFile(abs);
+
+    // O Content-Type depende da extensao. A Nota Fiscal pode ser PDF; se
+    // devolvessemos "image/webp" para um PDF, o navegador nao abriria.
+    const ext = path.extname(abs).toLowerCase();
+    const contentType =
+      ext === ".pdf" ? "application/pdf"
+      : ext === ".png" ? "image/png"
+      : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg"
+      : "image/webp";
+
     return new NextResponse(file, {
       headers: {
-        "Content-Type": "image/webp",
+        "Content-Type": contentType,
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
