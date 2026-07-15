@@ -60,23 +60,37 @@ export async function createOrder(
       select: { id: true, orderNumber: true },
     });
 
-    // Comprovante de pagamento (opcional): converte base64 -> webp no disco.
-    if (input.paymentProofBase64) {
+    // Comprovantes de pagamento (ate 5). Cada imagem vira .webp no disco e
+    // grava uma linha em OrderPaymentProof (no banco so o caminho).
+    const proofs = (input.paymentProofsBase64 ?? []).slice(0, 5);
+    for (const [i, dataUrl] of proofs.entries()) {
       try {
-        const base64 = input.paymentProofBase64.replace(/^data:[^;]+;base64,/, "");
+        const base64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
         const buffer = Buffer.from(base64, "base64");
-        if (buffer.length > 0) {
-          const processed = await processAndSaveImage(buffer, {
-            folder: "comprovantes-pagamento",
-            fileName: `${order.id}_paymentProofPath_${Date.now()}`,
-          });
+        if (buffer.length === 0) continue;
+        const processed = await processAndSaveImage(buffer, {
+          folder: "comprovantes-pagamento",
+          fileName: `${order.id}_paymentProof_${i + 1}_${Date.now()}`,
+        });
+        await prisma.orderPaymentProof.create({
+          data: {
+            orderId: order.id,
+            filePath: processed.filePath,
+            width: processed.width,
+            height: processed.height,
+            sizeBytes: processed.sizeBytes,
+          },
+        });
+        // Compat: guarda o PRIMEIRO comprovante tambem no campo antigo, para
+        // telas/consultas que ainda leem paymentProofPath.
+        if (i === 0) {
           await prisma.order.update({
             where: { id: order.id },
             data: { paymentProofPath: processed.filePath },
           });
         }
       } catch {
-        // Nao derruba o pedido se o comprovante falhar; pode reenviar depois.
+        // Nao derruba o pedido se um comprovante falhar; pode reenviar depois.
       }
     }
 

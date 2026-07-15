@@ -244,6 +244,8 @@ model Order {
   total      Decimal @default(0) @db.Decimal(10, 2)
 
   // Comprovante enviado pela Vendedora na criacao do pedido.
+  // MANTIDO por compatibilidade: pedidos antigos usam este campo unico.
+  // Pedidos novos gravam ate 5 comprovantes na tabela OrderPaymentProof.
   paymentProofPath String?
   // Segundo comprovante, anexado pelo FINANCEIRO na Analise de Pedidos.
   // Obrigatorio para aprovar. Visivel a todos ao expandir o card no fluxo.
@@ -252,9 +254,10 @@ model Order {
 
   notes String?
 
-  items    OrderItem[]
-  delivery Delivery?
-  history  OrderStatusHistory[]
+  items         OrderItem[]
+  paymentProofs OrderPaymentProof[]
+  delivery      Delivery?
+  history       OrderStatusHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -275,6 +278,23 @@ model OrderItem {
   productId String
   quantity  Int
   unitPrice Decimal @db.Decimal(10, 2)
+
+  @@index([orderId])
+}
+
+// Comprovantes de pagamento enviados pela Vendedora no Novo Pedido.
+// Um pedido aceita ate 5 (o limite e aplicado na action, nao no banco).
+// Segue a regra do projeto: aqui vai apenas o CAMINHO do arquivo (.webp no
+// disco), nunca o binario.
+model OrderPaymentProof {
+  id        String   @id @default(cuid())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  filePath  String
+  width     Int?
+  height    Int?
+  sizeBytes Int?
+  createdAt DateTime @default(now())
 
   @@index([orderId])
 }

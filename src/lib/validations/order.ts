@@ -18,13 +18,14 @@ export const createOrderSchema = z.object({
   itemCount: z.coerce.number().int().nonnegative().default(0),
   // Nome do tipo de pedido (ex.: "Troca"). Usado para a regra de anexo.
   orderTypeName: z.string().optional(),
-  // Comprovante de pagamento (data URL base64). Opcional no schema;
-  // a obrigatoriedade é aplicada condicionalmente abaixo (dispensada na Troca).
-  paymentProofBase64: z.string().optional(),
+  // Comprovantes de pagamento (ate 5, cada um em data URL base64).
+  // Opcional no schema; a obrigatoriedade (ao menos 1) e aplicada abaixo,
+  // dispensada na Troca.
+  paymentProofsBase64: z.array(z.string()).max(5, "Máximo de 5 comprovantes.").optional(),
 })
   .refine(
-    (d) => isTroca(d.orderTypeName) || !!(d.paymentProofBase64 && d.paymentProofBase64.length > 0),
-    { message: "Anexe o comprovante de pagamento.", path: ["paymentProofBase64"] },
+    (d) => isTroca(d.orderTypeName) || !!(d.paymentProofsBase64 && d.paymentProofsBase64.length > 0),
+    { message: "Anexe o comprovante de pagamento.", path: ["paymentProofsBase64"] },
   );
 
 // "Troca" dispensa anexo (NF e comprovante). Comparação tolerante a acentos/caixa.
