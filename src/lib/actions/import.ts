@@ -8,6 +8,7 @@ import type { Role, SalesModel } from "@prisma/client";
 
 export interface ImportSummary {
   created: number;
+  updated?: number; // atualizados por upsert (ex.: clientes corrigidos)
   skipped: number;
   errors: string[]; // mensagens linha a linha (limitado)
 }
@@ -162,7 +163,7 @@ export async function importCustomersCsv(csv: string): Promise<ActionResult<Impo
     rows = dropHeader(rows, ["codigo", "código", "code"]);
     if (rows.length === 0) return actionError("Arquivo vazio ou sem linhas válidas.");
 
-    const summary: ImportSummary = { created: 0, skipped: 0, errors: [] };
+    const summary: ImportSummary = { created: 0, updated: 0, skipped: 0, errors: [] };
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const ln = i + 1;
@@ -171,12 +172,21 @@ export async function importCustomersCsv(csv: string): Promise<ActionResult<Impo
       if (!code) { summary.skipped++; summary.errors.push(`Linha ${ln}: código é obrigatório.`); continue; }
       if (!name) { summary.skipped++; summary.errors.push(`Linha ${ln}: nome é obrigatório.`); continue; }
 
-      // code e unico: pula duplicado para nao quebrar o lote.
-      const dup = await prisma.customer.findUnique({ where: { code } });
-      if (dup) { summary.skipped++; summary.errors.push(`Linha ${ln}: código "${code}" já cadastrado.`); continue; }
-
-      await prisma.customer.create({ data: { code, name } });
-      summary.created++;
+      // UPSERT pelo "code" (unico): se o cliente ja existe, ATUALIZA o nome
+      // (permite corrigir cadastros em lote sem apagar nada, preservando os
+      // pedidos ja ligados). Se nao existe, cria.
+      const existente = await prisma.customer.findUnique({ where: { code } });
+      if (existente) {
+        if (existente.name !== name) {
+          await prisma.customer.update({ where: { code }, data: { name } });
+          summary.updated = (summary.updated ?? 0) + 1;
+        } else {
+          summary.skipped++; // ja estava igual, nada a fazer
+        }
+      } else {
+        await prisma.customer.create({ data: { code, name } });
+        summary.created++;
+      }
     }
     revalidatePath("/gestao");
     revalidatePath("/vendas/clientes");

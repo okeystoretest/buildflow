@@ -86,6 +86,9 @@ export function CsvImport({ title, description, columns, sample, action }: Props
       {result && (
         <div className="text-sm">
           <p className="text-motorista">{result.created} cadastrado(s) com sucesso.</p>
+          {typeof result.updated === "number" && result.updated > 0 && (
+            <p className="text-brand">{result.updated} atualizado(s).</p>
+          )}
           {result.skipped > 0 && <p className="text-muted-foreground">{result.skipped} linha(s) ignorada(s).</p>}
           {result.errors.length > 0 && (
             <ul className="mt-1 max-h-32 list-disc overflow-auto pl-5 text-xs text-muted-foreground">
