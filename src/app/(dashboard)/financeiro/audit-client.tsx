@@ -22,7 +22,7 @@ export function AuditarPedido({
   banks,
   currentPaymentMethodId,
   currentBankId,
-  hasProof2,
+  proof2Count,
 }: {
   orderId: string;
   statusOptions: StatusOpt[];
@@ -33,8 +33,8 @@ export function AuditarPedido({
   banks: Opt[];
   currentPaymentMethodId: string | null;
   currentBankId: string | null;
-  // Segundo comprovante ja anexado?
-  hasProof2: boolean;
+  // Quantos comprovantes do Financeiro ja foram anexados (0 a 5).
+  proof2Count: number;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -53,10 +53,14 @@ export function AuditarPedido({
   const [savedBankId, setSavedBankId] = useState(currentBankId ?? "");
   const [payMsg, setPayMsg] = useState<string | null>(null);
 
-  // Segundo comprovante de pagamento.
-  const [proof2Ok, setProof2Ok] = useState(hasProof2);
+  // Comprovantes do Financeiro (ate 5). Guarda a contagem ja anexada.
+  const MAX_PROOF2 = 5;
+  const [proof2Total, setProof2Total] = useState(proof2Count);
   const [proofBusy, setProofBusy] = useState(false);
   const [proofMsg, setProofMsg] = useState<string | null>(null);
+
+  // Ao menos 1 comprovante do Financeiro continua sendo pre-requisito.
+  const proof2Ok = proof2Total > 0;
 
   const selected = statusOptions.find((s) => s.id === statusId);
   const isInterrompe = selected?.disposition === "INTERROMPE";
@@ -95,21 +99,30 @@ export function AuditarPedido({
   }
 
   async function onProof2File(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setError(null); setProofMsg(null); setProofBusy(true);
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
 
-    const shrunk = await shrinkImageToBase64(file, { maxDimension: 1600, quality: 0.8 });
-    if (shrunk.error || !shrunk.base64) {
-      setProofBusy(false);
-      setError(shrunk.error ?? "Não foi possível processar a imagem.");
-      return;
+    const espacoLivre = MAX_PROOF2 - proof2Total;
+    if (espacoLivre <= 0) { setError(`Máximo de ${MAX_PROOF2} comprovantes.`); return; }
+
+    setError(null); setProofMsg(null); setProofBusy(true);
+    const base64List: string[] = [];
+    for (const file of files.slice(0, espacoLivre)) {
+      const shrunk = await shrinkImageToBase64(file, { maxDimension: 1600, quality: 0.8 });
+      if (shrunk.error || !shrunk.base64) {
+        setError(shrunk.error ?? "Não foi possível processar a imagem.");
+        continue;
+      }
+      base64List.push(shrunk.base64);
     }
-    const res = await uploadSecondPaymentProof({ orderId, base64: shrunk.base64 });
+    if (base64List.length === 0) { setProofBusy(false); return; }
+
+    const res = await uploadSecondPaymentProof({ orderId, base64List });
     setProofBusy(false);
     if (res.ok) {
-      setProof2Ok(true);
-      setProofMsg("Segundo comprovante anexado.");
+      setProof2Total((n) => Math.min(MAX_PROOF2, n + res.data.count));
+      setProofMsg(`${res.data.count} comprovante(s) anexado(s).`);
       router.refresh();
     } else setError(res.error);
   }
@@ -157,16 +170,20 @@ export function AuditarPedido({
         {payMsg && <span className="text-xs text-motorista">{payMsg}</span>}
       </div>
 
-      {/* Segundo comprovante de pagamento (obrigatorio para aprovar). */}
+      {/* Comprovantes do Financeiro (ate 5; ao menos 1 obrigatorio p/ aprovar). */}
       <div className="space-y-1">
-        <Label className="text-xs">2º Comprovante de Pagamento</Label>
-        {proof2Ok ? (
-          <p className="text-xs font-medium text-motorista">✓ Segundo comprovante anexado.</p>
-        ) : (
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+        <Label className="text-xs">2º Comprovante de Pagamento (até {MAX_PROOF2})</Label>
+        {proof2Total > 0 && (
+          <p className="text-xs font-medium text-motorista">
+            ✓ {proof2Total} comprovante(s) anexado(s).
+          </p>
+        )}
+        {proof2Total < MAX_PROOF2 && (
+          <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
             onChange={onProof2File} disabled={proofBusy || pending}
             className="block w-full max-w-xs text-xs text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-financeiro file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-financeiro-fg hover:file:opacity-90" />
         )}
+        <p className="text-[11px] text-muted-foreground">{proof2Total}/{MAX_PROOF2} anexados.</p>
         {proofBusy && <span className="text-xs text-muted-foreground">Enviando...</span>}
         {proofMsg && <span className="text-xs text-motorista">{proofMsg}</span>}
       </div>

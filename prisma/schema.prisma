@@ -256,6 +256,7 @@ model Order {
 
   items         OrderItem[]
   paymentProofs OrderPaymentProof[]
+  financeProofs OrderFinanceProof[]
   delivery      Delivery?
   history       OrderStatusHistory[]
 
@@ -287,6 +288,22 @@ model OrderItem {
 // Segue a regra do projeto: aqui vai apenas o CAMINHO do arquivo (.webp no
 // disco), nunca o binario.
 model OrderPaymentProof {
+  id        String   @id @default(cuid())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  filePath  String
+  width     Int?
+  height    Int?
+  sizeBytes Int?
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// Comprovantes anexados pelo FINANCEIRO na Analise de Pedidos (ate 5).
+// O PRIMEIRO tambem e espelhado em Order.paymentProof2Path, que continua
+// sendo a trava de aprovacao (nao quebrar essa regra).
+model OrderFinanceProof {
   id        String   @id @default(cuid())
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderId   String

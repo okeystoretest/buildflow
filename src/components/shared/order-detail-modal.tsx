@@ -25,6 +25,8 @@ interface OrderDetail {
   paymentProofs: { id: string; filePath: string }[];
   // Segundo comprovante, anexado pelo Financeiro. Visível a todos.
   paymentProof2Path: string | null;
+  // Comprovantes do Financeiro (ate 5). Pedidos novos usam esta lista.
+  financeProofs: { id: string; filePath: string }[];
   invoicePath: string | null;
   trackingCode: string | null;
   cnpj: { name: string; document: string } | null;
@@ -332,8 +334,15 @@ export function OrderDetailModal({
                 ) : (
                   <FileLink label="Comprovante pagamento" path={order.paymentProofPath} />
                 )}
-                {/* Segundo comprovante (anexado pelo Financeiro) — visível a todos. */}
-                <FileLink label="2º Comprovante pagamento" path={order.paymentProof2Path} />
+                {/* Comprovantes do Financeiro (ate 5). Pedidos antigos caem no
+                    campo unico paymentProof2Path. */}
+                {order.financeProofs.length > 0 ? (
+                  order.financeProofs.map((p, i) => (
+                    <FileLink key={p.id} label={`2º Comprovante ${i + 1}`} path={p.filePath} />
+                  ))
+                ) : (
+                  <FileLink label="2º Comprovante pagamento" path={order.paymentProof2Path} />
+                )}
                 <FileLink label="Nota Fiscal" path={order.invoicePath} />
               </div>
             )}

@@ -25,6 +25,7 @@ export async function GET(
       cnpj: true,
       delivery: { include: { driver: true, proofs: true } },
       paymentProofs: { orderBy: { createdAt: "asc" } },
+      financeProofs: { orderBy: { createdAt: "asc" } },
       history: { orderBy: { createdAt: "asc" } },
     },
   });

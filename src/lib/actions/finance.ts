@@ -45,34 +45,67 @@ export async function setOrderPaymentInfo(args: {
  */
 export async function uploadSecondPaymentProof(args: {
   orderId: string;
-  base64: string;
-}): Promise<ActionResult<{ filePath: string }>> {
+  // Um ou varios comprovantes (ate 5) em data URL base64.
+  base64?: string;
+  base64List?: string[];
+}): Promise<ActionResult<{ count: number }>> {
   try {
     await requireRoleAction(["FINANCEIRO", "GESTAO"]);
     if (!args.orderId) return actionError("Pedido não informado.");
-    if (!args.base64) return actionError("Arquivo obrigatório.");
 
-    const order = await prisma.order.findUnique({ where: { id: args.orderId } });
+    // Aceita tanto o formato antigo (base64 unico) quanto a lista.
+    const entradas = (args.base64List ?? (args.base64 ? [args.base64] : []))
+      .filter(Boolean)
+      .slice(0, 5);
+    if (entradas.length === 0) return actionError("Arquivo obrigatório.");
+
+    const order = await prisma.order.findUnique({
+      where: { id: args.orderId },
+      include: { financeProofs: true },
+    });
     if (!order) return actionError("Pedido não encontrado.");
 
-    const raw = args.base64.replace(/^data:[^;]+;base64,/, "");
-    const buffer = Buffer.from(raw, "base64");
-    if (buffer.length === 0) return actionError("Arquivo inválido.");
-    if (buffer.length > 15 * 1024 * 1024) return actionError("Imagem muito grande (máx. 15MB).");
+    // Respeita o teto de 5 no total (ja anexados + novos).
+    const espacoLivre = 5 - order.financeProofs.length;
+    if (espacoLivre <= 0) return actionError("Limite de 5 comprovantes atingido.");
+    const aProcessar = entradas.slice(0, espacoLivre);
 
-    const processed = await processAndSaveImage(buffer, {
-      folder: "comprovantes-pagamento",
-      fileName: `${order.id}_paymentProof2Path_${Date.now()}`,
-    });
+    let salvos = 0;
+    for (const [i, dataUrl] of aProcessar.entries()) {
+      const raw = dataUrl.replace(/^data:[^;]+;base64,/, "");
+      const buffer = Buffer.from(raw, "base64");
+      if (buffer.length === 0) continue;
+      if (buffer.length > 15 * 1024 * 1024) {
+        return actionError("Imagem muito grande (máx. 15MB).");
+      }
+      const processed = await processAndSaveImage(buffer, {
+        folder: "comprovantes-pagamento",
+        fileName: `${order.id}_financeProof_${order.financeProofs.length + i + 1}_${Date.now()}`,
+      });
+      await prisma.orderFinanceProof.create({
+        data: {
+          orderId: order.id,
+          filePath: processed.filePath,
+          width: processed.width,
+          height: processed.height,
+          sizeBytes: processed.sizeBytes,
+        },
+      });
+      // Espelha o PRIMEIRO comprovante em paymentProof2Path (trava de aprovacao).
+      if (order.financeProofs.length === 0 && i === 0) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { paymentProof2Path: processed.filePath },
+        });
+      }
+      salvos++;
+    }
 
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { paymentProof2Path: processed.filePath },
-    });
+    if (salvos === 0) return actionError("Nenhum comprovante válido para anexar.");
 
     revalidatePath("/financeiro");
     revalidatePath("/fluxo");
-    return actionOk({ filePath: processed.filePath });
+    return actionOk({ count: salvos });
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao anexar comprovante.");
   }

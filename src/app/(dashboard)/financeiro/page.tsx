@@ -13,7 +13,10 @@ export default async function FinanceiroPage() {
   const [emAnalise, payStatuses, paymentMethods, banks, cnpjs] = await Promise.all([
     prisma.order.findMany({
       where: { status: "EM_ANALISE" },
-      include: { customer: true, seller: true, cnpj: true },
+      include: {
+        customer: true, seller: true, cnpj: true,
+        _count: { select: { financeProofs: true } },
+      },
       orderBy: { createdAt: "asc" },
     }),
     prisma.paymentStatusOption.findMany({ orderBy: { name: "asc" } }),
@@ -89,7 +92,7 @@ export default async function FinanceiroPage() {
                 banks={bancosAtivos}
                 currentPaymentMethodId={o.paymentMethodId}
                 currentBankId={o.bankId}
-                hasProof2={o.paymentProof2Path != null}
+                proof2Count={o._count.financeProofs}
               />
             </div>
           ))}
