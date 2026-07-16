@@ -23,6 +23,7 @@ export function AuditarPedido({
   currentPaymentMethodId,
   currentBankId,
   proof2Count,
+  onProcessed,
 }: {
   orderId: string;
   statusOptions: StatusOpt[];
@@ -35,6 +36,8 @@ export function AuditarPedido({
   currentBankId: string | null;
   // Quantos comprovantes do Financeiro ja foram anexados (0 a 5).
   proof2Count: number;
+  // Chamado apos processar o pedido (ex.: fechar o modal do Kanban).
+  onProcessed?: () => void;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -131,7 +134,7 @@ export function AuditarPedido({
     setError(null);
     start(async () => {
       const res = await auditOrder({ orderId, comandaNumber: comanda, paymentStatusId: statusId });
-      if (res.ok) router.refresh();
+      if (res.ok) { router.refresh(); onProcessed?.(); }
       else setError(res.error);
     });
   }
@@ -144,7 +147,7 @@ export function AuditarPedido({
   const pagamentoAlterado = payMethodId !== savedPayMethodId || bankId !== savedBankId;
 
   return (
-    <div className="space-y-3 border-t pt-2">
+    <div className="space-y-3">
       {/* Forma de Pagamento + Banco: realocados de Vendas para o Financeiro. */}
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
