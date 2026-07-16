@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -53,18 +54,29 @@ export default async function VendasPage() {
                 </tr>
               </thead>
               <tbody>
-                {orders.map((o) => (
-                  <tr key={o.id} className="border-b border-border last:border-0 transition-colors hover:bg-secondary/50">
-                    <td className="py-2 pr-4 font-data">{o.orderNumber}</td>
+                {orders.map((o) => {
+                  // Pendencia ATIVA do Financeiro: texto presente e nao resolvido.
+                  const issueAtivo = o.financeIssue && !o.financeIssueResolvedAt ? o.financeIssue : null;
+                  return (
+                  <tr key={o.id} className={`border-b border-border last:border-0 transition-colors ${
+                    issueAtivo ? "bg-destructive/10 hover:bg-destructive/15" : "hover:bg-secondary/50"
+                  }`}>
+                    <td className="py-2 pr-4 font-data">
+                      <span className="flex items-center gap-1.5">
+                        {issueAtivo && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" />}
+                        {o.orderNumber}
+                      </span>
+                    </td>
                     <td className="py-2 pr-4 font-data">{o.comandaNumber ?? "—"}</td>
                     <td className="py-2 pr-4">{o.customer.name}</td>
                     <td className="py-2 pr-4">{formatBRL(o.total.toString())}</td>
                     <td className="py-2 pr-4"><StatusBadge status={o.status} /></td>
                     <td className="py-2 pr-4">
-                      <VendaRowActions orderId={o.id} orderNumber={o.orderNumber} canDelete={isGestao} />
+                      <VendaRowActions orderId={o.id} orderNumber={o.orderNumber} canDelete={isGestao} issue={issueAtivo} />
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {orders.length === 0 && (
                   <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">Nenhum pedido ainda.</td></tr>
                 )}

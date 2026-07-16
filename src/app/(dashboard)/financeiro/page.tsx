@@ -68,6 +68,8 @@ export default async function FinanceiroPage() {
     proof2Count: o._count.financeProofs,
     processedAt: null,
     outcome: null,
+    // Pendencia ativa = tem texto e ainda nao foi resolvida por Vendas.
+    hasActiveIssue: o.financeIssue != null && o.financeIssueResolvedAt == null,
   }));
 
   // Cartoes da coluna PROCESSADO. Uma entrada por pedido (a mais recente).
@@ -92,6 +94,7 @@ export default async function FinanceiroPage() {
       proof2Count: 0,
       processedAt: h.createdAt.toISOString(),
       outcome: aprovado ? "APROVADO" : "INTERROMPIDO",
+      hasActiveIssue: false,
     });
   }
 

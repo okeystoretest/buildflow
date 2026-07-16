@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, User, ChevronDown, CheckCircle2, XCircle } from "lucide-react";
+import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { flagOrderIssue } from "@/lib/actions/finance";
+import { useRouter } from "next/navigation";
 import { AuditarPedido } from "./audit-client";
 
 export interface FinanceCard {
@@ -19,6 +21,8 @@ export interface FinanceCard {
   proof2Count: number;
   processedAt: string | null;   // ISO — só na coluna Processado
   outcome: "APROVADO" | "INTERROMPIDO" | null;
+  // Pendencia ja sinalizada e ainda ativa? (mostra estado no card)
+  hasActiveIssue: boolean;
 }
 
 interface StatusOpt { id: string; name: string; disposition: "APROVA" | "INTERROMPE"; }
@@ -45,6 +49,8 @@ export function AnaliseKanban({
   processedWindowMin: number;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  // Card cujo modal "Qual o problema?" esta aberto.
+  const [issueId, setIssueId] = useState<string | null>(null);
   const [showAllPend, setShowAllPend] = useState(false);
   const [showAllProc, setShowAllProc] = useState(false);
 
@@ -71,6 +77,7 @@ export function AnaliseKanban({
   const procVis = showAllProc ? procVisiveis : procVisiveis.slice(0, PAGE);
 
   const aberto = openId ? pendentes.find((c) => c.id === openId) ?? null : null;
+  const cardIssue = issueId ? pendentes.find((c) => c.id === issueId) ?? null : null;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -82,7 +89,7 @@ export function AnaliseKanban({
         dot="bg-amber-500"
       >
         {pendVis.map((c) => (
-          <PendingCard key={c.id} card={c} onOpen={() => setOpenId(c.id)} />
+          <PendingCard key={c.id} card={c} onOpen={() => setOpenId(c.id)} onFlag={() => setIssueId(c.id)} />
         ))}
         {pendentes.length === 0 && <Empty>Nenhum pedido aguardando análise.</Empty>}
         {pendentes.length > PAGE && (
@@ -146,7 +153,56 @@ export function AnaliseKanban({
           />
         </Modal>
       )}
+
+      {/* MODAL "Qual o problema?" — sinalizacao de pendencia pelo Financeiro. */}
+      {cardIssue && (
+        <IssueModal
+          orderNumber={cardIssue.orderNumber}
+          orderId={cardIssue.id}
+          onClose={() => setIssueId(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function IssueModal({ orderId, orderNumber, onClose }: {
+  orderId: string; orderNumber: string; onClose: () => void;
+}) {
+  const router = useRouter();
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    if (!text.trim()) { setErr("Descreva o problema."); return; }
+    setBusy(true); setErr(null);
+    const res = await flagOrderIssue({ orderId, issue: text });
+    setBusy(false);
+    if (res.ok) { onClose(); router.refresh(); }
+    else setErr(res.error);
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <div className="mb-3 flex items-center gap-2">
+        <AlertTriangle className="h-5 w-5 text-amber-500" />
+        <h2 className="text-lg font-bold">Qual o problema?</h2>
+      </div>
+      <p className="mb-2 text-sm text-muted-foreground">Pedido {orderNumber}</p>
+      <textarea
+        className="min-h-[110px] w-full rounded-lg border border-input bg-background p-3 text-sm"
+        placeholder="Descreva a inconsistência para a vendedora corrigir..."
+        value={text} onChange={(e) => setText(e.target.value)} autoFocus
+      />
+      {err && <p className="mt-1 text-sm text-destructive">{err}</p>}
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose} disabled={busy}>Cancelar</Button>
+        <Button variant="financeiro" onClick={submit} disabled={busy || !text.trim()}>
+          {busy ? "Enviando..." : "Sinalizar pendência"}
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -170,29 +226,48 @@ function Column({
   );
 }
 
-function PendingCard({ card, onOpen }: { card: FinanceCard; onOpen: () => void }) {
+function PendingCard({ card, onOpen, onFlag }: { card: FinanceCard; onOpen: () => void; onFlag: () => void }) {
   return (
-    <button onClick={onOpen}
-      className="card-hover animate-fade-in-up w-full rounded-xl border border-border bg-card p-3 text-left shadow-sm hover:border-primary/40 hover:shadow-md">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="font-data text-sm font-semibold">Pedido {card.orderNumber}</span>
-        <span className="font-data text-sm font-semibold">{card.total}</span>
+    <div className={`card-hover animate-fade-in-up w-full rounded-xl border bg-card p-3 shadow-sm ${
+      card.hasActiveIssue ? "border-destructive/50 ring-1 ring-destructive/20" : "border-border hover:border-primary/40 hover:shadow-md"
+    }`}>
+      {/* Corpo clicavel: abre o modal de auditoria. */}
+      <button onClick={onOpen} className="block w-full text-left">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="font-data text-sm font-semibold">Pedido {card.orderNumber}</span>
+          <span className="font-data text-sm font-semibold">{card.total}</span>
+        </div>
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <User className="h-3 w-3 shrink-0" /> {card.customerName} · {card.sellerName}
+        </p>
+        <div className="mt-2 flex items-center justify-between">
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            {new Date(card.createdAt).toLocaleString("pt-BR", {
+              day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+            })}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-financeiro/15 px-2 py-0.5 text-[11px] font-medium text-financeiro">
+            Analisar <ChevronDown className="h-3 w-3" />
+          </span>
+        </div>
+      </button>
+
+      {/* Botao Atencao: sinaliza pendencia. Fica FORA da area clicavel do card. */}
+      <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
+        {card.hasActiveIssue ? (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-destructive">
+            <AlertTriangle className="h-3.5 w-3.5" /> Pendência sinalizada
+          </span>
+        ) : (
+          <span className="text-[11px] text-muted-foreground/60">Sem pendência</span>
+        )}
+        <button onClick={onFlag}
+          className="inline-flex items-center gap-1 rounded-full border border-amber-500/50 px-2 py-0.5 text-[11px] font-medium text-amber-600 transition-colors hover:bg-amber-500/10 dark:text-amber-400">
+          <AlertTriangle className="h-3.5 w-3.5" /> Atenção
+        </button>
       </div>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <User className="h-3 w-3 shrink-0" /> {card.customerName} · {card.sellerName}
-      </p>
-      <div className="mt-2 flex items-center justify-between">
-        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Clock className="h-3 w-3" />
-          {new Date(card.createdAt).toLocaleString("pt-BR", {
-            day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
-          })}
-        </span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-financeiro/15 px-2 py-0.5 text-[11px] font-medium text-financeiro">
-          Analisar <ChevronDown className="h-3 w-3" />
-        </span>
-      </div>
-    </button>
+    </div>
   );
 }
 

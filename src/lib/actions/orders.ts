@@ -109,6 +109,7 @@ export async function createOrder(
  */
 export async function updateOrder(args: {
   id: string;
+  orderNumber?: string;
   customerId?: string;
   storeId?: string;
   orderTypeId?: string;
@@ -119,6 +120,13 @@ export async function updateOrder(args: {
   orderValue?: number;
   freight?: number;
   notes?: string | null;
+  // Campanha
+  campaignId?: string | null;
+  itemCount?: number;
+  // Novos comprovantes a ADICIONAR (ate 5 no total). Substituicao e feita
+  // removendo os antigos via removeProofIds.
+  paymentProofsBase64?: string[];
+  removeProofIds?: string[];
 }): Promise<ActionResult<void>> {
   try {
     // GESTAO edita qualquer pedido; VENDAS edita apenas os proprios.
@@ -165,8 +173,53 @@ export async function updateOrder(args: {
         freight,
         total: orderValue + freight,
         notes: args.notes === undefined ? order.notes : args.notes,
+        // Numero do pedido (editavel como no cadastro).
+        orderNumber: args.orderNumber?.trim() ? args.orderNumber.trim() : order.orderNumber,
+        // Campanha: campaignId "" ou null limpa o vinculo.
+        campaignId: args.campaignId === undefined
+          ? order.campaignId
+          : (args.campaignId ? args.campaignId : null),
+        itemCount: args.campaignId
+          ? (args.itemCount ?? order.itemCount)
+          : (args.campaignId === undefined ? order.itemCount : 0),
       },
     });
+
+    // Remocao de comprovantes marcados (substituicao de anexos).
+    if (args.removeProofIds?.length) {
+      await prisma.orderPaymentProof.deleteMany({
+        where: { id: { in: args.removeProofIds }, orderId: order.id },
+      });
+    }
+
+    // Novos comprovantes: respeita o teto de 5 no total.
+    const novos = (args.paymentProofsBase64 ?? []).filter(Boolean);
+    if (novos.length) {
+      const jaTem = await prisma.orderPaymentProof.count({ where: { orderId: order.id } });
+      const espaco = Math.max(0, 5 - jaTem);
+      for (const [i, dataUrl] of novos.slice(0, espaco).entries()) {
+        try {
+          const base64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
+          const buffer = Buffer.from(base64, "base64");
+          if (buffer.length === 0) continue;
+          const processed = await processAndSaveImage(buffer, {
+            folder: "comprovantes-pagamento",
+            fileName: `${order.id}_paymentProof_edit_${jaTem + i + 1}_${Date.now()}`,
+          });
+          await prisma.orderPaymentProof.create({
+            data: {
+              orderId: order.id,
+              filePath: processed.filePath,
+              width: processed.width,
+              height: processed.height,
+              sizeBytes: processed.sizeBytes,
+            },
+          });
+        } catch {
+          // ignora um anexo que falhe, sem derrubar a edicao
+        }
+      }
+    }
     revalidatePath("/vendas");
     revalidatePath("/fluxo");
     revalidatePath("/logistica");
@@ -201,5 +254,38 @@ export async function deleteOrder(id: string): Promise<ActionResult<void>> {
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao excluir pedido.");
+  }
+}
+
+/**
+ * VENDAS marca a pendencia do Financeiro como RESOLVIDA.
+ * Mantem o texto do problema (historico), mas registra a resolucao — o card
+ * volta ao normal e o Financeiro ve que foi resolvida.
+ */
+export async function resolveFinanceIssue(orderId: string): Promise<ActionResult<void>> {
+  try {
+    const session = await requireRoleAction(["VENDAS", "GESTAO"]);
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return actionError("Pedido não encontrado.");
+
+    // Vendedora so resolve os proprios pedidos.
+    if (session.role === "VENDAS" && order.sellerId !== session.userId) {
+      return actionError("Você só pode resolver pendências dos seus pedidos.");
+    }
+    if (!order.financeIssue || order.financeIssueResolvedAt) {
+      return actionError("Não há pendência ativa neste pedido.");
+    }
+
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { financeIssueResolvedAt: new Date() },
+    });
+
+    revalidatePath("/vendas");
+    revalidatePath("/financeiro");
+    revalidatePath("/fluxo");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao resolver pendência.");
   }
 }

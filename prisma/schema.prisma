@@ -254,6 +254,16 @@ model Order {
 
   notes String?
 
+  // Pendencia sinalizada pelo FINANCEIRO ("Qual o problema?").
+  // - financeIssue: texto da inconsistencia (null = sem pendencia ativa).
+  // - financeIssueAt: quando foi sinalizada.
+  // - financeIssueResolvedAt: quando VENDAS marcou como resolvida
+  //   (se preenchido com issue ainda presente, ficou resolvida; usamos os
+  //    dois para saber se a pendencia esta ATIVA ou ja RESOLVIDA).
+  financeIssue           String?
+  financeIssueAt         DateTime?
+  financeIssueResolvedAt DateTime?
+
   items         OrderItem[]
   paymentProofs OrderPaymentProof[]
   financeProofs OrderFinanceProof[]

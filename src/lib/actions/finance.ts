@@ -306,3 +306,38 @@ export async function finDelete(
     return actionError(err instanceof Error ? err.message : "Erro ao excluir.");
   }
 }
+
+/**
+ * FINANCEIRO sinaliza uma pendencia ("Atencao") num pedido, descrevendo o
+ * problema. O pedido aparece avermelhado em Vendas ate ser resolvido.
+ */
+export async function flagOrderIssue(args: {
+  orderId: string;
+  issue: string;
+}): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["FINANCEIRO", "GESTAO"]);
+    const texto = args.issue.trim();
+    if (!texto) return actionError("Descreva o problema.");
+    if (texto.length > 1000) return actionError("Descrição muito longa (máx. 1000).");
+
+    const order = await prisma.order.findUnique({ where: { id: args.orderId } });
+    if (!order) return actionError("Pedido não encontrado.");
+
+    await prisma.order.update({
+      where: { id: args.orderId },
+      data: {
+        financeIssue: texto,
+        financeIssueAt: new Date(),
+        financeIssueResolvedAt: null, // nova pendencia reabre (limpa resolucao anterior)
+      },
+    });
+
+    revalidatePath("/financeiro");
+    revalidatePath("/vendas");
+    revalidatePath("/fluxo");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao sinalizar pendência.");
+  }
+}
