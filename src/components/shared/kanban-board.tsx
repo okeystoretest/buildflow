@@ -48,12 +48,12 @@ export function KanbanBoard({
     return () => clearInterval(id);
   }, []);
 
-  // Atualizacao automatica dos status: a cada 5 min busca os dados mais
+  // Atualizacao automatica dos status: a cada 2 min busca os dados mais
   // recentes do servidor (router.refresh re-renderiza o server component sem
   // recarregar a pagina nem perder o estado local, como busca ou modal aberto).
   // Pausa quando a aba esta em segundo plano para nao gastar recursos a toa.
   useEffect(() => {
-    const REFRESH_MS = 5 * 60 * 1000; // 5 minutos
+    const REFRESH_MS = 2 * 60 * 1000; // 2 minutos
     const id = setInterval(() => {
       if (document.visibilityState === "visible") router.refresh();
     }, REFRESH_MS);
