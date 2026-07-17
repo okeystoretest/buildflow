@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Maximize2, Minimize2, ChevronDown, Search, ChevronRight } from "lucide-react";
+import { Maximize2, Minimize2, Search, ChevronRight } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
 import { STATUS_LABEL, STATUS_STYLE, nextStatus, stageAlertLevel, type StageLimitMap } from "@/lib/order-flow";
 import { OrderCard, type OrderCardData } from "@/components/shared/order-card";
@@ -83,8 +83,6 @@ export function KanbanBoard({
         .some((v) => String(v).toLowerCase().includes(q)),
     );
   }, [query, cards, nowTick]);
-  // Coluna cujas comandas excedentes (além das 3 primeiras) estão sendo exibidas no modal.
-  const [overflowStatus, setOverflowStatus] = useState<OrderStatus | null>(null);
   const [isFull, setIsFull] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const byStatus = (status: OrderStatus) => visibleCards.filter((c) => c.status === status);
@@ -252,9 +250,10 @@ export function KanbanBoard({
             {list.length}
           </span>
         </div>
-        {/* Layout fixo: no máximo 3 cards, sem barra de rolagem. */}
-        <div className="flex flex-col gap-2 pr-0.5">
-          {list.slice(0, 3).map((card, i) => (
+        {/* Cards da coluna: mostra ~2 e o restante fica acessível por uma
+            barra de rolagem minimalista (sem botão "mostrar mais"). */}
+        <div className="kanban-scroll flex max-h-[15.5rem] flex-col gap-2 overflow-y-auto pr-1">
+          {list.map((card, i) => (
             <OrderCard
               key={card.id}
               data={card}
@@ -268,16 +267,6 @@ export function KanbanBoard({
               }
             />
           ))}
-          {list.length > 3 && (
-            <button
-              type="button"
-              onClick={() => setOverflowStatus(status)}
-              className="mt-0.5 flex flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-border/70 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
-            >
-              <ChevronDown className="h-4 w-4 animate-bounce" />
-              <span>+{list.length - 3} comandas</span>
-            </button>
-          )}
           {list.length === 0 && (
             <div className="rounded-lg border border-dashed border-border/50 py-4 text-center text-[11px] text-muted-foreground/50">
               Vazio
@@ -329,38 +318,6 @@ export function KanbanBoard({
       </div>
 
       {openId && <OrderDetailModal orderId={openId} onClose={() => setOpenId(null)} canManage={canManage} />}
-
-      {/* Modal de comandas excedentes da coluna (além das 3 primeiras) */}
-      {overflowStatus && (() => {
-        const list = byStatus(overflowStatus);
-        const rest = list.slice(3);
-        return (
-          <Modal onClose={() => setOverflowStatus(null)}>
-            <div className="mb-3 flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${STATUS_STYLE[overflowStatus].dot}`} />
-              <h2 className="text-lg font-bold">{STATUS_LABEL[overflowStatus]}</h2>
-              <span className="font-data ml-auto rounded-full bg-secondary px-2 text-xs text-muted-foreground">
-                {rest.length} na fila
-              </span>
-            </div>
-            <div className="-mr-2 max-h-[60vh] space-y-2 overflow-y-auto pr-2">
-              {rest.map((card) => (
-                <OrderCard
-                  key={card.id}
-                  data={card}
-                  onClick={() => { setOverflowStatus(null); setOpenId(card.id); }}
-                  stageAlert={stageAlertLevel(card.status, card.statusSince, stageLimits, nowTick)}
-                  action={
-                    canAdvanceCard(card) ? (
-                      <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />
-                    ) : undefined
-                  }
-                />
-              ))}
-            </div>
-          </Modal>
-        );
-      })()}
 
       {/* Pop-up de rastreio (antes de PROCESSADO) */}
       {trackingOrder && (
