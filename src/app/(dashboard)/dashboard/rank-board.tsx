@@ -90,7 +90,7 @@ export function RankBoard({ initial }: { initial: RankData }) {
       {/* Barra de filtro de periodo */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h1 className="mr-1 text-lg font-bold text-vendas sm:text-xl">Ranking de Vendas</h1>
+          <h1 className="mr-1 text-xl font-extrabold uppercase tracking-tight text-vendas sm:text-2xl lg:text-3xl">Ranking de Vendas</h1>
           <CalendarClock className="h-4 w-4 text-muted-foreground" />
           <select className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
             value={selMonth} onChange={(e) => changePeriod(Number(e.target.value), selYear)}>
@@ -139,7 +139,7 @@ export function RankBoard({ initial }: { initial: RankData }) {
 
       {/* 3 colunas de ranking */}
       <div className="grid min-h-0 grid-cols-1 gap-2.5 lg:grid-cols-3" style={{ flex: "1 1 55%" }}>
-        <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue />
+        <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue compact />
         <RankPanel title="Varejo" rows={data.rankVarejo} showTrophy compact />
         <RankPanel title="Atacado" rows={data.rankAtacado} showTrophy compact />
       </div>
@@ -206,7 +206,7 @@ function Kpi({ icon, iconClass, label, value, sub, subClass }: {
 function RankPanel({ title, rows, showTrophy, compact, hideValue }: { title: string; rows: RankRow[]; showTrophy?: boolean; compact?: boolean; hideValue?: boolean }) {
   return (
     <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3">
-      <p className="mb-1.5 shrink-0 text-base font-semibold">{title}</p>
+      <p className="mb-1.5 shrink-0 text-base font-semibold lg:text-lg">{title}</p>
       <div className={`flex min-h-0 flex-1 flex-col ${compact ? "justify-start gap-2" : "justify-around gap-0.5"}`}>
         {rows.slice(0, 10).map((r, i) => (
           <RankLine key={r.nome} pos={i + 1} row={r} showTrophy={showTrophy} compact={compact} hideValue={hideValue} />
@@ -226,11 +226,11 @@ function RankLine({ pos, row, showTrophy, compact, hideValue }: { pos: number; r
       <div className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5">
           {showTrophy && pos <= 3 && <RankTrophy pos={pos} />}
-          <span className="truncate text-sm font-medium">{row.nome}</span>
+          <span className="truncate text-sm font-medium lg:text-base">{row.nome}</span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
-          {!hideValue && row.vendido > 0 && <span className="font-data text-sm">{formatBRL(row.vendido)}</span>}
-          <span className={`font-data text-sm font-bold ${semMeta ? "text-muted-foreground" : tierText(pct)}`}>
+          {!hideValue && row.vendido > 0 && <span className="font-data text-sm lg:text-base">{formatBRL(row.vendido)}</span>}
+          <span className={`font-data text-sm font-bold lg:text-base ${semMeta ? "text-muted-foreground" : tierText(pct)}`}>
             {semMeta ? "s/ meta" : `${pct}%`}
           </span>
         </span>
@@ -245,7 +245,7 @@ function RankLine({ pos, row, showTrophy, compact, hideValue }: { pos: number; r
 
 function RankTrophy({ pos }: { pos: number }) {
   const color = pos === 1 ? "text-amber-400" : pos === 2 ? "text-slate-300" : "text-amber-700";
-  return <Trophy className={`h-4 w-4 ${color}`} />;
+  return <Trophy className={`h-4 w-4 lg:h-5 lg:w-5 ${color}`} />;
 }
 
 function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {

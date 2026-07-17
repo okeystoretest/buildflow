@@ -67,6 +67,7 @@ export default async function LogisticaPage() {
         canManage={session.role === "GESTAO"}
         userRole={session.role}
         boardTitle="LOGÍSTICA"
+        titleAccent="distribuicao"
         stageLimits={stageLimits}
       />
     </div>

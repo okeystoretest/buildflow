@@ -26,6 +26,7 @@ export function KanbanBoard({
   canManage = false,
   userRole,
   boardTitle,
+  titleAccent = "amber",
   stageLimits = {},
 }: {
   cards: KanbanCard[];
@@ -38,9 +39,14 @@ export function KanbanBoard({
   userRole?: "GESTAO" | "VENDAS" | "FINANCEIRO" | "LOGISTICA" | "MOTORISTA";
   // Título exibido ao lado da busca quando em tela cheia (ex.: "LOGÍSTICA").
   boardTitle?: string;
+  // Cor do sufixo do breadcrumb ("GERAL"/"LOGÍSTICA") — destaca-se do branco.
+  titleAccent?: "amber" | "distribuicao";
   // Prazos por status (Gestão > Etapas) para o alerta temporal dos cards.
   stageLimits?: StageLimitMap;
 }) {
+  // Classe de cor do sufixo do breadcrumb (item 3: cor distinta do "branco").
+  const titleAccentClass =
+    titleAccent === "distribuicao" ? "text-distribuicao" : "text-amber-400";
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
   // Busca rápida por comanda, nº do pedido, cliente ou vendedor.
@@ -215,8 +221,12 @@ export function KanbanBoard({
   }
 
   const wrapClass = isFull
-    ? "flex h-screen flex-col gap-3 overflow-auto bg-background p-4"
+    ? "flex h-screen flex-col gap-3 overflow-auto bg-background p-4 pt-3"
     : "space-y-3";
+
+  // Cor da faixa superior em tela cheia (item 6): reflete a ferramenta ativa.
+  const topBarClass =
+    titleAccent === "distribuicao" ? "bg-distribuicao" : "bg-white";
 
   // Divisão em dois estágios. O 1º vai até "Embalando" (fim da preparação);
   // o 2º começa em "Embalado". Se por algum motivo "Embalado" não estiver nas
@@ -279,27 +289,40 @@ export function KanbanBoard({
 
   return (
     <div ref={rootRef} className={wrapClass}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+      {/* Faixa colorida no topo em tela cheia (reflete a ferramenta ativa). */}
+      {isFull && (
+        <div className={`-mx-4 -mt-3 mb-1 h-1.5 shrink-0 ${topBarClass}`} />
+      )}
+      <div className="flex items-center gap-3">
+        {/* Esquerda: título/breadcrumb (só em tela cheia). */}
+        <div className="flex flex-1 items-center">
           {isFull && boardTitle && (
-            <h2 className="hidden text-lg font-bold text-distribuicao sm:block">
-              Fluxo de Pedidos <span className="text-muted-foreground">→</span> {boardTitle}
+            <h2 className="hidden text-2xl font-extrabold tracking-tight lg:text-3xl sm:block">
+              <span className="text-white">Fluxo de Pedidos</span>
+              <span className="mx-2 text-muted-foreground">→</span>
+              <span className={titleAccentClass}>{boardTitle}</span>
             </h2>
           )}
-          <div className="relative w-full max-w-xs">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <input
-              className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-sm"
-              placeholder="Buscar comanda, pedido ou cliente..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
         </div>
-        <Button variant="outline" size="sm" onClick={toggleFull}>
-          {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          <span className="hidden sm:inline">{isFull ? "Sair da tela cheia" : "Tela cheia"}</span>
-        </Button>
+
+        {/* Centro: barra de busca centralizada horizontalmente. */}
+        <div className="relative w-full max-w-xs shrink-0">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <input
+            className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-sm"
+            placeholder="Buscar comanda, pedido ou cliente..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+
+        {/* Direita: botão de tela cheia. */}
+        <div className="flex flex-1 justify-end">
+          <Button variant="outline" size="sm" onClick={toggleFull}>
+            {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            <span className="hidden sm:inline">{isFull ? "Sair da tela cheia" : "Tela cheia"}</span>
+          </Button>
+        </div>
       </div>
 
       {error && <p className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">{error}</p>}
