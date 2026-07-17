@@ -90,6 +90,7 @@ export function RankBoard({ initial }: { initial: RankData }) {
       {/* Barra de filtro de periodo */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
+          <h1 className="mr-1 text-lg font-bold text-vendas sm:text-xl">Ranking de Vendas</h1>
           <CalendarClock className="h-4 w-4 text-muted-foreground" />
           <select className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
             value={selMonth} onChange={(e) => changePeriod(Number(e.target.value), selYear)}>

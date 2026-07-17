@@ -6,6 +6,7 @@ import {
   createSimple, toggleSimple, renameSimple, deleteSimple,
   createOperation, renameOperation,
   createUser, updateUser, toggleUser, deleteUser,
+  setStageTimeLimit,
 } from "@/lib/actions/management";
 import {
   createSalesGoal, deleteSalesGoal,
@@ -22,7 +23,8 @@ import { ClientesManager, type ClienteRow } from "@/app/(dashboard)/vendas/clien
 import { importUsersCsv, importOperationsCsv, importCustomersCsv } from "@/lib/actions/import";
 import { Pencil, Trash2, Check, X } from "lucide-react";
 import { formatBRL } from "@/lib/utils";
-import type { Role, SalesModel } from "@prisma/client";
+import { DASHBOARD_COLUMNS, STATUS_LABEL, STATUS_STYLE } from "@/lib/order-flow";
+import type { Role, SalesModel, OrderStatus } from "@prisma/client";
 
 interface Row { id: string; name: string; active: boolean; }
 interface OpRow { id: string; code: string; name: string; active: boolean; }
@@ -31,10 +33,11 @@ interface SellerOpt { id: string; name: string; salesModel: SalesModel | null; }
 interface GoalRow { id: string; userName: string; amount: number; targetItems: number | null; month: number; year: number; scope: SalesModel; campaignName: string | null; }
 interface CampaignRow { id: string; name: string; active: boolean; }
 interface CampaignOpt { id: string; name: string; }
+interface StageLimitRow { status: OrderStatus; limitMinutes: number; }
 
 type SimpleEntity = "store" | "orderType" | "shippingMethod";
 
-const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Lojas", "Tipos de Pedido", "Operações", "Formas de Envio"] as const;
+const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Etapas", "Lojas", "Tipos de Pedido", "Operações", "Formas de Envio"] as const;
 
 export function GestaoTabs(props: {
   users: UserRow[]; stores: Row[]; orderTypes: Row[]; operations: OpRow[]; shippingMethods: Row[];
@@ -43,6 +46,7 @@ export function GestaoTabs(props: {
   currentMonth: number; currentYear: number;
   // Periodo das metas exibidas (pode ser um mes passado no modo historico).
   goalPeriodMonth: number; goalPeriodYear: number; isCurrentGoalPeriod: boolean;
+  stageLimits: StageLimitRow[];
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Usuários");
 
@@ -61,6 +65,7 @@ export function GestaoTabs(props: {
       {tab === "Clientes" && <CustomersPanel customers={props.customers} />}
       {tab === "Metas" && <GoalsPanel sellers={props.sellers} goals={props.goals} activeCampaigns={props.activeCampaigns} month={props.currentMonth} year={props.currentYear} periodMonth={props.goalPeriodMonth} periodYear={props.goalPeriodYear} isCurrentPeriod={props.isCurrentGoalPeriod} />}
       {tab === "Campanhas" && <CampaignsPanel campaigns={props.campaigns} />}
+      {tab === "Etapas" && <EtapasPanel stageLimits={props.stageLimits} />}
       {tab === "Lojas" && <SimplePanel entity="store" rows={props.stores} label="loja" />}
       {tab === "Tipos de Pedido" && <SimplePanel entity="orderType" rows={props.orderTypes} label="tipo de pedido" />}
       {tab === "Operações" && <OperationPanel rows={props.operations} />}
@@ -672,6 +677,84 @@ function FieldHelp({ label, help, children }: { label: string; help: string; chi
       <label className="block text-xs font-medium text-foreground">{label}</label>
       {children}
       <p className="text-[11px] leading-tight text-muted-foreground">{help}</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ETAPAS: tempo limite (min) por status do Fluxo de Pedidos.
+// Cards ficam amarelos ao atingir 50% do limite e vermelhos ao exceder.
+// ---------------------------------------------------------------------------
+function EtapasPanel({ stageLimits }: { stageLimits: StageLimitRow[] }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [savedStatus, setSavedStatus] = useState<OrderStatus | null>(null);
+
+  // Estado local dos inputs, inicializado com o que veio do banco (0 = sem limite).
+  const initial: Record<string, string> = {};
+  for (const s of DASHBOARD_COLUMNS) {
+    const found = stageLimits.find((l) => l.status === s);
+    initial[s] = String(found?.limitMinutes ?? 0);
+  }
+  const [values, setValues] = useState<Record<string, string>>(initial);
+
+  function save(status: OrderStatus) {
+    setError(null);
+    setSavedStatus(null);
+    const minutes = Math.max(0, Math.floor(Number(values[status]) || 0));
+    start(async () => {
+      const res = await setStageTimeLimit({ status, limitMinutes: minutes });
+      if (res.ok) {
+        setSavedStatus(status);
+        router.refresh();
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-border bg-secondary/40 p-3 text-sm text-muted-foreground">
+        Defina o tempo limite (em minutos) de cada etapa do fluxo. Ao atingir{" "}
+        <span className="font-semibold text-amber-600 dark:text-amber-400">50%</span> do limite o card fica{" "}
+        <span className="font-semibold text-amber-600 dark:text-amber-400">amarelo</span>; ao{" "}
+        <span className="font-semibold text-red-600 dark:text-red-400">exceder</span>, fica{" "}
+        <span className="font-semibold text-red-600 dark:text-red-400">vermelho</span>. Use{" "}
+        <span className="font-semibold">0</span> para desligar o alerta.
+      </div>
+
+      {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {DASHBOARD_COLUMNS.map((status) => {
+          const s = STATUS_STYLE[status];
+          return (
+            <div key={status} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${s.dot}`} />
+              <span className="flex-1 truncate text-sm font-medium">{STATUS_LABEL[status]}</span>
+              <Input
+                type="number"
+                min={0}
+                className="h-9 w-24 text-sm"
+                value={values[status]}
+                onChange={(e) => setValues((v) => ({ ...v, [status]: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && save(status)}
+              />
+              <span className="text-xs text-muted-foreground">min</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => save(status)}
+                disabled={pending}
+              >
+                {savedStatus === status && !pending ? <Check className="h-4 w-4 text-motorista" /> : "Salvar"}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

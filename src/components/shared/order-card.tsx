@@ -1,8 +1,8 @@
 "use client";
 
 import type { OrderStatus } from "@prisma/client";
-import { FileText, Receipt, User, Tag } from "lucide-react";
-import { STATUS_STYLE } from "@/lib/order-flow";
+import { FileText, Receipt, User, Tag, Clock } from "lucide-react";
+import { STATUS_STYLE, type StageAlert } from "@/lib/order-flow";
 import { cn } from "@/lib/utils";
 
 export interface OrderCardData {
@@ -19,6 +19,8 @@ export interface OrderCardData {
   approvedByFinance: boolean;
   // ISO da entrada em ENTREGUE (usado para sumir do fluxo após 15 min).
   deliveredAt?: string | null;
+  // ISO de quando o pedido entrou no status atual (para alerta temporal).
+  statusSince?: string | null;
 }
 
 export function OrderCard({
@@ -26,6 +28,7 @@ export function OrderCard({
   onClick,
   style,
   action,
+  stageAlert = "none",
 }: {
   data: OrderCardData;
   onClick?: () => void;
@@ -33,6 +36,8 @@ export function OrderCard({
   // Slot de acao renderizado DENTRO do card (ex.: seta de mudar status).
   // Fica fora da area clicavel principal para nao abrir o modal por engano.
   action?: React.ReactNode;
+  // Nivel de alerta temporal calculado pelo board (aviso/alerta/nenhum).
+  stageAlert?: StageAlert;
 }) {
   const s = STATUS_STYLE[data.status];
   // Alerta visual: processando sem NF
@@ -43,6 +48,15 @@ export function OrderCard({
     ? { rotulo: "Comanda", valor: data.comandaNumber }
     : { rotulo: "Pedido", valor: data.orderNumber };
 
+  // Borda/realce por tempo de permanencia (Gestao > Etapas). O "Sem NF" tem
+  // prioridade visual (vermelho proprio); fora isso aplicamos warn/alert.
+  const timeBorder =
+    !alerta && stageAlert === "alert"
+      ? "border-red-500/70 ring-1 ring-red-500/30 hover:shadow-md hover:shadow-red-500/10"
+      : !alerta && stageAlert === "warn"
+        ? "border-amber-500/70 ring-1 ring-amber-500/25 hover:shadow-md hover:shadow-amber-500/10"
+        : null;
+
   return (
     <div
       style={style}
@@ -50,7 +64,7 @@ export function OrderCard({
         "card-hover group w-full rounded-xl border bg-card p-3 text-left shadow-sm animate-fade-in-up",
         alerta
           ? "border-destructive/50 ring-1 ring-destructive/20 hover:shadow-md hover:shadow-destructive/10"
-          : "border-border hover:border-primary/40 hover:shadow-md",
+          : timeBorder ?? "border-border hover:border-primary/40 hover:shadow-md",
       )}
     >
       {/* Area clicavel que abre o modal (todo o corpo do card). */}
@@ -93,6 +107,20 @@ export function OrderCard({
         {alerta && (
           <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-semibold text-destructive">
             Sem NF
+          </span>
+        )}
+        {!alerta && stageAlert !== "none" && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+              stageAlert === "alert"
+                ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+            )}
+            title={stageAlert === "alert" ? "Tempo limite excedido" : "Atenção: 50% do tempo limite"}
+          >
+            <Clock className="h-3 w-3" />
+            {stageAlert === "alert" ? "Atrasado" : "Atenção"}
           </span>
         )}
         {action && <span className="ml-auto shrink-0">{action}</span>}

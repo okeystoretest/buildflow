@@ -21,7 +21,7 @@ export default async function GestaoPage({
   const goalMonth = gm >= 1 && gm <= 12 ? gm : curMonth;
   const goalYear = gy > 2000 && gy < 3000 ? gy : curYear;
 
-  const [users, stores, orderTypes, operations, shippingMethods, goals, campaigns, customers] =
+  const [users, stores, orderTypes, operations, shippingMethods, goals, campaigns, customers, stageLimits] =
     await Promise.all([
       prisma.user.findMany({ orderBy: { name: "asc" } }),
       prisma.store.findMany({ orderBy: { name: "asc" } }),
@@ -37,6 +37,7 @@ export default async function GestaoPage({
       // Base tem dezenas de milhares de clientes: aqui carregamos apenas uma
       // amostra. A gestao completa (com busca e paginacao) fica em /vendas/clientes.
       prisma.customer.findMany({ orderBy: { name: "asc" }, take: 20 }),
+      prisma.stageTimeLimit.findMany(),
     ]);
 
   const activeCampaigns = campaigns.filter((c) => c.active);
@@ -64,6 +65,7 @@ export default async function GestaoPage({
         goalPeriodMonth={goalMonth}
         goalPeriodYear={goalYear}
         isCurrentGoalPeriod={isCurrentPeriod}
+        stageLimits={stageLimits.map((s) => ({ status: s.status, limitMinutes: s.limitMinutes }))}
       />
     </div>
   );

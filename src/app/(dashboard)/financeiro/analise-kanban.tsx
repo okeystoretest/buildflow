@@ -53,6 +53,7 @@ export function AnaliseKanban({
   const [issueId, setIssueId] = useState<string | null>(null);
   const [showAllPend, setShowAllPend] = useState(false);
   const [showAllProc, setShowAllProc] = useState(false);
+  const router = useRouter();
 
   // "Relogio" interno: reavalia de 30 em 30s quais processados ja passaram
   // dos 15 min e devem sumir da coluna — sem recarregar a pagina.
@@ -61,6 +62,17 @@ export function AnaliseKanban({
     const id = setInterval(() => setNowTick(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
+
+  // Atualizacao automatica dos dados do Financeiro a cada 2 minutos: busca o
+  // estado mais recente do servidor sem recarregar a pagina nem perder modais
+  // abertos. Pausa quando a aba esta em segundo plano.
+  useEffect(() => {
+    const REFRESH_MS = 2 * 60 * 1000; // 2 minutos
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, REFRESH_MS);
+    return () => clearInterval(id);
+  }, [router]);
 
   const windowMs = processedWindowMin * 60 * 1000;
 

@@ -11,6 +11,22 @@ datasource db {
 }
 
 // ===========================================================================
+// CONFIGURACAO DE PRAZOS POR ETAPA (Gestao > Etapas)
+// ===========================================================================
+
+// Tempo limite (em minutos) que um pedido deve permanecer em cada status do
+// Fluxo de Pedidos. Usado para colorir os cards: >=50% do limite = amarelo
+// (aviso), > limite = vermelho (alerta). Um registro por status (unico).
+model StageTimeLimit {
+  id        String      @id @default(cuid())
+  status    OrderStatus @unique
+  // Limite em minutos. null/0 = sem alerta para este status.
+  limitMinutes Int       @default(0)
+  updatedAt DateTime    @updatedAt
+  createdAt DateTime    @default(now())
+}
+
+// ===========================================================================
 // USUARIOS / PERFIS
 // ===========================================================================
 

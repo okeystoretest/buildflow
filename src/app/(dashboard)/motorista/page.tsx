@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
+import Link from "next/link";
+import { History } from "lucide-react";
 import { EntregaCard, type DriverOrderView } from "./delivery-card";
 import { MOTORISTA_COLUMNS, STATUS_LABEL, STATUS_STYLE } from "@/lib/order-flow";
 import type { OrderStatus } from "@prisma/client";
@@ -49,11 +51,19 @@ export default async function MotoristaPage() {
 
   return (
     <div className="mx-auto max-w-md space-y-6 pb-8 sm:max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-bold text-motorista">Minhas entregas</h1>
-        <p className="text-sm text-muted-foreground">
-          Pegue um pedido em aberto e siga: Enviado → Em Rota → Entregue.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-motorista">Minhas entregas</h1>
+          <p className="text-sm text-muted-foreground">
+            Pegue um pedido em aberto e siga: Enviado → Em Rota → Entregue.
+          </p>
+        </div>
+        <Link
+          href="/motorista/historico"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          <History className="h-4 w-4" /> Histórico
+        </Link>
       </div>
 
       {/* Colunas do fluxo. Em telas pequenas empilham; no desktop lado a lado. */}

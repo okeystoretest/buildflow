@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { DASHBOARD_COLUMNS } from "@/lib/order-flow";
 import { KanbanBoard, type KanbanCard } from "@/components/shared/kanban-board";
+import { loadStageLimits, loadStatusSince } from "@/lib/stage-limits";
 import { formatBRL } from "@/lib/utils";
 
 // Dashboard de Logística: visual e estrutura iguais ao Fluxo de Pedidos,
@@ -30,6 +31,11 @@ export default async function LogisticaPage() {
     if (!deliveredAtById.has(h.orderId)) deliveredAtById.set(h.orderId, h.createdAt.toISOString());
   }
 
+  const [stageLimits, statusSince] = await Promise.all([
+    loadStageLimits(),
+    loadStatusSince(orders.map((o) => ({ id: o.id, status: o.status }))),
+  ]);
+
   const cards: KanbanCard[] = orders.map((o) => ({
     id: o.id,
     status: o.status,
@@ -43,6 +49,7 @@ export default async function LogisticaPage() {
     hasInvoice: o.invoicePath != null,
     hasPaymentProof: o.paymentProofPath != null,
     deliveredAt: deliveredAtById.get(o.id) ?? null,
+    statusSince: statusSince.get(o.id) ?? null,
   }));
 
   return (
@@ -53,7 +60,15 @@ export default async function LogisticaPage() {
           Acompanhe o status dos pedidos e avance manualmente os que estão prontos para entrega.
         </p>
       </div>
-      <KanbanBoard cards={cards} columns={DASHBOARD_COLUMNS} advance={{ enabled: true, drivers }} canManage={session.role === "GESTAO"} userRole={session.role} />
+      <KanbanBoard
+        cards={cards}
+        columns={DASHBOARD_COLUMNS}
+        advance={{ enabled: true, drivers }}
+        canManage={session.role === "GESTAO"}
+        userRole={session.role}
+        boardTitle="LOGÍSTICA"
+        stageLimits={stageLimits}
+      />
     </div>
   );
 }

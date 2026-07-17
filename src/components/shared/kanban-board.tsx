@@ -4,7 +4,7 @@ import { useState, useTransition, useRef, useCallback, useEffect, useMemo } from
 import { useRouter } from "next/navigation";
 import { Maximize2, Minimize2, ChevronDown, Search, ChevronRight } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
-import { STATUS_LABEL, STATUS_STYLE, nextStatus } from "@/lib/order-flow";
+import { STATUS_LABEL, STATUS_STYLE, nextStatus, stageAlertLevel, type StageLimitMap } from "@/lib/order-flow";
 import { OrderCard, type OrderCardData } from "@/components/shared/order-card";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,8 @@ export function KanbanBoard({
   advance,
   canManage = false,
   userRole,
+  boardTitle,
+  stageLimits = {},
 }: {
   cards: KanbanCard[];
   columns: OrderStatus[];
@@ -34,6 +36,10 @@ export function KanbanBoard({
   canManage?: boolean;
   // Papel do usuário atual — controla regras de permissão de avanço por status.
   userRole?: "GESTAO" | "VENDAS" | "FINANCEIRO" | "LOGISTICA" | "MOTORISTA";
+  // Título exibido ao lado da busca quando em tela cheia (ex.: "LOGÍSTICA").
+  boardTitle?: string;
+  // Prazos por status (Gestão > Etapas) para o alerta temporal dos cards.
+  stageLimits?: StageLimitMap;
 }) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -254,6 +260,7 @@ export function KanbanBoard({
               data={card}
               onClick={() => setOpenId(card.id)}
               style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
+              stageAlert={stageAlertLevel(card.status, card.statusSince, stageLimits, nowTick)}
               action={
                 canAdvanceCard(card) ? (
                   <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />
@@ -284,14 +291,21 @@ export function KanbanBoard({
   return (
     <div ref={rootRef} className={wrapClass}>
       <div className="flex items-center justify-between gap-3">
-        <div className="relative w-full max-w-xs">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <input
-            className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-sm"
-            placeholder="Buscar comanda, pedido ou cliente..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+        <div className="flex items-center gap-3">
+          {isFull && boardTitle && (
+            <h2 className="hidden text-lg font-bold text-distribuicao sm:block">
+              Fluxo de Pedidos <span className="text-muted-foreground">→</span> {boardTitle}
+            </h2>
+          )}
+          <div className="relative w-full max-w-xs">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <input
+              className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-sm"
+              placeholder="Buscar comanda, pedido ou cliente..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
         </div>
         <Button variant="outline" size="sm" onClick={toggleFull}>
           {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -335,6 +349,7 @@ export function KanbanBoard({
                   key={card.id}
                   data={card}
                   onClick={() => { setOverflowStatus(null); setOpenId(card.id); }}
+                  stageAlert={stageAlertLevel(card.status, card.statusSince, stageLimits, nowTick)}
                   action={
                     canAdvanceCard(card) ? (
                       <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />

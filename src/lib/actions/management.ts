@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction, hashPassword } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
-import type { Role, PaymentDisposition, SalesModel } from "@prisma/client";
+import type { Role, PaymentDisposition, SalesModel, OrderStatus } from "@prisma/client";
 
 // Entidades simples com apenas "name".
 type SimpleEntity = "store" | "orderType" | "shippingMethod" | "paymentMethod" | "bank";
@@ -250,5 +250,35 @@ export async function deleteUser(id: string): Promise<ActionResult<void>> {
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao excluir usuário.");
+  }
+}
+
+// ===========================================================================
+// PRAZOS POR ETAPA (Gestao > Etapas)
+// ===========================================================================
+
+/**
+ * Define (ou atualiza) o tempo limite em MINUTOS de um status do fluxo.
+ * Usado para colorir os cards por tempo de permanência (aviso/alerta).
+ * limitMinutes = 0 desliga o alerta daquele status.
+ */
+export async function setStageTimeLimit(args: {
+  status: OrderStatus;
+  limitMinutes: number;
+}): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    const minutes = Number.isFinite(args.limitMinutes) ? Math.max(0, Math.floor(args.limitMinutes)) : 0;
+    await prisma.stageTimeLimit.upsert({
+      where: { status: args.status },
+      update: { limitMinutes: minutes },
+      create: { status: args.status, limitMinutes: minutes },
+    });
+    revalidatePath("/gestao");
+    revalidatePath("/fluxo");
+    revalidatePath("/logistica");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao salvar prazo da etapa.");
   }
 }

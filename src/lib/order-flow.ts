@@ -95,7 +95,32 @@ export function canTransition(
 }
 
 // ---------------------------------------------------------------------------
-// Estilo visual por status (cor consistente em todo o sistema).
+// ALERTA TEMPORAL DE CARDS (Gestao > Etapas)
+// Nivel de alerta com base no tempo de permanencia no status atual:
+//   - "none":  sem limite configurado ou dentro de <50% do limite
+//   - "warn":  >=50% do limite (amarelo)
+//   - "alert": > limite (vermelho)
+// ---------------------------------------------------------------------------
+export type StageAlert = "none" | "warn" | "alert";
+
+// Mapa status -> limite em minutos (0/ausente = sem alerta).
+export type StageLimitMap = Partial<Record<OrderStatus, number>>;
+
+export function stageAlertLevel(
+  status: OrderStatus,
+  statusSinceIso: string | null | undefined,
+  limits: StageLimitMap,
+  nowMs: number = Date.now(),
+): StageAlert {
+  const limit = limits[status] ?? 0;
+  if (!limit || limit <= 0 || !statusSinceIso) return "none";
+  const elapsedMin = (nowMs - new Date(statusSinceIso).getTime()) / 60000;
+  if (elapsedMin > limit) return "alert";
+  if (elapsedMin >= limit * 0.5) return "warn";
+  return "none";
+}
+
+
 // Classes Tailwind para texto/fundo/borda de badges e cards.
 // ---------------------------------------------------------------------------
 export interface StatusStyle {
