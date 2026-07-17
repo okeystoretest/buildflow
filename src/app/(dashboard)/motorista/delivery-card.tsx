@@ -4,10 +4,11 @@ import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OrderStatus } from "@prisma/client";
 import { startRoute, completeDelivery } from "@/lib/actions/deliveries";
+import { claimOpenOrder } from "@/lib/actions/logistics";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
-import { Truck, Camera, Eye, CheckCircle2 } from "lucide-react";
+import { Truck, Camera, Eye, CheckCircle2, Hand } from "lucide-react";
 
 export interface DriverOrderView {
   id: string;
@@ -17,6 +18,8 @@ export interface DriverOrderView {
   customer: string;
   customerCode: string | null;
   notes: string | null;
+  // true quando o card está na coluna "Aguardando Entregador" (sem dono).
+  isOpen?: boolean;
 }
 
 // Card do fluxo restrito do motorista. Progressão:
@@ -36,6 +39,14 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
     });
   }
 
+  function atribuir() {
+    setError(null);
+    start(async () => {
+      const res = await claimOpenOrder({ orderId: order.id });
+      if (res.ok) router.refresh(); else setError(res.error);
+    });
+  }
+
   function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -50,8 +61,10 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
     e.target.value = "";
   }
 
-  const podeIniciar = order.status === "ENVIADO";
-  const podeConcluir = order.status === "EM_ROTA";
+  // Card em aberto: só permite "Atribuir" (pegar para si). Sem iniciar/concluir.
+  const podeAtribuir = order.isOpen === true;
+  const podeIniciar = !podeAtribuir && order.status === "ENVIADO";
+  const podeConcluir = !podeAtribuir && order.status === "EM_ROTA";
   const entregue = order.status === "ENTREGUE" || order.status === "CONCLUIDO";
 
   return (
@@ -87,6 +100,13 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
 
       {/* Ações do fluxo */}
       <div className="mt-3 flex flex-col gap-2">
+        {podeAtribuir && (
+          <Button variant="brand" size="lg" className="w-full" onClick={atribuir} disabled={pending}>
+            <Hand className="mr-2 h-5 w-5" />
+            {pending ? "..." : "Atribuir"}
+          </Button>
+        )}
+
         {podeIniciar && (
           <Button variant="brand" size="lg" className="w-full" onClick={iniciar} disabled={pending}>
             <Truck className="mr-2 h-5 w-5" />

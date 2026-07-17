@@ -152,6 +152,126 @@ export async function assignDriverToOrder(args: {
 }
 
 /**
+ * "Em aberto": a Logística NÃO escolhe motorista. Deixa o pedido disponível
+ * para qualquer motorista pegar. Move o pedido direto para ENVIADO e mantém a
+ * entrega sem driver (status AGUARDANDO). O card aparece na coluna
+ * "Aguardando Entregador" do Kanban de Motoristas.
+ *
+ * Convive com assignDriverToOrder: a Logística escolhe UM ou deixa em aberto.
+ */
+export async function openOrderForDrivers(args: {
+  orderId: string;
+  trackingCode?: string | null;
+}): Promise<ActionResult<void>> {
+  try {
+    const session = await requireRoleAction(["LOGISTICA", "GESTAO"]);
+
+    const tracking = args.trackingCode?.trim() || null;
+
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: args.orderId },
+        include: { delivery: true },
+      });
+      if (!order) throw new Error("Pedido nao encontrado.");
+      if (!order.delivery) throw new Error("Entrega nao encontrada para o pedido.");
+      if (order.status !== "PROCESSANDO" && order.status !== "PROCESSADO") {
+        throw new Error("O pedido precisa estar em Processando/Processado para abrir aos motoristas.");
+      }
+
+      // Entrega fica SEM motorista, aguardando alguém pegar.
+      await tx.delivery.update({
+        where: { id: order.delivery.id },
+        data: { status: "AGUARDANDO", driverId: null, assignedAt: null },
+      });
+      // Pedido vai direto para ENVIADO (disponível no Kanban de Motoristas).
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: "ENVIADO",
+          ...(tracking ? { trackingCode: tracking } : {}),
+        },
+      });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          status: "ENVIADO",
+          changedBy: session.userId,
+          note: tracking
+            ? `Em aberto para motoristas · Rastreio: ${tracking}`
+            : "Em aberto para motoristas",
+        },
+      });
+    });
+
+    revalidatePath("/logistica");
+    revalidatePath("/dashboard");
+    revalidatePath("/motorista");
+    return actionOk(undefined);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao abrir pedido aos motoristas.";
+    return actionError(msg);
+  }
+}
+
+/**
+ * "Atribuir": um MOTORISTA pega para si um pedido que está em aberto
+ * (coluna "Aguardando Entregador"). Vincula a entrega ao usuário autenticado e
+ * mantém o pedido em ENVIADO — a partir daí o card sai da coluna aberta e
+ * aparece em "Enviado" apenas para o motorista que pegou.
+ *
+ * Regra: qualquer motorista pode pegar qualquer pedido em aberto, mas só se
+ * ninguém tiver pego antes (corrida resolvida na transação).
+ */
+export async function claimOpenOrder(args: {
+  orderId: string;
+}): Promise<ActionResult<void>> {
+  try {
+    const session = await requireRoleAction(["MOTORISTA", "GESTAO"]);
+
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: args.orderId },
+        include: { delivery: true },
+      });
+      if (!order) throw new Error("Pedido nao encontrado.");
+      if (!order.delivery) throw new Error("Entrega nao encontrada para o pedido.");
+      if (order.status !== "ENVIADO") {
+        throw new Error("Este pedido não está mais disponível.");
+      }
+      if (order.delivery.driverId) {
+        throw new Error("Outro motorista já pegou este pedido.");
+      }
+
+      await tx.delivery.update({
+        where: { id: order.delivery.id },
+        data: {
+          status: "ATRIBUIDA",
+          driverId: session.userId,
+          assignedAt: new Date(),
+        },
+      });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          status: "ENVIADO",
+          changedBy: session.userId,
+          note: "Atribuído ao motorista (pego em aberto)",
+        },
+      });
+    });
+
+    revalidatePath("/motorista");
+    revalidatePath("/logistica");
+    revalidatePath("/dashboard");
+    return actionOk(undefined);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao atribuir pedido.";
+    return actionError(msg);
+  }
+}
+
+/**
  * Resolve uma pendência: registra (opcionalmente) um comentário de resolução
  * no histórico e AVANÇA o pedido do status PENDENTE para o próximo do fluxo
  * (CONFERINDO). Tudo dentro de uma transação — comentário e mudança de status

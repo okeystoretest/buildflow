@@ -182,6 +182,25 @@ export function KanbanBoard({
     });
   }
 
+  // "Em aberto": não escolhe motorista; libera o pedido para qualquer um pegar.
+  function openForDrivers() {
+    if (!popupOrder) return;
+    setError(null);
+    start(async () => {
+      const mod = await import("@/lib/actions/logistics");
+      const res = await mod.openOrderForDrivers({
+        orderId: popupOrder.id,
+        trackingCode: hasTracking ? trackingCode.trim() : null,
+      });
+      if (res.ok) {
+        setPopupOrder(null);
+        setTrackingCode("");
+        setHasTracking(null);
+        router.refresh();
+      } else setError(res.error);
+    });
+  }
+
   function answerPendency(hasPendency: boolean) {
     if (!pendencyOrder) return;
     setError(null);
@@ -378,11 +397,27 @@ export function KanbanBoard({
         <Modal onClose={() => setPopupOrder(null)}>
           <h2 className="mb-1 text-lg font-bold">Atribuir motorista</h2>
           <p className="mb-4 text-sm text-muted-foreground">Pedido {popupOrder.orderNumber} — quem fará a entrega?</p>
-          <select className="mb-4 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+          <select className="mb-3 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
             value={driverId} onChange={(e) => setDriverId(e.target.value)}>
             <option value="">Selecione o motorista...</option>
             {advance?.drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
+
+          {/* Alternativa: não escolher ninguém e deixar em aberto para os motoristas. */}
+          <div className="mb-4 flex items-center gap-2">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">ou</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <button
+            type="button"
+            onClick={openForDrivers}
+            disabled={pending}
+            className="mb-4 w-full rounded-lg border border-dashed border-distribuicao/60 bg-distribuicao/5 px-3 py-2 text-sm font-medium text-distribuicao transition-colors hover:bg-distribuicao/10 disabled:opacity-50"
+          >
+            {pending ? "..." : "Deixar em aberto (qualquer motorista pega)"}
+          </button>
+
           {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setPopupOrder(null)}>Cancelar</Button>
