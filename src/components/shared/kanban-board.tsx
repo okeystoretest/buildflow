@@ -250,9 +250,9 @@ export function KanbanBoard({
             {list.length}
           </span>
         </div>
-        {/* Cards da coluna: mostra ~2 e o restante fica acessível por uma
-            barra de rolagem minimalista (sem botão "mostrar mais"). */}
-        <div className="kanban-scroll flex max-h-[15.5rem] flex-col gap-2 overflow-y-auto pr-1">
+        {/* Cards da coluna: mostra até 3 completos e o restante fica acessível
+            por uma barra de rolagem minimalista (sem botão "mostrar mais"). */}
+        <div className="kanban-scroll flex max-h-[23.5rem] flex-col gap-2 overflow-y-auto pr-1">
           {list.map((card, i) => (
             <OrderCard
               key={card.id}
