@@ -20,6 +20,7 @@ export default async function FinanceiroPage() {
         include: {
           customer: true, seller: true, cnpj: true,
           _count: { select: { financeProofs: true } },
+          financeProofs: { orderBy: { createdAt: "asc" }, select: { id: true, filePath: true } },
         },
         orderBy: { createdAt: "asc" },
       }),
@@ -66,6 +67,7 @@ export default async function FinanceiroPage() {
     currentPaymentMethodId: o.paymentMethodId,
     currentBankId: o.bankId,
     proof2Count: o._count.financeProofs,
+    proof2List: o.financeProofs.map((p) => ({ id: p.id, filePath: p.filePath })),
     processedAt: null,
     outcome: null,
     // Pendencia ativa = tem texto e ainda nao foi resolvida por Vendas.
@@ -92,6 +94,7 @@ export default async function FinanceiroPage() {
       currentPaymentMethodId: o.paymentMethodId,
       currentBankId: o.bankId,
       proof2Count: 0,
+      proof2List: [],
       processedAt: h.createdAt.toISOString(),
       outcome: aprovado ? "APROVADO" : "INTERROMPIDO",
       hasActiveIssue: false,

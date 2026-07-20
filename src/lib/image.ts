@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -171,4 +171,27 @@ export async function saveDocument(
 /** Detecta se o data-URL/base64 recebido e um PDF. */
 export function isPdfDataUrl(dataUrl: string): boolean {
   return /^data:application\/pdf/i.test(dataUrl);
+}
+
+/**
+ * Remove do DISCO um arquivo previamente salvo, a partir do caminho relativo
+ * gravado no banco (ex.: "/uploads/comprovantes-pagamento/2026/07/x.webp").
+ *
+ * Converte o caminho publico (PUBLIC_BASE) de volta para o caminho absoluto
+ * em UPLOAD_DIR. Falhas (arquivo ja inexistente) sao ignoradas de proposito:
+ * o objetivo e garantir que o arquivo nao fique orfao, nao travar o fluxo.
+ */
+export async function deleteUploadedFile(publicPath: string): Promise<void> {
+  try {
+    if (!publicPath) return;
+    // Tira a base publica ("/uploads") do inicio, sobra "<folder>/ano/mes/arquivo".
+    let rel = publicPath;
+    if (rel.startsWith(PUBLIC_BASE)) rel = rel.slice(PUBLIC_BASE.length);
+    rel = rel.replace(/^\/+/, ""); // remove barras iniciais
+    if (!rel) return;
+    const absolutePath = path.join(UPLOAD_DIR, rel);
+    await unlink(absolutePath);
+  } catch {
+    // Arquivo ja pode nao existir; ignorar silenciosamente.
+  }
 }

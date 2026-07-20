@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
-import { processAndSaveImage, saveDocument, isPdfDataUrl, validateUpload } from "@/lib/image";
+import { processAndSaveImage, saveDocument, isPdfDataUrl, validateUpload, deleteUploadedFile } from "@/lib/image";
 import { createCustomerSchema, updateCustomerSchema } from "@/lib/validations/order";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
+import type { OrderStatus } from "@prisma/client";
 
 /** Cadastro de cliente (Vendas/Gestao). */
 export async function createCustomer(
@@ -152,6 +153,51 @@ export async function uploadInvoiceBase64(args: {
     return actionOk({ filePath: processed.filePath });
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao anexar Nota Fiscal.");
+  }
+}
+
+/**
+ * Remove a Nota Fiscal anexada ao pedido (botao "x"), liberando o campo para
+ * um novo envio. Apaga o arquivo do disco e limpa Order.invoicePath.
+ *
+ * Trava de seguranca: a NF e pre-requisito para o pedido avancar de
+ * PROCESSANDO. Se o pedido ja passou dessa etapa, remover deixaria o fluxo
+ * inconsistente — entao so permitimos a troca ate PROCESSANDO/PROCESSADO.
+ */
+export async function removeInvoice(args: {
+  orderId: string;
+}): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO", "VENDAS", "FINANCEIRO", "LOGISTICA"]);
+    if (!args.orderId) return actionError("Pedido não informado.");
+
+    const order = await prisma.order.findUnique({ where: { id: args.orderId } });
+    if (!order) return actionError("Pedido não encontrado.");
+    if (!order.invoicePath) return actionError("Não há Nota Fiscal anexada.");
+
+    // Etapas em que ainda e seguro trocar a NF.
+    const podeTrocar: OrderStatus[] = [
+      "EM_ANALISE", "AGUARDANDO_IMPRESSAO", "SEPARANDO", "PENDENTE",
+      "CONFERINDO", "EMBALANDO", "EMBALADO", "PROCESSANDO", "PROCESSADO",
+    ];
+    if (!podeTrocar.includes(order.status)) {
+      return actionError("O pedido já avançou; não é possível remover a Nota Fiscal.");
+    }
+
+    const antigo = order.invoicePath;
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { invoicePath: null },
+    });
+    // Apaga o arquivo fisico depois de limpar o banco.
+    await deleteUploadedFile(antigo);
+
+    revalidatePath("/fluxo");
+    revalidatePath("/logistica");
+    revalidatePath("/vendas");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao remover Nota Fiscal.");
   }
 }
 

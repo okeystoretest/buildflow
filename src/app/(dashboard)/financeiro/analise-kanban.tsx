@@ -19,6 +19,8 @@ export interface FinanceCard {
   currentPaymentMethodId: string | null;
   currentBankId: string | null;
   proof2Count: number;
+  // Lista dos comprovantes do Financeiro (para exibir com opção de remover).
+  proof2List: { id: string; filePath: string }[];
   processedAt: string | null;   // ISO — só na coluna Processado
   outcome: "APROVADO" | "INTERROMPIDO" | null;
   // Pendencia ja sinalizada e ainda ativa? (mostra estado no card)
@@ -160,7 +162,7 @@ export function AnaliseKanban({
             banks={banks}
             currentPaymentMethodId={aberto.currentPaymentMethodId}
             currentBankId={aberto.currentBankId}
-            proof2Count={aberto.proof2Count}
+            proof2List={aberto.proof2List}
             onProcessed={() => setOpenId(null)}
           />
         </Modal>

@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { auditOrder, setOrderPaymentInfo, uploadSecondPaymentProof } from "@/lib/actions/finance";
+import { auditOrder, setOrderPaymentInfo, uploadSecondPaymentProof, deleteSecondPaymentProof } from "@/lib/actions/finance";
 import { linkCnpjToOrder } from "@/lib/actions/cnpj";
 import { shrinkImageToBase64 } from "@/lib/client-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { X } from "lucide-react";
 
 interface StatusOpt { id: string; name: string; disposition: "APROVA" | "INTERROMPE"; }
 interface CnpjOpt { id: string; name: string; document: string; }
@@ -22,7 +23,7 @@ export function AuditarPedido({
   banks,
   currentPaymentMethodId,
   currentBankId,
-  proof2Count,
+  proof2List,
   onProcessed,
 }: {
   orderId: string;
@@ -34,8 +35,8 @@ export function AuditarPedido({
   banks: Opt[];
   currentPaymentMethodId: string | null;
   currentBankId: string | null;
-  // Quantos comprovantes do Financeiro ja foram anexados (0 a 5).
-  proof2Count: number;
+  // Lista dos comprovantes ja anexados (para exibir com opção de remover).
+  proof2List: { id: string; filePath: string }[];
   // Chamado apos processar o pedido (ex.: fechar o modal do Kanban).
   onProcessed?: () => void;
 }) {
@@ -58,7 +59,10 @@ export function AuditarPedido({
 
   // Comprovantes do Financeiro (ate 5). Guarda a contagem ja anexada.
   const MAX_PROOF2 = 5;
-  const [proof2Total, setProof2Total] = useState(proof2Count);
+  // Lista local dos comprovantes do Financeiro (id + caminho). Começa com o que
+  // veio do servidor e é atualizada ao anexar/remover, sem recarregar a página.
+  const [proofs, setProofs] = useState<{ id: string; filePath: string }[]>(proof2List);
+  const proof2Total = proofs.length;
   const [proofBusy, setProofBusy] = useState(false);
   const [proofMsg, setProofMsg] = useState<string | null>(null);
 
@@ -124,10 +128,23 @@ export function AuditarPedido({
     const res = await uploadSecondPaymentProof({ orderId, base64List });
     setProofBusy(false);
     if (res.ok) {
-      setProof2Total((n) => Math.min(MAX_PROOF2, n + res.data.count));
+      setProofs((prev) => [...prev, ...res.data.created].slice(0, MAX_PROOF2));
       setProofMsg(`${res.data.count} comprovante(s) anexado(s).`);
       router.refresh();
     } else setError(res.error);
+  }
+
+  // Remove um comprovante do Financeiro (com o "x"). Atualiza a lista local e
+  // sincroniza o servidor (apaga registro + arquivo do disco).
+  function removeProof2(proofId: string) {
+    setError(null); setProofMsg(null);
+    start(async () => {
+      const res = await deleteSecondPaymentProof({ proofId });
+      if (res.ok) {
+        setProofs((prev) => prev.filter((p) => p.id !== proofId));
+        router.refresh();
+      } else setError(res.error);
+    });
   }
 
   function run() {
@@ -176,11 +193,26 @@ export function AuditarPedido({
       {/* Comprovantes do Financeiro (ate 5; ao menos 1 obrigatorio p/ aprovar). */}
       <div className="space-y-1">
         <Label className="text-xs">2º Comprovante de Pagamento (até {MAX_PROOF2})</Label>
-        {proof2Total > 0 && (
-          <p className="text-xs font-medium text-motorista">
-            ✓ {proof2Total} comprovante(s) anexado(s).
-          </p>
+
+        {/* Lista dos comprovantes anexados, cada um com "x" para remover. */}
+        {proofs.length > 0 && (
+          <ul className="space-y-1">
+            {proofs.map((p, i) => (
+              <li key={p.id} className="flex items-center justify-between rounded-lg border border-border bg-secondary/40 px-3 py-1.5 text-xs">
+                <a href={p.filePath} target="_blank" rel="noreferrer" className="truncate text-financeiro underline">
+                  <span className="font-data mr-2 text-muted-foreground">{i + 1}.</span>
+                  Comprovante {i + 1}
+                </a>
+                <button type="button" onClick={() => removeProof2(p.id)} disabled={pending || proofBusy}
+                  className="ml-2 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-background hover:text-destructive disabled:opacity-40"
+                  aria-label="Remover comprovante">
+                  <X className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
+
         {proof2Total < MAX_PROOF2 && (
           <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
             onChange={onProof2File} disabled={proofBusy || pending}

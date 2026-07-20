@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
-import { processAndSaveImage } from "@/lib/image";
+import { processAndSaveImage, deleteUploadedFile } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import type { PaymentDisposition } from "@prisma/client";
 
@@ -48,7 +48,7 @@ export async function uploadSecondPaymentProof(args: {
   // Um ou varios comprovantes (ate 5) em data URL base64.
   base64?: string;
   base64List?: string[];
-}): Promise<ActionResult<{ count: number }>> {
+}): Promise<ActionResult<{ count: number; created: { id: string; filePath: string }[] }>> {
   try {
     await requireRoleAction(["FINANCEIRO", "GESTAO"]);
     if (!args.orderId) return actionError("Pedido não informado.");
@@ -71,6 +71,7 @@ export async function uploadSecondPaymentProof(args: {
     const aProcessar = entradas.slice(0, espacoLivre);
 
     let salvos = 0;
+    const created: { id: string; filePath: string }[] = [];
     for (const [i, dataUrl] of aProcessar.entries()) {
       const raw = dataUrl.replace(/^data:[^;]+;base64,/, "");
       const buffer = Buffer.from(raw, "base64");
@@ -82,7 +83,7 @@ export async function uploadSecondPaymentProof(args: {
         folder: "comprovantes-pagamento",
         fileName: `${order.id}_financeProof_${order.financeProofs.length + i + 1}_${Date.now()}`,
       });
-      await prisma.orderFinanceProof.create({
+      const rec = await prisma.orderFinanceProof.create({
         data: {
           orderId: order.id,
           filePath: processed.filePath,
@@ -90,7 +91,9 @@ export async function uploadSecondPaymentProof(args: {
           height: processed.height,
           sizeBytes: processed.sizeBytes,
         },
+        select: { id: true, filePath: true },
       });
+      created.push(rec);
       // Espelha o PRIMEIRO comprovante em paymentProof2Path (trava de aprovacao).
       if (order.financeProofs.length === 0 && i === 0) {
         await prisma.order.update({
@@ -105,9 +108,61 @@ export async function uploadSecondPaymentProof(args: {
 
     revalidatePath("/financeiro");
     revalidatePath("/fluxo");
-    return actionOk({ count: salvos });
+    return actionOk({ count: salvos, created });
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao anexar comprovante.");
+  }
+}
+
+/**
+ * Remove UM comprovante do Financeiro (2o comprovante) pelo id.
+ * - Apaga o registro OrderFinanceProof e o arquivo fisico do disco.
+ * - Se o removido era o espelhado em Order.paymentProof2Path (a trava de
+ *   aprovacao), re-aponta para o comprovante mais antigo restante — ou null se
+ *   nao sobrar nenhum. Assim a regra de "precisa de ao menos 1" continua valida.
+ */
+export async function deleteSecondPaymentProof(args: {
+  proofId: string;
+}): Promise<ActionResult<{ remaining: number }>> {
+  try {
+    await requireRoleAction(["FINANCEIRO", "GESTAO"]);
+    if (!args.proofId) return actionError("Comprovante não informado.");
+
+    const proof = await prisma.orderFinanceProof.findUnique({
+      where: { id: args.proofId },
+    });
+    if (!proof) return actionError("Comprovante não encontrado.");
+
+    const order = await prisma.order.findUnique({
+      where: { id: proof.orderId },
+      include: { financeProofs: { orderBy: { createdAt: "asc" } } },
+    });
+    if (!order) return actionError("Pedido não encontrado.");
+
+    // Comprovantes que sobram apos remover este.
+    const restantes = order.financeProofs.filter((p) => p.id !== proof.id);
+    // O espelho (paymentProof2Path) precisa apontar para um arquivo valido.
+    const eraEspelho = order.paymentProof2Path === proof.filePath;
+    const novoEspelho = eraEspelho ? (restantes[0]?.filePath ?? null) : order.paymentProof2Path;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.orderFinanceProof.delete({ where: { id: proof.id } });
+      if (eraEspelho) {
+        await tx.order.update({
+          where: { id: order.id },
+          data: { paymentProof2Path: novoEspelho },
+        });
+      }
+    });
+
+    // Remove o arquivo fisico apos o commit (nao bloqueia o fluxo se falhar).
+    await deleteUploadedFile(proof.filePath);
+
+    revalidatePath("/financeiro");
+    revalidatePath("/fluxo");
+    return actionOk({ remaining: restantes.length });
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao remover comprovante.");
   }
 }
 

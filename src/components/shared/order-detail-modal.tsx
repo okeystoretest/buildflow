@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { STATUS_LABEL } from "@/lib/order-flow";
 import { formatBRL } from "@/lib/utils";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { uploadInvoiceBase64 } from "@/lib/actions/sales";
+import { uploadInvoiceBase64, removeInvoice } from "@/lib/actions/sales";
 import { prepareInvoiceFile } from "@/lib/client-image";
 import { Button } from "@/components/ui/button";
-import { Clock } from "lucide-react";
+import { Clock, X } from "lucide-react";
 
 interface OrderDetail {
   id: string;
@@ -117,6 +117,22 @@ export function OrderDetailModal({
       } else setNfMsg({ ok: false, text: res.error });
     })();
     e.target.value = "";
+  }
+
+  // Remove a NF anexada (botao "x"), liberando o campo para um novo envio.
+  function onRemoveInvoice() {
+    if (!order) return;
+    setNfMsg(null);
+    setNfBusy(true);
+    (async () => {
+      const res = await removeInvoice({ orderId: order.id });
+      setNfBusy(false);
+      if (res.ok) {
+        setOrder({ ...order, invoicePath: null });
+        setNfMsg({ ok: true, text: "Nota Fiscal removida. Anexe a nova." });
+        router.refresh();
+      } else setNfMsg({ ok: false, text: res.error });
+    })();
   }
 
   useEffect(() => {
@@ -349,14 +365,27 @@ export function OrderDetailModal({
 
             {/* Nota Fiscal: liberado apos confirmacao do pagamento (comanda gerada).
                 Bloqueado para o motorista (sem edição de dados).
-                REGRA: apos o envio concluído (invoicePath existe), o botão de
-                upload SOME PERMANENTEMENTE — só resta a confirmação. */}
+                Depois de anexada, o "x" permite remover e enviar outra. */}
             {!driverMode && order.comandaNumber && (
               <div className="rounded-lg border border-border p-3">
                 <p className="mb-1 text-sm font-semibold">Nota Fiscal</p>
                 {order.invoicePath ? (
-                  // NF já enviada: sem input de upload, apenas confirmação.
-                  <p className="text-sm font-medium text-motorista">✓ Nota Fiscal anexada.</p>
+                  // NF ja enviada: confirmacao + "x" para trocar o arquivo.
+                  <>
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-1.5">
+                      <a href={order.invoicePath} target="_blank" rel="noreferrer"
+                        className="truncate text-sm font-medium text-motorista underline">
+                        ✓ Nota Fiscal anexada.
+                      </a>
+                      <button type="button" onClick={onRemoveInvoice} disabled={nfBusy}
+                        className="ml-2 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-background hover:text-destructive disabled:opacity-40"
+                        aria-label="Remover Nota Fiscal">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {nfBusy && <p className="mt-1 text-xs text-muted-foreground">Removendo...</p>}
+                    {nfMsg && <p className={`mt-1 text-sm ${nfMsg.ok ? "text-motorista" : "text-destructive"}`}>{nfMsg.text}</p>}
+                  </>
                 ) : (
                   <>
                     {order.status === "PROCESSANDO" && (
