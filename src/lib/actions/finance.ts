@@ -269,6 +269,63 @@ export async function auditOrder(args: {
 }
 
 // ===========================================================================
+// Coluna "Pagamento pendente" — pedidos aprovados com o status de pagamento
+// "Liberado (Pendente)" que ainda aguardam a confirmacao do recebimento.
+//
+// O pedido segue o fluxo normal (ja foi para AGUARDANDO_IMPRESSAO na auditoria).
+// Aqui apenas registramos a confirmacao do pagamento SEM alterar o status do
+// pedido — usamos o OrderStatusHistory como marcador (sem migration).
+// ===========================================================================
+
+// Nome exato do status que gera a pendencia na coluna azul.
+export const PENDING_PAYMENT_STATUS_NAME = "Liberado (Pendente)";
+// Nota gravada no historico ao confirmar o pagamento (marcador de confirmacao).
+export const PAYMENT_CONFIRMED_NOTE = "PAGAMENTO_CONFIRMADO";
+
+/**
+ * Financeiro confirma que o pagamento do pedido "Liberado (Pendente)" caiu.
+ * Nao muda o status do pedido (o fluxo ja segue normalmente); apenas grava
+ * um marcador no historico, o que faz o card sair da coluna "Pagamento pendente".
+ */
+export async function confirmPayment(orderId: string): Promise<ActionResult<void>> {
+  try {
+    const session = await requireRoleAction(["FINANCEIRO", "GESTAO"]);
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { paymentStatus: true },
+    });
+    if (!order) return actionError("Pedido não encontrado.");
+    if (order.paymentStatus?.name !== PENDING_PAYMENT_STATUS_NAME) {
+      return actionError("Pedido não está com pagamento pendente.");
+    }
+
+    // Idempotente: se ja existe confirmacao, nao duplica.
+    const already = await prisma.orderStatusHistory.findFirst({
+      where: { orderId, note: PAYMENT_CONFIRMED_NOTE },
+    });
+    if (already) {
+      revalidatePath("/financeiro");
+      return actionOk(undefined);
+    }
+
+    await prisma.orderStatusHistory.create({
+      data: {
+        orderId,
+        status: order.status, // preserva o status atual do fluxo
+        changedBy: session.userId,
+        note: PAYMENT_CONFIRMED_NOTE,
+      },
+    });
+
+    revalidatePath("/financeiro");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao confirmar pagamento.");
+  }
+}
+
+// ===========================================================================
 // Ferramentas do Financeiro: Formas de Pagamento, Bancos, Status de Pagamento
 // (acesso para FINANCEIRO e GESTAO)
 // ===========================================================================

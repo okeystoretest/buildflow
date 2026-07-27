@@ -1,17 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   reactStrictMode: true,
-  // sharp roda no server; garantir que nao seja bundlado errado
+  poweredByHeader: false,
+  eslint: { ignoreDuringBuilds: false },
   experimental: {
-    serverComponentsExternalPackages: ["sharp", "@prisma/client", "bcryptjs"],
-    // Uploads de imagem (comprovante/NF) trafegam pela Server Action em base64.
-    // Fotos de celular passam de 1 MB; elevamos o limite com folga.
+    instrumentationHook: true,
+    // sharp e binario nativo: nao deve ser empacotado pelo webpack, e sim
+    // resolvido em runtime pelo Node.
+    serverComponentsExternalPackages: ['sharp'],
     serverActions: {
-      bodySizeLimit: "15mb",
+      // Uploads de imagem passam por Server Action; video usa Route Handler.
+      bodySizeLimit: '12mb',
     },
   },
-  // uploads sao servidos via Nginx em producao (alias /uploads),
-  // mas em dev o Next serve pela rota /api/uploads (ver README)
-  output: "standalone",
+  images: {
+    // Arquivos sao servidos estaticamente pelo Nginx a partir de /uploads.
+    unoptimized: true,
+  },
 };
+
 export default nextConfig;

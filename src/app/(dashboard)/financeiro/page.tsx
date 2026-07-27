@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth";
 import { formatBRL } from "@/lib/utils";
 import { FinanceiroFerramentas } from "./ferramentas-client";
 import { AnaliseKanban, type FinanceCard } from "./analise-kanban";
+import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/actions/finance";
 
 // Janela em que um pedido processado permanece visivel na coluna "Processado".
 const PROCESSED_WINDOW_MIN = 15;
@@ -12,7 +13,7 @@ export default async function FinanceiroPage() {
 
   const desde = new Date(Date.now() - PROCESSED_WINDOW_MIN * 60 * 1000);
 
-  const [emAnalise, payStatuses, paymentMethods, banks, cnpjs, processadosHist] =
+  const [emAnalise, payStatuses, paymentMethods, banks, cnpjs, processadosHist, pagPendentes] =
     await Promise.all([
       // PENDENTES: aguardando analise. Mais antigos no topo.
       prisma.order.findMany({
@@ -37,6 +38,18 @@ export default async function FinanceiroPage() {
         },
         include: { order: { include: { customer: true, seller: true } } },
         orderBy: { createdAt: "desc" },
+      }),
+      // PAGAMENTO PENDENTE: pedidos aprovados cujo status de pagamento atual e
+      // "Liberado (Pendente)" e que ainda NAO possuem o marcador de confirmacao.
+      // O pedido ja segue o fluxo normal; aqui e apenas a fila de confirmacao.
+      prisma.order.findMany({
+        where: {
+          paymentStatus: { name: PENDING_PAYMENT_STATUS_NAME },
+          history: { none: { note: PAYMENT_CONFIRMED_NOTE } },
+          status: { notIn: ["CANCELADO", "ESTORNO", "ESTORNO_PARCIAL"] },
+        },
+        include: { customer: true, seller: true },
+        orderBy: { createdAt: "asc" },
       }),
     ]);
 
@@ -101,6 +114,25 @@ export default async function FinanceiroPage() {
     });
   }
 
+  // Cartoes da coluna PAGAMENTO PENDENTE.
+  const pagPendentesCards: FinanceCard[] = pagPendentes.map((o) => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    comandaNumber: o.comandaNumber,
+    customerName: o.customer.name,
+    sellerName: o.seller.name,
+    total: formatBRL(o.total.toString()),
+    createdAt: o.createdAt.toISOString(),
+    currentCnpjId: o.cnpjId,
+    currentPaymentMethodId: o.paymentMethodId,
+    currentBankId: o.bankId,
+    proof2Count: 0,
+    proof2List: [],
+    processedAt: null,
+    outcome: null,
+    hasActiveIssue: false,
+  }));
+
   return (
     <div className="space-y-6">
       <div>
@@ -118,6 +150,7 @@ export default async function FinanceiroPage() {
       <AnaliseKanban
         pendentes={pendentes}
         processados={processados}
+        pagPendentes={pagPendentesCards}
         statusOptions={statusAtivos}
         cnpjOptions={cnpjsAtivos}
         paymentMethods={formasAtivas}

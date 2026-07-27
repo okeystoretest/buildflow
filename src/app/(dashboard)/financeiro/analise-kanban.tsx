@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { flagOrderIssue } from "@/lib/actions/finance";
+import { flagOrderIssue, confirmPayment } from "@/lib/actions/finance";
 import { useRouter } from "next/navigation";
 import { AuditarPedido } from "./audit-client";
 
@@ -36,6 +36,7 @@ const PAGE = 3; // cards visiveis por vez em cada coluna
 export function AnaliseKanban({
   pendentes,
   processados,
+  pagPendentes,
   statusOptions,
   cnpjOptions,
   paymentMethods,
@@ -44,6 +45,7 @@ export function AnaliseKanban({
 }: {
   pendentes: FinanceCard[];
   processados: FinanceCard[];
+  pagPendentes: FinanceCard[];
   statusOptions: StatusOpt[];
   cnpjOptions: CnpjOpt[];
   paymentMethods: Opt[];
@@ -55,6 +57,7 @@ export function AnaliseKanban({
   const [issueId, setIssueId] = useState<string | null>(null);
   const [showAllPend, setShowAllPend] = useState(false);
   const [showAllProc, setShowAllProc] = useState(false);
+  const [showAllPag, setShowAllPag] = useState(false);
   const router = useRouter();
 
   // "Relogio" interno: reavalia de 30 em 30s quais processados ja passaram
@@ -89,12 +92,13 @@ export function AnaliseKanban({
 
   const pendVis = showAllPend ? pendentes : pendentes.slice(0, PAGE);
   const procVis = showAllProc ? procVisiveis : procVisiveis.slice(0, PAGE);
+  const pagVis = showAllPag ? pagPendentes : pagPendentes.slice(0, PAGE);
 
   const aberto = openId ? pendentes.find((c) => c.id === openId) ?? null : null;
   const cardIssue = issueId ? pendentes.find((c) => c.id === issueId) ?? null : null;
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       {/* COLUNA PENDENTE */}
       <Column
         title="Pendente"
@@ -127,6 +131,24 @@ export function AnaliseKanban({
         {procVisiveis.length > PAGE && (
           <VerMais total={procVisiveis.length} shown={procVis.length}
             expanded={showAllProc} onToggle={() => setShowAllProc((v) => !v)} />
+        )}
+      </Column>
+
+      {/* COLUNA PAGAMENTO PENDENTE (azul claro) */}
+      <Column
+        title="Pagamento pendente"
+        count={pagPendentes.length}
+        tone="border-sky-400/40 bg-sky-400/10 text-sky-700 dark:text-sky-300"
+        dot="bg-sky-400"
+        hint="Aguardando confirmação"
+      >
+        {pagVis.map((c) => (
+          <PaidPendingCard key={c.id} card={c} />
+        ))}
+        {pagPendentes.length === 0 && <Empty>Nenhum pagamento pendente.</Empty>}
+        {pagPendentes.length > PAGE && (
+          <VerMais total={pagPendentes.length} shown={pagVis.length}
+            expanded={showAllPag} onToggle={() => setShowAllPag((v) => !v)} />
         )}
       </Column>
 
@@ -314,6 +336,50 @@ function ProcessedCard({ card }: { card: FinanceCard }) {
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+function PaidPendingCard({ card }: { card: FinanceCard }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function pay() {
+    setBusy(true); setErr(null);
+    const res = await confirmPayment(card.id);
+    setBusy(false);
+    if (res.ok) router.refresh();
+    else setErr(res.error);
+  }
+
+  return (
+    <div className="animate-fade-in-up w-full rounded-xl border border-sky-400/40 bg-card p-3 shadow-sm">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="font-data text-sm font-semibold">Pedido {card.orderNumber}</span>
+        <span className="font-data text-sm font-semibold">{card.total}</span>
+      </div>
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <User className="h-3 w-3 shrink-0" /> {card.customerName} · {card.sellerName}
+      </p>
+      <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+        <Clock className="h-3 w-3" />
+        {new Date(card.createdAt).toLocaleString("pt-BR", {
+          day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+        })}
+      </div>
+
+      {err && <p className="mt-2 text-[11px] text-destructive">{err}</p>}
+
+      <Button
+        onClick={pay}
+        disabled={busy}
+        size="sm"
+        className="mt-3 w-full bg-sky-500 text-white hover:bg-sky-600"
+      >
+        <BadgeDollarSign className="mr-1 h-4 w-4" />
+        {busy ? "Confirmando..." : "Pago"}
+      </Button>
     </div>
   );
 }
