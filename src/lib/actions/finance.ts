@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { processAndSaveImage, deleteUploadedFile } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
+import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/finance-constants";
 import type { PaymentDisposition } from "@prisma/client";
 
 /**
@@ -275,12 +276,10 @@ export async function auditOrder(args: {
 // O pedido segue o fluxo normal (ja foi para AGUARDANDO_IMPRESSAO na auditoria).
 // Aqui apenas registramos a confirmacao do pagamento SEM alterar o status do
 // pedido — usamos o OrderStatusHistory como marcador (sem migration).
+//
+// As constantes vivem em @/lib/finance-constants porque este arquivo e
+// "use server" e so pode exportar funcoes async.
 // ===========================================================================
-
-// Nome exato do status que gera a pendencia na coluna azul.
-export const PENDING_PAYMENT_STATUS_NAME = "Liberado (Pendente)";
-// Nota gravada no historico ao confirmar o pagamento (marcador de confirmacao).
-export const PAYMENT_CONFIRMED_NOTE = "PAGAMENTO_CONFIRMADO";
 
 /**
  * Financeiro confirma que o pagamento do pedido "Liberado (Pendente)" caiu.

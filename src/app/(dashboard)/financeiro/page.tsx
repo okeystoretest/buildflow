@@ -3,7 +3,7 @@ import { requireRole } from "@/lib/auth";
 import { formatBRL } from "@/lib/utils";
 import { FinanceiroFerramentas } from "./ferramentas-client";
 import { AnaliseKanban, type FinanceCard } from "./analise-kanban";
-import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/actions/finance";
+import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/finance-constants";
 
 // Janela em que um pedido processado permanece visivel na coluna "Processado".
 const PROCESSED_WINDOW_MIN = 15;
