@@ -186,6 +186,21 @@ export function OrderDetailModal({
     return entry.note.replace(/^Pend[êe]ncia:\s*/i, "").trim();
   }, [order]);
 
+  // Ultima RESOLUCAO de pendencia registrada no historico (nota que comeca com
+  // "Pendência resolvida"). Exibida em destaque logo abaixo das Observações de
+  // Envio, para rastreabilidade rapida mesmo depois que o pedido saiu de
+  // PENDENTE.
+  const resolutionComment = useMemo(() => {
+    if (!order) return null;
+    const entry = [...order.history]
+      .reverse()
+      .find((h) => /^Pend[êe]ncia resolvida/i.test(h.note?.trim() ?? ""));
+    if (!entry?.note) return null;
+    // Remove o prefixo tecnico, mantendo so o texto da solucao (se houver).
+    const txt = entry.note.replace(/^Pend[êe]ncia resolvida:?\s*/i, "").trim();
+    return { text: txt, at: entry.createdAt };
+  }, [order]);
+
   async function handleResolvePendency() {
     if (!order) return;
     setError(null);
@@ -198,7 +213,14 @@ export function OrderDetailModal({
     setResolvingPend(false);
     if (res.ok) {
       setResolutionNote("");
-      onClose();
+      // Recarrega o pedido para refletir o novo status e exibir o highlight da
+      // resolução imediatamente (sem fechar o modal). Atualiza tambem a board.
+      try {
+        const r = await fetch(`/api/orders/${order.id}`);
+        if (r.ok) setOrder(await r.json());
+      } catch {
+        // se o refetch falhar, o router.refresh abaixo ainda sincroniza a tela
+      }
       router.refresh();
     } else {
       setError(res.error);
@@ -290,6 +312,23 @@ export function OrderDetailModal({
                 {order.notes?.trim() ? order.notes : <span className="font-normal text-muted-foreground">Nenhuma observação registrada.</span>}
               </div>
             </div>
+
+            {/* Resolução de pendência (highlight): texto da última solução
+                registrada, exibido logo abaixo das Observações de Envio para
+                rastreabilidade imediata — inclusive após o pedido sair de
+                PENDENTE. O registro completo permanece no Histórico. */}
+            {resolutionComment && (
+              <div className="rounded-lg border border-emerald-300 bg-emerald-100/70 p-4 dark:border-emerald-400/40 dark:bg-emerald-400/10">
+                <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+                  ✓ Pendência resolvida
+                </h3>
+                <p className="whitespace-pre-wrap text-sm text-emerald-900 dark:text-emerald-100">
+                  {resolutionComment.text
+                    ? resolutionComment.text
+                    : <span className="text-emerald-800/80 dark:text-emerald-200/80">Resolvida sem comentário.</span>}
+                </p>
+              </div>
+            )}
 
             {/* Pendência ativa: destaque laranja pastel logo abaixo das Observações
                 (NÃO no histórico). Motorista não interage — só logística/gestão. */}

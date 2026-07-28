@@ -342,12 +342,30 @@ export async function resolvePendency(args: {
   resolutionNote?: string; // comentário opcional descrevendo a resolução
 }): Promise<ActionResult<{ status: OrderStatus }>> {
   try {
-    const session = await requireRoleAction(["LOGISTICA", "GESTAO"]);
+    // Resolucao de pendencia liberada para LOGISTICA/GESTAO e tambem para
+    // VENDAS quando for o criador do pedido ou tiver a Loja de Origem atrelada
+    // (paridade com o avanco de status no fluxo simplificado/padrao).
+    const session = await requireRoleAction(["LOGISTICA", "GESTAO", "VENDAS"]);
 
     const order = await prisma.order.findUnique({ where: { id: args.orderId } });
     if (!order) return actionError("Pedido nao encontrado.");
     if (order.status !== "PENDENTE") {
       return actionError("Só é possível resolver pedidos que estão em Pendente.");
+    }
+
+    // Trava de escopo no servidor para perfis nao privilegiados (ex.: VENDAS).
+    const privileged = session.role === "LOGISTICA" || session.role === "GESTAO";
+    if (!privileged) {
+      const actor = await getActorContext();
+      const podeInteragir =
+        !!actor &&
+        canInteractWithOrder(actor, {
+          sellerId: order.sellerId,
+          originStoreId: order.originStoreId,
+        });
+      if (!podeInteragir) {
+        return actionError("Você não tem permissão para resolver este pedido.");
+      }
     }
 
     const target = nextStatus("PENDENTE"); // CONFERINDO

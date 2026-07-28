@@ -1,6 +1,6 @@
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { DASHBOARD_COLUMNS, columnsForFlow } from "@/lib/order-flow";
+import { columnsForFlow } from "@/lib/order-flow";
 import { KanbanBoard, type KanbanCard } from "@/components/shared/kanban-board";
 import { StorePicker } from "@/components/shared/store-picker";
 import { loadStageLimits, loadStatusSince } from "@/lib/stage-limits";
@@ -34,34 +34,23 @@ export default async function FluxoPage({
     return <StorePicker stores={pickerStores} basePath="/fluxo" title="Fluxo de Pedidos" />;
   }
 
-  // Loja especifica (nao "all"): valida acesso e resolve o tipo de fluxo.
-  const scoped = loja !== "all";
-  let simplified = false;
-  let lojaName = "";
-  if (scoped) {
-    const store = pickerStores.find((s) => s.id === loja);
-    // VENDAS so acessa lojas atreladas; se nao estiver na lista, bloqueia.
-    if (!store) {
-      return <StorePicker stores={pickerStores} basePath="/fluxo" title="Fluxo de Pedidos" />;
-    }
-    simplified = store.simplifiedFlow;
-    lojaName = store.name;
+  // Visualizacao SEMPRE escopada por loja (nao ha mais "todas as lojas").
+  // Valida acesso e resolve o tipo de fluxo. Se a loja nao estiver na lista
+  // permitida (inclui tentativa de forcar ?loja=all na URL), volta ao picker.
+  const store = pickerStores.find((s) => s.id === loja);
+  if (!store) {
+    return <StorePicker stores={pickerStores} basePath="/fluxo" title="Fluxo de Pedidos" />;
   }
+  const simplified = store.simplifiedFlow;
+  const lojaName = store.name;
 
   // Escopo de visualizacao (doc — Regras de Visibilidade):
-  //  - Loja especifica (scoped): mostra TODOS os pedidos daquela Loja de Origem,
-  //    independentemente de quem criou. Como VENDAS so consegue escolher lojas
-  //    atreladas no picker, isso ja garante que ele ve os pedidos da sua loja
-  //    (item 2 da spec), inclusive os de outros vendedores da mesma loja.
-  //  - Board "Todas as lojas" (loja=all): VENDAS cai no fallback de ver so os
-  //    proprios pedidos (nao ha loja definida para escopar); Gestao/Financeiro
-  //    veem tudo.
+  // Mostra TODOS os pedidos daquela Loja de Origem, independentemente de quem
+  // criou. Como VENDAS so consegue escolher lojas atreladas no picker, isso ja
+  // garante que ele ve os pedidos da sua loja (inclusive de outros vendedores
+  // da mesma loja).
   const orders = await prisma.order.findMany({
-    where: scoped
-      ? { originStoreId: loja }
-      : session.role === "VENDAS"
-        ? { sellerId: session.userId }
-        : {},
+    where: { originStoreId: loja },
     include: { customer: true, seller: true, orderType: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -106,18 +95,18 @@ export default async function FluxoPage({
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">
-          Fluxo de Pedidos{scoped ? ` — ${lojaName}` : " — Todas as lojas"}
+          Fluxo de Pedidos — {lojaName}
         </h1>
         <p className="text-sm text-muted-foreground">Acompanhamento de todos os pedidos por status.</p>
       </div>
       <KanbanBoard
         cards={cards}
-        columns={scoped ? columnsForFlow(simplified) : DASHBOARD_COLUMNS}
+        columns={columnsForFlow(simplified)}
         canManage={session.role === "GESTAO"}
         userRole={session.role}
-        boardTitle={scoped ? lojaName.toUpperCase() : "GERAL"}
+        boardTitle={lojaName.toUpperCase()}
         stageLimits={stageLimits}
-        simplified={scoped && simplified}
+        simplified={simplified}
       />
     </div>
   );

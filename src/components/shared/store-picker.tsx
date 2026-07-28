@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Store as StoreIcon, LayoutGrid } from "lucide-react";
+import { Store as StoreIcon } from "lucide-react";
 
 export interface StoreOption {
   id: string;
@@ -15,24 +15,22 @@ export interface StoreOption {
  * navega para a mesma rota com ?loja=<id>, que faz a page filtrar os pedidos
  * e adaptar as colunas conforme o tipo de fluxo da loja.
  *
- * A opcao "Todas as lojas" mostra o board geral (comportamento historico).
+ * NAO ha mais opcao "Todas as lojas": a visualizacao e sempre escopada por
+ * loja, conforme as regras de permissao.
  */
 export function StorePicker({
   stores,
   basePath,
   title = "Fluxo de Pedidos",
-  allowAll = true,
 }: {
   stores: StoreOption[];
   basePath: string;
   title?: string;
-  allowAll?: boolean;
 }) {
   const router = useRouter();
 
-  function go(loja: string | null) {
-    const url = loja ? `${basePath}?loja=${encodeURIComponent(loja)}` : basePath + "?loja=all";
-    router.push(url);
+  function go(loja: string) {
+    router.push(`${basePath}?loja=${encodeURIComponent(loja)}`);
   }
 
   return (
@@ -65,17 +63,6 @@ export function StorePicker({
               </span>
             </button>
           ))}
-        </div>
-      )}
-
-      {allowAll && (
-        <div className="pt-2 text-center">
-          <button
-            onClick={() => go(null)}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm hover:bg-secondary"
-          >
-            <LayoutGrid className="h-4 w-4" /> Ver todas as lojas
-          </button>
         </div>
       )}
     </div>

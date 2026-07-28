@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
-import { DASHBOARD_COLUMNS, columnsForFlow } from "@/lib/order-flow";
+import { columnsForFlow } from "@/lib/order-flow";
 import { KanbanBoard, type KanbanCard } from "@/components/shared/kanban-board";
 import { StorePicker } from "@/components/shared/store-picker";
 import { loadStageLimits, loadStatusSince } from "@/lib/stage-limits";
@@ -80,24 +80,21 @@ export default async function LogisticaPage({
     }
   }
 
-  const scoped = loja !== "all";
-  let simplified = false;
-  let lojaName = "";
-  if (scoped) {
-    const store = pickerStores.find((s) => s.id === loja);
-    // Fora do escopo permitido (ex.: VENDAS tentando loja nao atrelada) -> picker.
-    if (!store) {
-      return <StorePicker stores={pickerStores} basePath="/logistica" title="Logística" />;
-    }
-    simplified = store.simplifiedFlow;
-    lojaName = store.name;
+  // Visualizacao SEMPRE escopada por loja (nao ha mais "todas as lojas").
+  const store = pickerStores.find((s) => s.id === loja);
+  // Fora do escopo permitido (ex.: VENDAS tentando loja nao atrelada, ou
+  // ?loja=all forcado na URL) -> picker.
+  if (!store) {
+    return <StorePicker stores={pickerStores} basePath="/logistica" title="Logística" />;
   }
+  const simplified = store.simplifiedFlow;
+  const lojaName = store.name;
 
   const [orders, drivers] = await Promise.all([
     prisma.order.findMany({
       where: {
         ...ownershipWhere,
-        ...(scoped ? { originStoreId: loja } : {}),
+        originStoreId: loja,
       },
       include: { customer: true, seller: true, orderType: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
@@ -144,7 +141,7 @@ export default async function LogisticaPage({
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-distribuicao">
-          Logística{scoped ? ` — ${lojaName}` : " — Todas as lojas"}
+          Logística — {lojaName}
         </h1>
         <p className="text-sm text-muted-foreground">
           Acompanhe o status dos pedidos e avance manualmente os que estão prontos para entrega.
@@ -152,14 +149,14 @@ export default async function LogisticaPage({
       </div>
       <KanbanBoard
         cards={cards}
-        columns={scoped ? columnsForFlow(simplified) : DASHBOARD_COLUMNS}
+        columns={columnsForFlow(simplified)}
         advance={{ enabled: true, drivers }}
         canManage={session.role === "GESTAO"}
         userRole={session.role}
-        boardTitle={scoped ? lojaName.toUpperCase() : "LOGÍSTICA"}
+        boardTitle={lojaName.toUpperCase()}
         titleAccent="distribuicao"
         stageLimits={stageLimits}
-        simplified={scoped && simplified}
+        simplified={simplified}
       />
     </div>
   );
