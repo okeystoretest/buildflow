@@ -180,15 +180,17 @@ export async function shipWithTracking(args: {
         include: { delivery: true },
       });
       if (!order) throw new Error("Pedido nao encontrado.");
-      if (!order.delivery) throw new Error("Entrega nao encontrada para o pedido.");
       if (order.status !== "PROCESSANDO" && order.status !== "PROCESSADO") {
         throw new Error("O pedido precisa estar em Processando/Processado para envio externo.");
       }
 
       // Entrega despachada por transportadora: EM_ROTA, sem motorista proprio.
-      await tx.delivery.update({
-        where: { id: order.delivery.id },
-        data: { status: "EM_ROTA", driverId: null, assignedAt: null, startedAt: new Date() },
+      // A Delivery pode nao existir ainda (ex.: Troca, que pula a aprovacao do
+      // Financeiro onde a entrega e criada) — por isso usamos upsert.
+      await tx.delivery.upsert({
+        where: { orderId: order.id },
+        update: { status: "EM_ROTA", driverId: null, assignedAt: null, startedAt: new Date() },
+        create: { orderId: order.id, status: "EM_ROTA", startedAt: new Date() },
       });
       await tx.order.update({
         where: { id: order.id },
@@ -234,11 +236,13 @@ export async function assignDriverToOrder(args: {
         include: { delivery: true },
       });
       if (!order) throw new Error("Pedido nao encontrado.");
-      if (!order.delivery) throw new Error("Entrega nao encontrada para o pedido.");
 
-      await tx.delivery.update({
-        where: { id: order.delivery.id },
-        data: { status: "ATRIBUIDA", driverId: args.driverId, assignedAt: new Date() },
+      // A Delivery pode nao existir ainda (ex.: Troca, que pula a aprovacao do
+      // Financeiro onde a entrega e criada). Cria/atualiza via upsert.
+      await tx.delivery.upsert({
+        where: { orderId: order.id },
+        update: { status: "ATRIBUIDA", driverId: args.driverId, assignedAt: new Date() },
+        create: { orderId: order.id, status: "ATRIBUIDA", driverId: args.driverId, assignedAt: new Date() },
       });
       await tx.order.update({
         where: { id: order.id },
@@ -291,15 +295,16 @@ export async function openOrderForDrivers(args: {
         include: { delivery: true },
       });
       if (!order) throw new Error("Pedido nao encontrado.");
-      if (!order.delivery) throw new Error("Entrega nao encontrada para o pedido.");
       if (order.status !== "PROCESSANDO" && order.status !== "PROCESSADO") {
         throw new Error("O pedido precisa estar em Processando/Processado para abrir aos motoristas.");
       }
 
-      // Entrega fica SEM motorista, aguardando alguém pegar.
-      await tx.delivery.update({
-        where: { id: order.delivery.id },
-        data: { status: "AGUARDANDO", driverId: null, assignedAt: null },
+      // Entrega fica SEM motorista, aguardando alguém pegar. Cria a Delivery se
+      // ainda nao existir (ex.: Troca, que pula a aprovacao do Financeiro).
+      await tx.delivery.upsert({
+        where: { orderId: order.id },
+        update: { status: "AGUARDANDO", driverId: null, assignedAt: null },
+        create: { orderId: order.id, status: "AGUARDANDO" },
       });
       // Pedido vai direto para ENVIADO (disponível no Kanban de Motoristas).
       await tx.order.update({
