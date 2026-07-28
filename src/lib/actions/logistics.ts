@@ -458,3 +458,53 @@ export async function resolvePendency(args: {
     return actionError(msg);
   }
 }
+
+/**
+ * Move um pedido DIRETAMENTE para um status arbitrario — usado pelo
+ * drag-and-drop do Kanban, EXCLUSIVO da GESTAO. Diferente de
+ * advanceOrderStatus (que so avanca 1 passo no fluxo), aqui a Gestao pode
+ * arrastar o card para qualquer coluna. Registra a mudanca no historico.
+ *
+ * Nao dispara os efeitos colaterais operacionais do fluxo padrao (motorista,
+ * notificacao de NF, sincronizacao de entrega): e uma correcao manual de
+ * status pela Gestao, nao a operacao normal da Logistica.
+ */
+export async function setOrderStatus(args: {
+  orderId: string;
+  to: OrderStatus;
+}): Promise<ActionResult<{ status: OrderStatus }>> {
+  try {
+    // Restrito a GESTAO.
+    const session = await requireRoleAction(["GESTAO"]);
+
+    const order = await prisma.order.findUnique({
+      where: { id: args.orderId },
+      select: { id: true, status: true },
+    });
+    if (!order) return actionError("Pedido nao encontrado.");
+
+    // Sem no-op: se ja esta no status alvo, nada a fazer.
+    if (order.status === args.to) return actionOk({ status: order.status });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({ where: { id: order.id }, data: { status: args.to } });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          status: args.to,
+          changedBy: session.userId,
+          note: "Status alterado pela Gestao (arrastar no Kanban)",
+        },
+      });
+    });
+
+    revalidatePath("/logistica");
+    revalidatePath("/fluxo");
+    revalidatePath("/dashboard");
+    revalidatePath("/motorista");
+    return actionOk({ status: args.to });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao alterar status.";
+    return actionError(msg);
+  }
+}

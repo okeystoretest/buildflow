@@ -146,6 +146,31 @@ export function KanbanBoard({
   const [pendencyOrder, setPendencyOrder] = useState<KanbanCard | null>(null);
   const [pendencyNote, setPendencyNote] = useState("");
 
+  // ---- Drag-and-drop (EXCLUSIVO da GESTAO) ----
+  // A Gestao pode arrastar um card para qualquer coluna; isso muda o status
+  // diretamente (setOrderStatus) e registra no historico. Demais perfis usam
+  // apenas a seta de avanco (1 passo por vez).
+  const canDrag = userRole === "GESTAO";
+  const [dragCardId, setDragCardId] = useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<OrderStatus | null>(null);
+
+  function onDropStatus(target: OrderStatus) {
+    const id = dragCardId;
+    setDragCardId(null);
+    setDragOverStatus(null);
+    if (!id) return;
+    const card = cards.find((c) => c.id === id);
+    // Sem card, ou ja esta na coluna alvo: nada a fazer.
+    if (!card || card.status === target) return;
+    setError(null);
+    start(async () => {
+      const mod = await import("@/lib/actions/logistics");
+      const res = await mod.setOrderStatus({ orderId: id, to: target });
+      if (res.ok) router.refresh();
+      else setError(res.error);
+    });
+  }
+
   function handleAdvance(card: KanbanCard) {
     setError(null);
     const next = nextInFlow(card.status);
@@ -284,7 +309,13 @@ export function KanbanBoard({
       headerClass = "bg-red-600/90 text-white border-red-700";
     }
     return (
-      <div key={status} className="flex flex-col">
+      <div
+        key={status}
+        className="flex flex-col"
+        onDragOver={canDrag ? (e) => { e.preventDefault(); setDragOverStatus(status); } : undefined}
+        onDragLeave={canDrag ? () => setDragOverStatus((s) => (s === status ? null : s)) : undefined}
+        onDrop={canDrag ? (e) => { e.preventDefault(); onDropStatus(status); } : undefined}
+      >
         {/* Header colorido conforme o status (cor distinta por etapa). */}
         <div className={`mb-2 flex items-center justify-between rounded-lg border px-2.5 py-1.5 ${headerClass}`}>
           <span className="flex items-center gap-1.5 text-xs font-semibold leading-tight">
@@ -297,20 +328,29 @@ export function KanbanBoard({
         </div>
         {/* Cards da coluna: mostra até 3 completos e o restante fica acessível
             por uma barra de rolagem minimalista (sem botão "mostrar mais"). */}
-        <div className="kanban-scroll flex max-h-[23.5rem] flex-col gap-2 overflow-y-auto pr-1">
+        <div className={`kanban-scroll flex max-h-[23.5rem] flex-col gap-2 overflow-y-auto pr-1 rounded-lg transition-colors ${
+          canDrag && dragOverStatus === status ? "ring-2 ring-primary/60 bg-primary/5" : ""
+        }`}>
           {list.map((card, i) => (
-            <OrderCard
+            <div
               key={card.id}
-              data={card}
-              onClick={() => setOpenId(card.id)}
-              style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
-              stageAlert={stageAlertLevel(card.status, card.statusSince, stageLimits, nowTick)}
-              action={
-                canAdvanceCard(card) ? (
-                  <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />
-                ) : undefined
-              }
-            />
+              draggable={canDrag}
+              onDragStart={canDrag ? (e) => { setDragCardId(card.id); e.dataTransfer.effectAllowed = "move"; } : undefined}
+              onDragEnd={canDrag ? () => { setDragCardId(null); setDragOverStatus(null); } : undefined}
+              className={canDrag ? "cursor-grab active:cursor-grabbing" : ""}
+            >
+              <OrderCard
+                data={card}
+                onClick={() => setOpenId(card.id)}
+                style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
+                stageAlert={stageAlertLevel(card.status, card.statusSince, stageLimits, nowTick)}
+                action={
+                  canAdvanceCard(card) ? (
+                    <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />
+                  ) : undefined
+                }
+              />
+            </div>
           ))}
           {list.length === 0 && (
             <div className="rounded-lg border border-dashed border-border/50 py-4 text-center text-[11px] text-muted-foreground/50">
@@ -396,7 +436,9 @@ export function KanbanBoard({
         <Modal onClose={() => { setTrackingOrder(null); setTrackingCode(""); setError(null); }}>
           <h2 className="mb-1 text-lg font-bold">Código de rastreio</h2>
           <p className="mb-4 text-sm text-muted-foreground">
-            Pedido {trackingOrder.orderNumber}. Com rastreio (insira o código) ou sem rastreio (escolha o motorista).
+            Pedido {trackingOrder.orderNumber}. Se houver rastreio, o envio é
+            externo (Correios/Transportadora) e não precisa de motorista. Sem
+            rastreio, a entrega é própria e você escolhe o motorista.
           </p>
           <input
             className="mb-3 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
