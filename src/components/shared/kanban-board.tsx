@@ -436,9 +436,7 @@ export function KanbanBoard({
         <Modal onClose={() => { setTrackingOrder(null); setTrackingCode(""); setError(null); }}>
           <h2 className="mb-1 text-lg font-bold">Código de rastreio</h2>
           <p className="mb-4 text-sm text-muted-foreground">
-            Pedido {trackingOrder.orderNumber}. Se houver rastreio, o envio é
-            externo (Correios/Transportadora) e não precisa de motorista. Sem
-            rastreio, a entrega é própria e você escolhe o motorista.
+            Pedido {trackingOrder.orderNumber}. Se houver rastreio (transportadora externa), informe o código abaixo. Caso contrário, deixe em branco para entrega própria.
           </p>
           <input
             className="mb-3 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
