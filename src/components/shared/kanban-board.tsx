@@ -4,7 +4,7 @@ import { useState, useTransition, useRef, useCallback, useEffect, useMemo } from
 import { useRouter } from "next/navigation";
 import { Maximize2, Minimize2, Search, ChevronRight } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
-import { STATUS_LABEL, STATUS_STYLE, nextStatus, stageAlertLevel, type StageLimitMap } from "@/lib/order-flow";
+import { STATUS_LABEL, STATUS_STYLE, nextStatus, nextSimplifiedStatus, stageAlertLevel, type StageLimitMap } from "@/lib/order-flow";
 import { OrderCard, type OrderCardData } from "@/components/shared/order-card";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
 import { Button } from "@/components/ui/button";
@@ -97,18 +97,27 @@ export function KanbanBoard({
   const rootRef = useRef<HTMLDivElement>(null);
   const byStatus = (status: OrderStatus) => visibleCards.filter((c) => c.status === status);
 
+  // Proximo status conforme o fluxo do board: no simplificado usa a cadeia
+  // PAGO->EMBALADO->ENTREGUE; no padrao, o fluxo linear completo. Sem isto, a
+  // seta some no fluxo simplificado (PAGO nao existe no fluxo padrao).
+  const nextInFlow = useCallback(
+    (status: OrderStatus): OrderStatus | null =>
+      simplified ? nextSimplifiedStatus(status) : nextStatus(status),
+    [simplified],
+  );
+
   // Regra de permissão de avanço por status:
   //  - EM_ANALISE só avança por FINANCEIRO (ou GESTAO). Logística NÃO vê a seta.
   //  - Demais status seguem o advance normal da Logística.
   const canAdvanceCard = useCallback(
     (card: KanbanCard): boolean => {
-      if (!advance?.enabled || !nextStatus(card.status)) return false;
+      if (!advance?.enabled || !nextInFlow(card.status)) return false;
       if (card.status === "EM_ANALISE" && userRole !== "FINANCEIRO" && userRole !== "GESTAO") {
         return false;
       }
       return true;
     },
-    [advance?.enabled, userRole],
+    [advance?.enabled, userRole, nextInFlow],
   );
 
   // ---- Tela cheia (mesma lógica do Rank de Vendas) ----
@@ -140,7 +149,16 @@ export function KanbanBoard({
 
   function handleAdvance(card: KanbanCard) {
     setError(null);
-    const next = nextStatus(card.status);
+    const next = nextInFlow(card.status);
+    if (!next) return;
+
+    // Fluxo simplificado (PAGO->EMBALADO->ENTREGUE): avanco direto, sem os
+    // pop-ups do fluxo padrao (NF, rastreio, motorista, pendencia).
+    if (simplified) {
+      runAdvance({ orderId: card.id });
+      return;
+    }
+
     // Bloqueio de NF: Processando sem nota não avança. Troca é isenta (doc 5).
     if (card.status === "PROCESSANDO" && !card.hasInvoice && !card.isExchange) {
       setError(`Pedido ${card.comandaNumber ?? card.orderNumber}: anexe a Nota Fiscal antes de avançar (Processando sem NF).`);
