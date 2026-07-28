@@ -288,7 +288,7 @@ export async function deleteOrder(id: string): Promise<ActionResult<void>> {
  */
 export async function resolveFinanceIssue(orderId: string): Promise<ActionResult<void>> {
   try {
-    const session = await requireRoleAction(["VENDAS", "GESTAO"]);
+    await requireRoleAction(["VENDAS", "GESTAO"]);
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) return actionError("Pedido não encontrado.");
 
