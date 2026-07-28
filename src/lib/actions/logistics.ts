@@ -184,22 +184,23 @@ export async function shipWithTracking(args: {
         throw new Error("O pedido precisa estar em Processando/Processado para envio externo.");
       }
 
-      // Entrega despachada por transportadora: EM_ROTA, sem motorista proprio.
-      // A Delivery pode nao existir ainda (ex.: Troca, que pula a aprovacao do
-      // Financeiro onde a entrega e criada) — por isso usamos upsert.
+      // Envio externo (Correios/Transportadora): sem motorista proprio. O pedido
+      // vai para PROCESSADO com o rastreio gravado. A Delivery pode nao existir
+      // ainda (ex.: Troca, que pula a aprovacao do Financeiro) — usamos upsert.
+      // Fica sem motorista (driverId null); o despacho e feito pela transportadora.
       await tx.delivery.upsert({
         where: { orderId: order.id },
-        update: { status: "EM_ROTA", driverId: null, assignedAt: null, startedAt: new Date() },
-        create: { orderId: order.id, status: "EM_ROTA", startedAt: new Date() },
+        update: { status: "AGUARDANDO", driverId: null, assignedAt: null },
+        create: { orderId: order.id, status: "AGUARDANDO" },
       });
       await tx.order.update({
         where: { id: order.id },
-        data: { status: "EM_ROTA", trackingCode: tracking },
+        data: { status: "PROCESSADO", trackingCode: tracking },
       });
       await tx.orderStatusHistory.create({
         data: {
           orderId: order.id,
-          status: "EM_ROTA",
+          status: "PROCESSADO",
           changedBy: session.userId,
           note: `Envio externo (Correios/Transportadora) · Rastreio: ${tracking}`,
         },
