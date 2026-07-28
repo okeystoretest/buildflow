@@ -85,10 +85,21 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   // REGRA DE NEGOCIO -> vendas de itens de CAMPANHA tambem contam no valor
   // total da Meta Geral (e no rank por vendedor). Nao adicionar filtro de
   // campaignId nesta query, senao a meta geral passa a ignorar essas vendas.
+  // "Faturado" = pedido efetivamente confirmado como venda:
+  //  - Fluxo PADRAO: teve comanda gerada pelo Financeiro (comandaNumber != null).
+  //  - Fluxo SIMPLIFICADO: nao gera comanda; e confirmado quando o Financeiro
+  //    marca como PAGO. A partir de PAGO (inclui EMBALADO/ENTREGUE) o pedido
+  //    conta no ranking. Sem isso, vendas de loja simplificada ficam de fora.
   const faturados = await prisma.order.findMany({
     where: {
-      comandaNumber: { not: null },
       status: { notIn: ["ESTORNO", "ESTORNO_PARCIAL", "CANCELADO"] },
+      OR: [
+        { comandaNumber: { not: null } },
+        {
+          originStore: { simplifiedFlow: true },
+          status: { in: ["PAGO", "EMBALADO", "ENTREGUE", "CONCLUIDO"] },
+        },
+      ],
     },
     include: { seller: true },
   });

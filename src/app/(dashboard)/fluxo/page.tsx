@@ -48,13 +48,20 @@ export default async function FluxoPage({
     lojaName = store.name;
   }
 
-  // Restrição de escopo: vendedor(a) vê só os próprios pedidos.
-  // Os demais setores (Gestão, Financeiro) veem todos. Filtro por loja quando aplicavel.
+  // Escopo de visualizacao (doc — Regras de Visibilidade):
+  //  - Loja especifica (scoped): mostra TODOS os pedidos daquela Loja de Origem,
+  //    independentemente de quem criou. Como VENDAS so consegue escolher lojas
+  //    atreladas no picker, isso ja garante que ele ve os pedidos da sua loja
+  //    (item 2 da spec), inclusive os de outros vendedores da mesma loja.
+  //  - Board "Todas as lojas" (loja=all): VENDAS cai no fallback de ver so os
+  //    proprios pedidos (nao ha loja definida para escopar); Gestao/Financeiro
+  //    veem tudo.
   const orders = await prisma.order.findMany({
-    where: {
-      ...(session.role === "VENDAS" ? { sellerId: session.userId } : {}),
-      ...(scoped ? { originStoreId: loja } : {}),
-    },
+    where: scoped
+      ? { originStoreId: loja }
+      : session.role === "VENDAS"
+        ? { sellerId: session.userId }
+        : {},
     include: { customer: true, seller: true, orderType: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });

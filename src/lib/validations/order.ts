@@ -13,7 +13,9 @@ export const createOrderSchema = z.object({
   // O FINANCEIRO os preenche na Analise de Pedidos antes de aprovar.
   shippingMethodId: z.string().min(1, "Forma de envio obrigatoria."),
   // Valor total do pedido informado diretamente (sem itens).
-  orderValue: z.coerce.number().nonnegative("Valor invalido."),
+  // Na Troca, o valor e opcional (default 0) — a obrigatoriedade > 0 e aplicada
+  // abaixo apenas para os demais tipos.
+  orderValue: z.coerce.number().nonnegative("Valor invalido.").default(0),
   freight: z.coerce.number().nonnegative("Frete invalido.").default(0),
   // "Observacoes de Envio" (logistica/motorista).
   notes: z.string().max(1000).optional(),
@@ -32,6 +34,11 @@ export const createOrderSchema = z.object({
   .refine(
     (d) => isTroca(d.orderTypeName) || !!(d.paymentProofsBase64 && d.paymentProofsBase64.length > 0),
     { message: "Anexe o comprovante de pagamento.", path: ["paymentProofsBase64"] },
+  )
+  // "Valor Total do Pedido" obrigatorio (> 0), EXCETO na Troca.
+  .refine(
+    (d) => isTroca(d.orderTypeName) || d.orderValue > 0,
+    { message: "Informe o valor total do pedido.", path: ["orderValue"] },
   );
 
 // "Troca" dispensa anexo (NF e comprovante). Comparação tolerante a acentos/caixa.

@@ -30,17 +30,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await getSession();
   if (!session) redirect("/login");
 
-  // Usuarios com Loja de Origem atrelada (qualquer perfil) tambem acessam a
-  // Logistica da(s) sua(s) loja(s), para dar andamento (doc 4.4).
-  const meStores = await prisma.user.count({
-    where: { id: session.userId, originStores: { some: { active: true } } },
-  });
-  const temLojaAtrelada = meStores > 0;
+  // Acesso ao menu Logistica para VENDAS: SOMENTE se vinculado a loja(s) de
+  // FLUXO SIMPLIFICADO. Vendas de loja de fluxo padrao nao veem o modulo.
+  // (LOGISTICA/GESTAO ja entram pelas roles do NAV.)
+  const simplifiedLinked =
+    session.role === "VENDAS"
+      ? await prisma.user.count({
+          where: {
+            id: session.userId,
+            originStores: { some: { active: true, simplifiedFlow: true } },
+          },
+        })
+      : 0;
+  const vendasComLojaSimplificada = simplifiedLinked > 0;
 
   const items = NAV.filter(
     (n) =>
       n.roles.includes(session.role) ||
-      (n.href === "/logistica" && temLojaAtrelada),
+      (n.href === "/logistica" && vendasComLojaSimplificada),
   );
   const navLinks: NavLinkT[] = items.map((n) => ({ href: n.href, label: n.label }));
   const initials = session.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { nextStatus, canTransition, nextSimplifiedStatus, canTransitionSimplified } from "@/lib/order-flow";
+import { canInteractWithOrder } from "@/lib/permissions";
 import { isTroca } from "@/lib/validations/order";
 import type { OrderStatus } from "@prisma/client";
 
@@ -31,20 +32,33 @@ export async function advanceOrderStatus(args: {
     });
     if (!order) return actionError("Pedido nao encontrado.");
 
-    // Permissao para avancar: LOGISTICA/GESTAO/FINANCEIRO sempre; demais perfis
-    // apenas se tiverem a Loja de Origem do pedido atrelada (doc 4.4).
+    const simplified = order.originStore?.simplifiedFlow === true;
+
+    // Permissao para avancar:
+    // - LOGISTICA/GESTAO/FINANCEIRO: sempre.
+    // - Demais perfis (ex.: VENDAS): so o CRIADOR do pedido ou quem tem a Loja
+    //   de Origem atrelada (canInteractWithOrder). Isso da ao criador do pedido
+    //   a mesma autonomia da logistica padrao para mover os cards, inclusive no
+    //   fluxo simplificado.
+    // - Restricao extra no fluxo simplificado: usuario VENDAS so pode mover os
+    //   PROPRIOS pedidos (ownership) — nunca pedidos de terceiros.
     const privileged =
       session.role === "LOGISTICA" || session.role === "GESTAO" || session.role === "FINANCEIRO";
     if (!privileged) {
       const actor = await getActorContext();
-      const podeLoja =
-        !!order.originStoreId && !!actor && actor.originStoreIds.includes(order.originStoreId);
-      if (!podeLoja) {
+      const podeInteragir =
+        !!actor &&
+        canInteractWithOrder(actor, {
+          sellerId: order.sellerId,
+          originStoreId: order.originStoreId,
+        });
+      // No fluxo simplificado, VENDAS fica limitado aos proprios pedidos.
+      const bloqueadoPorOwnership =
+        simplified && session.role === "VENDAS" && order.sellerId !== session.userId;
+      if (!podeInteragir || bloqueadoPorOwnership) {
         return actionError("Você não tem permissão para avançar este pedido.");
       }
     }
-
-    const simplified = order.originStore?.simplifiedFlow === true;
     // Pedido tipo "Troca" dispensa a Nota Fiscal (doc 5).
     const troca = isTroca(order.orderType?.name);
 

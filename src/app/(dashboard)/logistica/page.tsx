@@ -8,6 +8,9 @@ import { loadStageLimits, loadStatusSince } from "@/lib/stage-limits";
 import { isTroca } from "@/lib/validations/order";
 import { formatBRL } from "@/lib/utils";
 
+// Nome da loja padrao (default view) da Logistica.
+const DEFAULT_STORE_NAME = "OKEY Store (Fábrica)";
+
 // Dashboard de Logística: visual e estrutura iguais ao Fluxo de Pedidos,
 // porém com a permissão de AVANÇAR manualmente o status dos pedidos.
 export default async function LogisticaPage({
@@ -15,31 +18,66 @@ export default async function LogisticaPage({
 }: {
   searchParams?: { loja?: string };
 }) {
-  // Acesso: LOGISTICA e GESTAO sempre; demais perfis somente se tiverem
-  // Loja de Origem atrelada (doc 4.4 — dar andamento aos pedidos da loja).
   const session = await requireRole();
-  const podeLogistica =
-    session.role === "LOGISTICA" || session.role === "GESTAO"
-      ? true
-      : (await prisma.user.count({
-          where: { id: session.userId, originStores: { some: { active: true } } },
-        })) > 0;
+
+  // ------------------------------------------------------------------
+  // CONTROLE DE ACESSO AO MODULO DE LOGISTICA
+  //  - LOGISTICA e GESTAO: acesso total.
+  //  - VENDAS: acesso APENAS se vinculado a loja(s) de FLUXO SIMPLIFICADO.
+  //    Vendas de loja de fluxo padrao NAO acessam este modulo.
+  //  - Demais perfis: sem acesso.
+  // ------------------------------------------------------------------
+  const isLogisticaOuGestao = session.role === "LOGISTICA" || session.role === "GESTAO";
+  const isVendas = session.role === "VENDAS";
+
+  // Lojas simplificadas atreladas ao usuario (relevante para VENDAS).
+  const simplifiedLinked = isVendas
+    ? (await prisma.user.findUnique({
+        where: { id: session.userId },
+        select: {
+          originStores: {
+            where: { active: true, simplifiedFlow: true },
+            select: { id: true, name: true, simplifiedFlow: true },
+            orderBy: { name: "asc" },
+          },
+        },
+      }))?.originStores ?? []
+    : [];
+
+  const podeLogistica = isLogisticaOuGestao || (isVendas && simplifiedLinked.length > 0);
   if (!podeLogistica) redirect("/");
 
-  const loja = searchParams?.loja;
+  // Lojas do pop-up:
+  //  - GESTAO/LOGISTICA: todas as ativas.
+  //  - VENDAS autorizado: apenas as suas lojas simplificadas.
+  const pickerStores = isLogisticaOuGestao
+    ? await prisma.originStore.findMany({
+        where: { active: true },
+        select: { id: true, name: true, simplifiedFlow: true },
+        orderBy: { name: "asc" },
+      })
+    : simplifiedLinked;
 
-  // Lojas do pop-up: GESTAO ve todas as ativas; os demais (LOGISTICA ou perfis
-  // com loja atrelada) veem as atreladas ao seu cadastro (doc 4.4).
-  const pickerStores =
-    session.role === "GESTAO"
-      ? await prisma.originStore.findMany({ where: { active: true }, select: { id: true, name: true, simplifiedFlow: true }, orderBy: { name: "asc" } })
-      : (await prisma.user.findUnique({
-          where: { id: session.userId },
-          select: { originStores: { where: { active: true }, select: { id: true, name: true, simplifiedFlow: true }, orderBy: { name: "asc" } } },
-        }))?.originStores ?? [];
+  // Ownership: VENDAS so ve/move os PROPRIOS pedidos dentro da Logistica.
+  const ownershipWhere = isVendas ? { sellerId: session.userId } : {};
 
+  let loja = searchParams?.loja;
+
+  // DEFAULT VIEW: sem ?loja, abre direto numa loja (sem pop-up), priorizando a
+  // "OKEY Store (Fábrica)" quando o usuario tem acesso a ela; senao, a primeira
+  // loja acessivel. So cai no pop-up se houver mais de uma opcao e nenhuma for
+  // a padrao (cenario raro).
   if (!loja) {
-    return <StorePicker stores={pickerStores} basePath="/logistica" title="Logística" />;
+    const fabrica = pickerStores.find((s) => s.name === DEFAULT_STORE_NAME);
+    if (fabrica) {
+      loja = fabrica.id;
+    } else if (pickerStores.length === 1) {
+      loja = pickerStores[0].id;
+    } else if (pickerStores.length === 0) {
+      redirect("/");
+    } else {
+      return <StorePicker stores={pickerStores} basePath="/logistica" title="Logística" />;
+    }
   }
 
   const scoped = loja !== "all";
@@ -47,6 +85,7 @@ export default async function LogisticaPage({
   let lojaName = "";
   if (scoped) {
     const store = pickerStores.find((s) => s.id === loja);
+    // Fora do escopo permitido (ex.: VENDAS tentando loja nao atrelada) -> picker.
     if (!store) {
       return <StorePicker stores={pickerStores} basePath="/logistica" title="Logística" />;
     }
@@ -56,7 +95,10 @@ export default async function LogisticaPage({
 
   const [orders, drivers] = await Promise.all([
     prisma.order.findMany({
-      where: scoped ? { originStoreId: loja } : {},
+      where: {
+        ...ownershipWhere,
+        ...(scoped ? { originStoreId: loja } : {}),
+      },
       include: { customer: true, seller: true, orderType: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
     }),

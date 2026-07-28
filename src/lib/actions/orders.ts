@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { canInteractWithOrder, INTERACTION_DENIED_MSG } from "@/lib/permissions";
-import { createOrderSchema } from "@/lib/validations/order";
+import { createOrderSchema, isTroca } from "@/lib/validations/order";
 import { processAndSaveImage } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { Prisma } from "@prisma/client";
@@ -29,6 +29,34 @@ export async function createOrder(
     const orderValue = new Prisma.Decimal(input.orderValue);
     const freight = new Prisma.Decimal(input.freight);
     const total = orderValue.add(freight);
+
+    // Tipo do pedido (fonte confiavel = banco, nao o payload da tela).
+    // "Troca" ignora a Aprovacao Financeira. Status inicial:
+    //  - Loja de fluxo PADRAO: entra ja em AGUARDANDO_IMPRESSAO.
+    //  - Loja de fluxo SIMPLIFICADO (PAGO->EMBALADO->ENTREGUE): entra em PAGO,
+    //    o 1o status do fluxo curto (AGUARDANDO_IMPRESSAO nao existe la).
+    const orderType = await prisma.orderType.findUnique({
+      where: { id: input.orderTypeId },
+      select: { name: true },
+    });
+    if (!orderType) return actionError("Tipo de pedido invalido.");
+    const troca = isTroca(orderType.name);
+
+    // Descobre se a Loja de Origem escolhida usa fluxo simplificado.
+    let simplifiedStore = false;
+    if (input.originStoreId) {
+      const os = await prisma.originStore.findUnique({
+        where: { id: input.originStoreId },
+        select: { simplifiedFlow: true },
+      });
+      simplifiedStore = os?.simplifiedFlow === true;
+    }
+
+    const initialStatus = troca
+      ? simplifiedStore
+        ? "PAGO"
+        : "AGUARDANDO_IMPRESSAO"
+      : "EM_ANALISE";
 
     // Se vinculado a campanha, exige quantidade de itens (volume).
     const campaignId = input.campaignId || null;
@@ -72,9 +100,13 @@ export async function createOrder(
         paymentNotes: input.paymentNotes,
         campaignId,
         itemCount: campaignId ? input.itemCount : 0,
-        status: "EM_ANALISE",
+        status: initialStatus,
         history: {
-          create: { status: "EM_ANALISE", changedBy: session.userId, note: "Pedido criado" },
+          create: {
+            status: initialStatus,
+            changedBy: session.userId,
+            note: troca ? "Pedido de Troca criado (sem aprovacao financeira)" : "Pedido criado",
+          },
         },
       },
       select: { id: true, orderNumber: true },

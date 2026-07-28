@@ -120,7 +120,9 @@ export function NovoPedidoForm({
   // Anexo obrigatório (ao menos 1), EXCETO quando o tipo for "Troca".
   const temAnexo = proofs.length > 0;
   const anexoOk = trocaSemAnexo || temAnexo;
-  const podeEnviar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId && shippingMethodId && orderValue > 0 && campaignOk && anexoOk;
+  // Valor obrigatório (> 0), EXCETO na Troca (opcional, pode ficar 0).
+  const valorOk = trocaSemAnexo || orderValue > 0;
+  const podeEnviar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId && shippingMethodId && valorOk && campaignOk && anexoOk;
 
   return (
     <div className="space-y-5">
@@ -156,7 +158,7 @@ export function NovoPedidoForm({
           <CustomerCombobox label="Cliente" value={customerId} onChange={setCustomerId} />
         </div>
         <div className="space-y-1.5">
-          <Label>Valor Total do Pedido</Label>
+          <Label>Valor Total do Pedido {trocaSemAnexo ? "(opcional p/ Troca)" : "*"}</Label>
           <Input type="number" min={0} step="0.01" value={orderValue || ""} onChange={(e) => setOrderValue(Number(e.target.value))} placeholder="0,00" />
         </div>
         <div className="space-y-1.5">
