@@ -16,15 +16,11 @@ export const ORDER_FLOW: OrderStatus[] = [
   "CONCLUIDO",
 ];
 
-// PAGO entra logo apos EM_ANALISE. Pedidos do fluxo PADRAO nunca passam por
-// PAGO (sua aprovacao vai para AGUARDANDO_IMPRESSAO), entao a coluna fica
-// vazia para eles. Pedidos do fluxo SIMPLIFICADO aparecem em PAGO/EMBALADO/
-// ENTREGUE. A separacao por loja (board dedicado) vem no pop-up (Parte B).
-export const DASHBOARD_COLUMNS: OrderStatus[] = [
-  "EM_ANALISE",
-  "PAGO",
-  ...ORDER_FLOW.filter((s) => s !== "EM_ANALISE" && s !== "CONCLUIDO"),
-];
+// PAGO NAO entra aqui: e exclusivo do fluxo simplificado (SIMPLIFIED_COLUMNS).
+// O fluxo padrao aprova indo para AGUARDANDO_IMPRESSAO, nunca para PAGO.
+export const DASHBOARD_COLUMNS: OrderStatus[] = ORDER_FLOW.filter(
+  (s) => s !== "CONCLUIDO",
+);
 
 export const EXCEPTION_STATUSES: OrderStatus[] = [
   "ESTORNO",
