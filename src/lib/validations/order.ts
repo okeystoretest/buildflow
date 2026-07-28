@@ -41,9 +41,10 @@ export const createOrderSchema = z.object({
     { message: "Informe o valor total do pedido.", path: ["orderValue"] },
   );
 
-// "Troca" dispensa anexo (NF e comprovante). Comparação tolerante a acentos/caixa.
+// "Troca" dispensa anexo (NF e comprovante). O tipo cadastrado é exatamente
+// "4 - Troca"; a comparação é tolerante a acentos/caixa/espaços.
 export function isTroca(orderTypeName?: string | null): boolean {
-  return (orderTypeName ?? "").trim().toLowerCase() === "troca";
+  return (orderTypeName ?? "").trim().toLowerCase() === "4 - troca";
 }
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
