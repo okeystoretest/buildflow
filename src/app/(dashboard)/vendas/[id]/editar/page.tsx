@@ -53,6 +53,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
               orderValue: Number(order.orderValue),
               freight: Number(order.freight),
               notes: order.notes ?? "",
+              paymentNotes: order.paymentNotes ?? "",
               campaignId: order.campaignId ?? "",
               itemCount: order.itemCount ?? 0,
             }}

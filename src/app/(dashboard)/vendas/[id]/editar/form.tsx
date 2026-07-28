@@ -18,7 +18,7 @@ interface OrderData {
   orderNumber: string;
   customerId: string; storeId: string; orderTypeId: string; operationId: string;
   paymentMethodId: string; shippingMethodId: string; bankId: string;
-  orderValue: number; freight: number; notes: string;
+  orderValue: number; freight: number; notes: string; paymentNotes: string;
   campaignId: string; itemCount: number;
 }
 interface ExistingProof { id: string; filePath: string; }
@@ -51,6 +51,7 @@ export function EditarPedidoForm({
   const [orderValue, setOrderValue] = useState(order.orderValue);
   const [freight, setFreight] = useState(order.freight);
   const [notes, setNotes] = useState(order.notes);
+  const [paymentNotes, setPaymentNotes] = useState(order.paymentNotes);
 
   // Campanha
   const [inCampaign, setInCampaign] = useState(!!order.campaignId);
@@ -108,7 +109,7 @@ export function EditarPedidoForm({
         customerId, storeId, orderTypeId, operationId,
         shippingMethodId,
         ...(canEditFinance ? { paymentMethodId, bankId: bankId || undefined } : {}),
-        orderValue, freight, notes,
+        orderValue, freight, notes, paymentNotes,
         campaignId: inCampaign ? campaignId : null,
         itemCount: inCampaign ? itemCount : 0,
         paymentProofsBase64: newProofs.length ? newProofs.map((p) => p.base64) : undefined,
@@ -228,9 +229,16 @@ export function EditarPedidoForm({
         {proofError && <p className="text-sm text-destructive">{proofError}</p>}
       </div>
 
-      <div className="space-y-1.5">
-        <Label>Observações</Label>
-        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Escreva suas observações aqui..." />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Observações de Envio</Label>
+          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Instruções de envio, endereço, referências..." />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Observações de Pagamento</Label>
+          <Input value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} placeholder="Informações para o Financeiro na aprovação..." />
+          <p className="text-xs text-muted-foreground">Visível apenas para o setor Financeiro.</p>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">

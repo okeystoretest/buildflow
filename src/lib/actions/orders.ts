@@ -50,6 +50,7 @@ export async function createOrder(
         freight,
         total,
         notes: input.notes,
+        paymentNotes: input.paymentNotes,
         campaignId,
         itemCount: campaignId ? input.itemCount : 0,
         status: "EM_ANALISE",
@@ -120,6 +121,7 @@ export async function updateOrder(args: {
   orderValue?: number;
   freight?: number;
   notes?: string | null;
+  paymentNotes?: string | null;
   // Campanha
   campaignId?: string | null;
   itemCount?: number;
@@ -173,6 +175,7 @@ export async function updateOrder(args: {
         freight,
         total: orderValue + freight,
         notes: args.notes === undefined ? order.notes : args.notes,
+        paymentNotes: args.paymentNotes === undefined ? order.paymentNotes : args.paymentNotes,
         // Numero do pedido (editavel como no cadastro).
         orderNumber: args.orderNumber?.trim() ? args.orderNumber.trim() : order.orderNumber,
         // Campanha: campaignId "" ou null limpa o vinculo.

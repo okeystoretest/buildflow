@@ -281,7 +281,7 @@ export function OrderDetailModal({
             {/* Observações. No modo motorista ficam em DESTAQUE (leitura rápida
                 durante a entrega): fonte maior, borda e fundo realçados. */}
             <div>
-              <h3 className={`mb-1 font-semibold ${driverMode ? "text-motorista" : ""}`}>Observações</h3>
+              <h3 className={`mb-1 font-semibold ${driverMode ? "text-motorista" : ""}`}>Observações de Envio</h3>
               <div className={
                 driverMode
                   ? "rounded-lg border-2 border-motorista/50 bg-motorista/10 p-4 text-base font-medium leading-relaxed whitespace-pre-wrap"

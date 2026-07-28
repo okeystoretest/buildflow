@@ -81,6 +81,9 @@ export default async function FinanceiroPage() {
     currentBankId: o.bankId,
     proof2Count: o._count.financeProofs,
     proof2List: o.financeProofs.map((p) => ({ id: p.id, filePath: p.filePath })),
+    // Observacoes: envio (discreta) + pagamento (destaque, so aqui).
+    shippingNotes: o.notes,
+    paymentNotes: o.paymentNotes,
     processedAt: null,
     outcome: null,
     // Pendencia ativa = tem texto e ainda nao foi resolvida por Vendas.
@@ -108,6 +111,9 @@ export default async function FinanceiroPage() {
       currentBankId: o.bankId,
       proof2Count: 0,
       proof2List: [],
+      shippingNotes: o.notes,
+      // paymentNotes NAO e exposto fora da coluna Pendente.
+      paymentNotes: null,
       processedAt: h.createdAt.toISOString(),
       outcome: aprovado ? "APROVADO" : "INTERROMPIDO",
       hasActiveIssue: false,
@@ -128,6 +134,8 @@ export default async function FinanceiroPage() {
     currentBankId: o.bankId,
     proof2Count: 0,
     proof2List: [],
+    shippingNotes: o.notes,
+    paymentNotes: null,
     processedAt: null,
     outcome: null,
     hasActiveIssue: false,

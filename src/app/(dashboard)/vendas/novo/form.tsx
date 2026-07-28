@@ -48,6 +48,7 @@ export function NovoPedidoForm({
   const [orderValue, setOrderValue] = useState(0);
   const [freight, setFreight] = useState(0);
   const [notes, setNotes] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
   // Campanha
   const [inCampaign, setInCampaign] = useState(false);
   const [campaignId, setCampaignId] = useState("");
@@ -103,6 +104,7 @@ export function NovoPedidoForm({
         orderNumber, storeId, orderTypeId, operationId, customerId,
         shippingMethodId, orderValue, freight,
         notes: notes || undefined,
+        paymentNotes: paymentNotes || undefined,
         orderTypeName,
         campaignId: inCampaign ? campaignId : undefined,
         itemCount: inCampaign ? itemCount : 0,
@@ -224,9 +226,16 @@ export function NovoPedidoForm({
         {proofError && <p className="text-sm text-destructive">{proofError}</p>}
       </div>
 
-      <div className="space-y-1.5">
-        <Label>Observações</Label>
-        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Escreva suas observações aqui..." />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Observações de Envio</Label>
+          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Instruções de envio, endereço, referências..." />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Observações de Pagamento</Label>
+          <Input value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} placeholder="Informações para o Financeiro na aprovação..." />
+          <p className="text-xs text-muted-foreground">Visível apenas para o setor Financeiro.</p>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">

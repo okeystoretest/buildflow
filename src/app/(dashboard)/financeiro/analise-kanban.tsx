@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign } from "lucide-react";
+import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign, Wallet, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { flagOrderIssue, confirmPayment } from "@/lib/actions/finance";
 import { useRouter } from "next/navigation";
@@ -21,6 +21,11 @@ export interface FinanceCard {
   proof2Count: number;
   // Lista dos comprovantes do Financeiro (para exibir com opção de remover).
   proof2List: { id: string; filePath: string }[];
+  // Observacoes de Envio (logistica). Exibida de forma discreta no card.
+  shippingNotes: string | null;
+  // Observacoes de Pagamento (EXCLUSIVO do Financeiro). So preenchida na
+  // coluna Pendente — nas demais vem null e nao e exibida.
+  paymentNotes: string | null;
   processedAt: string | null;   // ISO — só na coluna Processado
   outcome: "APROVADO" | "INTERROMPIDO" | null;
   // Pendencia ja sinalizada e ainda ativa? (mostra estado no card)
@@ -175,6 +180,29 @@ export function AnaliseKanban({
             <span className="ml-auto font-data font-semibold">{aberto.total}</span>
           </div>
 
+          {/* OBSERVACOES DE PAGAMENTO — destaque laranja, no topo do modal para
+              leitura imediata pela equipe de aprovacao. */}
+          {aberto.paymentNotes?.trim() && (
+            <div className="mb-3 rounded-lg border-2 border-orange-400/70 bg-orange-100/80 p-3 dark:border-orange-400/50 dark:bg-orange-400/10">
+              <h3 className="mb-1 flex items-center gap-1.5 text-sm font-bold text-orange-800 dark:text-orange-200">
+                <Wallet className="h-4 w-4" /> Observações de Pagamento
+              </h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-orange-900 dark:text-orange-100">
+                {aberto.paymentNotes}
+              </p>
+            </div>
+          )}
+
+          {/* OBSERVACOES DE ENVIO — informativo, sem destaque. */}
+          {aberto.shippingNotes?.trim() && (
+            <div className="mb-3 rounded-lg border border-border bg-secondary/30 p-3">
+              <h3 className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Truck className="h-3.5 w-3.5" /> Observações de Envio
+              </h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">{aberto.shippingNotes}</p>
+            </div>
+          )}
+
           <AuditarPedido
             orderId={aberto.id}
             statusOptions={statusOptions}
@@ -276,6 +304,28 @@ function PendingCard({ card, onOpen, onFlag }: { card: FinanceCard; onOpen: () =
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <User className="h-3 w-3 shrink-0" /> {card.customerName} · {card.sellerName}
         </p>
+
+        {/* Obs. de Pagamento em DESTAQUE laranja (visibilidade imediata p/ o
+            Financeiro). Aparece apenas quando ha texto. */}
+        {card.paymentNotes?.trim() && (
+          <div className="mt-2 rounded-md border border-orange-400/60 bg-orange-100/70 px-2 py-1 dark:border-orange-400/40 dark:bg-orange-400/10">
+            <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+              <Wallet className="h-3 w-3" /> Obs. Pagamento
+            </p>
+            <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-orange-900 dark:text-orange-100">
+              {card.paymentNotes}
+            </p>
+          </div>
+        )}
+
+        {/* Obs. de Envio: discreta (nao e o foco do Financeiro). */}
+        {card.shippingNotes?.trim() && (
+          <p className="mt-1.5 flex items-start gap-1 text-[11px] text-muted-foreground">
+            <Truck className="mt-0.5 h-3 w-3 shrink-0" />
+            <span className="line-clamp-1">{card.shippingNotes}</span>
+          </p>
+        )}
+
         <div className="mt-2 flex items-center justify-between">
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Clock className="h-3 w-3" />

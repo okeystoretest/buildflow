@@ -12,7 +12,10 @@ export const createOrderSchema = z.object({
   // Valor total do pedido informado diretamente (sem itens).
   orderValue: z.coerce.number().nonnegative("Valor invalido."),
   freight: z.coerce.number().nonnegative("Frete invalido.").default(0),
+  // "Observacoes de Envio" (logistica/motorista).
   notes: z.string().max(1000).optional(),
+  // "Observacoes de Pagamento" (exclusivo do Financeiro).
+  paymentNotes: z.string().max(1000).optional(),
   // Campanha opcional + quantidade de itens (volume) quando vinculado.
   campaignId: z.string().optional(),
   itemCount: z.coerce.number().int().nonnegative().default(0),
