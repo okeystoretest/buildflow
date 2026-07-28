@@ -268,7 +268,11 @@ model Order {
   paymentProof2Path String?
   invoicePath      String?
 
+  // "Observacoes de Envio" na UI. Vai para a logistica/motorista.
   notes String?
+  // "Observacoes de Pagamento": exclusivo do FINANCEIRO na aprovacao.
+  // NAO e exibido para motorista/logistica.
+  paymentNotes String?
 
   // Pendencia sinalizada pelo FINANCEIRO ("Qual o problema?").
   // - financeIssue: texto da inconsistencia (null = sem pendencia ativa).
