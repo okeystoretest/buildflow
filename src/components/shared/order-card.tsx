@@ -16,6 +16,8 @@ export interface OrderCardData {
   total?: string;
   hasInvoice: boolean;
   hasPaymentProof?: boolean;
+  // Pedido do tipo Troca: isento do bloqueio "Processando sem NF" (doc §5).
+  isExchange?: boolean;
   approvedByFinance: boolean;
   // ISO da entrada em ENTREGUE (usado para sumir do fluxo após 15 min).
   deliveredAt?: string | null;
