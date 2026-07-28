@@ -493,7 +493,7 @@ export async function setOrderStatus(args: {
           orderId: order.id,
           status: args.to,
           changedBy: session.userId,
-          note: "Status alterado pela Gestao (arrastar no Kanban)",
+          note: "Status alterado pela Gestão.",
         },
       });
     });
