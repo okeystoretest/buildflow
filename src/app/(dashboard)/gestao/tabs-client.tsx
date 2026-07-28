@@ -7,6 +7,7 @@ import {
   createOperation, renameOperation,
   createUser, updateUser, toggleUser, deleteUser,
   setStageTimeLimit,
+  createOriginStore, updateOriginStore, toggleOriginStore,
 } from "@/lib/actions/management";
 import {
   createSalesGoal, deleteSalesGoal,
@@ -28,7 +29,8 @@ import type { Role, SalesModel, OrderStatus } from "@prisma/client";
 
 interface Row { id: string; name: string; active: boolean; }
 interface OpRow { id: string; code: string; name: string; active: boolean; }
-interface UserRow { id: string; name: string; email: string; role: Role; active: boolean; salesModel: SalesModel | null; }
+interface UserRow { id: string; name: string; email: string; role: Role; active: boolean; salesModel: SalesModel | null; originStoreIds: string[]; }
+interface OriginStoreRow { id: string; name: string; active: boolean; simplifiedFlow: boolean; }
 interface SellerOpt { id: string; name: string; salesModel: SalesModel | null; }
 interface GoalRow { id: string; userName: string; amount: number; targetItems: number | null; month: number; year: number; scope: SalesModel; campaignName: string | null; }
 interface CampaignRow { id: string; name: string; active: boolean; }
@@ -37,10 +39,10 @@ interface StageLimitRow { status: OrderStatus; limitMinutes: number; }
 
 type SimpleEntity = "store" | "orderType" | "shippingMethod";
 
-const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Etapas", "Lojas", "Tipos de Pedido", "Operações", "Formas de Envio"] as const;
+const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Etapas", "Lojas", "Lojas de Origem", "Tipos de Pedido", "Operações", "Formas de Envio"] as const;
 
 export function GestaoTabs(props: {
-  users: UserRow[]; stores: Row[]; orderTypes: Row[]; operations: OpRow[]; shippingMethods: Row[];
+  users: UserRow[]; stores: Row[]; originStores: OriginStoreRow[]; orderTypes: Row[]; operations: OpRow[]; shippingMethods: Row[];
   sellers: SellerOpt[]; goals: GoalRow[]; campaigns: CampaignRow[]; activeCampaigns: CampaignOpt[];
   customers: ClienteRow[];
   currentMonth: number; currentYear: number;
@@ -61,12 +63,13 @@ export function GestaoTabs(props: {
         ))}
       </div>
 
-      {tab === "Usuários" && <UsersPanel users={props.users} />}
+      {tab === "Usuários" && <UsersPanel users={props.users} originStores={props.originStores} />}
       {tab === "Clientes" && <CustomersPanel customers={props.customers} />}
       {tab === "Metas" && <GoalsPanel sellers={props.sellers} goals={props.goals} activeCampaigns={props.activeCampaigns} month={props.currentMonth} year={props.currentYear} periodMonth={props.goalPeriodMonth} periodYear={props.goalPeriodYear} isCurrentPeriod={props.isCurrentGoalPeriod} />}
       {tab === "Campanhas" && <CampaignsPanel campaigns={props.campaigns} />}
       {tab === "Etapas" && <EtapasPanel stageLimits={props.stageLimits} />}
       {tab === "Lojas" && <SimplePanel entity="store" rows={props.stores} label="loja" />}
+      {tab === "Lojas de Origem" && <OriginStoresPanel rows={props.originStores} />}
       {tab === "Tipos de Pedido" && <SimplePanel entity="orderType" rows={props.orderTypes} label="tipo de pedido" />}
       {tab === "Operações" && <OperationPanel rows={props.operations} />}
       {tab === "Formas de Envio" && <SimplePanel entity="shippingMethod" rows={props.shippingMethods} label="forma de envio" />}
@@ -201,11 +204,13 @@ function FieldHint({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-muted-foreground">{children}</p>;
 }
 
-function UsersPanel({ users }: { users: UserRow[] }) {
+function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: OriginStoreRow[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const EMPTY = { name: "", email: "", password: "", role: "VENDAS" as Role, salesModel: "VAREJO" as SalesModel };
   const [f, setF] = useState(EMPTY);
+  // Lojas de Origem selecionadas (max 2). Separado de `f` por ser lista.
+  const [selectedStores, setSelectedStores] = useState<string[]>([]);
   // Quando != null, o formulario esta EDITANDO este usuario (em vez de criar).
   const [editId, setEditId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -213,6 +218,17 @@ function UsersPanel({ users }: { users: UserRow[] }) {
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
   const editando = editId !== null;
+  // So lojas ativas aparecem para nova selecao (as ja atreladas continuam
+  // exibidas via toggle mesmo se inativas, para nao sumir silenciosamente).
+  const lojasDisponiveis = originStores.filter((s) => s.active || selectedStores.includes(s.id));
+
+  function toggleStore(id: string) {
+    setSelectedStores((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 2) return prev; // trava no maximo de 2
+      return [...prev, id];
+    });
+  }
 
   // Carrega o usuario no formulario para edicao. A senha fica em branco:
   // preencher so se quiser trocar.
@@ -225,6 +241,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
       role: u.role as Role,
       salesModel: (u.salesModel ?? "VAREJO") as SalesModel,
     });
+    setSelectedStores(u.originStoreIds ?? []);
     setError(null);
     setMsg(null);
     // Leva o usuario ate o formulario (ele fica no topo do painel).
@@ -234,6 +251,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
   function cancelEdit() {
     setEditId(null);
     setF(EMPTY);
+    setSelectedStores([]);
     setError(null);
     setMsg(null);
   }
@@ -243,6 +261,8 @@ function UsersPanel({ users }: { users: UserRow[] }) {
     setMsg(null);
     start(async () => {
       const salesModel = f.role === "VENDAS" ? f.salesModel : null;
+      // Lojas de Origem so valem para VENDAS.
+      const originStoreIds = f.role === "VENDAS" ? selectedStores : [];
       const res = editId
         ? await updateUser({
             id: editId,
@@ -252,13 +272,15 @@ function UsersPanel({ users }: { users: UserRow[] }) {
             password: f.password.trim() || undefined,
             role: f.role,
             salesModel,
+            originStoreIds,
           })
-        : await createUser({ ...f, salesModel });
+        : await createUser({ ...f, salesModel, originStoreIds });
 
       if (res.ok) {
         setMsg(editId ? "Usuário atualizado." : "Usuário criado.");
         setEditId(null);
         setF(EMPTY);
+        setSelectedStores([]);
         router.refresh();
       } else setError(res.error);
     });
@@ -336,6 +358,41 @@ function UsersPanel({ users }: { users: UserRow[] }) {
             </div>
           )}
         </div>
+        {f.role === "VENDAS" && (
+          <div className="space-y-1">
+            <Label>Loja de Origem <span className="text-muted-foreground">(máx. 2)</span></Label>
+            {lojasDisponiveis.length === 0 ? (
+              <FieldHint>Nenhuma Loja de Origem cadastrada. Cadastre na aba &quot;Lojas de Origem&quot;.</FieldHint>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {lojasDisponiveis.map((s) => {
+                  const sel = selectedStores.includes(s.id);
+                  const bloqueado = !sel && selectedStores.length >= 2;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => toggleStore(s.id)}
+                      disabled={bloqueado}
+                      className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+                        sel
+                          ? "border-primary bg-primary/10 text-primary"
+                          : bloqueado
+                          ? "cursor-not-allowed border-border text-muted-foreground/50"
+                          : "border-border hover:bg-secondary"
+                      }`}
+                    >
+                      {sel && <Check className="mr-1 inline h-3 w-3" />}
+                      {s.name}
+                      {s.simplifiedFlow && <span className="ml-1 text-[10px] opacity-70">(fluxo simpl.)</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <FieldHint>Associe o vendedor a até duas lojas. Define quais lojas ele pode usar ao criar pedidos.</FieldHint>
+          </div>
+        )}
         <div>
           <Button variant="brand" onClick={save} disabled={pending || !podeSalvar}>
             {pending ? "Salvando..." : editando ? "Salvar alterações" : "Criar usuário"}
@@ -356,7 +413,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
 
       <table className="w-full text-sm">
         <thead className="border-b border-border text-left text-muted-foreground">
-          <tr><th className="py-2 pr-4">Nome</th><th className="py-2 pr-4">Usuário</th><th className="py-2 pr-4">Perfil</th><th className="py-2 pr-4">Modelo</th><th className="py-2 pr-4">Ativo</th><th className="py-2 pr-4 text-right">Ações</th></tr>
+          <tr><th className="py-2 pr-4">Nome</th><th className="py-2 pr-4">Usuário</th><th className="py-2 pr-4">Perfil</th><th className="py-2 pr-4">Modelo</th><th className="py-2 pr-4">Lojas de Origem</th><th className="py-2 pr-4">Ativo</th><th className="py-2 pr-4 text-right">Ações</th></tr>
         </thead>
         <tbody>
           {users.map((u) => (
@@ -365,6 +422,13 @@ function UsersPanel({ users }: { users: UserRow[] }) {
               <td className="py-2 pr-4">{u.email}</td>
               <td className="py-2 pr-4">{u.role}</td>
               <td className="py-2 pr-4">{u.salesModel ? (u.salesModel === "VAREJO" ? "Varejo" : "Atacado") : "—"}</td>
+              <td className="py-2 pr-4">
+                {u.originStoreIds.length === 0
+                  ? "—"
+                  : u.originStoreIds
+                      .map((id) => originStores.find((s) => s.id === id)?.name ?? "?")
+                      .join(", ")}
+              </td>
               <td className="py-2 pr-4">{u.active ? <Badge variant="motorista">Sim</Badge> : <Badge variant="secondary">Não</Badge>}</td>
               <td className="py-2 pr-4">
                 <div className="flex justify-end gap-1">
@@ -384,6 +448,106 @@ function UsersPanel({ users }: { users: UserRow[] }) {
               </td>
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+// ===== Painel de Lojas de Origem (Gestao) =====
+// Conceito novo, separado de "Lojas". Tem o campo extra simplifiedFlow.
+function OriginStoresPanel({ rows }: { rows: OriginStoreRow[] }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [name, setName] = useState("");
+  const [simplified, setSimplified] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const editando = editId !== null;
+
+  function reset() {
+    setEditId(null); setName(""); setSimplified(false); setError(null);
+  }
+
+  function startEdit(r: OriginStoreRow) {
+    setEditId(r.id); setName(r.name); setSimplified(r.simplifiedFlow); setError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function save() {
+    setError(null);
+    start(async () => {
+      const res = editId
+        ? await updateOriginStore({ id: editId, name, simplifiedFlow: simplified })
+        : await createOriginStore({ name, simplifiedFlow: simplified });
+      if (res.ok) { reset(); router.refresh(); } else setError(res.error);
+    });
+  }
+
+  function toggle(id: string, active: boolean) {
+    start(async () => { await toggleOriginStore(id, !active); router.refresh(); });
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className={`rounded-lg border p-4 space-y-3 ${editando ? "border-primary bg-primary/5" : "border-border"}`}>
+        <div className="flex items-center justify-between">
+          <p className="font-medium">{editando ? "Editar Loja de Origem" : "Nova Loja de Origem"}</p>
+          {editando && (
+            <Button variant="ghost" size="sm" onClick={reset} disabled={pending}>
+              <X className="h-4 w-4" /> Cancelar edição
+            </Button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label>Nome</Label>
+            <Input placeholder="Ex: OKEY Store (Iguatemi)" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Fluxo</Label>
+            <button
+              type="button"
+              onClick={() => setSimplified((v) => !v)}
+              className={`flex h-10 w-full items-center gap-2 rounded-lg border px-3 text-sm transition-colors ${
+                simplified ? "border-primary bg-primary/10 text-primary" : "border-input bg-background"
+              }`}
+            >
+              {simplified ? <Check className="h-4 w-4" /> : <X className="h-4 w-4 opacity-40" />}
+              Fluxo simplificado (Pago → Embalado → Entregue)
+            </button>
+            <FieldHint>Ative para lojas sem Nota Fiscal, com comprovante obrigatório e botão &quot;Pago&quot;.</FieldHint>
+          </div>
+        </div>
+        <div>
+          <Button variant="brand" onClick={save} disabled={pending || !name.trim()}>
+            {pending ? "Salvando..." : editando ? "Salvar alterações" : "Criar loja"}
+          </Button>
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </div>
+
+      <table className="w-full text-sm">
+        <thead className="border-b border-border text-left text-muted-foreground">
+          <tr><th className="py-2 pr-4">Nome</th><th className="py-2 pr-4">Fluxo</th><th className="py-2 pr-4">Ativo</th><th className="py-2 pr-4 text-right">Ações</th></tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} className={`border-b border-border last:border-0 hover:bg-secondary/50 ${editId === r.id ? "bg-primary/5" : ""}`}>
+              <td className="py-2 pr-4 font-medium">{r.name}</td>
+              <td className="py-2 pr-4">{r.simplifiedFlow ? <Badge variant="secondary">Simplificado</Badge> : "Padrão"}</td>
+              <td className="py-2 pr-4">{r.active ? <Badge variant="motorista">Sim</Badge> : <Badge variant="secondary">Não</Badge>}</td>
+              <td className="py-2 pr-4">
+                <div className="flex justify-end gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => startEdit(r)} disabled={pending} aria-label="Editar"><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={() => toggle(r.id, r.active)} disabled={pending}>{r.active ? "Desativar" : "Ativar"}</Button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr><td colSpan={4} className="py-4 text-center text-muted-foreground">Nenhuma Loja de Origem cadastrada.</td></tr>
+          )}
         </tbody>
       </table>
     </div>

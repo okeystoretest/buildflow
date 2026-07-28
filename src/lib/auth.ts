@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
 const COOKIE_NAME = "bf_session";
 const secret = new TextEncoder().encode(
@@ -84,4 +85,26 @@ export async function requireRoleAction(allowed?: Role[]): Promise<SessionPayloa
     throw new Error("Sem permissao para esta acao.");
   }
   return session;
+}
+
+/**
+ * Carrega o contexto do ator (sessao + Lojas de Origem atreladas) para as
+ * checagens de permissao de interacao com pedidos. Ver src/lib/permissions.ts.
+ */
+export async function getActorContext(): Promise<{
+  userId: string;
+  role: Role;
+  originStoreIds: string[];
+} | null> {
+  const session = await getSession();
+  if (!session) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { originStores: { select: { id: true } } },
+  });
+  return {
+    userId: session.userId,
+    role: session.role,
+    originStoreIds: user?.originStores.map((s) => s.id) ?? [],
+  };
 }

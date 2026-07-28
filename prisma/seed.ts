@@ -27,6 +27,19 @@ async function main() {
     if (!exists) await prisma.store.create({ data: { name } });
   }
 
+  // Lojas de Origem (conceito novo). Iguatemi, Sao Paulo e Lov Club usam o
+  // fluxo simplificado; a Fabrica segue o fluxo padrao.
+  const originStores = [
+    { name: "OKEY Store (Fábrica)", simplifiedFlow: false },
+    { name: "OKEY Store (Iguatemi)", simplifiedFlow: true },
+    { name: "OKEY Store (São Paulo)", simplifiedFlow: true },
+    { name: "Lov Club (Centro Fashion)", simplifiedFlow: true },
+  ];
+  for (const os of originStores) {
+    const exists = await prisma.originStore.findFirst({ where: { name: os.name } });
+    if (!exists) await prisma.originStore.create({ data: os });
+  }
+
   const orderTypes = ["Venda", "Brinde", "Troca", "Amostra"];
   for (const name of orderTypes) {
     const exists = await prisma.orderType.findFirst({ where: { name } });

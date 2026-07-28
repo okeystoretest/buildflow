@@ -20,6 +20,8 @@ export default async function FinanceiroPage() {
         where: { status: "EM_ANALISE" },
         include: {
           customer: true, seller: true, cnpj: true,
+          originStore: { select: { simplifiedFlow: true } },
+          paymentProofs: { orderBy: { createdAt: "asc" }, select: { id: true, filePath: true } },
           _count: { select: { financeProofs: true } },
           financeProofs: { orderBy: { createdAt: "asc" }, select: { id: true, filePath: true } },
         },
@@ -81,6 +83,9 @@ export default async function FinanceiroPage() {
     currentBankId: o.bankId,
     proof2Count: o._count.financeProofs,
     proof2List: o.financeProofs.map((p) => ({ id: p.id, filePath: p.filePath })),
+    // Fluxo simplificado (Loja de Origem): muda o modal para so comprovante + Pago.
+    simplifiedFlow: o.originStore?.simplifiedFlow === true,
+    paymentProofList: o.paymentProofs.map((p) => ({ id: p.id, filePath: p.filePath })),
     // Observacoes: envio (discreta) + pagamento (destaque, so aqui).
     shippingNotes: o.notes,
     paymentNotes: o.paymentNotes,
@@ -111,6 +116,8 @@ export default async function FinanceiroPage() {
       currentBankId: o.bankId,
       proof2Count: 0,
       proof2List: [],
+      simplifiedFlow: false,
+      paymentProofList: [],
       shippingNotes: o.notes,
       // paymentNotes NAO e exposto fora da coluna Pendente.
       paymentNotes: null,
@@ -134,6 +141,8 @@ export default async function FinanceiroPage() {
     currentBankId: o.bankId,
     proof2Count: 0,
     proof2List: [],
+    simplifiedFlow: false,
+    paymentProofList: [],
     shippingNotes: o.notes,
     paymentNotes: null,
     processedAt: null,

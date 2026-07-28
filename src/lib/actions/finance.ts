@@ -270,6 +270,59 @@ export async function auditOrder(args: {
 }
 
 // ===========================================================================
+// FLUXO SIMPLIFICADO (Loja de Origem): botao "Pago" do Financeiro.
+// Move EM_ANALISE -> PAGO. So exige comprovante de pagamento (sem NF, CNPJ,
+// forma de pagamento, banco ou comanda). Nao cria Delivery (o fluxo
+// simplificado nao tem fase de motorista; Embalado/Entregue sao operados
+// por quem tem a loja atrelada).
+// ===========================================================================
+export async function markOrderPaid(orderId: string): Promise<ActionResult<{ status: string }>> {
+  try {
+    const session = await requireRoleAction(["FINANCEIRO", "GESTAO"]);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        include: {
+          originStore: { select: { simplifiedFlow: true } },
+          _count: { select: { paymentProofs: true } },
+        },
+      });
+      if (!order) throw new Error("Pedido nao encontrado.");
+      if (!order.originStore?.simplifiedFlow) {
+        throw new Error("Este pedido nao usa o fluxo simplificado.");
+      }
+      if (order.status !== "EM_ANALISE") {
+        throw new Error("Pedido nao esta em analise.");
+      }
+      // Comprovante obrigatorio (mirror ou tabela).
+      const temComprovante = order.paymentProofPath != null || order._count.paymentProofs > 0;
+      if (!temComprovante) {
+        throw new Error("Anexe o comprovante de pagamento antes de marcar como Pago.");
+      }
+
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: "PAGO" },
+      });
+      await tx.orderStatusHistory.create({
+        data: { orderId: order.id, status: "PAGO", changedBy: session.userId, note: "Pago (fluxo simplificado)" },
+      });
+      return { status: "PAGO" };
+    });
+
+    revalidatePath("/financeiro");
+    revalidatePath("/fluxo");
+    revalidatePath("/logistica");
+    revalidatePath("/dashboard");
+    return actionOk(result);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao marcar como Pago.");
+  }
+}
+
+
+// ===========================================================================
 // Coluna "Pagamento pendente" — pedidos aprovados com o status de pagamento
 // "Liberado (Pendente)" que ainda aguardam a confirmacao do recebimento.
 //

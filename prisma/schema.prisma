@@ -61,6 +61,9 @@ model User {
   notifications  Notification[]
   salesGoals     SalesGoal[]
   dailyTasks     DailyTask[]
+  // "Lojas de Origem" atreladas ao usuario (max 2, validado na action).
+  // Usado por VENDAS para escopo de criacao e por quem opera o fluxo por loja.
+  originStores   OriginStore[]  @relation("UserOriginStores")
 
   @@index([role])
 }
@@ -75,6 +78,22 @@ model Store {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   orders    Order[]
+}
+
+// "Loja de Origem": conceito NOVO e separado do Store acima.
+// - Cadastravel pela Gestao (as 4 iniciais vem do seed).
+// - simplifiedFlow=true => fluxo Pago -> Embalado -> Entregue, sem NF,
+//   comprovante obrigatorio (Iguatemi, Sao Paulo, Lov Club).
+// - Relacao N-N com User (max 2 por usuario, validado na action).
+model OriginStore {
+  id             String   @id @default(cuid())
+  name           String
+  simplifiedFlow Boolean  @default(false)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  users  User[]  @relation("UserOriginStores")
+  orders Order[]
 }
 
 model OrderType {
@@ -191,6 +210,8 @@ model Product {
 
 enum OrderStatus {
   EM_ANALISE
+  // Fluxo simplificado (Loja de Origem): apos o Financeiro clicar "Pago".
+  PAGO
   AGUARDANDO_IMPRESSAO
   SEPARANDO
   PENDENTE
@@ -216,6 +237,10 @@ model Order {
 
   store       Store     @relation(fields: [storeId], references: [id])
   storeId     String
+  // "Loja de Origem" do pedido (conceito novo, separado de store).
+  // Nullable: pedidos antigos nao tem. Define o fluxo (simplificado ou padrao).
+  originStore   OriginStore? @relation(fields: [originStoreId], references: [id])
+  originStoreId String?
   orderType   OrderType @relation(fields: [orderTypeId], references: [id])
   orderTypeId String
   operation   Operation @relation(fields: [operationId], references: [id])

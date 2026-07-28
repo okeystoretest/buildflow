@@ -3,6 +3,9 @@ import { z } from "zod";
 export const createOrderSchema = z.object({
   orderNumber: z.string().min(1, "Numero do pedido obrigatorio."),
   storeId: z.string().min(1, "Loja obrigatoria."),
+  // "Loja de Origem" (conceito novo). Obrigatoria (doc 4.1). A UI de Novo
+  // Pedido sempre envia; o vinculo com o vendedor e checado na action.
+  originStoreId: z.string().min(1, "Loja de Origem obrigatoria."),
   orderTypeId: z.string().min(1, "Tipo de pedido obrigatorio."),
   operationId: z.string().min(1, "Operacao obrigatoria."),
   customerId: z.string().min(1, "Cliente obrigatorio."),

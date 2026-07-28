@@ -136,6 +136,7 @@ export async function createUser(args: {
   password: string;
   role: Role;
   salesModel?: SalesModel | null;
+  originStoreIds?: string[];
 }): Promise<ActionResult<void>> {
   try {
     await requireRoleAction(["GESTAO"]);
@@ -146,6 +147,11 @@ export async function createUser(args: {
     if (args.role === "VENDAS" && !args.salesModel) {
       return actionError("Selecione o Modelo de Venda (Varejo ou Atacado) para o vendedor.");
     }
+    // Lojas de Origem: apenas para VENDAS, no maximo 2 (doc 3.1).
+    const originStoreIds = args.role === "VENDAS" ? (args.originStoreIds ?? []) : [];
+    if (originStoreIds.length > 2) {
+      return actionError("Selecione no máximo 2 Lojas de Origem.");
+    }
     const exists = await prisma.user.findUnique({ where: { email: args.email.trim() } });
     if (exists) return actionError("Já existe usuário com este e-mail.");
     await prisma.user.create({
@@ -155,6 +161,9 @@ export async function createUser(args: {
         password: await hashPassword(args.password),
         role: args.role,
         salesModel: args.role === "VENDAS" ? args.salesModel : null,
+        originStores: originStoreIds.length
+          ? { connect: originStoreIds.map((id) => ({ id })) }
+          : undefined,
       },
     });
     revalidatePath("/gestao");
@@ -175,6 +184,7 @@ export async function updateUser(args: {
   password?: string; // vazio/undefined = nao altera
   role: Role;
   salesModel?: SalesModel | null;
+  originStoreIds?: string[];
 }): Promise<ActionResult<void>> {
   try {
     await requireRoleAction(["GESTAO"]);
@@ -194,6 +204,12 @@ export async function updateUser(args: {
     if (args.role === "VENDAS" && !args.salesModel) {
       return actionError("Selecione o Modelo de Venda (Varejo ou Atacado) para o vendedor.");
     }
+    // Lojas de Origem: apenas para VENDAS, no maximo 2 (doc 3.1).
+    // "set" substitui todas as associacoes; para nao-VENDAS zera.
+    const originStoreIds = args.role === "VENDAS" ? (args.originStoreIds ?? []) : [];
+    if (originStoreIds.length > 2) {
+      return actionError("Selecione no máximo 2 Lojas de Origem.");
+    }
 
     // O login (email) deve continuar unico.
     const email = args.email.trim();
@@ -209,6 +225,8 @@ export async function updateUser(args: {
         email,
         role: args.role,
         salesModel: args.role === "VENDAS" ? args.salesModel : null,
+        // Substitui todas as Lojas de Origem atreladas (set).
+        originStores: { set: originStoreIds.map((id) => ({ id })) },
         // Só regrava a senha quando uma nova foi informada.
         ...(novaSenha ? { password: await hashPassword(novaSenha) } : {}),
       },
@@ -280,5 +298,65 @@ export async function setStageTimeLimit(args: {
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao salvar prazo da etapa.");
+  }
+}
+
+// ===========================================================================
+// LOJA DE ORIGEM (conceito novo, cadastravel pela Gestao)
+// Tem o campo extra "simplifiedFlow", por isso nao usa o CRUD "simple".
+// ===========================================================================
+
+export async function createOriginStore(args: {
+  name: string;
+  simplifiedFlow: boolean;
+}): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    const name = args.name.trim();
+    if (!name) return actionError("Informe o nome da Loja de Origem.");
+    const exists = await prisma.originStore.findFirst({ where: { name } });
+    if (exists) return actionError("Já existe uma Loja de Origem com este nome.");
+    await prisma.originStore.create({
+      data: { name, simplifiedFlow: !!args.simplifiedFlow },
+    });
+    revalidatePath("/gestao");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao criar Loja de Origem.");
+  }
+}
+
+export async function updateOriginStore(args: {
+  id: string;
+  name: string;
+  simplifiedFlow: boolean;
+}): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    const name = args.name.trim();
+    if (!name) return actionError("Informe o nome da Loja de Origem.");
+    const dup = await prisma.originStore.findFirst({
+      where: { name, id: { not: args.id } },
+    });
+    if (dup) return actionError("Já existe uma Loja de Origem com este nome.");
+    await prisma.originStore.update({
+      where: { id: args.id },
+      data: { name, simplifiedFlow: !!args.simplifiedFlow },
+    });
+    revalidatePath("/gestao");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao editar Loja de Origem.");
+  }
+}
+
+export async function toggleOriginStore(id: string, active: boolean): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    await prisma.originStore.update({ where: { id }, data: { active } });
+    revalidatePath("/gestao");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao alterar status da Loja de Origem.");
   }
 }

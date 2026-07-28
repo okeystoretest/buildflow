@@ -16,9 +16,15 @@ export const ORDER_FLOW: OrderStatus[] = [
   "CONCLUIDO",
 ];
 
-export const DASHBOARD_COLUMNS: OrderStatus[] = ORDER_FLOW.filter(
-  (s) => s !== "CONCLUIDO",
-);
+// PAGO entra logo apos EM_ANALISE. Pedidos do fluxo PADRAO nunca passam por
+// PAGO (sua aprovacao vai para AGUARDANDO_IMPRESSAO), entao a coluna fica
+// vazia para eles. Pedidos do fluxo SIMPLIFICADO aparecem em PAGO/EMBALADO/
+// ENTREGUE. A separacao por loja (board dedicado) vem no pop-up (Parte B).
+export const DASHBOARD_COLUMNS: OrderStatus[] = [
+  "EM_ANALISE",
+  "PAGO",
+  ...ORDER_FLOW.filter((s) => s !== "EM_ANALISE" && s !== "CONCLUIDO"),
+];
 
 export const EXCEPTION_STATUSES: OrderStatus[] = [
   "ESTORNO",
@@ -28,6 +34,7 @@ export const EXCEPTION_STATUSES: OrderStatus[] = [
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   EM_ANALISE: "Em Análise",
+  PAGO: "Pago",
   AGUARDANDO_IMPRESSAO: "Aguardando Impressão",
   SEPARANDO: "Separando",
   PENDENTE: "Pendente",
@@ -47,8 +54,37 @@ export const STATUS_LABEL: Record<OrderStatus, string> = {
 
 export type Setor = "VENDAS" | "FINANCEIRO" | "LOGISTICA" | "MOTORISTA";
 
+// ---------------------------------------------------------------------------
+// FLUXO SIMPLIFICADO (Loja de Origem com simplifiedFlow = true)
+// Caminho curto: EM_ANALISE -> PAGO -> EMBALADO -> ENTREGUE.
+// Sem NF; comprovante obrigatorio; o Financeiro so ve comprovante + "Pago".
+// ---------------------------------------------------------------------------
+export const SIMPLIFIED_FLOW: OrderStatus[] = ["PAGO", "EMBALADO", "ENTREGUE"];
+
+// Colunas exibidas no fluxo simplificado (sem CONCLUIDO, que some da board).
+export const SIMPLIFIED_COLUMNS: OrderStatus[] = ["PAGO", "EMBALADO", "ENTREGUE"];
+
+// Proximo status DENTRO do fluxo simplificado. Retorna null no fim (ENTREGUE).
+export function nextSimplifiedStatus(current: OrderStatus): OrderStatus | null {
+  const idx = SIMPLIFIED_FLOW.indexOf(current);
+  if (idx === -1 || idx === SIMPLIFIED_FLOW.length - 1) return null;
+  return SIMPLIFIED_FLOW[idx + 1];
+}
+
+// Transicao valida no fluxo simplificado (avancar 1 passo ou excecao).
+export function canTransitionSimplified(from: OrderStatus, to: OrderStatus): boolean {
+  if (EXCEPTION_STATUSES.includes(to)) return true;
+  return nextSimplifiedStatus(from) === to;
+}
+
+// Colunas do fluxo conforme o tipo da loja de origem.
+export function columnsForFlow(simplified: boolean): OrderStatus[] {
+  return simplified ? SIMPLIFIED_COLUMNS : DASHBOARD_COLUMNS;
+}
+
 export const STATUS_SETOR: Record<OrderStatus, Setor> = {
   EM_ANALISE: "FINANCEIRO",
+  PAGO: "LOGISTICA",
   AGUARDANDO_IMPRESSAO: "LOGISTICA",
   SEPARANDO: "LOGISTICA",
   PENDENTE: "LOGISTICA",
@@ -132,6 +168,7 @@ export interface StatusStyle {
 
 export const STATUS_STYLE: Record<OrderStatus, StatusStyle> = {
   EM_ANALISE:           { label: "Em Análise",          badge: "bg-muted text-muted-foreground",     dot: "bg-slate-600",      header: "bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/40" },
+  PAGO:                 { label: "Pago",                badge: "bg-sky-400/15 text-sky-700 dark:text-sky-300", dot: "bg-sky-400",  header: "bg-sky-400/15 text-sky-700 dark:text-sky-300 border-sky-400/40" },
   AGUARDANDO_IMPRESSAO: { label: "Aguardando Impressão", badge: "bg-primary/15 text-primary",        dot: "bg-yellow-500",        header: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/40" },
   SEPARANDO:            { label: "Separando",           badge: "bg-primary/15 text-primary",        dot: "bg-cyan-600",       header: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/40" },
   PENDENTE:             { label: "Pendente",            badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400",     dot: "bg-amber-600",      header: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40" },

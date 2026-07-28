@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRoleAction } from "@/lib/auth";
+import { requireRoleAction, getActorContext } from "@/lib/auth";
+import { canInteractWithOrder, INTERACTION_DENIED_MSG } from "@/lib/permissions";
 import { createOrderSchema } from "@/lib/validations/order";
 import { processAndSaveImage } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
@@ -35,10 +36,28 @@ export async function createOrder(
       return actionError("Informe a quantidade de itens para a campanha.");
     }
 
+    // Loja de Origem: se enviada, precisa existir, estar ativa e (para VENDAS)
+    // estar atrelada ao usuario. GESTAO pode usar qualquer loja ativa.
+    // Opcional nesta fatia backend; a UI tornara obrigatoria.
+    if (input.originStoreId) {
+      const originStore = await prisma.originStore.findFirst({
+        where: { id: input.originStoreId, active: true },
+        select: { id: true, users: { select: { id: true } } },
+      });
+      if (!originStore) return actionError("Loja de Origem inválida ou inativa.");
+      if (
+        session.role === "VENDAS" &&
+        !originStore.users.some((u) => u.id === session.userId)
+      ) {
+        return actionError("Você não está atrelado a esta Loja de Origem.");
+      }
+    }
+
     const order = await prisma.order.create({
       data: {
         orderNumber: input.orderNumber,
         storeId: input.storeId,
+        originStoreId: input.originStoreId || null,
         orderTypeId: input.orderTypeId,
         operationId: input.operationId,
         customerId: input.customerId,
@@ -136,10 +155,12 @@ export async function updateOrder(args: {
     const order = await prisma.order.findUnique({ where: { id: args.id } });
     if (!order) return actionError("Pedido não encontrado.");
 
-    // Trava de escopo no SERVIDOR (nao confiar so na tela): impede a vendedora
-    // de alterar o pedido de outra pessoa chamando a action diretamente.
-    if (session.role === "VENDAS" && order.sellerId !== session.userId) {
-      return actionError("Você só pode editar os seus próprios pedidos.");
+    // Trava de escopo no SERVIDOR (nao confiar so na tela). Interacao liberada
+    // para: criador do pedido, quem tem a Loja de Origem do pedido atrelada, ou
+    // GESTAO. Ver src/lib/permissions.ts.
+    const actor = await getActorContext();
+    if (!actor || !canInteractWithOrder(actor, { sellerId: order.sellerId, originStoreId: order.originStoreId })) {
+      return actionError(INTERACTION_DENIED_MSG);
     }
 
     const orderValue = args.orderValue ?? Number(order.orderValue);
@@ -271,9 +292,10 @@ export async function resolveFinanceIssue(orderId: string): Promise<ActionResult
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) return actionError("Pedido não encontrado.");
 
-    // Vendedora so resolve os proprios pedidos.
-    if (session.role === "VENDAS" && order.sellerId !== session.userId) {
-      return actionError("Você só pode resolver pendências dos seus pedidos.");
+    // Interacao liberada para criador, dono da Loja de Origem ou GESTAO.
+    const actor = await getActorContext();
+    if (!actor || !canInteractWithOrder(actor, { sellerId: order.sellerId, originStoreId: order.originStoreId })) {
+      return actionError(INTERACTION_DENIED_MSG);
     }
     if (!order.financeIssue || order.financeIssueResolvedAt) {
       return actionError("Não há pendência ativa neste pedido.");

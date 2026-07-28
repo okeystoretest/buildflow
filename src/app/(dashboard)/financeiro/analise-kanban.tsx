@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign, Wallet, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { flagOrderIssue, confirmPayment } from "@/lib/actions/finance";
+import { flagOrderIssue, confirmPayment, markOrderPaid } from "@/lib/actions/finance";
 import { useRouter } from "next/navigation";
 import { AuditarPedido } from "./audit-client";
 
@@ -21,6 +21,9 @@ export interface FinanceCard {
   proof2Count: number;
   // Lista dos comprovantes do Financeiro (para exibir com opção de remover).
   proof2List: { id: string; filePath: string }[];
+  // Fluxo simplificado (Loja de Origem): modal mostra so comprovante + "Pago".
+  simplifiedFlow: boolean;
+  paymentProofList: { id: string; filePath: string }[];
   // Observacoes de Envio (logistica). Exibida de forma discreta no card.
   shippingNotes: string | null;
   // Observacoes de Pagamento (EXCLUSIVO do Financeiro). So preenchida na
@@ -203,18 +206,26 @@ export function AnaliseKanban({
             </div>
           )}
 
-          <AuditarPedido
-            orderId={aberto.id}
-            statusOptions={statusOptions}
-            cnpjOptions={cnpjOptions}
-            currentCnpjId={aberto.currentCnpjId}
-            paymentMethods={paymentMethods}
-            banks={banks}
-            currentPaymentMethodId={aberto.currentPaymentMethodId}
-            currentBankId={aberto.currentBankId}
-            proof2List={aberto.proof2List}
-            onProcessed={() => setOpenId(null)}
-          />
+          {aberto.simplifiedFlow ? (
+            <SimplifiedPaidPanel
+              orderId={aberto.id}
+              proofs={aberto.paymentProofList}
+              onDone={() => setOpenId(null)}
+            />
+          ) : (
+            <AuditarPedido
+              orderId={aberto.id}
+              statusOptions={statusOptions}
+              cnpjOptions={cnpjOptions}
+              currentCnpjId={aberto.currentCnpjId}
+              paymentMethods={paymentMethods}
+              banks={banks}
+              currentPaymentMethodId={aberto.currentPaymentMethodId}
+              currentBankId={aberto.currentBankId}
+              proof2List={aberto.proof2List}
+              onProcessed={() => setOpenId(null)}
+            />
+          )}
         </Modal>
       )}
 
@@ -386,6 +397,60 @@ function ProcessedCard({ card }: { card: FinanceCard }) {
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+// Painel do Financeiro para pedidos de fluxo simplificado (Loja de Origem).
+// Mostra APENAS o(s) comprovante(s) de pagamento e o botao "Pago", que move
+// o pedido para o status PAGO. Sem CNPJ, forma de pagamento, banco ou NF.
+function SimplifiedPaidPanel({ orderId, proofs, onDone }: {
+  orderId: string;
+  proofs: { id: string; filePath: string }[];
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function pay() {
+    setBusy(true); setErr(null);
+    const res = await markOrderPaid(orderId);
+    setBusy(false);
+    if (res.ok) { onDone(); router.refresh(); }
+    else setErr(res.error);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-border bg-secondary/30 p-3">
+        <p className="mb-2 text-sm font-semibold">Comprovante de pagamento</p>
+        {proofs.length === 0 ? (
+          <p className="text-sm text-destructive">Nenhum comprovante anexado. O pedido não pode ser marcado como Pago.</p>
+        ) : (
+          <ul className="space-y-1">
+            {proofs.map((p, i) => (
+              <li key={p.id} className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">{i + 1}.</span>
+                <a href={p.filePath} target="_blank" rel="noreferrer" className="truncate text-financeiro underline">
+                  Ver comprovante {i + 1}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {err && <p className="text-sm text-destructive">{err}</p>}
+
+      <Button
+        onClick={pay}
+        disabled={busy || proofs.length === 0}
+        className="w-full bg-sky-500 text-white hover:bg-sky-600"
+      >
+        <BadgeDollarSign className="mr-1 h-4 w-4" />
+        {busy ? "Confirmando..." : "Pago"}
+      </Button>
     </div>
   );
 }

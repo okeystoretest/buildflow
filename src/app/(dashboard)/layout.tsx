@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { logout } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -28,7 +29,19 @@ const ROLE_LABEL: Record<Role, string> = {
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/login");
-  const items = NAV.filter((n) => n.roles.includes(session.role));
+
+  // Usuarios com Loja de Origem atrelada (qualquer perfil) tambem acessam a
+  // Logistica da(s) sua(s) loja(s), para dar andamento (doc 4.4).
+  const meStores = await prisma.user.count({
+    where: { id: session.userId, originStores: { some: { active: true } } },
+  });
+  const temLojaAtrelada = meStores > 0;
+
+  const items = NAV.filter(
+    (n) =>
+      n.roles.includes(session.role) ||
+      (n.href === "/logistica" && temLojaAtrelada),
+  );
   const navLinks: NavLinkT[] = items.map((n) => ({ href: n.href, label: n.label }));
   const initials = session.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 

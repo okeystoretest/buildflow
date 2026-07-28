@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRoleAction } from "@/lib/auth";
+import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
-import { nextStatus, canTransition } from "@/lib/order-flow";
+import { nextStatus, canTransition, nextSimplifiedStatus, canTransitionSimplified } from "@/lib/order-flow";
+import { isTroca } from "@/lib/validations/order";
 import type { OrderStatus } from "@prisma/client";
 
 /**
@@ -19,10 +20,33 @@ export async function advanceOrderStatus(args: {
   skipPendente?: boolean; // pula a etapa PENDENTE indo direto p/ a seguinte
 }): Promise<ActionResult<{ status: OrderStatus }>> {
   try {
-    const session = await requireRoleAction(["LOGISTICA", "GESTAO", "FINANCEIRO"]);
+    const session = await requireRoleAction();
 
-    const order = await prisma.order.findUnique({ where: { id: args.orderId } });
+    const order = await prisma.order.findUnique({
+      where: { id: args.orderId },
+      include: {
+        originStore: { select: { simplifiedFlow: true } },
+        orderType: { select: { name: true } },
+      },
+    });
     if (!order) return actionError("Pedido nao encontrado.");
+
+    // Permissao para avancar: LOGISTICA/GESTAO/FINANCEIRO sempre; demais perfis
+    // apenas se tiverem a Loja de Origem do pedido atrelada (doc 4.4).
+    const privileged =
+      session.role === "LOGISTICA" || session.role === "GESTAO" || session.role === "FINANCEIRO";
+    if (!privileged) {
+      const actor = await getActorContext();
+      const podeLoja =
+        !!order.originStoreId && !!actor && actor.originStoreIds.includes(order.originStoreId);
+      if (!podeLoja) {
+        return actionError("Você não tem permissão para avançar este pedido.");
+      }
+    }
+
+    const simplified = order.originStore?.simplifiedFlow === true;
+    // Pedido tipo "Troca" dispensa a Nota Fiscal (doc 5).
+    const troca = isTroca(order.orderType?.name);
 
     // Regra de permissão: sair de EM_ANALISE é exclusivo do Financeiro (e Gestão).
     // A Logística não avança o pedido enquanto estiver Em Análise.
@@ -30,6 +54,27 @@ export async function advanceOrderStatus(args: {
       return actionError("Apenas o Financeiro pode avançar pedidos em Análise.");
     }
 
+    // ---- FLUXO SIMPLIFICADO (Loja de Origem): PAGO -> EMBALADO -> ENTREGUE ----
+    // Caminho curto e separado: sem NF, sem PENDENTE, sem fase de motorista.
+    if (simplified) {
+      const target = args.to ?? nextSimplifiedStatus(order.status);
+      if (!target) return actionError("Pedido ja no ultimo status do fluxo.");
+      if (!canTransitionSimplified(order.status, target)) {
+        return actionError("Transicao de status invalida.");
+      }
+      await prisma.$transaction(async (tx) => {
+        await tx.order.update({ where: { id: order.id }, data: { status: target } });
+        await tx.orderStatusHistory.create({
+          data: { orderId: order.id, status: target, changedBy: session.userId },
+        });
+      });
+      revalidatePath("/logistica");
+      revalidatePath("/fluxo");
+      revalidatePath("/dashboard");
+      return actionOk({ status: target });
+    }
+
+    // ---- FLUXO PADRAO (linear) ----
     let target = args.to ?? nextStatus(order.status);
     if (!target) return actionError("Pedido ja no ultimo status do fluxo.");
 
@@ -46,7 +91,8 @@ export async function advanceOrderStatus(args: {
 
     // Regra de NF: um pedido em PROCESSANDO só avança se tiver a Nota Fiscal
     // anexada. Sem NF, o avanço é bloqueado (alerta exibido na tela).
-    if (order.status === "PROCESSANDO" && !order.invoicePath) {
+    // EXCECAO: pedidos "Troca" nao exigem NF (doc 5).
+    if (order.status === "PROCESSANDO" && !order.invoicePath && !troca) {
       return actionError("Anexe a Nota Fiscal antes de avançar este pedido (Processando sem NF).");
     }
 

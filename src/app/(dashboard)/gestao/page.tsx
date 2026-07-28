@@ -21,9 +21,9 @@ export default async function GestaoPage({
   const goalMonth = gm >= 1 && gm <= 12 ? gm : curMonth;
   const goalYear = gy > 2000 && gy < 3000 ? gy : curYear;
 
-  const [users, stores, orderTypes, operations, shippingMethods, goals, campaigns, customers, stageLimits] =
+  const [users, stores, orderTypes, operations, shippingMethods, goals, campaigns, customers, stageLimits, originStores] =
     await Promise.all([
-      prisma.user.findMany({ orderBy: { name: "asc" } }),
+      prisma.user.findMany({ orderBy: { name: "asc" }, include: { originStores: { select: { id: true } } } }),
       prisma.store.findMany({ orderBy: { name: "asc" } }),
       prisma.orderType.findMany({ orderBy: { name: "asc" } }),
       prisma.operation.findMany({}),
@@ -38,6 +38,7 @@ export default async function GestaoPage({
       // amostra. A gestao completa (com busca e paginacao) fica em /vendas/clientes.
       prisma.customer.findMany({ orderBy: { name: "asc" }, take: 20 }),
       prisma.stageTimeLimit.findMany(),
+      prisma.originStore.findMany({ orderBy: { name: "asc" } }),
     ]);
 
   const activeCampaigns = campaigns.filter((c) => c.active);
@@ -50,8 +51,9 @@ export default async function GestaoPage({
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Gestão — Parâmetros</h1>
       <GestaoTabs
-        users={users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, active: u.active, salesModel: u.salesModel }))}
+        users={users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, active: u.active, salesModel: u.salesModel, originStoreIds: u.originStores.map((s) => s.id) }))}
         stores={stores.map((s) => ({ id: s.id, name: s.name, active: s.active }))}
+        originStores={originStores.map((s) => ({ id: s.id, name: s.name, active: s.active, simplifiedFlow: s.simplifiedFlow }))}
         orderTypes={orderTypes.map((s) => ({ id: s.id, name: s.name, active: s.active }))}
         operations={sortOperationsByCode(operations).map((o) => ({ id: o.id, code: o.code, name: o.name, active: o.active }))}
         shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name, active: s.active }))}

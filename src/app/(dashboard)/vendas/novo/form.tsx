@@ -30,9 +30,9 @@ function Select({ label, value, onChange, options, placeholder }: {
 }
 
 export function NovoPedidoForm({
-  stores, orderTypes, operations, shippingMethods, campaigns,
+  stores, originStores, orderTypes, operations, shippingMethods, campaigns,
 }: {
-  stores: Opt[]; orderTypes: Opt[];
+  stores: Opt[]; originStores: Opt[]; orderTypes: Opt[];
   operations: Opt[]; shippingMethods: Opt[]; campaigns: Opt[];
 }) {
   const router = useRouter();
@@ -41,6 +41,7 @@ export function NovoPedidoForm({
 
   const [orderNumber, setOrderNumber] = useState("");
   const [storeId, setStoreId] = useState("");
+  const [originStoreId, setOriginStoreId] = useState("");
   const [orderTypeId, setOrderTypeId] = useState("");
   const [operationId, setOperationId] = useState("");
   const [customerId, setCustomerId] = useState("");
@@ -101,7 +102,7 @@ export function NovoPedidoForm({
     setError(null);
     start(async () => {
       const res = await createOrder({
-        orderNumber, storeId, orderTypeId, operationId, customerId,
+        orderNumber, storeId, originStoreId, orderTypeId, operationId, customerId,
         shippingMethodId, orderValue, freight,
         notes: notes || undefined,
         paymentNotes: paymentNotes || undefined,
@@ -119,7 +120,7 @@ export function NovoPedidoForm({
   // Anexo obrigatório (ao menos 1), EXCETO quando o tipo for "Troca".
   const temAnexo = proofs.length > 0;
   const anexoOk = trocaSemAnexo || temAnexo;
-  const podeEnviar = orderNumber && storeId && orderTypeId && operationId && customerId && shippingMethodId && orderValue > 0 && campaignOk && anexoOk;
+  const podeEnviar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId && shippingMethodId && orderValue > 0 && campaignOk && anexoOk;
 
   return (
     <div className="space-y-5">
@@ -130,6 +131,16 @@ export function NovoPedidoForm({
           <Input value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="ex: 1024" />
         </div>
         <Select label="Loja" value={storeId} onChange={setStoreId} options={stores} placeholder="Selecione..." />
+        {originStores.length > 0 ? (
+          <Select label="Loja de Origem" value={originStoreId} onChange={setOriginStoreId} options={originStores} placeholder="Selecione..." />
+        ) : (
+          <div className="space-y-1.5">
+            <Label>Loja de Origem</Label>
+            <div className="flex h-10 items-center rounded-lg border border-destructive/40 bg-destructive/5 px-3 text-sm text-destructive">
+              Nenhuma loja atrelada ao seu usuário.
+            </div>
+          </div>
+        )}
         <Select label="Tipo de Pedido" value={orderTypeId} onChange={setOrderTypeId} options={orderTypes} placeholder="Selecione..." />
         <Select label="Código da Operação" value={operationId} onChange={setOperationId} options={operations} placeholder="Selecione..." />
         {/* "Forma de Pagamento" e "Banco" saíram daqui: agora são preenchidos
