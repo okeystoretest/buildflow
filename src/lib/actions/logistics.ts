@@ -158,6 +158,63 @@ export async function advanceOrderStatus(args: {
 }
 
 /**
+ * Envio EXTERNO (Correios/Transportadora): ao informar codigo de rastreio, o
+ * pedido nao usa motorista proprio. Move PROCESSANDO/PROCESSADO -> EM_ROTA,
+ * grava o rastreio e marca a entrega como EM_ROTA SEM motorista (driverId null).
+ * Assim o pedido sai da fila de logistica sem exigir escolha de motorista e nao
+ * aparece na coluna "Aguardando Entregador" dos motoristas (que so pega ENVIADO).
+ */
+export async function shipWithTracking(args: {
+  orderId: string;
+  trackingCode: string;
+}): Promise<ActionResult<void>> {
+  try {
+    const session = await requireRoleAction(["LOGISTICA", "GESTAO"]);
+
+    const tracking = args.trackingCode?.trim();
+    if (!tracking) return actionError("Informe o codigo de rastreio.");
+
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: args.orderId },
+        include: { delivery: true },
+      });
+      if (!order) throw new Error("Pedido nao encontrado.");
+      if (!order.delivery) throw new Error("Entrega nao encontrada para o pedido.");
+      if (order.status !== "PROCESSANDO" && order.status !== "PROCESSADO") {
+        throw new Error("O pedido precisa estar em Processando/Processado para envio externo.");
+      }
+
+      // Entrega despachada por transportadora: EM_ROTA, sem motorista proprio.
+      await tx.delivery.update({
+        where: { id: order.delivery.id },
+        data: { status: "EM_ROTA", driverId: null, assignedAt: null, startedAt: new Date() },
+      });
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: "EM_ROTA", trackingCode: tracking },
+      });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          status: "EM_ROTA",
+          changedBy: session.userId,
+          note: `Envio externo (Correios/Transportadora) · Rastreio: ${tracking}`,
+        },
+      });
+    });
+
+    revalidatePath("/logistica");
+    revalidatePath("/dashboard");
+    revalidatePath("/motorista");
+    return actionOk(undefined);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao registrar envio externo.";
+    return actionError(msg);
+  }
+}
+
+/**
  * Pop-up obrigatorio no PROCESSADO: atribui motorista a entrega.
  * Move o pedido para PROCESSADO e a entrega para ATRIBUIDA.
  */

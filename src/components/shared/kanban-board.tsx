@@ -143,7 +143,6 @@ export function KanbanBoard({
   // Pop-up de rastreio (antes de PROCESSADO): pergunta se ha codigo.
   const [trackingOrder, setTrackingOrder] = useState<KanbanCard | null>(null);
   const [trackingCode, setTrackingCode] = useState("");
-  const [hasTracking, setHasTracking] = useState<boolean | null>(null);
   const [pendencyOrder, setPendencyOrder] = useState<KanbanCard | null>(null);
   const [pendencyNote, setPendencyNote] = useState("");
 
@@ -167,7 +166,7 @@ export function KanbanBoard({
     if (next === "PROCESSADO") {
       setTrackingOrder(card);
       setTrackingCode("");
-      setHasTracking(null);
+      setError(null);
       return;
     }
     if (next === "PENDENTE") { setPendencyOrder(card); setPendencyNote(""); return; }
@@ -182,14 +181,29 @@ export function KanbanBoard({
     });
   }
 
-  // Etapa 1 (PROCESSADO): respondida a pergunta de rastreio, vai p/ motorista.
+  // Cenario A (envio externo): ha codigo de rastreio -> despacha por
+  // transportadora, SEM motorista, e fecha o pop-up.
+  function confirmExternalShipping() {
+    if (!trackingOrder) return;
+    setError(null);
+    const code = trackingCode.trim();
+    if (!code) { setError("Informe o codigo de rastreio."); return; }
+    start(async () => {
+      const mod = await import("@/lib/actions/logistics");
+      const res = await mod.shipWithTracking({ orderId: trackingOrder.id, trackingCode: code });
+      if (res.ok) {
+        setTrackingOrder(null);
+        setTrackingCode("");
+        router.refresh();
+      } else setError(res.error);
+    });
+  }
+
+  // Cenario B (entrega propria): sem rastreio -> segue para escolha de
+  // motorista (obrigatoria).
   function goToDriverStep() {
     if (!trackingOrder) return;
     setError(null);
-    if (hasTracking && !trackingCode.trim()) {
-      setError("Informe o codigo de rastreio.");
-      return;
-    }
     setPopupOrder(trackingOrder);
     setDriverId("");
     setTrackingOrder(null);
@@ -203,12 +217,12 @@ export function KanbanBoard({
       const res = await mod.assignDriverToOrder({
         orderId: popupOrder.id,
         driverId,
-        trackingCode: hasTracking ? trackingCode.trim() : null,
+        // Cenario B nunca tem rastreio (exclusao mutua).
+        trackingCode: null,
       });
       if (res.ok) {
         setPopupOrder(null);
         setTrackingCode("");
-        setHasTracking(null);
         router.refresh();
       } else setError(res.error);
     });
@@ -222,12 +236,11 @@ export function KanbanBoard({
       const mod = await import("@/lib/actions/logistics");
       const res = await mod.openOrderForDrivers({
         orderId: popupOrder.id,
-        trackingCode: hasTracking ? trackingCode.trim() : null,
+        trackingCode: null,
       });
       if (res.ok) {
         setPopupOrder(null);
         setTrackingCode("");
-        setHasTracking(null);
         router.refresh();
       } else setError(res.error);
     });
@@ -374,48 +387,41 @@ export function KanbanBoard({
 
       {openId && <OrderDetailModal orderId={openId} onClose={() => setOpenId(null)} canManage={canManage} />}
 
-      {/* Pop-up de rastreio (antes de PROCESSADO) */}
+      {/* Pop-up de rastreio (antes de PROCESSADO) — EXCLUSAO MUTUA:
+          - Com codigo de rastreio: envio EXTERNO (Correios/Transportadora),
+            NAO pede motorista (shipWithTracking).
+          - Sem codigo: entrega PROPRIA/LOCAL, segue para escolha de motorista
+            (obrigatoria). */}
       {trackingOrder && (
-        <Modal onClose={() => setTrackingOrder(null)}>
-          <h2 className="mb-1 text-lg font-bold">O item possui codigo de rastreio?</h2>
-          <p className="mb-4 text-sm text-muted-foreground">Pedido {trackingOrder.orderNumber}</p>
-
-          {hasTracking === null && (
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setHasTracking(false); }}>
-                Nao
+        <Modal onClose={() => { setTrackingOrder(null); setTrackingCode(""); setError(null); }}>
+          <h2 className="mb-1 text-lg font-bold">Código de rastreio</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Pedido {trackingOrder.orderNumber}. Se houver rastreio, o envio é
+            externo (Correios/Transportadora) e não precisa de motorista. Sem
+            rastreio, a entrega é própria e você escolhe o motorista.
+          </p>
+          <input
+            className="mb-3 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+            placeholder="Digite o código de rastreio (deixe vazio p/ entrega própria)..."
+            value={trackingCode}
+            onChange={(e) => setTrackingCode(e.target.value)}
+            autoFocus
+          />
+          {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => { setTrackingOrder(null); setTrackingCode(""); setError(null); }}>
+              Cancelar
+            </Button>
+            {trackingCode.trim() ? (
+              <Button variant="distribuicao" onClick={confirmExternalShipping} disabled={pending}>
+                {pending ? "..." : "Enviar via transportadora"}
               </Button>
-              <Button variant="distribuicao" onClick={() => setHasTracking(true)}>
-                Sim
+            ) : (
+              <Button variant="distribuicao" onClick={goToDriverStep} disabled={pending}>
+                Escolher motorista
               </Button>
-            </div>
-          )}
-
-          {hasTracking === true && (
-            <>
-              <input
-                className="mb-3 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                placeholder="Digite o codigo de rastreio..."
-                value={trackingCode}
-                onChange={(e) => setTrackingCode(e.target.value)}
-                autoFocus
-              />
-              {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setHasTracking(null)}>Voltar</Button>
-                <Button variant="distribuicao" onClick={goToDriverStep} disabled={!trackingCode.trim()}>
-                  Confirmar e prosseguir
-                </Button>
-              </div>
-            </>
-          )}
-
-          {hasTracking === false && (
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setHasTracking(null)}>Voltar</Button>
-              <Button variant="distribuicao" onClick={goToDriverStep}>Prosseguir</Button>
-            </div>
-          )}
+            )}
+          </div>
         </Modal>
       )}
 
