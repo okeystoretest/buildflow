@@ -117,6 +117,7 @@ export default async function LogisticaPage({
         boardTitle={scoped ? lojaName.toUpperCase() : "LOGÍSTICA"}
         titleAccent="distribuicao"
         stageLimits={stageLimits}
+        simplified={scoped && simplified}
       />
     </div>
   );

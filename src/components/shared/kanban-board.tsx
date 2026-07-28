@@ -28,6 +28,7 @@ export function KanbanBoard({
   boardTitle,
   titleAccent = "amber",
   stageLimits = {},
+  simplified = false,
 }: {
   cards: KanbanCard[];
   columns: OrderStatus[];
@@ -43,6 +44,9 @@ export function KanbanBoard({
   titleAccent?: "amber" | "distribuicao";
   // Prazos por status (Gestão > Etapas) para o alerta temporal dos cards.
   stageLimits?: StageLimitMap;
+  // Fluxo simplificado (Loja de Origem): colunas lado a lado numa unica
+  // fileira (estilo Financeiro), sem o split em 2 estagios do fluxo padrao.
+  simplified?: boolean;
 }) {
   // Classe de cor do sufixo do breadcrumb (item 3: cor distinta do "branco").
   const titleAccentClass =
@@ -137,8 +141,8 @@ export function KanbanBoard({
   function handleAdvance(card: KanbanCard) {
     setError(null);
     const next = nextStatus(card.status);
-    // Bloqueio de NF: Processando sem nota não avança.
-    if (card.status === "PROCESSANDO" && !card.hasInvoice) {
+    // Bloqueio de NF: Processando sem nota não avança. Troca é isenta (doc 5).
+    if (card.status === "PROCESSANDO" && !card.hasInvoice && !card.isExchange) {
       setError(`Pedido ${card.comandaNumber ?? card.orderNumber}: anexe a Nota Fiscal antes de avançar (Processando sem NF).`);
       return;
     }
@@ -327,18 +331,28 @@ export function KanbanBoard({
 
       {error && <p className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">{error}</p>}
 
-      {/* Dois estágios do fluxo, cada um com barra full-width:
-          Estágio 1: até "Embalando" (fim da preparação).
-          Estágio 2: de "Embalado" em diante (expedição/entrega). */}
-      <StageBar label="1º Estágio · Preparação" />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {stage1.map((status) => renderColumn(status))}
-      </div>
+      {simplified ? (
+        /* Fluxo simplificado (Loja de Origem): colunas lado a lado numa unica
+           fileira, no estilo do Kanban do Financeiro. Sem split em estagios. */
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {columns.map((status) => renderColumn(status))}
+        </div>
+      ) : (
+        <>
+          {/* Dois estágios do fluxo, cada um com barra full-width:
+              Estágio 1: até "Embalando" (fim da preparação).
+              Estágio 2: de "Embalado" em diante (expedição/entrega). */}
+          <StageBar label="1º Estágio · Preparação" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {stage1.map((status) => renderColumn(status))}
+          </div>
 
-      <StageBar label="2º Estágio · Expedição" className="mt-4" />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {stage2.map((status) => renderColumn(status))}
-      </div>
+          <StageBar label="2º Estágio · Expedição" className="mt-4" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {stage2.map((status) => renderColumn(status))}
+          </div>
+        </>
+      )}
 
       {openId && <OrderDetailModal orderId={openId} onClose={() => setOpenId(null)} canManage={canManage} />}
 
