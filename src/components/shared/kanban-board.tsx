@@ -440,7 +440,7 @@ export function KanbanBoard({
           </p>
           <input
             className="mb-3 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-            placeholder="Digite o código de rastreio (deixe vazio p/ entrega própria)..."
+            placeholder="Insira o código ou escolha o Motorista"
             value={trackingCode}
             onChange={(e) => setTrackingCode(e.target.value)}
             autoFocus
