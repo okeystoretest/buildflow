@@ -6,8 +6,7 @@ import { logout } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TopBarAccent, NavLinks, type NavLink as NavLinkT } from "./nav-client";
-import { LogOut } from "lucide-react";
-import { BuildFlowLogo } from "@/components/shared/build-flow-logo";
+import { PackageCheck, LogOut } from "lucide-react";
 import type { Role } from "@prisma/client";
 
 interface NavItem { href: string; label: string; roles: Role[]; }
@@ -60,7 +59,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <BuildFlowLogo className="h-5 w-5" />
+                <PackageCheck className="h-5 w-5" />
               </div>
               <span className="text-lg font-bold tracking-tight">
                 Build<span className="text-primary">.Flow</span>
