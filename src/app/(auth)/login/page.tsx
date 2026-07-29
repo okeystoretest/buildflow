@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
-import { PackageCheck } from "lucide-react";
+import { BuildFlowLogo } from "@/components/shared/build-flow-logo";
 import { login } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +29,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm animate-fade-in-up">
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30">
-            <PackageCheck className="h-8 w-8" />
+            <BuildFlowLogo className="h-8 w-8" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">
             Build<span className="text-primary">.Flow</span>

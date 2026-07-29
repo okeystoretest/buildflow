@@ -42,8 +42,9 @@ export function OrderCard({
   stageAlert?: StageAlert;
 }) {
   const s = STATUS_STYLE[data.status];
-  // Alerta visual: processando sem NF
-  const alerta = data.status === "PROCESSANDO" && !data.hasInvoice;
+  // Alerta visual: processando sem NF. Troca (4 - Troca) e isenta de NF, entao
+  // nao dispara o alerta nem o selo vermelho "Sem NF".
+  const alerta = data.status === "PROCESSANDO" && !data.hasInvoice && !data.isExchange;
 
   // Regra de exibicao: se ja existe comanda, ela tem prioridade; senao, pedido.
   const principal = data.comandaNumber

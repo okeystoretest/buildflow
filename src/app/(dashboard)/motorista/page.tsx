@@ -20,11 +20,21 @@ export default async function MotoristaPage() {
     orderBy: { updatedAt: "desc" },
   });
 
+  // Janela de visibilidade para pedidos ENTREGUE: some do Kanban do motorista
+  // 15 min apos a entrega, mantendo a interface focada em entregas recentes.
+  // (O historico completo continua em /motorista/historico.)
+  const DELIVERED_WINDOW_MIN = 15;
+  const entregueDesde = new Date(Date.now() - DELIVERED_WINDOW_MIN * 60 * 1000);
+
   // 2) Entregas do motorista (ou todas, se Gestão) já com dono.
+  //    ENTREGUE so aparece se a entrega ocorreu na janela recente.
   const myOrders = await prisma.order.findMany({
     where: {
-      status: { in: [...MOTORISTA_COLUMNS] },
       delivery: session.role === "GESTAO" ? { isNot: null } : { driverId: session.userId },
+      OR: [
+        { status: { in: MOTORISTA_COLUMNS.filter((s) => s !== "ENTREGUE") } },
+        { status: "ENTREGUE", delivery: { deliveredAt: { gte: entregueDesde } } },
+      ],
     },
     include: { customer: true },
     orderBy: { updatedAt: "desc" },

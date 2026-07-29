@@ -7,10 +7,27 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBRL } from "@/lib/utils";
 import { VendaRowActions } from "./row-actions";
+import { VendasBusca } from "./busca-client";
+import type { Prisma } from "@prisma/client";
 
-export default async function VendasPage() {
+export default async function VendasPage({
+  searchParams,
+}: {
+  searchParams?: { busca?: string };
+}) {
   const session = await requireRole(["VENDAS", "GESTAO"]);
   const isGestao = session.role === "GESTAO";
+
+  const busca = searchParams?.busca?.trim() || "";
+  // Busca por Numero do Pedido OU Comanda (case-insensitive, parcial).
+  const buscaFilter: Prisma.OrderWhereInput = busca
+    ? {
+        OR: [
+          { orderNumber: { contains: busca, mode: "insensitive" } },
+          { comandaNumber: { contains: busca, mode: "insensitive" } },
+        ],
+      }
+    : {};
 
   // Restricao de escopo: vendedora so ve os proprios pedidos.
   // Pedidos CONCLUIDO saem daqui e ficam so no Historico.
@@ -18,6 +35,7 @@ export default async function VendasPage() {
     where: {
       status: { not: "CONCLUIDO" },
       ...(isGestao ? {} : { sellerId: session.userId }),
+      ...buscaFilter,
     },
     include: { customer: true },
     orderBy: { createdAt: "desc" },
@@ -35,6 +53,8 @@ export default async function VendasPage() {
           <Button asChild variant="vendas"><Link href="/vendas/novo">Novo pedido</Link></Button>
         </div>
       </div>
+
+      <VendasBusca defaultBusca={busca} />
 
       <Card>
         <CardHeader><CardTitle>Meus pedidos</CardTitle></CardHeader>
@@ -78,7 +98,9 @@ export default async function VendasPage() {
                   );
                 })}
                 {orders.length === 0 && (
-                  <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">Nenhum pedido ainda.</td></tr>
+                  <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">
+                    {busca ? `Nenhum pedido encontrado para "${busca}".` : "Nenhum pedido ainda."}
+                  </td></tr>
                 )}
               </tbody>
             </table>
