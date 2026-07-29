@@ -4,39 +4,30 @@ import type { Role } from "@prisma/client";
 /**
  * Barramento de eventos em processo (in-process) para o tempo real do Build.Flow.
  *
- * Por que EventEmitter singleton e nao Redis/pubsub externo:
- * - O app roda em UMA VPS, atras do Nginx, com PM2. Enquanto o processo Node for
- *   unico (ou usarmos o endpoint SSE no mesmo processo que as Server Actions),
- *   um EventEmitter em memoria resolve sem infra adicional.
- * - Se um dia o PM2 rodar em modo CLUSTER (varias instancias), este barramento
- *   NAO cruza processos. Nesse cenario, trocar a implementacao por um adaptador
- *   (Redis pub/sub) mantendo a mesma interface `publish`/`subscribe`. Ver nota
- *   no README de deploy.
+ * Transporte para o CLIENT: POLLING. O provider consulta /api/events/poll a cada
+ * poucos segundos perguntando "o que mudou desde o timestamp X". Escolhemos
+ * polling (e nao SSE) porque o proxy do ambiente corta conexoes longas — uma
+ * requisicao curta atravessa qualquer proxy sem configuracao especial.
  *
- * Padrao singleton identico ao do Prisma (src/lib/prisma.ts): sobrevive ao
- * hot-reload do Next em desenvolvimento.
+ * Para o poll conseguir responder "o que mudou desde X", o barramento mantem um
+ * BUFFER curto dos eventos recentes em memoria (ring buffer por tempo/tamanho).
+ *
+ * Padrao singleton identico ao do Prisma: sobrevive ao hot-reload do Next em dev.
+ *
+ * Nota de escala: buffer e EventEmitter sao POR PROCESSO. Em PM2 fork (1
+ * instancia) funciona. Em cluster, trocar por store compartilhado (Redis).
  */
 
 export type RealtimeEventType = "order.created" | "order.updated";
 
 export interface RealtimeEvent {
   type: RealtimeEventType;
-  /** ID do pedido afetado. */
   orderId: string;
-  /** Numero do pedido (para exibir na notificacao sem novo fetch). */
   orderNumber?: string;
-  /** Nome do cliente (para o corpo da notificacao). */
   customerName?: string;
-  /** Status resultante da mutacao. */
   status?: string;
-  /** Loja de Origem do pedido (para futura segmentacao por loja). */
   originStoreId?: string | null;
-  /**
-   * Papeis que DEVEM receber uma notificacao ATIVA (Web Notification) deste
-   * evento. A reatividade do board (router.refresh) vale para todos; este campo
-   * so controla o alerta nativo. Ex.: order.created de pedido nao-Troca ->
-   * ["FINANCEIRO"].
-   */
+  /** Papeis que devem receber alerta ATIVO (Web Notification) deste evento. */
   notifyRoles?: Role[];
   /** Epoch ms da emissao. */
   ts: number;
@@ -44,34 +35,69 @@ export interface RealtimeEvent {
 
 const CHANNEL = "bf:realtime";
 
-const globalForBus = globalThis as unknown as {
-  bfBus: EventEmitter | undefined;
-};
+/** Janela e tamanho maximo do buffer de eventos recentes. */
+const BUFFER_MAX_AGE_MS = 60_000; // 60s cobre folgadamente um poll de 4s
+const BUFFER_MAX_ITEMS = 300;
 
-function makeBus(): EventEmitter {
-  const bus = new EventEmitter();
-  // Muitas abas/conexoes SSE simultaneas => muitos listeners. Sem isto o Node
-  // emite warning de "possible memory leak" ao passar de 10.
-  bus.setMaxListeners(0);
-  return bus;
+interface BusState {
+  emitter: EventEmitter;
+  /** Ring buffer dos eventos recentes, em ordem de emissao (ts crescente). */
+  buffer: RealtimeEvent[];
 }
 
-const bus = globalForBus.bfBus ?? makeBus();
-if (process.env.NODE_ENV !== "production") globalForBus.bfBus = bus;
+const globalForBus = globalThis as unknown as {
+  bfBusState: BusState | undefined;
+};
+
+function makeState(): BusState {
+  const emitter = new EventEmitter();
+  emitter.setMaxListeners(0);
+  return { emitter, buffer: [] };
+}
+
+const state = globalForBus.bfBusState ?? makeState();
+if (process.env.NODE_ENV !== "production") globalForBus.bfBusState = state;
+
+/** Remove do buffer os eventos mais velhos que a janela ou que excedem o teto. */
+function pruneBuffer(now: number): void {
+  const cutoff = now - BUFFER_MAX_AGE_MS;
+  // Descarta por idade (buffer esta ordenado por ts crescente).
+  while (state.buffer.length > 0 && state.buffer[0].ts < cutoff) {
+    state.buffer.shift();
+  }
+  // Descarta por tamanho.
+  while (state.buffer.length > BUFFER_MAX_ITEMS) {
+    state.buffer.shift();
+  }
+}
 
 /** Publica um evento no barramento (chamado pelas Server Actions). */
 export function publish(event: Omit<RealtimeEvent, "ts">): void {
-  const full: RealtimeEvent = { ...event, ts: Date.now() };
-  bus.emit(CHANNEL, full);
+  const now = Date.now();
+  const full: RealtimeEvent = { ...event, ts: now };
+  state.buffer.push(full);
+  pruneBuffer(now);
+  state.emitter.emit(CHANNEL, full);
 }
 
 /**
- * Assina o barramento. Retorna a funcao de cancelamento (usada no cleanup do
- * stream SSE quando o cliente desconecta).
+ * Retorna os eventos emitidos APOS o timestamp `since` (exclusivo), ordenados.
+ * Usado pelo endpoint de polling. Se `since` for 0/indefinido, devolve o buffer
+ * atual (o client normalmente descarta a 1a resposta e so guarda o `ts`).
+ */
+export function getEventsSince(since: number): RealtimeEvent[] {
+  pruneBuffer(Date.now());
+  if (!since) return [...state.buffer];
+  return state.buffer.filter((e) => e.ts > since);
+}
+
+/**
+ * Assina o barramento (mantido para compatibilidade; nao usado pelo polling).
+ * Retorna a funcao de cancelamento.
  */
 export function subscribe(handler: (event: RealtimeEvent) => void): () => void {
-  bus.on(CHANNEL, handler);
+  state.emitter.on(CHANNEL, handler);
   return () => {
-    bus.off(CHANNEL, handler);
+    state.emitter.off(CHANNEL, handler);
   };
 }

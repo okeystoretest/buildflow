@@ -6,7 +6,7 @@ import { Bell } from "lucide-react";
 
 type Role = "GESTAO" | "VENDAS" | "FINANCEIRO" | "LOGISTICA" | "MOTORISTA";
 
-interface RealtimePayload {
+interface PollEvent {
   type: "order.created" | "order.updated";
   orderId: string;
   orderNumber?: string;
@@ -16,133 +16,159 @@ interface RealtimePayload {
   ts: number;
 }
 
+interface PollResponse {
+  now: number;
+  bootstrap: boolean;
+  events: PollEvent[];
+}
+
+/** Intervalo do polling do board. */
+const POLL_MS = 4000;
+
 /**
  * Provider de tempo real (montado no layout do dashboard).
  *
- * Responsabilidades:
- * 1) Manter uma conexao SSE com /api/events (reconexao automatica nativa do
- *    EventSource; alem disso, um watchdog reabre se cair de vez).
- * 2) A cada evento de pedido, chamar router.refresh() com DEBOUNCE — isso
- *    re-renderiza os Server Components (board, listas) sem reload e sem perder
- *    estado local (busca, modal aberto). Substitui o polling de 2 min do Kanban
- *    por push instantaneo.
- * 3) Se o evento vier com notify=true (papel-alvo, ex.: FINANCEIRO em pedido
- *    novo nao-Troca), emitir uma Web Notification nativa — funciona mesmo com a
- *    aba em segundo plano.
+ * Transporte: POLLING curto a /api/events/poll (nao SSE). O proxy do ambiente
+ * corta conexoes longas, entao usamos requisicoes curtas periodicas — atravessam
+ * qualquer proxy sem config. A cada mudanca recebida, chama router.refresh(),
+ * re-renderizando os Server Components (board Fluxo/Financeiro) sem reload e sem
+ * perder o estado local (busca, modal aberto).
  *
- * Fallback: se o navegador nao suportar EventSource, cai para polling de 30s.
+ * Notificacao ativa (Web Notification) para o FINANCEIRO: disparada quando o
+ * evento vem com notify=true. Depende de HTTPS (requisito do navegador); em HTTP
+ * o board ainda atualiza normalmente, so o pop-up nao aparece.
+ *
+ * HIDRATACAO: UI (botao de opt-in) so renderiza apos montar no client (`mounted`).
+ * Server e 1o render do client sao ambos `null` — sem mismatch. APIs de browser
+ * so sao tocadas dentro de efeitos.
  */
 export function RealtimeProvider({ role }: { role: Role }) {
   const router = useRouter();
 
-  // Debounce do refresh: varios eventos em rajada => um unico refresh.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const wantsNotifications = role === "FINANCEIRO";
+
+  // Debounce do refresh: varias mudancas numa rajada => um unico refresh.
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleRefresh = useCallback(() => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
     refreshTimer.current = setTimeout(() => {
       router.refresh();
-    }, 400);
+    }, 300);
   }, [router]);
 
-  // Só o Financeiro precisa do opt-in de notificacao ativa.
-  const wantsNotifications = role === "FINANCEIRO";
-
-  useEffect(() => {
-    // Fallback: sem EventSource, mantem a tela atualizada por polling lento.
-    if (typeof window === "undefined" || typeof EventSource === "undefined") {
-      const id = setInterval(() => {
-        if (document.visibilityState === "visible") router.refresh();
-      }, 30_000);
-      return () => clearInterval(id);
-    }
-
-    let es: EventSource | null = null;
-    let watchdog: ReturnType<typeof setInterval> | null = null;
-    let disposed = false;
-
-    const handle = (raw: MessageEvent) => {
-      let data: RealtimePayload | null = null;
-      try {
-        data = JSON.parse(raw.data) as RealtimePayload;
-      } catch {
+  const maybeNotify = useCallback(
+    (evt: PollEvent) => {
+      if (
+        !evt.notify ||
+        !wantsNotifications ||
+        typeof Notification === "undefined" ||
+        Notification.permission !== "granted"
+      ) {
         return;
       }
-      if (!data) return;
+      const numero = evt.orderNumber ? `#${evt.orderNumber}` : "novo";
+      const cliente = evt.customerName ? ` — ${evt.customerName}` : "";
+      const n = new Notification("Novo pedido para análise", {
+        body: `Pedido ${numero}${cliente} aguardando aprovação financeira.`,
+        tag: `order-${evt.orderId}`,
+        icon: "/icon.svg",
+      });
+      n.onclick = () => {
+        window.focus();
+        window.location.href = "/financeiro";
+      };
+    },
+    [wantsNotifications],
+  );
 
-      // Reatividade para todos.
-      scheduleRefresh();
+  useEffect(() => {
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    // `since`: ultimo ts conhecido. Comeca em 0 (bootstrap: so sincroniza relogio).
+    let since = 0;
 
-      // Alerta ativo apenas quando o servidor marcou notify=true para este papel.
-      if (
-        data.notify &&
-        wantsNotifications &&
-        typeof Notification !== "undefined" &&
-        Notification.permission === "granted"
-      ) {
-        const numero = data.orderNumber ? `#${data.orderNumber}` : "novo";
-        const cliente = data.customerName ? ` — ${data.customerName}` : "";
-        const n = new Notification("Novo pedido para análise", {
-          body: `Pedido ${numero}${cliente} aguardando aprovação financeira.`,
-          tag: `order-${data.orderId}`, // colapsa duplicatas do mesmo pedido
-          icon: "/icon.svg",
+    const tick = async () => {
+      if (disposed) return;
+      // Nao consulta com a aba em segundo plano (economiza requisicoes). Reassume
+      // no proximo tick quando voltar a ficar visivel.
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        schedule();
+        return;
+      }
+      try {
+        const res = await fetch(`/api/events/poll?since=${since}`, {
+          cache: "no-store",
+          headers: { accept: "application/json" },
         });
-        n.onclick = () => {
-          window.focus();
-          window.location.href = "/financeiro";
-        };
+        if (res.ok) {
+          const data = (await res.json()) as PollResponse;
+          since = data.now; // avanca o relogio para o proximo poll
+          if (!data.bootstrap && data.events.length > 0) {
+            // Houve mudanca => atualiza o board.
+            scheduleRefresh();
+            // Dispara notificacao para os eventos marcados (dedupe por tag/orderId).
+            const seen = new Set<string>();
+            for (const evt of data.events) {
+              if (evt.notify && !seen.has(evt.orderId)) {
+                seen.add(evt.orderId);
+                maybeNotify(evt);
+              }
+            }
+          }
+        }
+      } catch {
+        // Rede instavel: ignora e tenta no proximo tick.
+      } finally {
+        schedule();
       }
     };
 
-    const connect = () => {
+    const schedule = () => {
       if (disposed) return;
-      es = new EventSource("/api/events");
-      es.addEventListener("order.created", handle);
-      es.addEventListener("order.updated", handle);
-      es.onerror = () => {
-        // EventSource ja tenta reconectar sozinho; se fechar de vez, o watchdog
-        // recria a conexao.
-        if (es && es.readyState === EventSource.CLOSED) {
-          es.close();
-          es = null;
-        }
-      };
+      timer = setTimeout(tick, POLL_MS);
     };
 
-    connect();
+    // Primeira consulta imediata (bootstrap) para sincronizar o relogio.
+    tick();
 
-    // Watchdog: se a conexao morreu (es == null), reabre a cada 10s.
-    watchdog = setInterval(() => {
-      if (!disposed && es === null) connect();
-    }, 10_000);
+    // Ao voltar o foco para a aba, dispara um poll imediato (responsividade).
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && !disposed) {
+        if (timer) clearTimeout(timer);
+        tick();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       disposed = true;
-      if (watchdog) clearInterval(watchdog);
+      if (timer) clearTimeout(timer);
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
-      if (es) es.close();
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [router, scheduleRefresh, wantsNotifications]);
+  }, [scheduleRefresh, maybeNotify]);
 
-  // O Financeiro ve um botao discreto para conceder permissao de notificacao.
-  if (!wantsNotifications) return null;
+  if (!mounted || !wantsNotifications) return null;
   return <NotificationOptIn />;
 }
 
 /**
- * Botao flutuante de opt-in. A Web Notifications API exige que o pedido de
- * permissao parta de um gesto do usuario (clique) — nao da para pedir sozinho no
- * load. Some quando a permissao ja foi concedida ou negada.
+ * Botao flutuante de opt-in. A Web Notifications API exige gesto do usuario
+ * (clique) para pedir permissao. So e montado no client (via `mounted`), entao
+ * pode ler `Notification` no estado inicial sem risco de hidratacao.
+ *
+ * Observacao: a permissao so e concedida/efetiva em HTTPS. Em HTTP o botao pode
+ * aparecer, mas o navegador nao entrega a notificacao.
  */
 function NotificationOptIn() {
-  const [perm, setPerm] = useState<NotificationPermission | "unsupported">("default");
-
-  useEffect(() => {
-    if (typeof Notification === "undefined") {
-      setPerm("unsupported");
-      return;
-    }
-    setPerm(Notification.permission);
-  }, []);
+  const [perm, setPerm] = useState<NotificationPermission | "unsupported">(() =>
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+  );
 
   if (perm === "unsupported" || perm === "granted" || perm === "denied") {
     return null;
@@ -168,4 +194,3 @@ function NotificationOptIn() {
     </button>
   );
 }
-
