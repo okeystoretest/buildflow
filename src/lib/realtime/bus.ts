@@ -1,21 +1,18 @@
-import { EventEmitter } from "events";
+import { prisma } from "@/lib/prisma";
 import type { Role } from "@prisma/client";
 
 /**
- * Barramento de eventos em processo (in-process) para o tempo real do Build.Flow.
+ * Barramento de eventos do tempo real — agora PERSISTIDO no PostgreSQL.
  *
- * Transporte para o CLIENT: POLLING. O provider consulta /api/events/poll a cada
- * poucos segundos perguntando "o que mudou desde o timestamp X". Escolhemos
- * polling (e nao SSE) porque o proxy do ambiente corta conexoes longas — uma
- * requisicao curta atravessa qualquer proxy sem configuracao especial.
+ * Por que no banco (e nao em memoria): no output `standalone` do Next dentro do
+ * container, a Server Action que publica o evento e o route handler do poll que
+ * o le NAO compartilham o mesmo estado de modulo. Um buffer em memoria nunca
+ * "casa" (o poll sempre via events:[]). O Postgres e o canal compartilhado —
+ * funciona em qualquer container e com qualquer numero de replicas.
  *
- * Para o poll conseguir responder "o que mudou desde X", o barramento mantem um
- * BUFFER curto dos eventos recentes em memoria (ring buffer por tempo/tamanho).
- *
- * Padrao singleton identico ao do Prisma: sobrevive ao hot-reload do Next em dev.
- *
- * Nota de escala: buffer e EventEmitter sao POR PROCESSO. Em PM2 fork (1
- * instancia) funciona. Em cluster, trocar por store compartilhado (Redis).
+ * Interface preservada: publish(...) e getEventsSince(...). A diferenca e que
+ * agora sao assincronas. publish continua "fire-and-forget" (nao bloqueia a
+ * action nem quebra o pedido se a gravacao do evento falhar).
  */
 
 export type RealtimeEventType = "order.created" | "order.updated";
@@ -27,77 +24,85 @@ export interface RealtimeEvent {
   customerName?: string;
   status?: string;
   originStoreId?: string | null;
-  /** Papeis que devem receber alerta ATIVO (Web Notification) deste evento. */
   notifyRoles?: Role[];
-  /** Epoch ms da emissao. */
+  /** Epoch ms (derivado de createdAt). */
   ts: number;
 }
 
-const CHANNEL = "bf:realtime";
+/** Janela util de eventos e frequencia de limpeza. */
+const EVENT_TTL_MS = 60_000; // cliente so olha os ultimos segundos; 60s sobra
+const CLEANUP_EVERY_MS = 30_000; // roda no maximo a cada 30s
 
-/** Janela e tamanho maximo do buffer de eventos recentes. */
-const BUFFER_MAX_AGE_MS = 60_000; // 60s cobre folgadamente um poll de 4s
-const BUFFER_MAX_ITEMS = 300;
+let lastCleanup = 0;
 
-interface BusState {
-  emitter: EventEmitter;
-  /** Ring buffer dos eventos recentes, em ordem de emissao (ts crescente). */
-  buffer: RealtimeEvent[];
-}
-
-const globalForBus = globalThis as unknown as {
-  bfBusState: BusState | undefined;
-};
-
-function makeState(): BusState {
-  const emitter = new EventEmitter();
-  emitter.setMaxListeners(0);
-  return { emitter, buffer: [] };
-}
-
-const state = globalForBus.bfBusState ?? makeState();
-if (process.env.NODE_ENV !== "production") globalForBus.bfBusState = state;
-
-/** Remove do buffer os eventos mais velhos que a janela ou que excedem o teto. */
-function pruneBuffer(now: number): void {
-  const cutoff = now - BUFFER_MAX_AGE_MS;
-  // Descarta por idade (buffer esta ordenado por ts crescente).
-  while (state.buffer.length > 0 && state.buffer[0].ts < cutoff) {
-    state.buffer.shift();
-  }
-  // Descarta por tamanho.
-  while (state.buffer.length > BUFFER_MAX_ITEMS) {
-    state.buffer.shift();
+/**
+ * Remove eventos antigos (best-effort). Chamado de forma oportunista dentro do
+ * poll; nao bloqueia a resposta se falhar.
+ */
+async function maybeCleanup(now: number): Promise<void> {
+  if (now - lastCleanup < CLEANUP_EVERY_MS) return;
+  lastCleanup = now;
+  try {
+    await prisma.realtimeEvent.deleteMany({
+      where: { createdAt: { lt: new Date(now - EVENT_TTL_MS) } },
+    });
+  } catch {
+    // Limpeza e descartavel; ignora falhas.
   }
 }
 
-/** Publica um evento no barramento (chamado pelas Server Actions). */
+/**
+ * Publica um evento. FIRE-AND-FORGET: inicia a gravacao e retorna imediatamente.
+ * Uma falha ao gravar o evento de tempo real NAO pode derrubar a operacao do
+ * pedido — por isso o erro e apenas logado.
+ */
 export function publish(event: Omit<RealtimeEvent, "ts">): void {
+  void prisma.realtimeEvent
+    .create({
+      data: {
+        type: event.type,
+        orderId: event.orderId,
+        orderNumber: event.orderNumber ?? null,
+        customerName: event.customerName ?? null,
+        status: event.status ?? null,
+        originStoreId: event.originStoreId ?? null,
+        notifyRoles: (event.notifyRoles ?? []) as string[],
+      },
+    })
+    .catch((err) => {
+      console.error("[realtime] falha ao publicar evento:", err);
+    });
+}
+
+/**
+ * Retorna os eventos criados APOS o timestamp `since` (epoch ms, exclusivo),
+ * ordenados por data. Usado pelo endpoint de polling. Com `since` = 0/indefinido
+ * (bootstrap), devolve os eventos recentes da janela (o cliente descarta e so
+ * guarda o `now`).
+ */
+export async function getEventsSince(since: number): Promise<RealtimeEvent[]> {
   const now = Date.now();
-  const full: RealtimeEvent = { ...event, ts: now };
-  state.buffer.push(full);
-  pruneBuffer(now);
-  state.emitter.emit(CHANNEL, full);
-}
+  // Limite inferior: nunca busca alem da janela util (evita varrer a tabela).
+  const floor = now - EVENT_TTL_MS;
+  const sinceMs = since && since > floor ? since : floor;
 
-/**
- * Retorna os eventos emitidos APOS o timestamp `since` (exclusivo), ordenados.
- * Usado pelo endpoint de polling. Se `since` for 0/indefinido, devolve o buffer
- * atual (o client normalmente descarta a 1a resposta e so guarda o `ts`).
- */
-export function getEventsSince(since: number): RealtimeEvent[] {
-  pruneBuffer(Date.now());
-  if (!since) return [...state.buffer];
-  return state.buffer.filter((e) => e.ts > since);
-}
+  const rows = await prisma.realtimeEvent.findMany({
+    where: { createdAt: { gt: new Date(sinceMs) } },
+    orderBy: { createdAt: "asc" },
+    take: 200,
+  });
 
-/**
- * Assina o barramento (mantido para compatibilidade; nao usado pelo polling).
- * Retorna a funcao de cancelamento.
- */
-export function subscribe(handler: (event: RealtimeEvent) => void): () => void {
-  state.emitter.on(CHANNEL, handler);
-  return () => {
-    state.emitter.off(CHANNEL, handler);
-  };
+  // Limpeza oportunista (nao aguarda para nao atrasar a resposta).
+  void maybeCleanup(now);
+
+  return rows.map((r) => ({
+    type: r.type as RealtimeEventType,
+    orderId: r.orderId,
+    orderNumber: r.orderNumber ?? undefined,
+    customerName: r.customerName ?? undefined,
+    status: r.status ?? undefined,
+    originStoreId: r.originStoreId,
+    notifyRoles: (r.notifyRoles ?? []) as Role[],
+    ts: r.createdAt.getTime(),
+  }));
 }

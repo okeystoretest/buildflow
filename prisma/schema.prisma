@@ -522,3 +522,31 @@ model DailyTask {
   @@index([userId, status])
   @@index([createdAt])
 }
+
+// ===========================================================================
+// TEMPO REAL (polling) — eventos de pedido persistidos
+// ===========================================================================
+
+// Fila curta de eventos para o polling do dashboard. As Server Actions inserem
+// uma linha a cada criacao/mudanca de pedido; o endpoint /api/events/poll le os
+// eventos posteriores ao ultimo timestamp que o cliente ja viu.
+//
+// Por que no banco e nao em memoria: no container standalone do Next, a Server
+// Action e o route handler do poll nao compartilham o mesmo estado de modulo,
+// entao um buffer em memoria nunca "casa". O Postgres e o canal compartilhado.
+//
+// Limpeza: linhas antigas sao descartaveis (o cliente so olha os ultimos
+// segundos). Um DELETE periodico evita crescimento — ver realtime/bus.ts.
+model RealtimeEvent {
+  id            String   @id @default(cuid())
+  type          String
+  orderId       String
+  orderNumber   String?
+  customerName  String?
+  status        String?
+  originStoreId String?
+  notifyRoles   String[] @default([])
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+}
