@@ -7,6 +7,7 @@ import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { nextStatus, canTransition, nextSimplifiedStatus, canTransitionSimplified } from "@/lib/order-flow";
 import { canInteractWithOrder } from "@/lib/permissions";
 import { isTroca } from "@/lib/validations/order";
+import { emitOrderUpdated } from "@/lib/realtime/emit";
 import type { OrderStatus } from "@prisma/client";
 
 /**
@@ -85,6 +86,7 @@ export async function advanceOrderStatus(args: {
       revalidatePath("/logistica");
       revalidatePath("/fluxo");
       revalidatePath("/dashboard");
+      emitOrderUpdated({ orderId: args.orderId, status: target });
       return actionOk({ status: target });
     }
 
@@ -150,6 +152,7 @@ export async function advanceOrderStatus(args: {
     revalidatePath("/logistica");
     revalidatePath("/fluxo");
     revalidatePath("/motorista");
+    emitOrderUpdated({ orderId: args.orderId, status: target });
     return actionOk({ status: target });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao avancar status.";
@@ -210,6 +213,7 @@ export async function shipWithTracking(args: {
     revalidatePath("/logistica");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
+    emitOrderUpdated({ orderId: args.orderId });
     return actionOk(undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao registrar envio externo.";
@@ -266,6 +270,7 @@ export async function assignDriverToOrder(args: {
     revalidatePath("/logistica");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
+    emitOrderUpdated({ orderId: args.orderId });
     return actionOk(undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao atribuir motorista.";
@@ -330,6 +335,7 @@ export async function openOrderForDrivers(args: {
     revalidatePath("/logistica");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
+    emitOrderUpdated({ orderId: args.orderId });
     return actionOk(undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao abrir pedido aos motoristas.";
@@ -387,6 +393,7 @@ export async function claimOpenOrder(args: {
     revalidatePath("/motorista");
     revalidatePath("/logistica");
     revalidatePath("/dashboard");
+    emitOrderUpdated({ orderId: args.orderId });
     return actionOk(undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao atribuir pedido.";
@@ -452,6 +459,7 @@ export async function resolvePendency(args: {
     revalidatePath("/fluxo");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
+    emitOrderUpdated({ orderId: args.orderId });
     return actionOk({ status: target });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao resolver pendência.";
@@ -502,6 +510,7 @@ export async function setOrderStatus(args: {
     revalidatePath("/fluxo");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
+    emitOrderUpdated({ orderId: args.orderId });
     return actionOk({ status: args.to });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao alterar status.";

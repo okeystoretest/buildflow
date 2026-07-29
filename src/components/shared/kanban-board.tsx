@@ -64,17 +64,13 @@ export function KanbanBoard({
     return () => clearInterval(id);
   }, []);
 
-  // Atualizacao automatica dos status: a cada 2 min busca os dados mais
-  // recentes do servidor (router.refresh re-renderiza o server component sem
-  // recarregar a pagina nem perder o estado local, como busca ou modal aberto).
-  // Pausa quando a aba esta em segundo plano para nao gastar recursos a toa.
-  useEffect(() => {
-    const REFRESH_MS = 2 * 60 * 1000; // 2 minutos
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") router.refresh();
-    }, REFRESH_MS);
-    return () => clearInterval(id);
-  }, [router]);
+  // Atualizacao automatica dos status: agora e PUSH em tempo real via SSE.
+  // O RealtimeProvider (montado no layout do dashboard) escuta /api/events e
+  // chama router.refresh() a cada evento de pedido — refletindo criacao,
+  // aprovacao e movimentacao instantaneamente, sem reload e sem perder o estado
+  // local (busca, modal aberto). O antigo polling de 2 min foi removido; o
+  // proprio provider ja tem fallback de polling (30s) se o SSE nao estiver
+  // disponivel no navegador.
 
   // Janela de permanência de um card ENTREGUE no fluxo ativo: 15 minutos.
   const visibleCards = useMemo(() => {

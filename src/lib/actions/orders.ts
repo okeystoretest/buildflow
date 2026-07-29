@@ -7,6 +7,7 @@ import { canInteractWithOrder, INTERACTION_DENIED_MSG } from "@/lib/permissions"
 import { createOrderSchema, isTroca } from "@/lib/validations/order";
 import { processAndSaveImage } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
+import { emitOrderCreated, emitOrderUpdated } from "@/lib/realtime/emit";
 import { Prisma } from "@prisma/client";
 
 /**
@@ -148,6 +149,24 @@ export async function createOrder(
 
     revalidatePath("/vendas");
     revalidatePath("/fluxo");
+
+    // Tempo real: publica a criacao. Notifica o FINANCEIRO com alerta ativo
+    // SOMENTE quando o pedido entra em EM_ANALISE (aprovacao financeira).
+    // Trocas pulam o Financeiro (AGUARDANDO_IMPRESSAO/PAGO) => sem alerta ativo,
+    // mas o board de quem visualiza ainda reage.
+    const customer = await prisma.customer.findUnique({
+      where: { id: input.customerId },
+      select: { name: true },
+    });
+    emitOrderCreated({
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      customerName: customer?.name,
+      status: initialStatus,
+      originStoreId: input.originStoreId || null,
+      notifyFinance: initialStatus === "EM_ANALISE",
+    });
+
     return actionOk(order);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao criar pedido.";
@@ -279,6 +298,7 @@ export async function updateOrder(args: {
     revalidatePath("/vendas");
     revalidatePath("/fluxo");
     revalidatePath("/logistica");
+    emitOrderUpdated({ orderId: args.id });
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao editar pedido.");
@@ -307,6 +327,7 @@ export async function deleteOrder(id: string): Promise<ActionResult<void>> {
     revalidatePath("/vendas");
     revalidatePath("/fluxo");
     revalidatePath("/logistica");
+    emitOrderUpdated({ orderId: id });
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao excluir pedido.");
@@ -341,6 +362,7 @@ export async function resolveFinanceIssue(orderId: string): Promise<ActionResult
     revalidatePath("/vendas");
     revalidatePath("/financeiro");
     revalidatePath("/fluxo");
+    emitOrderUpdated({ orderId, originStoreId: order.originStoreId });
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao resolver pendência.");

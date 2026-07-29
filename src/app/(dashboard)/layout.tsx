@@ -6,6 +6,7 @@ import { logout } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TopBarAccent, NavLinks, type NavLink as NavLinkT } from "./nav-client";
+import { RealtimeProvider } from "@/components/shared/realtime-provider";
 import { PackageCheck, LogOut } from "lucide-react";
 import type { Role } from "@prisma/client";
 
@@ -95,6 +96,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 lg:px-8 animate-fade-in">
         {children}
       </main>
+      {/* Tempo real: conexao SSE (reatividade do board) + alerta de novos
+          pedidos para o Financeiro. Renderiza no client, sem UI para os demais. */}
+      <RealtimeProvider role={session.role} />
     </div>
   );
 }

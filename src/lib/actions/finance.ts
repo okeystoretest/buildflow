@@ -6,6 +6,7 @@ import { requireRoleAction } from "@/lib/auth";
 import { processAndSaveImage, deleteUploadedFile } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/finance-constants";
+import { emitOrderUpdated } from "@/lib/realtime/emit";
 import type { PaymentDisposition } from "@prisma/client";
 
 /**
@@ -262,6 +263,7 @@ export async function auditOrder(args: {
     revalidatePath("/financeiro");
     revalidatePath("/logistica");
     revalidatePath("/dashboard");
+    emitOrderUpdated({ orderId: args.orderId, status: result.status });
     return actionOk(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao auditar pedido.";
@@ -315,6 +317,7 @@ export async function markOrderPaid(orderId: string): Promise<ActionResult<{ sta
     revalidatePath("/fluxo");
     revalidatePath("/logistica");
     revalidatePath("/dashboard");
+    emitOrderUpdated({ orderId, status: result.status });
     return actionOk(result);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao marcar como Pago.");
@@ -371,6 +374,7 @@ export async function confirmPayment(orderId: string): Promise<ActionResult<void
     });
 
     revalidatePath("/financeiro");
+    emitOrderUpdated({ orderId, status: order.status });
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao confirmar pagamento.");
