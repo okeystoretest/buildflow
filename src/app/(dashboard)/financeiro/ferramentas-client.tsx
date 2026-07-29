@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Check, X } from "lucide-react";
+import { Pencil, Trash2, Check, X, History } from "lucide-react";
 import { CrudTable, type CrudRow } from "@/components/shared/crud-table";
 import type { PaymentDisposition } from "@prisma/client";
 
@@ -32,6 +32,7 @@ export function FinanceiroFerramentas({
   // Nenhuma ferramenta aberta por padrão: os formulários ficam ocultos
   // e só aparecem ao clicar no respectivo botão (clicar de novo fecha).
   const [open, setOpen] = useState<ToolId | null>(null);
+  const router = useRouter();
 
   const tools = [
     { id: "pagamento" as const, label: "Formas de Pagamento" },
@@ -54,6 +55,10 @@ export function FinanceiroFerramentas({
             {t.label}
           </Button>
         ))}
+        {/* Histórico: pedidos já processados (rota própria, listagem paginada). */}
+        <Button variant="outline" size="sm" onClick={() => router.push("/financeiro/historico")}>
+          <History className="h-4 w-4" /> Histórico
+        </Button>
       </div>
 
       {open && (
