@@ -129,3 +129,11 @@ export async function prepareInvoiceFile(
   // Nao e PDF: segue o caminho normal de imagem.
   return shrinkImageToBase64(file, opts);
 }
+
+/**
+ * Alias semantico para comprovantes de pagamento (Vendas e Financeiro).
+ * Mesma logica de prepareInvoiceFile: aceita IMAGEM (encolhe no navegador) ou
+ * PDF (le em base64 sem canvas). Nome proprio para deixar a intencao clara no
+ * ponto de uso, sem duplicar codigo.
+ */
+export const prepareProofFile = prepareInvoiceFile;

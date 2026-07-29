@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { canInteractWithOrder, INTERACTION_DENIED_MSG } from "@/lib/permissions";
 import { createOrderSchema, isTroca } from "@/lib/validations/order";
-import { processAndSaveImage } from "@/lib/image";
+import { processAndSaveImage, saveDocument, isPdfDataUrl } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { emitOrderCreated, emitOrderUpdated } from "@/lib/realtime/emit";
 import { Prisma } from "@prisma/client";
@@ -121,10 +121,17 @@ export async function createOrder(
         const base64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
         const buffer = Buffer.from(base64, "base64");
         if (buffer.length === 0) continue;
-        const processed = await processAndSaveImage(buffer, {
-          folder: "comprovantes-pagamento",
-          fileName: `${order.id}_paymentProof_${i + 1}_${Date.now()}`,
-        });
+        // Comprovante aceita imagem OU PDF. PDF vai direto ao disco (sem sharp);
+        // imagem passa pelo pipeline .webp. No banco, so o caminho.
+        const processed = isPdfDataUrl(dataUrl)
+          ? await saveDocument(buffer, {
+              folder: "comprovantes-pagamento",
+              fileName: `${order.id}_paymentProof_${i + 1}_${Date.now()}`,
+            })
+          : await processAndSaveImage(buffer, {
+              folder: "comprovantes-pagamento",
+              fileName: `${order.id}_paymentProof_${i + 1}_${Date.now()}`,
+            });
         await prisma.orderPaymentProof.create({
           data: {
             orderId: order.id,
@@ -277,10 +284,16 @@ export async function updateOrder(args: {
           const base64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
           const buffer = Buffer.from(base64, "base64");
           if (buffer.length === 0) continue;
-          const processed = await processAndSaveImage(buffer, {
-            folder: "comprovantes-pagamento",
-            fileName: `${order.id}_paymentProof_edit_${jaTem + i + 1}_${Date.now()}`,
-          });
+          // Comprovante aceita imagem OU PDF (mesma regra da criacao).
+          const processed = isPdfDataUrl(dataUrl)
+            ? await saveDocument(buffer, {
+                folder: "comprovantes-pagamento",
+                fileName: `${order.id}_paymentProof_edit_${jaTem + i + 1}_${Date.now()}`,
+              })
+            : await processAndSaveImage(buffer, {
+                folder: "comprovantes-pagamento",
+                fileName: `${order.id}_paymentProof_edit_${jaTem + i + 1}_${Date.now()}`,
+              });
           await prisma.orderPaymentProof.create({
             data: {
               orderId: order.id,

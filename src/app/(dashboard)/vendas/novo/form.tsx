@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CustomerCombobox } from "@/components/shared/customer-combobox";
 import { formatBRL } from "@/lib/utils";
-import { shrinkImageToBase64 } from "@/lib/client-image";
+import { prepareProofFile } from "@/lib/client-image";
 import { isTroca } from "@/lib/validations/order";
 
 interface Opt { id: string; name: string; }
@@ -78,7 +78,7 @@ export function NovoPedidoForm({
 
     setProofBusy(true);
     for (const file of aProcessar) {
-      const r = await shrinkImageToBase64(file, { maxDimension: 1600, quality: 0.8 });
+      const r = await prepareProofFile(file, { maxDimension: 1600, quality: 0.8 });
       if (r.error) { setProofError(r.error); continue; }
       setProofs((prev) =>
         prev.length >= MAX_PROOFS ? prev : [...prev, { name: file.name, base64: r.base64 ?? "" }],
@@ -224,7 +224,7 @@ export function NovoPedidoForm({
 
         {/* Botao de adicionar (some ao atingir o limite). Aceita multipla selecao. */}
         {proofs.length < MAX_PROOFS && (
-          <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+          <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.pdf"
             onChange={onProof} disabled={proofBusy}
             className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-vendas file:px-4 file:py-2 file:text-sm file:font-medium file:text-vendas-fg hover:file:opacity-90" />
         )}

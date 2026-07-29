@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
-import { processAndSaveImage, deleteUploadedFile } from "@/lib/image";
+import { processAndSaveImage, saveDocument, isPdfDataUrl, deleteUploadedFile } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/finance-constants";
 import { emitOrderUpdated } from "@/lib/realtime/emit";
@@ -79,12 +79,19 @@ export async function uploadSecondPaymentProof(args: {
       const buffer = Buffer.from(raw, "base64");
       if (buffer.length === 0) continue;
       if (buffer.length > 15 * 1024 * 1024) {
-        return actionError("Imagem muito grande (máx. 15MB).");
+        return actionError("Arquivo muito grande (máx. 15MB).");
       }
-      const processed = await processAndSaveImage(buffer, {
-        folder: "comprovantes-pagamento",
-        fileName: `${order.id}_financeProof_${order.financeProofs.length + i + 1}_${Date.now()}`,
-      });
+      // Comprovante de pagamento aceita imagem OU PDF. PDF vai direto ao disco
+      // (sem sharp); imagem passa pelo pipeline .webp. No banco, so o caminho.
+      const processed = isPdfDataUrl(dataUrl)
+        ? await saveDocument(buffer, {
+            folder: "comprovantes-pagamento",
+            fileName: `${order.id}_financeProof_${order.financeProofs.length + i + 1}_${Date.now()}`,
+          })
+        : await processAndSaveImage(buffer, {
+            folder: "comprovantes-pagamento",
+            fileName: `${order.id}_financeProof_${order.financeProofs.length + i + 1}_${Date.now()}`,
+          });
       const rec = await prisma.orderFinanceProof.create({
         data: {
           orderId: order.id,

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { auditOrder, setOrderPaymentInfo, uploadSecondPaymentProof, deleteSecondPaymentProof } from "@/lib/actions/finance";
 import { linkCnpjToOrder } from "@/lib/actions/cnpj";
-import { shrinkImageToBase64 } from "@/lib/client-image";
+import { prepareProofFile } from "@/lib/client-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,7 +116,7 @@ export function AuditarPedido({
     setError(null); setProofMsg(null); setProofBusy(true);
     const base64List: string[] = [];
     for (const file of files.slice(0, espacoLivre)) {
-      const shrunk = await shrinkImageToBase64(file, { maxDimension: 1600, quality: 0.8 });
+      const shrunk = await prepareProofFile(file, { maxDimension: 1600, quality: 0.8 });
       if (shrunk.error || !shrunk.base64) {
         setError(shrunk.error ?? "Não foi possível processar a imagem.");
         continue;
@@ -214,7 +214,7 @@ export function AuditarPedido({
         )}
 
         {proof2Total < MAX_PROOF2 && (
-          <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+          <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.pdf"
             onChange={onProof2File} disabled={proofBusy || pending}
             className="block w-full max-w-xs text-xs text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-financeiro file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-financeiro-fg hover:file:opacity-90" />
         )}
