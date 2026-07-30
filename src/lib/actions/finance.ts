@@ -7,6 +7,7 @@ import { processAndSaveImage, saveDocument, isPdfDataUrl, deleteUploadedFile } f
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/finance-constants";
 import { emitOrderUpdated } from "@/lib/realtime/emit";
+import { isDoacao } from "@/lib/validations/order";
 import type { PaymentDisposition } from "@prisma/client";
 
 /**
@@ -189,7 +190,7 @@ export async function deleteSecondPaymentProof(args: {
 export async function auditOrder(args: {
   orderId: string;
   comandaNumber: string;
-  paymentStatusId: string;
+  paymentStatusId?: string;
 }): Promise<ActionResult<{ status: string }>> {
   try {
     const session = await requireRoleAction(["FINANCEIRO", "GESTAO"]);
@@ -197,12 +198,39 @@ export async function auditOrder(args: {
     const result = await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: args.orderId },
+        include: { orderType: { select: { name: true } } },
       });
       if (!order) throw new Error("Pedido nao encontrado.");
       if (order.status !== "EM_ANALISE") {
         throw new Error("Pedido nao esta em analise.");
       }
 
+      // Doação: passa pelo Financeiro, mas dispensa CNPJ, forma de pagamento,
+      // banco e comprovante. O Financeiro vê os dados básicos e aprova direto
+      // (sem status de pagamento).
+      const doacao = isDoacao(order.orderType?.name);
+
+      if (doacao) {
+        if (!args.comandaNumber?.trim()) {
+          throw new Error("Informe o Nº da Comanda para aprovar.");
+        }
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            comandaNumber: args.comandaNumber,
+            status: "AGUARDANDO_IMPRESSAO",
+          },
+        });
+        await tx.orderStatusHistory.create({
+          data: { orderId: order.id, status: "AGUARDANDO_IMPRESSAO", changedBy: session.userId, note: "Aprovado: Doação" },
+        });
+        await tx.delivery.create({
+          data: { orderId: order.id, status: "AGUARDANDO" },
+        });
+        return { status: "AGUARDANDO_IMPRESSAO" };
+      }
+
+      if (!args.paymentStatusId) throw new Error("Selecione o status de pagamento.");
       const payStatus = await tx.paymentStatusOption.findUnique({
         where: { id: args.paymentStatusId },
       });

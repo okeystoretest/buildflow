@@ -6,7 +6,7 @@ import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { nextStatus, canTransition, nextSimplifiedStatus, canTransitionSimplified } from "@/lib/order-flow";
 import { canInteractWithOrder } from "@/lib/permissions";
-import { isTroca } from "@/lib/validations/order";
+import { isAnexoDispensavel } from "@/lib/validations/order";
 import { emitOrderUpdated } from "@/lib/realtime/emit";
 import type { OrderStatus } from "@prisma/client";
 
@@ -60,8 +60,8 @@ export async function advanceOrderStatus(args: {
         return actionError("Você não tem permissão para avançar este pedido.");
       }
     }
-    // Pedido tipo "Troca" dispensa a Nota Fiscal (doc 5).
-    const troca = isTroca(order.orderType?.name);
+    // Pedido tipo "Troca" ou "Doação" dispensa a Nota Fiscal.
+    const semNfObrigatoria = isAnexoDispensavel(order.orderType?.name);
 
     // Regra de permissão: sair de EM_ANALISE é exclusivo do Financeiro (e Gestão).
     // A Logística não avança o pedido enquanto estiver Em Análise.
@@ -107,8 +107,8 @@ export async function advanceOrderStatus(args: {
 
     // Regra de NF: um pedido em PROCESSANDO só avança se tiver a Nota Fiscal
     // anexada. Sem NF, o avanço é bloqueado (alerta exibido na tela).
-    // EXCECAO: pedidos "Troca" nao exigem NF (doc 5).
-    if (order.status === "PROCESSANDO" && !order.invoicePath && !troca) {
+    // EXCECAO: pedidos "Troca" e "Doação" nao exigem NF.
+    if (order.status === "PROCESSANDO" && !order.invoicePath && !semNfObrigatoria) {
       return actionError("Anexe a Nota Fiscal antes de avançar este pedido (Processando sem NF).");
     }
 

@@ -8,6 +8,7 @@ import { prepareProofFile } from "@/lib/client-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { isDoacao } from "@/lib/validations/order";
 import { X } from "lucide-react";
 
 interface StatusOpt { id: string; name: string; disposition: "APROVA" | "INTERROMPE"; }
@@ -24,6 +25,7 @@ export function AuditarPedido({
   currentPaymentMethodId,
   currentBankId,
   proof2List,
+  orderTypeName,
   onProcessed,
 }: {
   orderId: string;
@@ -37,6 +39,8 @@ export function AuditarPedido({
   currentBankId: string | null;
   // Lista dos comprovantes ja anexados (para exibir com opção de remover).
   proof2List: { id: string; filePath: string }[];
+  // Nome do tipo de pedido — Doação usa painel simplificado.
+  orderTypeName: string | null;
   // Chamado apos processar o pedido (ex.: fechar o modal do Kanban).
   onProcessed?: () => void;
 }) {
@@ -156,12 +160,47 @@ export function AuditarPedido({
     });
   }
 
+  // Doação: aprovação simplificada — só a comanda. Dispensa CNPJ, forma,
+  // banco, comprovante e status de pagamento.
+  const doacao = isDoacao(orderTypeName);
+  function runDoacao() {
+    setError(null);
+    start(async () => {
+      const res = await auditOrder({ orderId, comandaNumber: comanda });
+      if (res.ok) { router.refresh(); onProcessed?.(); }
+      else setError(res.error);
+    });
+  }
+
   // Aprovar exige: comanda + status + CNPJ + pagamento + 2o comprovante.
   // Interromper (estorno/cancela) nao exige esses pre-requisitos.
   const faltaParaAprovar = !cnpjOk || !pagamentoOk || !proof2Ok;
   const aprovarBloqueado = !statusId || !comanda || (!isInterrompe && faltaParaAprovar);
 
   const pagamentoAlterado = payMethodId !== savedPayMethodId || bankId !== savedBankId;
+
+  // ---- PAINEL SIMPLIFICADO: DOAÇÃO ----
+  // Dispensa CNPJ, forma de pagamento, banco, comprovante e status. O
+  // Financeiro apenas confere os dados básicos, informa a comanda e aprova.
+  if (doacao) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-lg border border-financeiro/40 bg-financeiro/10 px-3 py-2 text-xs text-muted-foreground">
+          Pedido de <span className="font-semibold text-foreground">Doação</span>: dispensa comprovante, CNPJ, forma de pagamento e Nota Fiscal. Informe a comanda e aprove para seguir o fluxo.
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Nº Comanda</Label>
+            <Input className="h-9 w-32" value={comanda} onChange={(e) => setComanda(e.target.value)} placeholder="ex: C-501" />
+          </div>
+          <Button variant="financeiro" size="sm" onClick={runDoacao} disabled={pending || !comanda.trim()}>
+            {pending ? "..." : "Aprovado"}
+          </Button>
+        </div>
+        {error && <span className="block text-xs text-destructive">{error}</span>}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { CustomerCombobox } from "@/components/shared/customer-combobox";
 import { formatBRL } from "@/lib/utils";
 import { prepareProofFile } from "@/lib/client-image";
-import { isTroca } from "@/lib/validations/order";
+import { isAnexoDispensavel } from "@/lib/validations/order";
 
 interface Opt { id: string; name: string; }
 
@@ -94,9 +94,10 @@ export function NovoPedidoForm({
 
   const total = (orderValue || 0) + (freight || 0);
 
-  // Tipo "Troca" dispensa o comprovante de pagamento (anexo opcional).
+  // Anexo (comprovante) e valor dispensados na Troca e na Doação.
   const orderTypeName = orderTypes.find((t) => t.id === orderTypeId)?.name ?? "";
-  const trocaSemAnexo = isTroca(orderTypeName);
+  const anexoDispensavel = isAnexoDispensavel(orderTypeName);
+  const valorDispensavel = anexoDispensavel;
 
   function onSubmit() {
     setError(null);
@@ -117,11 +118,11 @@ export function NovoPedidoForm({
   }
 
   const campaignOk = !inCampaign || (campaignId && itemCount > 0);
-  // Anexo obrigatório (ao menos 1), EXCETO quando o tipo for "Troca".
+  // Anexo obrigatório (ao menos 1), EXCETO Troca e Doação.
   const temAnexo = proofs.length > 0;
-  const anexoOk = trocaSemAnexo || temAnexo;
-  // Valor obrigatório (> 0), EXCETO na Troca (opcional, pode ficar 0).
-  const valorOk = trocaSemAnexo || orderValue > 0;
+  const anexoOk = anexoDispensavel || temAnexo;
+  // Valor obrigatório (> 0), EXCETO Troca e Doação.
+  const valorOk = valorDispensavel || orderValue > 0;
   const podeEnviar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId && shippingMethodId && valorOk && campaignOk && anexoOk;
 
   return (
@@ -158,7 +159,7 @@ export function NovoPedidoForm({
           <CustomerCombobox label="Cliente" value={customerId} onChange={setCustomerId} />
         </div>
         <div className="space-y-1.5">
-          <Label>Valor Total do Pedido {trocaSemAnexo ? "(opcional p/ Troca)" : "*"}</Label>
+          <Label>Valor Total do Pedido {valorDispensavel ? "(opcional)" : "*"}</Label>
           <Input type="number" min={0} step="0.01" value={orderValue || ""} onChange={(e) => setOrderValue(Number(e.target.value))} placeholder="0,00" />
         </div>
         <div className="space-y-1.5">
@@ -201,7 +202,7 @@ export function NovoPedidoForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Comprovantes de pagamento {trocaSemAnexo ? "(opcional p/ Troca)" : "*"}</Label>
+        <Label>Comprovantes de pagamento {anexoDispensavel ? "(opcional)" : "*"}</Label>
 
         {/* Lista dos comprovantes ja anexados, com opcao de remover. */}
         {proofs.length > 0 && (
@@ -230,8 +231,8 @@ export function NovoPedidoForm({
         )}
 
         <p className="text-xs text-muted-foreground">
-          {trocaSemAnexo
-            ? "Tipo \"Troca\": anexo não é exigido."
+          {anexoDispensavel
+            ? "Anexo não é exigido para este tipo de pedido."
             : "Envio de ao menos 1 comprovante obrigatório."}{" "}
           <span className="text-foreground">{proofs.length}/{MAX_PROOFS} anexados.</span>
           {proofBusy && " Processando..."}

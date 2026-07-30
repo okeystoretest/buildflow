@@ -20,6 +20,7 @@ export default async function FinanceiroPage() {
         where: { status: "EM_ANALISE" },
         include: {
           customer: true, seller: true, cnpj: true,
+          orderType: { select: { name: true } },
           originStore: { select: { simplifiedFlow: true } },
           paymentProofs: { orderBy: { createdAt: "asc" }, select: { id: true, filePath: true } },
           _count: { select: { financeProofs: true } },
@@ -75,6 +76,7 @@ export default async function FinanceiroPage() {
     comandaNumber: o.comandaNumber,
     customerName: o.customer.name,
     sellerName: o.seller.name,
+    orderTypeName: o.orderType?.name ?? null,
     total: formatBRL(o.total.toString()),
     createdAt: o.createdAt.toISOString(),
     // Dados que o modal de auditoria precisa:
@@ -109,6 +111,7 @@ export default async function FinanceiroPage() {
       comandaNumber: o.comandaNumber,
       customerName: o.customer.name,
       sellerName: o.seller.name,
+      orderTypeName: null,
       total: formatBRL(o.total.toString()),
       createdAt: o.createdAt.toISOString(),
       currentCnpjId: o.cnpjId,
@@ -134,6 +137,7 @@ export default async function FinanceiroPage() {
     comandaNumber: o.comandaNumber,
     customerName: o.customer.name,
     sellerName: o.seller.name,
+    orderTypeName: null,
     total: formatBRL(o.total.toString()),
     createdAt: o.createdAt.toISOString(),
     currentCnpjId: o.cnpjId,

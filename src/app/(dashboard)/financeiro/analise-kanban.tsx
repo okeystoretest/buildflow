@@ -13,6 +13,8 @@ export interface FinanceCard {
   comandaNumber: string | null;
   customerName: string;
   sellerName: string;
+  // Nome do tipo de pedido (ex.: "9 - Doação"). Define o painel simplificado.
+  orderTypeName: string | null;
   total: string;
   createdAt: string;            // ISO
   currentCnpjId: string | null;
@@ -223,6 +225,7 @@ export function AnaliseKanban({
               currentPaymentMethodId={aberto.currentPaymentMethodId}
               currentBankId={aberto.currentBankId}
               proof2List={aberto.proof2List}
+              orderTypeName={aberto.orderTypeName}
               onProcessed={() => setOpenId(null)}
             />
           )}

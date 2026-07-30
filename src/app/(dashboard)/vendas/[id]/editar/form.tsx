@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CustomerCombobox, type CustomerOpt } from "@/components/shared/customer-combobox";
 import { prepareProofFile } from "@/lib/client-image";
-import { isTroca } from "@/lib/validations/order";
+import { isAnexoDispensavel } from "@/lib/validations/order";
 import { formatBRL } from "@/lib/utils";
 
 interface Opt { id: string; name: string; }
@@ -96,9 +96,9 @@ export function EditarPedidoForm({
 
   const total = (orderValue || 0) + (freight || 0);
   const orderTypeName = orderTypes.find((t) => t.id === orderTypeId)?.name ?? "";
-  const trocaSemAnexo = isTroca(orderTypeName);
+  const anexoDispensavel = isAnexoDispensavel(orderTypeName);
   const campaignOk = !inCampaign || (campaignId && itemCount > 0);
-  const anexoOk = trocaSemAnexo || totalProofs > 0;
+  const anexoOk = anexoDispensavel || totalProofs > 0;
 
   function save() {
     setError(null);
@@ -120,8 +120,10 @@ export function EditarPedidoForm({
     });
   }
 
+  // Valor obrigatório (> 0), EXCETO Troca e Doação.
+  const valorOk = anexoDispensavel || orderValue > 0;
   const podeSalvar = orderNumber && storeId && orderTypeId && operationId && customerId
-    && shippingMethodId && orderValue > 0 && campaignOk && anexoOk;
+    && shippingMethodId && valorOk && campaignOk && anexoOk;
 
   return (
     <div className="space-y-5">
@@ -145,7 +147,7 @@ export function EditarPedidoForm({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CustomerCombobox label="Cliente" value={customerId} onChange={setCustomerId} initialSelected={selectedCustomer} />
         <div className="space-y-1.5">
-          <Label>Valor Total do Pedido</Label>
+          <Label>Valor Total do Pedido {anexoDispensavel ? "(opcional)" : "*"}</Label>
           <Input type="number" min={0} step="0.01" value={orderValue || ""} onChange={(e) => setOrderValue(Number(e.target.value))} placeholder="0,00" />
         </div>
         <div className="space-y-1.5">
@@ -183,7 +185,7 @@ export function EditarPedidoForm({
 
       {/* Comprovantes: existentes + novos */}
       <div className="space-y-1.5">
-        <Label>Comprovantes de pagamento {trocaSemAnexo ? "(opcional p/ Troca)" : "*"}</Label>
+        <Label>Comprovantes de pagamento {anexoDispensavel ? "(opcional)" : "*"}</Label>
 
         {(existing.length > 0 || newProofs.length > 0) && (
           <ul className="space-y-1">
@@ -222,7 +224,7 @@ export function EditarPedidoForm({
         )}
 
         <p className="text-xs text-muted-foreground">
-          {trocaSemAnexo ? "Tipo \"Troca\": anexo não é exigido." : "Ao menos 1 comprovante obrigatório."}{" "}
+          {anexoDispensavel ? "Anexo não é exigido para este tipo de pedido." : "Ao menos 1 comprovante obrigatório."}{" "}
           <span className="text-foreground">{totalProofs}/{MAX_PROOFS} anexados.</span>
           {proofBusy && " Processando..."}
         </p>

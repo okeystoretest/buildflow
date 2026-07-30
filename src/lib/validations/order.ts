@@ -31,20 +31,46 @@ export const createOrderSchema = z.object({
   // dispensada na Troca.
   paymentProofsBase64: z.array(z.string()).max(5, "Máximo de 5 comprovantes.").optional(),
 })
+  // Comprovante de pagamento dispensado quando o tipo isenta anexo
+  // (Troca ou Doação).
   .refine(
-    (d) => isTroca(d.orderTypeName) || !!(d.paymentProofsBase64 && d.paymentProofsBase64.length > 0),
+    (d) => isAnexoDispensavel(d.orderTypeName) || !!(d.paymentProofsBase64 && d.paymentProofsBase64.length > 0),
     { message: "Anexe o comprovante de pagamento.", path: ["paymentProofsBase64"] },
   )
-  // "Valor Total do Pedido" obrigatorio (> 0), EXCETO na Troca.
+  // "Valor Total do Pedido" obrigatorio (> 0), EXCETO Troca e Doação.
   .refine(
-    (d) => isTroca(d.orderTypeName) || d.orderValue > 0,
+    (d) => isAnexoDispensavel(d.orderTypeName) || d.orderValue > 0,
     { message: "Informe o valor total do pedido.", path: ["orderValue"] },
   );
 
-// "Troca" dispensa anexo (NF e comprovante). O tipo cadastrado é exatamente
-// "4 - Troca"; a comparação é tolerante a acentos/caixa/espaços.
+// "Troca" dispensa anexo (NF e comprovante) E pula o Financeiro. O tipo
+// cadastrado é exatamente "4 - Troca"; a comparação é tolerante a
+// acentos/caixa/espaços.
 export function isTroca(orderTypeName?: string | null): boolean {
   return (orderTypeName ?? "").trim().toLowerCase() === "4 - troca";
+}
+
+// "Doação" PASSA pelo Financeiro normalmente, mas dispensa comprovante e Nota
+// Fiscal (e, na aprovação, também CNPJ/forma/banco). O tipo cadastrado é
+// exatamente "9 - Doação"; comparação tolerante a acentos/caixa/espaços.
+export function isDoacao(orderTypeName?: string | null): boolean {
+  return normalize(orderTypeName) === normalize("9 - Doação");
+}
+
+// Isenção de ANEXO (comprovante de pagamento + Nota Fiscal). Vale para Troca e
+// Doação. NÃO implica pular o Financeiro nem dispensar o valor — para isso,
+// use isTroca diretamente.
+export function isAnexoDispensavel(orderTypeName?: string | null): boolean {
+  return isTroca(orderTypeName) || isDoacao(orderTypeName);
+}
+
+// Normaliza para comparação tolerante a acentos, caixa e espaços.
+function normalize(s?: string | null): string {
+  return (s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
 }
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

@@ -4,7 +4,7 @@ import { columnsForFlow } from "@/lib/order-flow";
 import { KanbanBoard, type KanbanCard } from "@/components/shared/kanban-board";
 import { StorePicker } from "@/components/shared/store-picker";
 import { loadStageLimits, loadStatusSince } from "@/lib/stage-limits";
-import { isTroca } from "@/lib/validations/order";
+import { isAnexoDispensavel } from "@/lib/validations/order";
 import { formatBRL } from "@/lib/utils";
 
 // Fluxo de pedidos GLOBAL: Gestão, Vendas e Financeiro.
@@ -86,7 +86,7 @@ export default async function FluxoPage({
     approvedByFinance: o.comandaNumber != null,
     hasInvoice: o.invoicePath != null,
     hasPaymentProof: o.paymentProofPath != null,
-    isExchange: isTroca(o.orderType?.name),
+    isExchange: isAnexoDispensavel(o.orderType?.name),
     deliveredAt: deliveredAtById.get(o.id) ?? null,
     statusSince: statusSince.get(o.id) ?? null,
   }));
