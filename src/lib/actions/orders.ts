@@ -216,6 +216,7 @@ export async function updateOrder(args: {
   orderNumber?: string;
   customerId?: string;
   storeId?: string;
+  originStoreId?: string;
   orderTypeId?: string;
   operationId?: string;
   paymentMethodId?: string;
@@ -273,13 +274,17 @@ export async function updateOrder(args: {
     // "Forma de Pagamento" e "Banco" sao do FINANCEIRO (definidos na Analise
     // de Pedidos). A vendedora nunca os altera, mesmo que o payload venha
     // adulterado — aqui simplesmente ignoramos o que ela mandar.
-    const podeMexerNoFinanceiro = session.role === "GESTAO";
+    const podeMexerNoFinanceiro = session.role === "GESTAO" || session.role === "FINANCEIRO";
 
     await prisma.order.update({
       where: { id: args.id },
       data: {
         customerId: args.customerId ?? order.customerId,
         storeId: args.storeId ?? order.storeId,
+        // Loja de Origem: string vazia limpa o vínculo; undefined mantém.
+        originStoreId: args.originStoreId === undefined
+          ? order.originStoreId
+          : (args.originStoreId ? args.originStoreId : null),
         orderTypeId: args.orderTypeId ?? order.orderTypeId,
         operationId: args.operationId ?? order.operationId,
         // FKs opcionais: string vazia vira NULL (senão a FK quebra).

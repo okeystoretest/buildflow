@@ -98,8 +98,14 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
         </div>
       )}
 
-      {/* Ações do fluxo */}
+      {/* Ações do fluxo. Hierarquia visual: "Ver detalhes" no topo (primária),
+          ações do fluxo (Atribuir/Iniciar/Concluir) abaixo (secundárias). */}
       <div className="mt-3 flex flex-col gap-2">
+        {/* Ver detalhes (somente leitura, sem histórico/valores) — posição primária. */}
+        <Button variant="outline" size="sm" className="w-full" onClick={() => setDetail(true)}>
+          <Eye className="mr-2 h-4 w-4" /> Ver detalhes
+        </Button>
+
         {podeAtribuir && (
           <Button variant="brand" size="lg" className="w-full" onClick={atribuir} disabled={pending}>
             <Hand className="mr-2 h-5 w-5" />
@@ -129,11 +135,6 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
             <CheckCircle2 className="h-5 w-5" /> Entregue
           </div>
         )}
-
-        {/* Ver detalhes (somente leitura, sem histórico/valores). */}
-        <Button variant="outline" size="sm" className="w-full" onClick={() => setDetail(true)}>
-          <Eye className="mr-2 h-4 w-4" /> Ver detalhes
-        </Button>
       </div>
 
       {error && <p className="mt-2 text-sm font-medium text-destructive">{error}</p>}

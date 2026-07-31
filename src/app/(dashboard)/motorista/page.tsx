@@ -13,9 +13,17 @@ const OPEN_COLUMN = "AGUARDANDO_ENTREGADOR" as const;
 export default async function MotoristaPage() {
   const session = await requireRole(["MOTORISTA", "GESTAO"]);
 
-  // 1) Pedidos EM ABERTO (ENVIADO sem driver): visíveis a TODOS os motoristas.
+  // 1) Pedidos EM ABERTO (ENVIADO, sem motorista e SEM código de rastreio):
+  //    visíveis a TODOS os motoristas, aguardando atribuição manual.
+  //    Regra de exclusão: pedido com "Código de Rastreio" preenchido segue por
+  //    transportadora — não é entrega de motorista — e sai deste Kanban.
   const openOrders = await prisma.order.findMany({
-    where: { status: "ENVIADO", delivery: { driverId: null } },
+    where: {
+      status: "ENVIADO",
+      delivery: { driverId: null },
+      // Sem rastreio: cobre tanto NULL quanto string vazia por segurança.
+      OR: [{ trackingCode: null }, { trackingCode: "" }],
+    },
     include: { customer: true },
     orderBy: { updatedAt: "desc" },
   });

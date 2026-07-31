@@ -1,4 +1,5 @@
 import { publish, type RealtimeEvent } from "@/lib/realtime/bus";
+import { sendPushToRole } from "@/lib/push";
 
 /**
  * Fachada de emissao para as Server Actions. Concentra a regra de "quem recebe
@@ -29,6 +30,21 @@ export function emitOrderCreated(args: {
     notifyRoles: args.notifyFinance ? ["FINANCEIRO"] : [],
   };
   publish(evt);
+
+  // Web Push a nível de SO para o FINANCEIRO — chega mesmo com o navegador
+  // minimizado/fechado (via Service Worker). Complementa a Web Notification em
+  // foco disparada pelo board. Fire-and-forget: nunca bloqueia nem quebra a
+  // criação do pedido.
+  if (args.notifyFinance) {
+    const numero = args.orderNumber ? `#${args.orderNumber}` : "novo";
+    const cliente = args.customerName ? ` — ${args.customerName}` : "";
+    void sendPushToRole("FINANCEIRO", {
+      title: "Novo pedido para análise",
+      body: `Pedido ${numero}${cliente} aguardando aprovação financeira.`,
+      url: "/financeiro",
+      tag: `order-${args.orderId}`,
+    }).catch((err) => console.error("[push] envio falhou:", err));
+  }
 }
 
 /**

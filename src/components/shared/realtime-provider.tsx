@@ -165,10 +165,61 @@ export function RealtimeProvider({ role }: { role: Role }) {
  * Observacao: a permissao so e concedida/efetiva em HTTPS. Em HTTP o botao pode
  * aparecer, mas o navegador nao entrega a notificacao.
  */
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+/**
+ * Registra o Service Worker e cria (ou reaproveita) a inscrição de Web Push,
+ * enviando-a ao servidor. É o que habilita a notificação a nível de SO — chega
+ * mesmo com o navegador minimizado. Requer HTTPS e a chave VAPID pública.
+ * Silencioso se indisponível (cai na Web Notification em foco).
+ */
+async function registerPush(): Promise<void> {
+  const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (
+    typeof window === "undefined" ||
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window) ||
+    !vapid
+  ) {
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        // cast: a tipagem de lib-dom varia entre versões (Uint8Array vs BufferSource).
+        applicationServerKey: urlBase64ToUint8Array(vapid) as unknown as BufferSource,
+      });
+    }
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sub),
+    });
+  } catch (err) {
+    console.error("[push] falha ao registrar:", err);
+  }
+}
+
 function NotificationOptIn() {
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">(() =>
     typeof Notification === "undefined" ? "unsupported" : Notification.permission,
   );
+
+  // Permissao ja concedida antes: garante SW + inscricao (idempotente).
+  useEffect(() => {
+    if (perm === "granted") void registerPush();
+  }, [perm]);
 
   if (perm === "unsupported" || perm === "granted" || perm === "denied") {
     return null;
@@ -178,6 +229,7 @@ function NotificationOptIn() {
     try {
       const result = await Notification.requestPermission();
       setPerm(result);
+      if (result === "granted") await registerPush();
     } catch {
       /* ignore */
     }

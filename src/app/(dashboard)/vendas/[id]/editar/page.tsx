@@ -12,7 +12,7 @@ import { EditarPedidoForm } from "./form";
 export default async function EditarPedidoPage({ params }: { params: { id: string } }) {
   const session = await requireRole(["GESTAO", "VENDAS", "FINANCEIRO"]);
 
-  const [order, stores, orderTypes, operations, paymentMethods, shippingMethods, banks, campaigns] =
+  const [order, stores, orderTypes, operations, paymentMethods, shippingMethods, banks, campaigns, me, allOriginStores] =
     await Promise.all([
       prisma.order.findUnique({
         where: { id: params.id },
@@ -29,9 +29,24 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
       prisma.shippingMethod.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.bank.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.campaign.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+      prisma.user.findUnique({
+        where: { id: session.userId },
+        include: { originStores: { where: { active: true }, orderBy: { name: "asc" } } },
+      }),
+      prisma.originStore.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     ]);
 
   if (!order) notFound();
+
+  // Paridade com o Novo Pedido: VENDAS vê apenas as lojas de origem atreladas;
+  // GESTAO e FINANCEIRO veem todas as ativas. Garante que a de origem do pedido
+  // apareça na lista mesmo que não esteja mais atrelada ao usuário.
+  const originStoresBase = session.role === "VENDAS" ? (me?.originStores ?? []) : allOriginStores;
+  const originStores = [...originStoresBase];
+  if (order.originStoreId && !originStores.some((s) => s.id === order.originStoreId)) {
+    const atual = allOriginStores.find((s) => s.id === order.originStoreId);
+    if (atual) originStores.unshift(atual);
+  }
 
   if (session.role === "VENDAS" && order.sellerId !== session.userId) {
     notFound();
@@ -49,6 +64,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
               orderNumber: order.orderNumber,
               customerId: order.customerId,
               storeId: order.storeId,
+              originStoreId: order.originStoreId ?? "",
               orderTypeId: order.orderTypeId,
               operationId: order.operationId,
               paymentMethodId: order.paymentMethodId ?? "",
@@ -70,6 +86,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
             existingProofs={order.paymentProofs.map((p) => ({ id: p.id, filePath: p.filePath }))}
             selectedCustomer={order.customer ? { id: order.customer.id, code: order.customer.code, name: order.customer.name } : null}
             stores={stores.map((s) => ({ id: s.id, name: s.name }))}
+            originStores={originStores.map((s) => ({ id: s.id, name: s.name }))}
             orderTypes={orderTypes.map((s) => ({ id: s.id, name: s.name }))}
             operations={sortOperationsByCode(operations).map((o) => ({ id: o.id, name: `${o.code} - ${o.name}` }))}
             paymentMethods={paymentMethods.map((p) => ({ id: p.id, name: p.name }))}

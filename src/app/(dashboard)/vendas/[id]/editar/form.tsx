@@ -17,7 +17,7 @@ interface Opt { id: string; name: string; }
 interface OrderData {
   id: string;
   orderNumber: string;
-  customerId: string; storeId: string; orderTypeId: string; operationId: string;
+  customerId: string; storeId: string; originStoreId: string; orderTypeId: string; operationId: string;
   paymentMethodId: string; shippingMethodId: string; bankId: string;
   orderValue: number; freight: number; notes: string; paymentNotes: string;
   campaignId: string; itemCount: number;
@@ -30,13 +30,13 @@ function emptyCampItem(): CampaignItemData { return { campaignId: "", reference:
 const MAX_PROOFS = 5;
 
 export function EditarPedidoForm({
-  order, existingProofs, selectedCustomer, stores, orderTypes, operations,
+  order, existingProofs, selectedCustomer, stores, originStores, orderTypes, operations,
   paymentMethods, shippingMethods, banks, campaigns, canEditFinance = false,
 }: {
   order: OrderData;
   existingProofs: ExistingProof[];
   selectedCustomer: CustomerOpt | null;
-  stores: Opt[]; orderTypes: Opt[]; operations: Opt[];
+  stores: Opt[]; originStores: Opt[]; orderTypes: Opt[]; operations: Opt[];
   paymentMethods: Opt[]; shippingMethods: Opt[]; banks: Opt[]; campaigns: Opt[];
   canEditFinance?: boolean;
 }) {
@@ -47,6 +47,7 @@ export function EditarPedidoForm({
   const [orderNumber, setOrderNumber] = useState(order.orderNumber);
   const [customerId, setCustomerId] = useState(order.customerId);
   const [storeId, setStoreId] = useState(order.storeId);
+  const [originStoreId, setOriginStoreId] = useState(order.originStoreId);
   const [orderTypeId, setOrderTypeId] = useState(order.orderTypeId);
   const [operationId, setOperationId] = useState(order.operationId);
   const [paymentMethodId, setPaymentMethodId] = useState(order.paymentMethodId);
@@ -123,7 +124,7 @@ export function EditarPedidoForm({
       const res = await updateOrder({
         id: order.id,
         orderNumber,
-        customerId, storeId, orderTypeId, operationId,
+        customerId, storeId, originStoreId, orderTypeId, operationId,
         shippingMethodId,
         ...(canEditFinance ? { paymentMethodId, bankId: bankId || undefined } : {}),
         orderValue, freight, notes, paymentNotes,
@@ -146,7 +147,7 @@ export function EditarPedidoForm({
 
   // Valor obrigatório (> 0), EXCETO Troca e Doação.
   const valorOk = anexoDispensavel || orderValue > 0;
-  const podeSalvar = orderNumber && storeId && orderTypeId && operationId && customerId
+  const podeSalvar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId
     && shippingMethodId && valorOk && campaignOk && anexoOk;
 
   return (
@@ -157,8 +158,18 @@ export function EditarPedidoForm({
           <Input value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="ex: 1024" />
         </div>
         <Select label="Loja" value={storeId} onChange={setStoreId} options={stores} />
+        {originStores.length > 0 ? (
+          <Select label="Loja de Origem" value={originStoreId} onChange={setOriginStoreId} options={originStores} placeholder="Selecione..." />
+        ) : (
+          <div className="space-y-1.5">
+            <Label>Loja de Origem</Label>
+            <div className="flex h-10 items-center rounded-lg border border-destructive/40 bg-destructive/5 px-3 text-sm text-destructive">
+              Nenhuma loja atrelada ao seu usuário.
+            </div>
+          </div>
+        )}
         <Select label="Tipo de Pedido" value={orderTypeId} onChange={setOrderTypeId} options={orderTypes} />
-        <Select label="Operação" value={operationId} onChange={setOperationId} options={operations} />
+        <Select label="Código da Operação" value={operationId} onChange={setOperationId} options={operations} />
         {canEditFinance && (
           <Select label="Forma de Pagamento" value={paymentMethodId} onChange={setPaymentMethodId} options={paymentMethods} placeholder="Selecione..." />
         )}

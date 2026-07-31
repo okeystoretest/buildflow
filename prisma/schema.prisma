@@ -64,8 +64,26 @@ model User {
   // "Lojas de Origem" atreladas ao usuario (max 2, validado na action).
   // Usado por VENDAS para escopo de criacao e por quem opera o fluxo por loja.
   originStores   OriginStore[]  @relation("UserOriginStores")
+  pushSubscriptions PushSubscription[]
 
   @@index([role])
+}
+
+// Inscrição de Web Push (Push API) de um dispositivo/navegador do usuário.
+// Guarda o endpoint do serviço de push do navegador + chaves de criptografia
+// (p256dh/auth) necessárias para o web-push cifrar a mensagem. Uma por
+// dispositivo; o mesmo usuário pode ter várias (celular, desktop, etc.).
+// NÃO guardamos payload aqui — só o "endereço" para onde enviar o push.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // ===========================================================================
