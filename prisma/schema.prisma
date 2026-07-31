@@ -310,6 +310,7 @@ model Order {
   financeIssueResolvedAt DateTime?
 
   items         OrderItem[]
+  campaignItems CampaignItem[]
   paymentProofs OrderPaymentProof[]
   financeProofs OrderFinanceProof[]
   delivery      Delivery?
@@ -488,6 +489,30 @@ model Campaign {
 
   orders Order[]
   goals  SalesGoal[]
+  items  CampaignItem[]
+}
+
+// Item de campanha lançado dentro de um pedido. Permite MÚLTIPLAS referências
+// de campanha por pedido, cada uma com sua quantidade e valor próprios.
+// Substitui a semântica antiga do par (Order.campaignId + Order.itemCount),
+// que só comportava UMA campanha por pedido. Os campos legados no Order são
+// mantidos por compatibilidade e alimentados com os agregados destes itens.
+model CampaignItem {
+  id        String   @id @default(cuid())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  campaignId String
+  // "Referência" da peça de campanha (texto livre informado no pedido).
+  reference String
+  quantity  Int      @default(0)
+  // Valor (R$) registrado individualmente para este item de campanha.
+  // É esta soma que alimenta a coluna "Valor" no Rank > Performance na Campanha.
+  value     Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([campaignId])
 }
 
 // ===========================================================================

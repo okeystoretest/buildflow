@@ -10,15 +10,19 @@ import { VendaRowActions } from "./row-actions";
 import { VendasBusca } from "./busca-client";
 import type { Prisma } from "@prisma/client";
 
+const PAGE_SIZE = 10; // exibe apenas as ultimas 10 vendas por pagina
+
 export default async function VendasPage({
   searchParams,
 }: {
-  searchParams?: { busca?: string };
+  searchParams?: { busca?: string; page?: string };
 }) {
-  const session = await requireRole(["VENDAS", "GESTAO"]);
-  const isGestao = session.role === "GESTAO";
+  const session = await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
+  // GESTAO e FINANCEIRO veem TODOS os pedidos; VENDAS ve apenas os proprios.
+  const veTudo = session.role === "GESTAO" || session.role === "FINANCEIRO";
 
   const busca = searchParams?.busca?.trim() || "";
+  const page = Math.max(1, Number(searchParams?.page) || 1);
   // Busca por Numero do Pedido OU Comanda (case-insensitive, parcial).
   const buscaFilter: Prisma.OrderWhereInput = busca
     ? {
@@ -29,18 +33,34 @@ export default async function VendasPage({
       }
     : {};
 
-  // Restricao de escopo: vendedora so ve os proprios pedidos.
-  // Pedidos CONCLUIDO saem daqui e ficam so no Historico.
+  // Restricao de escopo: VENDAS so ve os proprios pedidos; GESTAO/FINANCEIRO
+  // veem todos. Pedidos CONCLUIDO saem daqui e ficam so no Historico.
+  const where: Prisma.OrderWhereInput = {
+    status: { not: "CONCLUIDO" },
+    ...(veTudo ? {} : { sellerId: session.userId }),
+    ...buscaFilter,
+  };
+
+  // Paginacao: 10 por pagina (as ultimas vendas primeiro).
+  const totalOrders = await prisma.order.count({ where });
+  const totalPages = Math.max(1, Math.ceil(totalOrders / PAGE_SIZE));
+  const pageSafe = Math.min(page, totalPages);
   const orders = await prisma.order.findMany({
-    where: {
-      status: { not: "CONCLUIDO" },
-      ...(isGestao ? {} : { sellerId: session.userId }),
-      ...buscaFilter,
-    },
+    where,
     include: { customer: true },
     orderBy: { createdAt: "desc" },
-    take: 100,
+    skip: (pageSafe - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
   });
+
+  // Preserva a busca ao paginar.
+  const pageHref = (p: number) => {
+    const sp = new URLSearchParams();
+    if (busca) sp.set("busca", busca);
+    if (p > 1) sp.set("page", String(p));
+    const qs = sp.toString();
+    return qs ? `/vendas?${qs}` : "/vendas";
+  };
 
   return (
     <div className="space-y-6">
@@ -57,7 +77,7 @@ export default async function VendasPage({
       <VendasBusca defaultBusca={busca} />
 
       <Card>
-        <CardHeader><CardTitle>Meus pedidos</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{veTudo ? "Pedidos" : "Meus pedidos"}</CardTitle></CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -92,7 +112,7 @@ export default async function VendasPage({
                     <td className="py-2 pr-4">{formatBRL(o.total.toString())}</td>
                     <td className="py-2 pr-4"><StatusBadge status={o.status} /></td>
                     <td className="py-2 pr-4">
-                      <VendaRowActions orderId={o.id} orderNumber={o.orderNumber} canDelete={isGestao} issue={issueAtivo} />
+                      <VendaRowActions orderId={o.id} orderNumber={o.orderNumber} canDelete={session.role === "GESTAO"} issue={issueAtivo} />
                     </td>
                   </tr>
                   );
@@ -105,6 +125,26 @@ export default async function VendasPage({
               </tbody>
             </table>
           </div>
+
+          {totalOrders > 0 && (
+            <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+              <span>
+                Página {pageSafe} de {totalPages} · {totalOrders} pedido{totalOrders === 1 ? "" : "s"}
+              </span>
+              <div className="flex gap-2">
+                {pageSafe > 1 ? (
+                  <Button asChild variant="outline" size="sm"><Link href={pageHref(pageSafe - 1)}>Anterior</Link></Button>
+                ) : (
+                  <Button variant="outline" size="sm" disabled>Anterior</Button>
+                )}
+                {pageSafe < totalPages ? (
+                  <Button asChild variant="outline" size="sm"><Link href={pageHref(pageSafe + 1)}>Próxima</Link></Button>
+                ) : (
+                  <Button variant="outline" size="sm" disabled>Próxima</Button>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

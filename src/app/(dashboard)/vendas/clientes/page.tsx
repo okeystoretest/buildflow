@@ -14,7 +14,7 @@ export default async function ClientesPage({
 }: {
   searchParams: { page?: string; q?: string };
 }) {
-  await requireRole(["VENDAS", "GESTAO"]);
+  await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
   const page = Math.max(1, Number(searchParams.page ?? 1) || 1);
   const q = (searchParams.q ?? "").trim();

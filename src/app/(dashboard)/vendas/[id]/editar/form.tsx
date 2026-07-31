@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import { X, Plus } from "lucide-react";
 import { updateOrder } from "@/lib/actions/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { CustomerCombobox, type CustomerOpt } from "@/components/shared/customer
 import { prepareProofFile } from "@/lib/client-image";
 import { isAnexoDispensavel } from "@/lib/validations/order";
 import { formatBRL } from "@/lib/utils";
+import { CampaignItemRow, type CampaignItemData } from "@/components/shared/campaign-item-row";
 
 interface Opt { id: string; name: string; }
 interface OrderData {
@@ -20,8 +21,11 @@ interface OrderData {
   paymentMethodId: string; shippingMethodId: string; bankId: string;
   orderValue: number; freight: number; notes: string; paymentNotes: string;
   campaignId: string; itemCount: number;
+  campaignItems: CampaignItemData[];
 }
 interface ExistingProof { id: string; filePath: string; }
+
+function emptyCampItem(): CampaignItemData { return { campaignId: "", reference: "", quantity: 0, value: 0 }; }
 
 const MAX_PROOFS = 5;
 
@@ -53,10 +57,20 @@ export function EditarPedidoForm({
   const [notes, setNotes] = useState(order.notes);
   const [paymentNotes, setPaymentNotes] = useState(order.paymentNotes);
 
-  // Campanha
-  const [inCampaign, setInCampaign] = useState(!!order.campaignId);
-  const [campaignId, setCampaignId] = useState(order.campaignId);
-  const [itemCount, setItemCount] = useState(order.itemCount);
+  // Campanha — lista dinâmica de itens. Pré-carrega os itens existentes;
+  // se não houver, começa com uma linha vazia quando o toggle é ligado.
+  const [inCampaign, setInCampaign] = useState(order.campaignItems.length > 0 || !!order.campaignId);
+  const [campItems, setCampItems] = useState<CampaignItemData[]>(
+    order.campaignItems.length > 0 ? order.campaignItems : [emptyCampItem()],
+  );
+
+  function updateItem(idx: number, patch: Partial<CampaignItemData>) {
+    setCampItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  }
+  function addItem() { setCampItems((prev) => [...prev, emptyCampItem()]); }
+  function removeItem(idx: number) {
+    setCampItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
+  }
 
   // Comprovantes: existentes (com opcao de remover) + novos a adicionar.
   const [existing, setExisting] = useState<ExistingProof[]>(existingProofs);
@@ -97,7 +111,10 @@ export function EditarPedidoForm({
   const total = (orderValue || 0) + (freight || 0);
   const orderTypeName = orderTypes.find((t) => t.id === orderTypeId)?.name ?? "";
   const anexoDispensavel = isAnexoDispensavel(orderTypeName);
-  const campaignOk = !inCampaign || (campaignId && itemCount > 0);
+  const campaignOk =
+    !inCampaign ||
+    (campItems.length > 0 &&
+      campItems.every((it) => it.campaignId && it.reference.trim() && it.quantity > 0));
   const anexoOk = anexoDispensavel || totalProofs > 0;
 
   function save() {
@@ -110,8 +127,15 @@ export function EditarPedidoForm({
         shippingMethodId,
         ...(canEditFinance ? { paymentMethodId, bankId: bankId || undefined } : {}),
         orderValue, freight, notes, paymentNotes,
-        campaignId: inCampaign ? campaignId : null,
-        itemCount: inCampaign ? itemCount : 0,
+        // Lista de itens de campanha substitui o conjunto atual no servidor.
+        campaignItems: inCampaign
+          ? campItems.map((it) => ({
+              campaignId: it.campaignId,
+              reference: it.reference.trim(),
+              quantity: it.quantity,
+              value: it.value,
+            }))
+          : [],
         paymentProofsBase64: newProofs.length ? newProofs.map((p) => p.base64) : undefined,
         removeProofIds: removedIds.length ? removedIds : undefined,
       });
@@ -156,29 +180,31 @@ export function EditarPedidoForm({
         </div>
       </div>
 
-      {/* Campanha */}
+      {/* Campanha — peças de campanha (lista dinâmica de itens) */}
       <div className="rounded-lg border border-border p-4">
         <label className="flex cursor-pointer items-center gap-2">
           <input type="checkbox" className="h-4 w-4 accent-vendas"
             checked={inCampaign} onChange={(e) => setInCampaign(e.target.checked)}
             disabled={campaigns.length === 0} />
-          <span className="text-sm font-medium">Este pedido faz parte de uma campanha</span>
+          <span className="text-sm font-medium">Neste pedido, há peças de campanha?</span>
           {campaigns.length === 0 && <span className="text-xs text-muted-foreground">(nenhuma campanha ativa)</span>}
         </label>
         {inCampaign && (
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Campanha</Label>
-              <select className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                value={campaignId} onChange={(e) => setCampaignId(e.target.value)}>
-                <option value="">Selecione...</option>
-                {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Quantidade de itens</Label>
-              <Input type="number" min={1} value={itemCount || ""} onChange={(e) => setItemCount(Number(e.target.value))} placeholder="ex: 10" />
-            </div>
+          <div className="mt-3 space-y-3">
+            {campItems.map((it, idx) => (
+              <CampaignItemRow
+                key={idx}
+                item={it}
+                index={idx}
+                campaigns={campaigns}
+                canRemove={campItems.length > 1}
+                onChange={(patch) => updateItem(idx, patch)}
+                onRemove={() => removeItem(idx)}
+              />
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={addItem}>
+              <Plus className="mr-1.5 h-4 w-4" /> Adicionar Item
+            </Button>
           </div>
         )}
       </div>

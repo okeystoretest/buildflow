@@ -24,7 +24,7 @@ export default async function HistoricoPage({
 }: {
   searchParams: { comanda?: string; de?: string; ate?: string; page?: string };
 }) {
-  const session = await requireRole(["VENDAS", "GESTAO"]);
+  const session = await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
   // Padrao: mes atual.
   const de = searchParams.de || firstDayOfMonth();

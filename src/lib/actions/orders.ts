@@ -19,7 +19,7 @@ export async function createOrder(
   raw: unknown,
 ): Promise<ActionResult<{ id: string; orderNumber: string }>> {
   try {
-    const session = await requireRoleAction(["VENDAS", "GESTAO"]);
+    const session = await requireRoleAction(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
     const parsed = createOrderSchema.safeParse(raw);
     if (!parsed.success) {
@@ -59,10 +59,26 @@ export async function createOrder(
         : "AGUARDANDO_IMPRESSAO"
       : "EM_ANALISE";
 
-    // Se vinculado a campanha, exige quantidade de itens (volume).
-    const campaignId = input.campaignId || null;
-    if (campaignId && !(input.itemCount > 0)) {
+    // Campanha: a entrada agora é uma LISTA de itens (campaignItems), cada um
+    // com campanha, referência, quantidade e valor. Os campos legados do Order
+    // (campaignId/itemCount) são DERIVADOS dos itens para manter compatibilidade
+    // com o Rank (volume por campanha e metas continuam lendo itemCount):
+    //   - campaignId  = 1ª campanha dos itens (o par legado só comporta uma).
+    //   - itemCount   = soma das quantidades de TODOS os itens.
+    // A coluna "Valor" do Rank de Campanha passa a somar CampaignItem.value.
+    const campaignItems = input.campaignItems ?? [];
+    const campaignId = campaignItems[0]?.campaignId || input.campaignId || null;
+    const itemCount = campaignItems.length
+      ? campaignItems.reduce((a, it) => a + it.quantity, 0)
+      : input.itemCount;
+    if (campaignId && !(itemCount > 0)) {
       return actionError("Informe a quantidade de itens para a campanha.");
+    }
+    // Valida que todas as campanhas referenciadas existem e estão ativas.
+    if (campaignItems.length) {
+      const ids = [...new Set(campaignItems.map((it) => it.campaignId))];
+      const found = await prisma.campaign.count({ where: { id: { in: ids }, active: true } });
+      if (found !== ids.length) return actionError("Campanha inválida ou inativa em um dos itens.");
     }
 
     // Loja de Origem: se enviada, precisa existir, estar ativa e (para VENDAS)
@@ -100,7 +116,17 @@ export async function createOrder(
         notes: input.notes,
         paymentNotes: input.paymentNotes,
         campaignId,
-        itemCount: campaignId ? input.itemCount : 0,
+        itemCount: campaignId ? itemCount : 0,
+        campaignItems: campaignItems.length
+          ? {
+              create: campaignItems.map((it) => ({
+                campaignId: it.campaignId,
+                reference: it.reference,
+                quantity: it.quantity,
+                value: new Prisma.Decimal(it.value),
+              })),
+            }
+          : undefined,
         status: initialStatus,
         history: {
           create: {
@@ -202,14 +228,17 @@ export async function updateOrder(args: {
   // Campanha
   campaignId?: string | null;
   itemCount?: number;
+  // Itens de campanha (lista dinâmica). Quando enviado, SUBSTITUI o conjunto
+  // atual de itens do pedido (delete-all + recreate). undefined = não mexe.
+  campaignItems?: { campaignId: string; reference: string; quantity: number; value: number }[];
   // Novos comprovantes a ADICIONAR (ate 5 no total). Substituicao e feita
   // removendo os antigos via removeProofIds.
   paymentProofsBase64?: string[];
   removeProofIds?: string[];
 }): Promise<ActionResult<void>> {
   try {
-    // GESTAO edita qualquer pedido; VENDAS edita apenas os proprios.
-    const session = await requireRoleAction(["GESTAO", "VENDAS"]);
+    // GESTAO edita qualquer pedido; VENDAS/FINANCEIRO seguem a trava de escopo.
+    const session = await requireRoleAction(["GESTAO", "VENDAS", "FINANCEIRO"]);
     const order = await prisma.order.findUnique({ where: { id: args.id } });
     if (!order) return actionError("Pedido não encontrado.");
 
@@ -224,6 +253,22 @@ export async function updateOrder(args: {
     const orderValue = args.orderValue ?? Number(order.orderValue);
     const freight = args.freight ?? Number(order.freight);
     if (!(orderValue > 0)) return actionError("Valor do pedido inválido.");
+
+    // Campanha: se a lista de itens veio no payload, ela é a fonte de verdade.
+    // Os campos legados (campaignId/itemCount) são derivados dela.
+    const itemsProvided = args.campaignItems !== undefined;
+    const campaignItems = args.campaignItems ?? [];
+    if (itemsProvided && campaignItems.length) {
+      const ids = [...new Set(campaignItems.map((it) => it.campaignId))];
+      const found = await prisma.campaign.count({ where: { id: { in: ids }, active: true } });
+      if (found !== ids.length) return actionError("Campanha inválida ou inativa em um dos itens.");
+    }
+    const derivedCampaignId = itemsProvided
+      ? (campaignItems[0]?.campaignId ?? null)
+      : undefined;
+    const derivedItemCount = itemsProvided
+      ? campaignItems.reduce((a, it) => a + it.quantity, 0)
+      : undefined;
 
     // "Forma de Pagamento" e "Banco" sao do FINANCEIRO (definidos na Analise
     // de Pedidos). A vendedora nunca os altera, mesmo que o payload venha
@@ -257,15 +302,40 @@ export async function updateOrder(args: {
         paymentNotes: args.paymentNotes === undefined ? order.paymentNotes : args.paymentNotes,
         // Numero do pedido (editavel como no cadastro).
         orderNumber: args.orderNumber?.trim() ? args.orderNumber.trim() : order.orderNumber,
-        // Campanha: campaignId "" ou null limpa o vinculo.
-        campaignId: args.campaignId === undefined
-          ? order.campaignId
-          : (args.campaignId ? args.campaignId : null),
-        itemCount: args.campaignId
-          ? (args.itemCount ?? order.itemCount)
-          : (args.campaignId === undefined ? order.itemCount : 0),
+        // Campanha (legado derivado). Se veio lista de itens, ela manda; senão
+        // mantém o comportamento antigo baseado em campaignId/itemCount.
+        campaignId: itemsProvided
+          ? derivedCampaignId
+          : (args.campaignId === undefined
+              ? order.campaignId
+              : (args.campaignId ? args.campaignId : null)),
+        itemCount: itemsProvided
+          ? (derivedItemCount ?? 0)
+          : (args.campaignId
+              ? (args.itemCount ?? order.itemCount)
+              : (args.campaignId === undefined ? order.itemCount : 0)),
       },
     });
+
+    // Itens de campanha: substituição total (apaga os atuais e recria).
+    if (itemsProvided) {
+      await prisma.$transaction([
+        prisma.campaignItem.deleteMany({ where: { orderId: order.id } }),
+        ...(campaignItems.length
+          ? [
+              prisma.campaignItem.createMany({
+                data: campaignItems.map((it) => ({
+                  orderId: order.id,
+                  campaignId: it.campaignId,
+                  reference: it.reference,
+                  quantity: it.quantity,
+                  value: new Prisma.Decimal(it.value),
+                })),
+              }),
+            ]
+          : []),
+      ]);
+    }
 
     // Remocao de comprovantes marcados (substituicao de anexos).
     if (args.removeProofIds?.length) {

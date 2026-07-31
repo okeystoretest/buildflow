@@ -7,16 +7,20 @@ import { sortOperationsByCode } from "@/lib/utils";
 import { EditarPedidoForm } from "./form";
 
 // Edição de pedido — mesmo formulário do Novo Pedido (completo).
-// - GESTAO: edita qualquer pedido.
+// - GESTAO e FINANCEIRO: editam qualquer pedido.
 // - VENDAS: edita apenas os PROPRIOS pedidos (escopo verificado abaixo).
 export default async function EditarPedidoPage({ params }: { params: { id: string } }) {
-  const session = await requireRole(["GESTAO", "VENDAS"]);
+  const session = await requireRole(["GESTAO", "VENDAS", "FINANCEIRO"]);
 
   const [order, stores, orderTypes, operations, paymentMethods, shippingMethods, banks, campaigns] =
     await Promise.all([
       prisma.order.findUnique({
         where: { id: params.id },
-        include: { customer: true, paymentProofs: { orderBy: { createdAt: "asc" } } },
+        include: {
+          customer: true,
+          paymentProofs: { orderBy: { createdAt: "asc" } },
+          campaignItems: { orderBy: { createdAt: "asc" } },
+        },
       }),
       prisma.store.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.orderType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
@@ -56,6 +60,12 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
               paymentNotes: order.paymentNotes ?? "",
               campaignId: order.campaignId ?? "",
               itemCount: order.itemCount ?? 0,
+              campaignItems: order.campaignItems.map((it) => ({
+                campaignId: it.campaignId,
+                reference: it.reference,
+                quantity: it.quantity,
+                value: Number(it.value),
+              })),
             }}
             existingProofs={order.paymentProofs.map((p) => ({ id: p.id, filePath: p.filePath }))}
             selectedCustomer={order.customer ? { id: order.customer.id, code: order.customer.code, name: order.customer.name } : null}
@@ -66,7 +76,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
             shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name }))}
             banks={banks.map((b) => ({ id: b.id, name: b.name }))}
             campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
-            canEditFinance={session.role === "GESTAO"}
+            canEditFinance={session.role === "GESTAO" || session.role === "FINANCEIRO"}
           />
         </CardContent>
       </Card>

@@ -7,7 +7,7 @@ import { TasksBoard, type TaskCard } from "./tasks-board";
 // - VENDAS: ve/gerencia apenas as proprias tarefas.
 // - GESTAO: ve todas (com o nome da dona em cada card).
 export default async function TarefasPage() {
-  const session = await requireRole(["VENDAS", "GESTAO"]);
+  const session = await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
   const isGestao = session.role === "GESTAO";
 
   const tasks = await prisma.dailyTask.findMany({

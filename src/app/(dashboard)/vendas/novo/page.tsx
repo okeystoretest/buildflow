@@ -7,7 +7,7 @@ import { NovoPedidoForm } from "./form";
 
 export default async function NovoPedidoPage() {
 
-  const session = await requireRole(["VENDAS", "GESTAO"]);
+  const session = await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
   // NOTA: a lista de clientes NAO e carregada aqui. Com dezenas de milhares
   // de registros isso geraria um HTML gigante. O formulario usa o
@@ -32,9 +32,9 @@ export default async function NovoPedidoPage() {
       prisma.originStore.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     ]);
 
-  // VENDAS ve apenas as lojas atreladas; GESTAO ve todas as ativas.
+  // VENDAS ve apenas as lojas atreladas; GESTAO e FINANCEIRO veem todas as ativas.
   const originStores =
-    session.role === "GESTAO" ? allOriginStores : (me?.originStores ?? []);
+    session.role === "VENDAS" ? (me?.originStores ?? []) : allOriginStores;
 
   return (
     <div className="mx-auto max-w-5xl">

@@ -186,7 +186,7 @@ export function AuditarPedido({
     return (
       <div className="space-y-3">
         <div className="rounded-lg border border-financeiro/40 bg-financeiro/10 px-3 py-2 text-xs text-muted-foreground">
-          Pedido de <span className="font-semibold text-foreground">Doação</span>: dispensa comprovante, CNPJ, forma de pagamento e Nota Fiscal. Informe a comanda e aprove para seguir o fluxo.
+          Pedido de <span className="font-semibold text-foreground">Doação</span>: Informe a comanda e aprove para seguir o fluxo.
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">

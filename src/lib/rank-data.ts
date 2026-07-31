@@ -158,7 +158,10 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   const campaignsRaw = await prisma.campaign.findMany({
     where: { active: true },
     include: {
-      orders: { where: { comandaNumber: { not: null } }, include: { seller: true } },
+      orders: {
+        where: { comandaNumber: { not: null } },
+        include: { seller: true, campaignItems: true },
+      },
       goals: { where: { month, year }, include: { user: true } },
     },
     orderBy: { name: "asc" },
@@ -194,7 +197,13 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
       if (!noMes(o.createdAt)) continue;
       const cur = porVend.get(o.sellerId) ?? { nome: o.seller.name, scope: o.seller.salesModel ?? null, meta: 0, qtd: 0, valor: 0 };
       cur.qtd += o.itemCount ?? 0;
-      cur.valor += Number(o.total);
+      // REGRA DE NEGOCIO: a coluna "Valor" NAO usa mais o total do pedido.
+      // Agora soma os valores registrados individualmente nos itens de campanha
+      // DESTA campanha (CampaignItem.value). Pedidos antigos, sem itens, somam 0.
+      const itensDestaCampanha = (o.campaignItems ?? []).filter(
+        (it: any) => it.campaignId === c.id,
+      );
+      cur.valor += itensDestaCampanha.reduce((a: number, it: any) => a + Number(it.value), 0);
       porVend.set(o.sellerId, cur);
     }
     const rows: CampaignPerfRow[] = [...porVend.values()]

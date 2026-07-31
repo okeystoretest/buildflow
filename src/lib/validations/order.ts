@@ -22,8 +22,24 @@ export const createOrderSchema = z.object({
   // "Observacoes de Pagamento" (exclusivo do Financeiro).
   paymentNotes: z.string().max(1000).optional(),
   // Campanha opcional + quantidade de itens (volume) quando vinculado.
+  // LEGADO: mantidos por compatibilidade. A entrada real agora vem em
+  // `campaignItems` (múltiplas referências por pedido); estes campos passam a
+  // ser derivados dos itens na action (campaignId = 1ª campanha, itemCount = soma).
   campaignId: z.string().optional(),
   itemCount: z.coerce.number().int().nonnegative().default(0),
+  // Itens de campanha (lista dinâmica): cada linha tem campanha, referência,
+  // quantidade e valor próprios. Opcional; quando presente, cada item é validado.
+  campaignItems: z
+    .array(
+      z.object({
+        campaignId: z.string().min(1, "Selecione a campanha do item."),
+        reference: z.string().trim().min(1, "Informe a referência.").max(120),
+        quantity: z.coerce.number().int().positive("Quantidade deve ser > 0."),
+        value: z.coerce.number().nonnegative("Valor inválido.").default(0),
+      }),
+    )
+    .max(50, "Máximo de 50 itens de campanha.")
+    .optional(),
   // Nome do tipo de pedido (ex.: "Troca"). Usado para a regra de anexo.
   orderTypeName: z.string().optional(),
   // Comprovantes de pagamento (ate 5, cada um em data URL base64).

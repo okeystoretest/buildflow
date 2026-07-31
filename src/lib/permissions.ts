@@ -28,9 +28,14 @@ export interface OrderAccessInfo {
   originStoreId: string | null;
 }
 
-/** GESTAO enxerga e opera tudo, sem restricao. */
+/**
+ * GESTAO e FINANCEIRO enxergam e operam tudo, sem restricao de escopo.
+ * FINANCEIRO foi incluido por decisao de produto: o setor Financeiro passa a
+ * ter as MESMAS capacidades operacionais do modulo Vendas (ver/criar/editar
+ * qualquer pedido), alem da aprovacao financeira que ja exercia.
+ */
 export function isPrivileged(role: Role): boolean {
-  return role === "GESTAO";
+  return role === "GESTAO" || role === "FINANCEIRO";
 }
 
 /**
