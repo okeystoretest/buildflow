@@ -52,10 +52,10 @@ export interface RankPeriod {
 // janela de "semana atual" ativa.
 export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   // Comissão de campanha por ITEM, conforme o modelo de venda da vendedora.
-  // Regra de negócio: Varejo R$5,00/item · Atacado R$2,50/item.
+  // Regra de negócio: Varejo R$5,00/item · Atacado R$4,00/item.
   const COMISSAO_POR_ITEM: Record<"VAREJO" | "ATACADO", number> = {
     VAREJO: 5,
-    ATACADO: 2.5,
+    ATACADO: 4,
   };
 
   const now = new Date();
