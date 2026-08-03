@@ -117,6 +117,8 @@ export async function createOrder(
         paymentNotes: input.paymentNotes,
         campaignId,
         itemCount: campaignId ? itemCount : 0,
+        // Desconto só faz sentido quando há campanha; sem campanha, força false.
+        campaignDiscount: campaignId ? input.campaignDiscount === true : false,
         campaignItems: campaignItems.length
           ? {
               create: campaignItems.map((it) => ({
@@ -232,6 +234,8 @@ export async function updateOrder(args: {
   // Itens de campanha (lista dinâmica). Quando enviado, SUBSTITUI o conjunto
   // atual de itens do pedido (delete-all + recreate). undefined = não mexe.
   campaignItems?: { campaignId: string; reference: string; quantity: number; value: number }[];
+  // "Possui desconto?" do pedido de campanha. undefined = não mexe.
+  campaignDiscount?: boolean;
   // Novos comprovantes a ADICIONAR (ate 5 no total). Substituicao e feita
   // removendo os antigos via removeProofIds.
   paymentProofsBase64?: string[];
@@ -319,6 +323,12 @@ export async function updateOrder(args: {
           : (args.campaignId
               ? (args.itemCount ?? order.itemCount)
               : (args.campaignId === undefined ? order.itemCount : 0)),
+        // Desconto: se veio lista de itens, o novo estado do checkbox manda
+        // (e sem campanha resultante, zera para false). Se a lista não veio,
+        // só altera quando o campo foi explicitamente enviado.
+        campaignDiscount: itemsProvided
+          ? (derivedCampaignId ? args.campaignDiscount === true : false)
+          : (args.campaignDiscount === undefined ? order.campaignDiscount : args.campaignDiscount === true),
       },
     });
 

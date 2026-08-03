@@ -50,7 +50,18 @@ export function RealtimeProvider({ role }: { role: Role }) {
     setMounted(true);
   }, []);
 
-  const wantsNotifications = role === "FINANCEIRO";
+  // Papéis que recebem alerta ativo de novos itens:
+  //  - FINANCEIRO: novo pedido para análise (→ /financeiro)
+  //  - MOTORISTA: entrega disponível para coleta (→ /motorista)
+  const wantsNotifications = role === "FINANCEIRO" || role === "MOTORISTA";
+
+  // Conteúdo da Web Notification em foco, por papel. O Web Push a nível de SO
+  // (via Service Worker) monta o próprio payload no servidor; isto aqui é só o
+  // pop-up com a aba aberta.
+  const notifConfig =
+    role === "MOTORISTA"
+      ? { title: "Entrega disponível para coleta", url: "/motorista", verbo: "aguardando entregador" }
+      : { title: "Novo pedido para análise", url: "/financeiro", verbo: "aguardando aprovação financeira" };
 
   // Debounce do refresh: varias mudancas numa rajada => um unico refresh.
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,17 +84,17 @@ export function RealtimeProvider({ role }: { role: Role }) {
       }
       const numero = evt.orderNumber ? `#${evt.orderNumber}` : "novo";
       const cliente = evt.customerName ? ` — ${evt.customerName}` : "";
-      const n = new Notification("Novo pedido para análise", {
-        body: `Pedido ${numero}${cliente} aguardando aprovação financeira.`,
+      const n = new Notification(notifConfig.title, {
+        body: `Pedido ${numero}${cliente} ${notifConfig.verbo}.`,
         tag: `order-${evt.orderId}`,
         icon: "/icon.svg",
       });
       n.onclick = () => {
         window.focus();
-        window.location.href = "/financeiro";
+        window.location.href = notifConfig.url;
       };
     },
-    [wantsNotifications],
+    [wantsNotifications, notifConfig],
   );
 
   useEffect(() => {

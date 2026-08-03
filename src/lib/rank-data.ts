@@ -51,12 +51,23 @@ export interface RankPeriod {
 // (do dia 1 ao ultimo dia do mes). Sem period, usa o mes corrente com a
 // janela de "semana atual" ativa.
 export async function computeRankData(period?: RankPeriod): Promise<RankData> {
-  // Comissão de campanha por ITEM, conforme o modelo de venda da vendedora.
-  // Regra de negócio: Varejo R$5,00/item · Atacado R$4,00/item.
-  const COMISSAO_POR_ITEM: Record<"VAREJO" | "ATACADO", number> = {
-    VAREJO: 5,
-    ATACADO: 4,
+  // Comissão de campanha por ITEM, conforme o modelo de venda da vendedora E se
+  // o pedido foi marcado com desconto ("Possui desconto?" no formulário).
+  // Regra de negócio:
+  //             │ Sem desconto │ Com desconto
+  //   Atacado   │    R$4,00    │    R$2,00
+  //   Varejo    │    R$5,00    │    R$2,50
+  // A dimensão do desconto é POR PEDIDO (Order.campaignDiscount), então a
+  // comissão é apurada pedido a pedido — não dá para aplicar uma taxa única
+  // sobre o total de itens do vendedor.
+  const COMISSAO_POR_ITEM: Record<"VAREJO" | "ATACADO", { normal: number; desconto: number }> = {
+    VAREJO: { normal: 5, desconto: 2.5 },
+    ATACADO: { normal: 4, desconto: 2 },
   };
+  const taxaItem = (
+    scope: "VAREJO" | "ATACADO" | null,
+    desconto: boolean,
+  ): number => (scope ? (desconto ? COMISSAO_POR_ITEM[scope].desconto : COMISSAO_POR_ITEM[scope].normal) : 0);
 
   const now = new Date();
   const curMonth = now.getMonth() + 1;
@@ -185,18 +196,24 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
 
   // Performance por campanha (linha por vendedor com meta vinculada ou venda).
   const campaignPerf: CampaignPerf[] = campaignsRaw.map((c: any) => {
-    const porVend = new Map<string, { nome: string; scope: "VAREJO" | "ATACADO" | null; meta: number; qtd: number; valor: number }>();
+    // `comissao` acumula pedido a pedido porque a taxa depende do desconto de
+    // CADA pedido (Order.campaignDiscount), não de um valor fixo por vendedor.
+    const porVend = new Map<string, { nome: string; scope: "VAREJO" | "ATACADO" | null; meta: number; qtd: number; valor: number; comissao: number }>();
     // inicia pelos vendedores com meta vinculada a esta campanha (meta = itens)
     for (const g of c.goals) {
-      const cur = porVend.get(g.userId) ?? { nome: g.user.name, scope: g.user.salesModel ?? null, meta: 0, qtd: 0, valor: 0 };
+      const cur = porVend.get(g.userId) ?? { nome: g.user.name, scope: g.user.salesModel ?? null, meta: 0, qtd: 0, valor: 0, comissao: 0 };
       cur.meta += g.targetItems ?? 0;
       porVend.set(g.userId, cur);
     }
     // soma pedidos vinculados a campanha, apenas os do mes selecionado
     for (const o of c.orders) {
       if (!noMes(o.createdAt)) continue;
-      const cur = porVend.get(o.sellerId) ?? { nome: o.seller.name, scope: o.seller.salesModel ?? null, meta: 0, qtd: 0, valor: 0 };
-      cur.qtd += o.itemCount ?? 0;
+      const cur = porVend.get(o.sellerId) ?? { nome: o.seller.name, scope: o.seller.salesModel ?? null, meta: 0, qtd: 0, valor: 0, comissao: 0 };
+      const qtdPedido = o.itemCount ?? 0;
+      cur.qtd += qtdPedido;
+      // Comissão do pedido = itens × taxa do escopo da vendedora, aplicando o
+      // valor reduzido quando o pedido foi marcado com desconto.
+      cur.comissao += qtdPedido * taxaItem(cur.scope, o.campaignDiscount === true);
       // REGRA DE NEGOCIO: a coluna "Valor" NAO usa mais o total do pedido.
       // Agora soma os valores registrados individualmente nos itens de campanha
       // DESTA campanha (CampaignItem.value). Pedidos antigos, sem itens, somam 0.
@@ -209,10 +226,7 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     const rows: CampaignPerfRow[] = [...porVend.values()]
       .map((v) => {
         const pct = v.meta > 0 ? Math.round((v.qtd / v.meta) * 100) : 0;
-        // Comissão = itens da campanha × taxa do escopo da vendedora.
-        const taxa = v.scope ? COMISSAO_POR_ITEM[v.scope] : 0;
-        const comissao = v.qtd * taxa;
-        return { nome: v.nome, meta: v.meta, qtd: v.qtd, valor: v.valor, comissao, pct };
+        return { nome: v.nome, meta: v.meta, qtd: v.qtd, valor: v.valor, comissao: v.comissao, pct };
       })
       .sort((a, b) => b.pct - a.pct || b.qtd - a.qtd);
     return { id: c.id, name: c.name, rows };

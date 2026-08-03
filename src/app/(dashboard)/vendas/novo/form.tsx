@@ -56,6 +56,7 @@ export function NovoPedidoForm({
   const [paymentNotes, setPaymentNotes] = useState("");
   // Campanha — lista dinâmica de itens (campanha, referência, qtd, valor).
   const [inCampaign, setInCampaign] = useState(false);
+  const [campaignDiscount, setCampaignDiscount] = useState(false);
   const [campItems, setCampItems] = useState<CampItem[]>([emptyCampItem()]);
 
   function updateItem(idx: number, patch: Partial<CampItem>) {
@@ -129,6 +130,7 @@ export function NovoPedidoForm({
               value: it.value,
             }))
           : undefined,
+        campaignDiscount: inCampaign ? campaignDiscount : false,
         paymentProofsBase64: proofs.length ? proofs.map((p) => p.base64) : undefined,
       });
       if (res.ok) { router.push("/vendas"); router.refresh(); }
@@ -206,6 +208,15 @@ export function NovoPedidoForm({
         </label>
         {inCampaign && (
           <div className="mt-3 space-y-3">
+            <label className="flex w-fit cursor-pointer items-center gap-2">
+              <input type="checkbox" className="h-4 w-4 accent-vendas"
+                checked={campaignDiscount}
+                onChange={(e) => setCampaignDiscount(e.target.checked)} />
+              <span className="text-sm font-medium">Possui desconto?</span>
+              <span className="text-xs text-muted-foreground">
+                (premiação por item: {campaignDiscount ? "reduzida" : "integral"})
+              </span>
+            </label>
             {campItems.map((it, idx) => (
               <CampaignItemRow
                 key={idx}

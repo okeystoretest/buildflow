@@ -48,6 +48,32 @@ export function emitOrderCreated(args: {
 }
 
 /**
+ * Pedido disponibilizado para os MOTORISTAS ("Aguardando Entregador"). Dispara
+ * Web Push a nível de SO para todos os motoristas cadastrados, informando que
+ * há entrega disponível para coleta. Como o board do motorista já reage pelo
+ * polling, aqui só emitimos o push (fire-and-forget: nunca bloqueia nem quebra
+ * a ação de logística que abriu o pedido).
+ *
+ * Chamado apenas quando o pedido entra na coluna aberta de fato — isto é, sem
+ * código de rastreio (pedidos com rastreio seguem por transportadora e não
+ * aparecem no Kanban de Motoristas).
+ */
+export function emitOrderAvailableForDrivers(args: {
+  orderId: string;
+  orderNumber?: string;
+  customerName?: string;
+}): void {
+  const numero = args.orderNumber ? `#${args.orderNumber}` : "novo";
+  const cliente = args.customerName ? ` — ${args.customerName}` : "";
+  void sendPushToRole("MOTORISTA", {
+    title: "Entrega disponível para coleta",
+    body: `Pedido ${numero}${cliente} aguardando entregador.`,
+    url: "/motorista",
+    tag: `delivery-${args.orderId}`,
+  }).catch((err) => console.error("[push] envio p/ motorista falhou:", err));
+}
+
+/**
  * Pedido atualizado (mudanca de status, avanco, movimentacao, resolucao de
  * pendencia, etc.). Nao dispara notificacao ativa — apenas reatividade do board
  * para todos que estao visualizando.

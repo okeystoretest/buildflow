@@ -7,7 +7,7 @@ import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { nextStatus, canTransition, nextSimplifiedStatus, canTransitionSimplified } from "@/lib/order-flow";
 import { canInteractWithOrder } from "@/lib/permissions";
 import { isAnexoDispensavel } from "@/lib/validations/order";
-import { emitOrderUpdated } from "@/lib/realtime/emit";
+import { emitOrderUpdated, emitOrderAvailableForDrivers } from "@/lib/realtime/emit";
 import type { OrderStatus } from "@prisma/client";
 
 /**
@@ -295,10 +295,13 @@ export async function openOrderForDrivers(args: {
 
     const tracking = args.trackingCode?.trim() || null;
 
+    // Dados para o push aos motoristas (preenchidos dentro da transação).
+    let pushInfo: { orderNumber: string; customerName?: string } | null = null;
+
     await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: args.orderId },
-        include: { delivery: true },
+        include: { delivery: true, customer: true },
       });
       if (!order) throw new Error("Pedido nao encontrado.");
       if (order.status !== "PROCESSANDO" && order.status !== "PROCESSADO") {
@@ -330,12 +333,27 @@ export async function openOrderForDrivers(args: {
             : "Em aberto para motoristas",
         },
       });
+
+      // Só notifica os motoristas quando o pedido de fato cai na coluna aberta,
+      // isto é, SEM rastreio (com rastreio segue por transportadora e não
+      // aparece no Kanban de Motoristas — não faria sentido chamar entregador).
+      if (!tracking) {
+        pushInfo = { orderNumber: order.orderNumber, customerName: order.customer?.name };
+      }
     });
 
     revalidatePath("/logistica");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
     emitOrderUpdated({ orderId: args.orderId });
+    // Web Push a nível de SO para todos os motoristas (fire-and-forget).
+    if (pushInfo) {
+      emitOrderAvailableForDrivers({
+        orderId: args.orderId,
+        orderNumber: pushInfo.orderNumber,
+        customerName: pushInfo.customerName,
+      });
+    }
     return actionOk(undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao abrir pedido aos motoristas.";

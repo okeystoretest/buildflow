@@ -297,6 +297,11 @@ model Order {
   campaignId String?
   // Quantidade de itens que este pedido contribui para a campanha.
   itemCount  Int       @default(0)
+  // "Possui desconto?" — marcado no formulario de Vendas quando as pecas de
+  // campanha deste pedido sao vendidas com desconto. Muda a premiacao por item:
+  //   Atacado: R$4,00 (sem) / R$2,00 (com) · Varejo: R$5,00 (sem) / R$2,50 (com).
+  // Pedidos antigos ficam false (sem desconto = valor integral).
+  campaignDiscount Boolean @default(false)
 
   orderValue Decimal @default(0) @db.Decimal(10, 2)
   freight    Decimal @default(0) @db.Decimal(10, 2)

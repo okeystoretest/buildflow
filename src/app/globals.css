@@ -63,6 +63,15 @@
 
   html { color-scheme: light dark; }
 
+  /* Responsividade: impede que qualquer elemento mais largo que a tela force o
+     navegador móvel a "diminuir o zoom" (escala < 1). Com o viewport correto
+     (width=device-width) + este guard, o layout ocupa 100% da largura real do
+     dispositivo. overflow-x visível só é cortado no eixo horizontal. */
+  html, body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
