@@ -295,10 +295,12 @@ export async function openOrderForDrivers(args: {
 
     const tracking = args.trackingCode?.trim() || null;
 
-    // Dados para o push aos motoristas (preenchidos dentro da transação).
-    let pushInfo: { orderNumber: string; customerName?: string } | null = null;
-
-    await prisma.$transaction(async (tx) => {
+    // O push aos motoristas usa dados do pedido; retornamos da transação para
+    // evitar mutar um `let` externo dentro do callback (o control-flow do TS
+    // pode estreitar indevidamente para `never`).
+    const pushInfo = await prisma.$transaction<
+      { orderNumber: string; customerName?: string } | null
+    >(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: args.orderId },
         include: { delivery: true, customer: true },
@@ -337,9 +339,9 @@ export async function openOrderForDrivers(args: {
       // Só notifica os motoristas quando o pedido de fato cai na coluna aberta,
       // isto é, SEM rastreio (com rastreio segue por transportadora e não
       // aparece no Kanban de Motoristas — não faria sentido chamar entregador).
-      if (!tracking) {
-        pushInfo = { orderNumber: order.orderNumber, customerName: order.customer?.name };
-      }
+      return tracking
+        ? null
+        : { orderNumber: order.orderNumber, customerName: order.customer?.name };
     });
 
     revalidatePath("/logistica");
