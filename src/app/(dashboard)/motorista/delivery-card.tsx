@@ -4,11 +4,11 @@ import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OrderStatus } from "@prisma/client";
 import { startRoute, completeDelivery } from "@/lib/actions/deliveries";
-import { claimOpenOrder } from "@/lib/actions/logistics";
+import { claimOpenOrder, unassignMyOrder } from "@/lib/actions/logistics";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
-import { Truck, Camera, Eye, CheckCircle2, Hand } from "lucide-react";
+import { Truck, Camera, Eye, CheckCircle2, Hand, X } from "lucide-react";
 
 export interface DriverOrderView {
   id: string;
@@ -43,6 +43,14 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
     setError(null);
     start(async () => {
       const res = await claimOpenOrder({ orderId: order.id });
+      if (res.ok) router.refresh(); else setError(res.error);
+    });
+  }
+
+  function cancelar() {
+    setError(null);
+    start(async () => {
+      const res = await unassignMyOrder({ orderId: order.id });
       if (res.ok) router.refresh(); else setError(res.error);
     });
   }
@@ -134,6 +142,21 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
           <div className="flex items-center justify-center gap-2 rounded-lg bg-motorista/10 py-2 text-sm font-medium text-motorista">
             <CheckCircle2 className="h-5 w-5" /> Entregue
           </div>
+        )}
+
+        {/* Cancelar atribuição: some do motorista e volta o pedido para a coluna
+            "Aguardando Entregador". Disponível enquanto não foi concluído. */}
+        {(podeIniciar || podeConcluir) && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={cancelar}
+            disabled={pending}
+          >
+            <X className="mr-2 h-4 w-4" />
+            {pending ? "..." : "Cancelar"}
+          </Button>
         )}
       </div>
 

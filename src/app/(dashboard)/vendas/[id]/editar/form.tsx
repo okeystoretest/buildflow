@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Printer } from "lucide-react";
 import { updateOrder } from "@/lib/actions/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { formatBRL } from "@/lib/utils";
 import { CampaignItemRow, type CampaignItemData } from "@/components/shared/campaign-item-row";
 
 interface Opt { id: string; name: string; }
+interface ShipOpt extends Opt { requiresAddress?: boolean; }
 interface OrderData {
   id: string;
   orderNumber: string;
@@ -23,6 +24,8 @@ interface OrderData {
   campaignId: string; itemCount: number;
   campaignItems: CampaignItemData[];
   campaignDiscount: boolean;
+  shipCep: string; shipStreet: string; shipNumber: string;
+  shipDistrict: string; shipCity: string; shipState: string;
 }
 interface ExistingProof { id: string; filePath: string; }
 
@@ -38,7 +41,7 @@ export function EditarPedidoForm({
   existingProofs: ExistingProof[];
   selectedCustomer: CustomerOpt | null;
   stores: Opt[]; originStores: Opt[]; orderTypes: Opt[]; operations: Opt[];
-  paymentMethods: Opt[]; shippingMethods: Opt[]; banks: Opt[]; campaigns: Opt[];
+  paymentMethods: Opt[]; shippingMethods: ShipOpt[]; banks: Opt[]; campaigns: Opt[];
   canEditFinance?: boolean;
 }) {
   const router = useRouter();
@@ -58,6 +61,20 @@ export function EditarPedidoForm({
   const [freight, setFreight] = useState(order.freight);
   const [notes, setNotes] = useState(order.notes);
   const [paymentNotes, setPaymentNotes] = useState(order.paymentNotes);
+
+  // Endereço de entrega (Excursão).
+  const [shipCep, setShipCep] = useState(order.shipCep);
+  const [shipStreet, setShipStreet] = useState(order.shipStreet);
+  const [shipNumber, setShipNumber] = useState(order.shipNumber);
+  const [shipDistrict, setShipDistrict] = useState(order.shipDistrict);
+  const [shipCity, setShipCity] = useState(order.shipCity);
+  const [shipState, setShipState] = useState(order.shipState);
+
+  const requiresAddress =
+    shippingMethods.find((s) => s.id === shippingMethodId)?.requiresAddress === true;
+  const addressOk =
+    !requiresAddress ||
+    [shipCep, shipStreet, shipNumber, shipDistrict, shipCity, shipState].every((v) => (v ?? "").trim());
 
   // Campanha — lista dinâmica de itens. Pré-carrega os itens existentes;
   // se não houver, começa com uma linha vazia quando o toggle é ligado.
@@ -130,6 +147,9 @@ export function EditarPedidoForm({
         shippingMethodId,
         ...(canEditFinance ? { paymentMethodId, bankId: bankId || undefined } : {}),
         orderValue, freight, notes, paymentNotes,
+        // Endereço de entrega (Excursão). Enviado sempre; a action limpa quando
+        // a forma de envio não exige.
+        shipCep, shipStreet, shipNumber, shipDistrict, shipCity, shipState,
         // Lista de itens de campanha substitui o conjunto atual no servidor.
         campaignItems: inCampaign
           ? campItems.map((it) => ({
@@ -151,7 +171,7 @@ export function EditarPedidoForm({
   // Valor obrigatório (> 0), EXCETO Troca e Doação.
   const valorOk = anexoDispensavel || orderValue > 0;
   const podeSalvar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId
-    && shippingMethodId && valorOk && campaignOk && anexoOk;
+    && shippingMethodId && valorOk && campaignOk && anexoOk && addressOk;
 
   return (
     <div className="space-y-5">
@@ -194,7 +214,53 @@ export function EditarPedidoForm({
         </div>
       </div>
 
-      {/* Campanha — peças de campanha (lista dinâmica de itens) */}
+      {/* Endereço de entrega — só quando a forma de envio exige (Excursão). */}
+      {requiresAddress && (
+        <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-4">
+          <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Excursão)</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="space-y-1.5 lg:col-span-1">
+              <Label>CEP *</Label>
+              <Input value={shipCep} onChange={(e) => setShipCep(e.target.value)} placeholder="00000-000" />
+            </div>
+            <div className="space-y-1.5 lg:col-span-3">
+              <Label>Logradouro *</Label>
+              <Input value={shipStreet} onChange={(e) => setShipStreet(e.target.value)} placeholder="Rua, Av..." />
+            </div>
+            <div className="space-y-1.5 lg:col-span-1">
+              <Label>Número *</Label>
+              <Input value={shipNumber} onChange={(e) => setShipNumber(e.target.value)} placeholder="Nº" />
+            </div>
+            <div className="space-y-1.5 lg:col-span-1">
+              <Label>Bairro *</Label>
+              <Input value={shipDistrict} onChange={(e) => setShipDistrict(e.target.value)} placeholder="Bairro" />
+            </div>
+            <div className="space-y-1.5 lg:col-span-4">
+              <Label>Cidade *</Label>
+              <Input value={shipCity} onChange={(e) => setShipCity(e.target.value)} placeholder="Cidade" />
+            </div>
+            <div className="space-y-1.5 lg:col-span-2">
+              <Label>UF *</Label>
+              <Input value={shipState} maxLength={2} onChange={(e) => setShipState(e.target.value.toUpperCase())} placeholder="UF" />
+            </div>
+          </div>
+          {/* Etiqueta térmica (Zebra 105×140mm). Abre em nova aba e imprime.
+              Usa os dados JÁ SALVOS do pedido — por isso o aviso de salvar antes. */}
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-vendas/30 pt-3">
+            <a
+              href={`/etiqueta/${order.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-vendas px-4 text-sm font-semibold text-vendas-fg shadow-sm transition-colors hover:bg-vendas/90"
+            >
+              <Printer className="mr-2 h-4 w-4" /> Imprimir Etiqueta
+            </a>
+            <span className="text-xs text-muted-foreground">
+              A etiqueta usa os dados salvos. Salve o pedido antes se alterou o endereço.
+            </span>
+          </div>
+        </div>
+      )}
       <div className="rounded-lg border border-border p-4">
         <label className="flex cursor-pointer items-center gap-2">
           <input type="checkbox" className="h-4 w-4 accent-vendas"

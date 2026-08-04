@@ -134,11 +134,17 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   // janela da meta), não o acumulado histórico. Evita % inflado.
   // Inclui os pedidos vinculados a CAMPANHA (regra de negocio): o valor da
   // venda de campanha soma normalmente no realizado da meta geral.
-  const realizadoGeral = doMes.reduce((a, o) => a + Number(o.total), 0);
+  // REGRA DE NEGÓCIO: o volume de vendas para ranking/metas NÃO inclui o frete.
+  // O frete é repasse/custo pago pelo cliente, não receita ganha. Por isso o
+  // cálculo usa `orderValue` (valor da mercadoria) e não `total` (= valor +
+  // frete). Helper único para manter a regra consistente em todo o rank.
+  const receita = (o: { orderValue: unknown }) => Number(o.orderValue);
+
+  const realizadoGeral = doMes.reduce((a, o) => a + receita(o), 0);
   const metaGeralPct = metaGeral > 0 ? Math.round((realizadoGeral / metaGeral) * 100) : 0;
   const maior = (arr: typeof faturados) =>
     arr.reduce<{ total: number; nome: string } | null>((acc, o) => {
-      const t = Number(o.total);
+      const t = receita(o);
       return !acc || t > acc.total ? { total: t, nome: o.seller.name } : acc;
     }, null);
 
@@ -147,7 +153,7 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   const porVendedor = new Map<string, { nome: string; scope: string | null; total: number }>();
   for (const o of doMes) {
     const cur = porVendedor.get(o.sellerId) ?? { nome: o.seller.name, scope: o.seller.salesModel, total: 0 };
-    cur.total += Number(o.total);
+    cur.total += receita(o);
     porVendedor.set(o.sellerId, cur);
   }
   // Meta por vendedor: usa as metas Gerais (escopo do vendedor).
@@ -190,7 +196,8 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
       id: c.id,
       name: c.name,
       volume: ordersMes.reduce((a: number, o: any) => a + (o.itemCount ?? 0), 0),
-      receita: ordersMes.reduce((a: number, o: any) => a + Number(o.total), 0),
+      // Receita da campanha também sem frete (mesma regra do ranking).
+      receita: ordersMes.reduce((a: number, o: any) => a + Number(o.orderValue), 0),
     };
   });
 

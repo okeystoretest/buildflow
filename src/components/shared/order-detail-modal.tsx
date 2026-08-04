@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { uploadInvoiceBase64, removeInvoice } from "@/lib/actions/sales";
 import { prepareInvoiceFile } from "@/lib/client-image";
 import { Button } from "@/components/ui/button";
-import { Clock, X } from "lucide-react";
+import { Clock, X, Printer, MapPin } from "lucide-react";
 
 interface OrderDetail {
   id: string;
@@ -29,6 +29,13 @@ interface OrderDetail {
   financeProofs: { id: string; filePath: string }[];
   invoicePath: string | null;
   trackingCode: string | null;
+  // Endereço de entrega (Excursão). Preenchidos só quando a forma exige.
+  shipCep: string | null;
+  shipStreet: string | null;
+  shipNumber: string | null;
+  shipDistrict: string | null;
+  shipCity: string | null;
+  shipState: string | null;
   cnpj: { name: string; document: string } | null;
   customer: { name: string; code: string };
   seller: { name: string };
@@ -38,7 +45,7 @@ interface OrderDetail {
   // Preenchidos pelo Financeiro: ficam nulos até a Análise de Pedidos.
   paymentMethod: { name: string } | null;
   bank: { name: string } | null;
-  shippingMethod: { name: string };
+  shippingMethod: { name: string; requiresAddress?: boolean };
   paymentStatus: { name: string } | null;
   delivery: {
     status: string;
@@ -299,6 +306,35 @@ export function OrderDetailModal({
               <Info label="CNPJ" value={order.cnpj ? order.cnpj.name : "—"} />
               <Info label="Rastreio" value={order.trackingCode ?? "—"} />
             </div>
+
+            {/* Endereço de entrega + etiqueta térmica — só para formas de envio
+                que exigem endereço (Excursão). Oculto no modo motorista. */}
+            {!driverMode && order.shippingMethod.requiresAddress && (
+              <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-1.5 text-sm font-semibold text-vendas">
+                    <MapPin className="h-4 w-4" /> Endereço de Entrega
+                  </h3>
+                  <a
+                    href={`/etiqueta/${order.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-9 items-center justify-center rounded-lg bg-vendas px-3 text-sm font-semibold text-vendas-fg shadow-sm transition-colors hover:bg-vendas/90"
+                  >
+                    <Printer className="mr-2 h-4 w-4" /> Imprimir Etiqueta
+                  </a>
+                </div>
+                <div className="text-sm leading-relaxed">
+                  {[order.shipStreet, order.shipNumber].filter(Boolean).join(", ") || "—"}
+                  {(order.shipDistrict || order.shipCity || order.shipState) && (
+                    <div className="text-muted-foreground">
+                      {[order.shipDistrict, order.shipCity, order.shipState].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
+                  {order.shipCep && <div className="font-data text-muted-foreground">CEP {order.shipCep}</div>}
+                </div>
+              </div>
+            )}
 
             {/* Observações. No modo motorista ficam em DESTAQUE (leitura rápida
                 durante a entrega): fonte maior, borda e fundo realçados. */}

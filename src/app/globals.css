@@ -84,6 +84,27 @@
   }
 
   .font-data { font-family: var(--font-mono); font-feature-settings: "tnum"; }
+
+  /* ===== Card de pedido ATRASADO (tempo limite excedido) =====
+     Fundo vermelho preenchido por inteiro. Para manter a legibilidade (WCAG AA
+     sobre o vermelho ~#dc2626), forçamos texto/ícones em branco em TODO o
+     conteúdo interno — exceto o selo "Atrasado", que fica em chip branco com
+     texto vermelho para destaque. */
+  .card-overdue,
+  .card-overdue * {
+    color: #fff !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+  }
+  .card-overdue .order-overdue-badge,
+  .card-overdue .order-overdue-badge * {
+    color: #b91c1c !important; /* red-700 sobre chip branco */
+  }
+  /* Chips de sinais (NF/Comprovante) e código do cliente: fundo translúcido
+     claro para não sumirem no vermelho, mantendo contraste do texto branco. */
+  .card-overdue .bg-secondary,
+  .card-overdue .bg-motorista\/15 {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+  }
 }
 
 @layer utilities {

@@ -98,6 +98,14 @@ export async function createOrder(
       }
     }
 
+    // Determina, pela forma de envio escolhida, se o endereço é exigido.
+    // A verdade vem do banco (não confiamos só no flag do cliente).
+    const shipMethod = await prisma.shippingMethod.findUnique({
+      where: { id: input.shippingMethodId },
+      select: { requiresAddress: true },
+    });
+    const requiresAddress = shipMethod?.requiresAddress === true;
+
     const order = await prisma.order.create({
       data: {
         orderNumber: input.orderNumber,
@@ -115,6 +123,14 @@ export async function createOrder(
         total,
         notes: input.notes,
         paymentNotes: input.paymentNotes,
+        // Endereço de entrega: só grava quando a forma de envio exige; caso
+        // contrário mantém tudo nulo.
+        shipCep: requiresAddress ? input.shipCep?.trim() || null : null,
+        shipStreet: requiresAddress ? input.shipStreet?.trim() || null : null,
+        shipNumber: requiresAddress ? input.shipNumber?.trim() || null : null,
+        shipDistrict: requiresAddress ? input.shipDistrict?.trim() || null : null,
+        shipCity: requiresAddress ? input.shipCity?.trim() || null : null,
+        shipState: requiresAddress ? input.shipState?.trim().toUpperCase() || null : null,
         campaignId,
         itemCount: campaignId ? itemCount : 0,
         // Desconto só faz sentido quando há campanha; sem campanha, força false.
@@ -228,6 +244,13 @@ export async function updateOrder(args: {
   freight?: number;
   notes?: string | null;
   paymentNotes?: string | null;
+  // Endereço de entrega (Excursão). undefined = não mexe.
+  shipCep?: string | null;
+  shipStreet?: string | null;
+  shipNumber?: string | null;
+  shipDistrict?: string | null;
+  shipCity?: string | null;
+  shipState?: string | null;
   // Campanha
   campaignId?: string | null;
   itemCount?: number;
@@ -280,6 +303,21 @@ export async function updateOrder(args: {
     // adulterado — aqui simplesmente ignoramos o que ela mandar.
     const podeMexerNoFinanceiro = session.role === "GESTAO" || session.role === "FINANCEIRO";
 
+    // Forma de envio resultante após a edição e se ela exige endereço.
+    const finalShippingId = args.shippingMethodId ?? order.shippingMethodId;
+    const finalShipMethod = await prisma.shippingMethod.findUnique({
+      where: { id: finalShippingId },
+      select: { requiresAddress: true },
+    });
+    const requiresAddress = finalShipMethod?.requiresAddress === true;
+    // Helper: para cada campo de endereço, respeita "undefined = não mexe";
+    // quando a forma NÃO exige endereço, limpa o campo (null).
+    const addrField = (incoming: string | null | undefined, current: string | null) => {
+      if (!requiresAddress) return null;
+      if (incoming === undefined) return current;
+      return incoming?.trim() ? incoming.trim() : null;
+    };
+
     await prisma.order.update({
       where: { id: args.id },
       data: {
@@ -309,6 +347,15 @@ export async function updateOrder(args: {
         total: orderValue + freight,
         notes: args.notes === undefined ? order.notes : args.notes,
         paymentNotes: args.paymentNotes === undefined ? order.paymentNotes : args.paymentNotes,
+        // Endereço de entrega (Excursão). Limpa quando a forma não exige.
+        shipCep: addrField(args.shipCep, order.shipCep),
+        shipStreet: addrField(args.shipStreet, order.shipStreet),
+        shipNumber: addrField(args.shipNumber, order.shipNumber),
+        shipDistrict: addrField(args.shipDistrict, order.shipDistrict),
+        shipCity: addrField(args.shipCity, order.shipCity),
+        shipState: args.shipState === undefined
+          ? (requiresAddress ? order.shipState : null)
+          : (requiresAddress ? (args.shipState?.trim() ? args.shipState.trim().toUpperCase() : null) : null),
         // Numero do pedido (editavel como no cadastro).
         orderNumber: args.orderNumber?.trim() ? args.orderNumber.trim() : order.orderNumber,
         // Campanha (legado derivado). Se veio lista de itens, ela manda; senão

@@ -74,6 +74,12 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
               freight: Number(order.freight),
               notes: order.notes ?? "",
               paymentNotes: order.paymentNotes ?? "",
+              shipCep: order.shipCep ?? "",
+              shipStreet: order.shipStreet ?? "",
+              shipNumber: order.shipNumber ?? "",
+              shipDistrict: order.shipDistrict ?? "",
+              shipCity: order.shipCity ?? "",
+              shipState: order.shipState ?? "",
               campaignId: order.campaignId ?? "",
               itemCount: order.itemCount ?? 0,
               campaignDiscount: order.campaignDiscount ?? false,
@@ -91,7 +97,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
             orderTypes={orderTypes.map((s) => ({ id: s.id, name: s.name }))}
             operations={sortOperationsByCode(operations).map((o) => ({ id: o.id, name: `${o.code} - ${o.name}` }))}
             paymentMethods={paymentMethods.map((p) => ({ id: p.id, name: p.name }))}
-            shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name }))}
+            shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name, requiresAddress: s.requiresAddress }))}
             banks={banks.map((b) => ({ id: b.id, name: b.name }))}
             campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
             canEditFinance={session.role === "GESTAO" || session.role === "FINANCEIRO"}

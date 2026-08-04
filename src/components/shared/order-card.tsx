@@ -53,9 +53,17 @@ export function OrderCard({
 
   // Borda/realce por tempo de permanencia (Gestao > Etapas). O "Sem NF" tem
   // prioridade visual (vermelho proprio); fora isso aplicamos warn/alert.
+  // Pedido ATRASADO (tempo limite excedido): fundo vermelho preenchido por
+  // inteiro (antes era só a borda). Forçamos texto claro nos descendentes para
+  // manter legibilidade sobre o vermelho. O aviso "warn" (50%) segue discreto,
+  // só na borda. O selo "Sem NF" (processando sem nota) mantém prioridade.
+  const atrasado = !alerta && stageAlert === "alert";
+  // Fundo vermelho preenchido (antes só borda). O contraste do texto é tratado
+  // pela classe utilitária `.card-overdue` em globals.css, que força cores
+  // legíveis (branco) em todos os textos internos, exceto no selo "Atrasado".
   const timeBorder =
-    !alerta && stageAlert === "alert"
-      ? "border-red-500/70 ring-1 ring-red-500/30 hover:shadow-md hover:shadow-red-500/10"
+    atrasado
+      ? "card-overdue border-red-700 bg-red-600 shadow-md shadow-red-900/20"
       : !alerta && stageAlert === "warn"
         ? "border-amber-500/70 ring-1 ring-amber-500/25 hover:shadow-md hover:shadow-amber-500/10"
         : null;
@@ -64,7 +72,8 @@ export function OrderCard({
     <div
       style={style}
       className={cn(
-        "card-hover group w-full rounded-xl border bg-card p-3 text-left shadow-sm animate-fade-in-up",
+        "card-hover group w-full rounded-xl border p-3 text-left shadow-sm animate-fade-in-up",
+        atrasado ? null : "bg-card",
         alerta
           ? "border-destructive/50 ring-1 ring-destructive/20 hover:shadow-md hover:shadow-destructive/10"
           : timeBorder ?? "border-border hover:border-primary/40 hover:shadow-md",
@@ -115,10 +124,12 @@ export function OrderCard({
         {!alerta && stageAlert !== "none" && (
           <span
             className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-              stageAlert === "alert"
-                ? "bg-red-500/15 text-red-600 dark:text-red-400"
-                : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+              "order-overdue-badge inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+              atrasado
+                ? "bg-white text-red-700"
+                : stageAlert === "alert"
+                  ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                  : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
             )}
             title={stageAlert === "alert" ? "Tempo limite excedido" : "Atenção: 50% do tempo limite"}
           >

@@ -422,10 +422,67 @@ export async function claimOpenOrder(args: {
 }
 
 /**
- * Resolve uma pendência: registra (opcionalmente) um comentário de resolução
- * no histórico e AVANÇA o pedido do status PENDENTE para o próximo do fluxo
- * (CONFERINDO). Tudo dentro de uma transação — comentário e mudança de status
- * andam juntos ou nenhum acontece.
+ * O MOTORISTA cancela a própria atribuição: o pedido volta para "Aguardando
+ * Entregador" (status ENVIADO, sem motorista), disponível para qualquer um
+ * pegar novamente. GESTAO também pode cancelar (supervisão).
+ *
+ * Só é permitido enquanto a entrega ainda não foi concluída: pedidos em
+ * ENVIADO ou EM_ROTA. Após ENTREGUE/CONCLUIDO não há o que cancelar.
+ */
+export async function unassignMyOrder(args: {
+  orderId: string;
+}): Promise<ActionResult<void>> {
+  try {
+    const session = await requireRoleAction(["MOTORISTA", "GESTAO"]);
+
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: args.orderId },
+        include: { delivery: true },
+      });
+      if (!order) throw new Error("Pedido nao encontrado.");
+      if (!order.delivery) throw new Error("Entrega nao encontrada para o pedido.");
+      if (order.status !== "ENVIADO" && order.status !== "EM_ROTA") {
+        throw new Error("Só é possível cancelar antes de concluir a entrega.");
+      }
+      // Motorista só cancela a PRÓPRIA atribuição; GESTAO pode qualquer uma.
+      if (session.role === "MOTORISTA" && order.delivery.driverId !== session.userId) {
+        throw new Error("Este pedido está atribuído a outro motorista.");
+      }
+
+      // Volta a entrega para o estado "aguardando" e sem dono.
+      await tx.delivery.update({
+        where: { id: order.delivery.id },
+        data: { status: "AGUARDANDO", driverId: null, assignedAt: null },
+      });
+      // Retorna o pedido para ENVIADO (coluna "Aguardando Entregador"). Se
+      // estava EM_ROTA, também volta — a rota é reiniciada por quem pegar.
+      if (order.status !== "ENVIADO") {
+        await tx.order.update({
+          where: { id: order.id },
+          data: { status: "ENVIADO" },
+        });
+      }
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          status: "ENVIADO",
+          changedBy: session.userId,
+          note: "Atribuição cancelada pelo motorista (voltou para aguardando entregador)",
+        },
+      });
+    });
+
+    revalidatePath("/motorista");
+    revalidatePath("/logistica");
+    revalidatePath("/dashboard");
+    emitOrderUpdated({ orderId: args.orderId });
+    return actionOk(undefined);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao cancelar atribuição.";
+    return actionError(msg);
+  }
+}
  */
 export async function resolvePendency(args: {
   orderId: string;

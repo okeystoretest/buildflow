@@ -48,7 +48,7 @@ export default async function NovoPedidoPage() {
             originStores={originStores.map((s) => ({ id: s.id, name: s.name }))}
             orderTypes={orderTypes.map((t) => ({ id: t.id, name: t.name }))}
             operations={sortOperationsByCode(operations).map((o) => ({ id: o.id, name: `${o.code} - ${o.name}` }))}
-            shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name }))}
+            shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name, requiresAddress: s.requiresAddress }))}
             campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
           />
         </CardContent>

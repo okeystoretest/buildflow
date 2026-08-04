@@ -19,6 +19,16 @@ export const createOrderSchema = z.object({
   freight: z.coerce.number().nonnegative("Frete invalido.").default(0),
   // "Observacoes de Envio" (logistica/motorista).
   notes: z.string().max(1000).optional(),
+  // Endereço de entrega — obrigatório apenas quando a forma de envio exige
+  // (ex.: "Excursão"). O cliente envia `requiresAddress` (derivado da forma
+  // escolhida) para o schema aplicar a obrigatoriedade condicional.
+  requiresAddress: z.coerce.boolean().default(false),
+  shipCep: z.string().max(20).optional(),
+  shipStreet: z.string().max(200).optional(),
+  shipNumber: z.string().max(30).optional(),
+  shipDistrict: z.string().max(120).optional(),
+  shipCity: z.string().max(120).optional(),
+  shipState: z.string().max(2).optional(),
   // "Observacoes de Pagamento" (exclusivo do Financeiro).
   paymentNotes: z.string().max(1000).optional(),
   // Campanha opcional + quantidade de itens (volume) quando vinculado.
@@ -60,7 +70,15 @@ export const createOrderSchema = z.object({
   .refine(
     (d) => isAnexoDispensavel(d.orderTypeName) || d.orderValue > 0,
     { message: "Informe o valor total do pedido.", path: ["orderValue"] },
-  );
+  )
+  // Endereço obrigatório quando a forma de envio exige (ex.: "Excursão").
+  // Cada campo faltante aponta o erro no próprio campo para a UI destacar.
+  .refine((d) => !d.requiresAddress || !!d.shipCep?.trim(), { message: "Informe o CEP.", path: ["shipCep"] })
+  .refine((d) => !d.requiresAddress || !!d.shipStreet?.trim(), { message: "Informe o logradouro.", path: ["shipStreet"] })
+  .refine((d) => !d.requiresAddress || !!d.shipNumber?.trim(), { message: "Informe o número.", path: ["shipNumber"] })
+  .refine((d) => !d.requiresAddress || !!d.shipDistrict?.trim(), { message: "Informe o bairro.", path: ["shipDistrict"] })
+  .refine((d) => !d.requiresAddress || !!d.shipCity?.trim(), { message: "Informe a cidade.", path: ["shipCity"] })
+  .refine((d) => !d.requiresAddress || !!d.shipState?.trim(), { message: "Informe a UF.", path: ["shipState"] });
 
 // "Troca" dispensa anexo (NF e comprovante) E pula o Financeiro. O tipo
 // cadastrado é exatamente "4 - Troca"; a comparação é tolerante a

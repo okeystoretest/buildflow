@@ -135,6 +135,11 @@ model ShippingMethod {
   id        String   @id @default(cuid())
   name      String
   active    Boolean  @default(true)
+  // Quando true, o formulário de Vendas exige o endereço de entrega completo
+  // (CEP, logradouro, número, bairro, cidade, UF) e habilita a etiqueta
+  // térmica. Usado pela forma de envio "Excursão". Default false = sem
+  // endereço (comportamento das demais formas de envio).
+  requiresAddress Boolean @default(false)
   createdAt DateTime @default(now())
   orders    Order[]
 }
@@ -318,6 +323,17 @@ model Order {
 
   // "Observacoes de Envio" na UI. Vai para a logistica/motorista.
   notes String?
+
+  // Endereço de entrega — preenchido apenas quando a forma de envio exige
+  // (ShippingMethod.requiresAddress = true, ex.: "Excursão"). Todos opcionais
+  // no banco (pedidos de outras formas de envio não têm endereço); a
+  // obrigatoriedade é validada no formulário quando a forma exige.
+  shipCep         String?
+  shipStreet      String?  // Logradouro
+  shipNumber      String?  // Número
+  shipDistrict    String?  // Bairro
+  shipCity        String?  // Cidade
+  shipState       String?  // UF
   // "Observacoes de Pagamento": exclusivo do FINANCEIRO na aprovacao.
   // NAO e exibido para motorista/logistica.
   paymentNotes String?

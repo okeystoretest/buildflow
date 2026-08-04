@@ -14,6 +14,8 @@ import { isAnexoDispensavel } from "@/lib/validations/order";
 import { CampaignItemRow } from "@/components/shared/campaign-item-row";
 
 interface Opt { id: string; name: string; }
+// Forma de envio carrega o flag que exige endereço de entrega (ex.: Excursão).
+interface ShipOpt extends Opt { requiresAddress?: boolean; }
 
 interface CampItem { campaignId: string; reference: string; quantity: number; value: number; }
 function emptyCampItem(): CampItem { return { campaignId: "", reference: "", quantity: 0, value: 0 }; }
@@ -37,7 +39,7 @@ export function NovoPedidoForm({
   stores, originStores, orderTypes, operations, shippingMethods, campaigns,
 }: {
   stores: Opt[]; originStores: Opt[]; orderTypes: Opt[];
-  operations: Opt[]; shippingMethods: Opt[]; campaigns: Opt[];
+  operations: Opt[]; shippingMethods: ShipOpt[]; campaigns: Opt[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -53,6 +55,21 @@ export function NovoPedidoForm({
   const [orderValue, setOrderValue] = useState(0);
   const [freight, setFreight] = useState(0);
   const [notes, setNotes] = useState("");
+
+  // Endereço de entrega (exibido só quando a forma de envio exige, ex.: Excursão).
+  const [shipCep, setShipCep] = useState("");
+  const [shipStreet, setShipStreet] = useState("");
+  const [shipNumber, setShipNumber] = useState("");
+  const [shipDistrict, setShipDistrict] = useState("");
+  const [shipCity, setShipCity] = useState("");
+  const [shipState, setShipState] = useState("");
+
+  // A forma de envio selecionada exige endereço completo?
+  const requiresAddress =
+    shippingMethods.find((s) => s.id === shippingMethodId)?.requiresAddress === true;
+  const addressOk =
+    !requiresAddress ||
+    [shipCep, shipStreet, shipNumber, shipDistrict, shipCity, shipState].every((v) => v.trim());
   const [paymentNotes, setPaymentNotes] = useState("");
   // Campanha — lista dinâmica de itens (campanha, referência, qtd, valor).
   const [inCampaign, setInCampaign] = useState(false);
@@ -122,6 +139,14 @@ export function NovoPedidoForm({
         notes: notes || undefined,
         paymentNotes: paymentNotes || undefined,
         orderTypeName,
+        // Endereço de entrega (só relevante quando a forma de envio exige).
+        requiresAddress,
+        shipCep: requiresAddress ? shipCep.trim() : undefined,
+        shipStreet: requiresAddress ? shipStreet.trim() : undefined,
+        shipNumber: requiresAddress ? shipNumber.trim() : undefined,
+        shipDistrict: requiresAddress ? shipDistrict.trim() : undefined,
+        shipCity: requiresAddress ? shipCity.trim() : undefined,
+        shipState: requiresAddress ? shipState.trim().toUpperCase() : undefined,
         campaignItems: inCampaign
           ? campItems.map((it) => ({
               campaignId: it.campaignId,
@@ -147,7 +172,7 @@ export function NovoPedidoForm({
   const anexoOk = anexoDispensavel || temAnexo;
   // Valor obrigatório (> 0), EXCETO Troca e Doação.
   const valorOk = valorDispensavel || orderValue > 0;
-  const podeEnviar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId && shippingMethodId && valorOk && campaignOk && anexoOk;
+  const podeEnviar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId && shippingMethodId && valorOk && campaignOk && anexoOk && addressOk;
 
   return (
     <div className="space-y-5">
@@ -191,6 +216,40 @@ export function NovoPedidoForm({
           <Input type="number" min={0} step="0.01" value={freight || ""} onChange={(e) => setFreight(Number(e.target.value))} placeholder="0,00" />
         </div>
       </div>
+
+      {/* Endereço de entrega — só aparece quando a forma de envio exige
+          (ex.: "1 - Excursão"). Todos os campos são obrigatórios. */}
+      {requiresAddress && (
+        <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-4">
+          <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Excursão)</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="space-y-1.5 lg:col-span-1">
+              <Label>CEP *</Label>
+              <Input value={shipCep} onChange={(e) => setShipCep(e.target.value)} placeholder="00000-000" />
+            </div>
+            <div className="space-y-1.5 lg:col-span-3">
+              <Label>Logradouro *</Label>
+              <Input value={shipStreet} onChange={(e) => setShipStreet(e.target.value)} placeholder="Rua, Av..." />
+            </div>
+            <div className="space-y-1.5 lg:col-span-1">
+              <Label>Número *</Label>
+              <Input value={shipNumber} onChange={(e) => setShipNumber(e.target.value)} placeholder="Nº" />
+            </div>
+            <div className="space-y-1.5 lg:col-span-1">
+              <Label>Bairro *</Label>
+              <Input value={shipDistrict} onChange={(e) => setShipDistrict(e.target.value)} placeholder="Bairro" />
+            </div>
+            <div className="space-y-1.5 lg:col-span-4">
+              <Label>Cidade *</Label>
+              <Input value={shipCity} onChange={(e) => setShipCity(e.target.value)} placeholder="Cidade" />
+            </div>
+            <div className="space-y-1.5 lg:col-span-2">
+              <Label>UF *</Label>
+              <Input value={shipState} maxLength={2} onChange={(e) => setShipState(e.target.value.toUpperCase())} placeholder="UF" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Campanha — peças de campanha (lista dinâmica de itens) */}
       <div className="rounded-lg border border-border p-4">
