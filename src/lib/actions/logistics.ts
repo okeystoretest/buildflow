@@ -483,6 +483,12 @@ export async function unassignMyOrder(args: {
     return actionError(msg);
   }
 }
+
+/**
+ * Resolve uma pendência: registra (opcionalmente) um comentário de resolução
+ * no histórico e AVANÇA o pedido do status PENDENTE para o próximo do fluxo
+ * (CONFERINDO). Tudo dentro de uma transação — comentário e mudança de status
+ * andam juntos ou nenhum acontece.
  */
 export async function resolvePendency(args: {
   orderId: string;
