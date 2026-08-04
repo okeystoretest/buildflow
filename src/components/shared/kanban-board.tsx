@@ -26,6 +26,7 @@ export function KanbanBoard({
   canManage = false,
   userRole,
   boardTitle,
+  boardModule = "Fluxo de Pedidos",
   titleAccent = "amber",
   stageLimits = {},
   simplified = false,
@@ -40,6 +41,9 @@ export function KanbanBoard({
   userRole?: "GESTAO" | "VENDAS" | "FINANCEIRO" | "LOGISTICA" | "MOTORISTA";
   // Título exibido ao lado da busca quando em tela cheia (ex.: "LOGÍSTICA").
   boardTitle?: string;
+  // Prefixo do breadcrumb, específico do módulo. Ex.:
+  // "Fluxo de Pedidos → Fábrica (VENDAS)" / "(LOGÍSTICA)".
+  boardModule?: string;
   // Cor do sufixo do breadcrumb ("GERAL"/"LOGÍSTICA") — destaca-se do branco.
   titleAccent?: "amber" | "distribuicao";
   // Prazos por status (Gestão > Etapas) para o alerta temporal dos cards.
@@ -91,7 +95,21 @@ export function KanbanBoard({
   }, [query, cards, nowTick]);
   const [isFull, setIsFull] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const byStatus = (status: OrderStatus) => visibleCards.filter((c) => c.status === status);
+  // Agrupa os cards por coluna. No fluxo SIMPLIFICADO as colunas são apenas
+  // PAGO → EMBALADO → ENTREGUE, mas ao atribuir um motorista o pedido passa a
+  // ENVIADO/EM_ROTA (status do fluxo padrão). Esses status não têm coluna
+  // própria aqui, então o card sumia do Fluxo entre EMBALADO e ENTREGUE. Para
+  // não perder o pedido de vista, dobramos ENVIADO/EM_ROTA na coluna EMBALADO
+  // (etapa "saiu para entrega") enquanto não chega em ENTREGUE.
+  const IN_TRANSIT_INTO_EMBALADO: OrderStatus[] = ["ENVIADO", "EM_ROTA"];
+  const byStatus = (status: OrderStatus) =>
+    visibleCards.filter((c) => {
+      if (c.status === status) return true;
+      if (simplified && status === "EMBALADO" && IN_TRANSIT_INTO_EMBALADO.includes(c.status)) {
+        return true;
+      }
+      return false;
+    });
 
   // Proximo status conforme o fluxo do board: no simplificado usa a cadeia
   // PAGO->EMBALADO->ENTREGUE; no padrao, o fluxo linear completo. Sem isto, a
@@ -369,7 +387,7 @@ export function KanbanBoard({
         <div className="flex flex-1 items-center">
           {isFull && boardTitle && (
             <h2 className="hidden text-2xl font-extrabold tracking-tight lg:text-3xl sm:block">
-              <span className="text-white">Fluxo de Pedidos</span>
+              <span className="text-white">{boardModule}</span>
               <span className="mx-2 text-muted-foreground">→</span>
               <span className={titleAccentClass}>{boardTitle}</span>
             </h2>

@@ -95,7 +95,7 @@ export default async function FluxoPage({
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">
-          Fluxo de Pedidos — {lojaName}
+          Fluxo de Pedidos → Fábrica (VENDAS) — {lojaName}
         </h1>
         <p className="text-sm text-muted-foreground">Acompanhamento de todos os pedidos por status.</p>
       </div>
@@ -104,6 +104,7 @@ export default async function FluxoPage({
         columns={columnsForFlow(simplified)}
         canManage={session.role === "GESTAO"}
         userRole={session.role}
+        boardModule="Fluxo de Pedidos → Fábrica (VENDAS)"
         boardTitle={lojaName.toUpperCase()}
         stageLimits={stageLimits}
         simplified={simplified}

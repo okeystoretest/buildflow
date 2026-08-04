@@ -141,7 +141,7 @@ export default async function LogisticaPage({
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-distribuicao">
-          Logística — {lojaName}
+          Fluxo de Pedidos → Fábrica (LOGÍSTICA) — {lojaName}
         </h1>
         <p className="text-sm text-muted-foreground">
           Acompanhe o status dos pedidos e avance manualmente os que estão prontos para entrega.
@@ -153,6 +153,7 @@ export default async function LogisticaPage({
         advance={{ enabled: true, drivers }}
         canManage={session.role === "GESTAO"}
         userRole={session.role}
+        boardModule="Fluxo de Pedidos → Fábrica (LOGÍSTICA)"
         boardTitle={lojaName.toUpperCase()}
         titleAccent="distribuicao"
         stageLimits={stageLimits}
