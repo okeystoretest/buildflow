@@ -91,7 +91,6 @@ export default async function LogisticaPage({
     return <StorePicker stores={pickerStores} basePath="/logistica" title="Logística" />;
   }
   const simplified = store.simplifiedFlow;
-  const lojaName = store.name;
 
   const [orders, drivers] = await Promise.all([
     prisma.order.findMany({
@@ -145,7 +144,7 @@ export default async function LogisticaPage({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-distribuicao">
-            Fluxo de Pedidos → Fábrica (LOGÍSTICA) — {lojaName}
+            Fluxo de Pedidos → Fábrica (LOGÍSTICA)
           </h1>
           <p className="text-sm text-muted-foreground">
             Acompanhe o status dos pedidos e avance manualmente os que estão prontos para entrega.
@@ -167,7 +166,6 @@ export default async function LogisticaPage({
         canManage={session.role === "GESTAO"}
         userRole={session.role}
         boardModule="Fluxo de Pedidos → Fábrica (LOGÍSTICA)"
-        boardTitle={lojaName.toUpperCase()}
         titleAccent="distribuicao"
         stageLimits={stageLimits}
         simplified={simplified}

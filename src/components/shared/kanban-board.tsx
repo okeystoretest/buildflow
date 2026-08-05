@@ -385,11 +385,15 @@ export function KanbanBoard({
       <div className="flex items-center gap-3">
         {/* Esquerda: título/breadcrumb (só em tela cheia). */}
         <div className="flex flex-1 items-center">
-          {isFull && boardTitle && (
+          {isFull && (boardTitle || boardModule) && (
             <h2 className="hidden text-2xl font-extrabold tracking-tight lg:text-3xl sm:block">
               <span className="text-white">{boardModule}</span>
-              <span className="mx-2 text-muted-foreground">→</span>
-              <span className={titleAccentClass}>{boardTitle}</span>
+              {boardTitle && (
+                <>
+                  <span className="mx-2 text-muted-foreground">→</span>
+                  <span className={titleAccentClass}>{boardTitle}</span>
+                </>
+              )}
             </h2>
           )}
         </div>

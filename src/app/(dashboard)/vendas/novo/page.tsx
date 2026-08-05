@@ -36,6 +36,15 @@ export default async function NovoPedidoPage() {
   const originStores =
     session.role === "VENDAS" ? (me?.originStores ?? []) : allOriginStores;
 
+  // Planta padrao para o FINANCEIRO: ao criar pedido, o campo "Loja" (Planta)
+  // ja vem preenchido com "Carlos Trajano". Busca case-insensitive pelo nome;
+  // se a loja nao existir/estiver inativa, o campo abre vazio (sem quebrar).
+  const CARLOS_TRAJANO = "Carlos Trajano";
+  const defaultStoreId =
+    session.role === "FINANCEIRO"
+      ? (stores.find((s) => s.name.trim().toLowerCase() === CARLOS_TRAJANO.toLowerCase())?.id ?? "")
+      : "";
+
   return (
     <div className="mx-auto max-w-5xl">
       <BackButton href="/vendas" />
@@ -45,6 +54,7 @@ export default async function NovoPedidoPage() {
         <CardContent>
           <NovoPedidoForm
             stores={stores.map((s) => ({ id: s.id, name: s.name }))}
+            defaultStoreId={defaultStoreId}
             originStores={originStores.map((s) => ({ id: s.id, name: s.name }))}
             orderTypes={orderTypes.map((t) => ({ id: t.id, name: t.name }))}
             operations={sortOperationsByCode(operations).map((o) => ({ id: o.id, name: `${o.code} - ${o.name}` }))}

@@ -36,9 +36,9 @@ function Select({ label, value, onChange, options, placeholder }: {
 }
 
 export function NovoPedidoForm({
-  stores, originStores, orderTypes, operations, shippingMethods, campaigns,
+  stores, defaultStoreId = "", originStores, orderTypes, operations, shippingMethods, campaigns,
 }: {
-  stores: Opt[]; originStores: Opt[]; orderTypes: Opt[];
+  stores: Opt[]; defaultStoreId?: string; originStores: Opt[]; orderTypes: Opt[];
   operations: Opt[]; shippingMethods: ShipOpt[]; campaigns: Opt[];
 }) {
   const router = useRouter();
@@ -46,7 +46,9 @@ export function NovoPedidoForm({
   const [error, setError] = useState<string | null>(null);
 
   const [orderNumber, setOrderNumber] = useState("");
-  const [storeId, setStoreId] = useState("");
+  // "Planta" (campo Loja): para o FINANCEIRO ja vem preenchida com "Carlos
+  // Trajano" (defaultStoreId vindo do servidor). Permanece editavel.
+  const [storeId, setStoreId] = useState(defaultStoreId);
   const [originStoreId, setOriginStoreId] = useState("");
   const [orderTypeId, setOrderTypeId] = useState("");
   const [operationId, setOperationId] = useState("");

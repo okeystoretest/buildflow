@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Check, X, History, Truck } from "lucide-react";
+import { Pencil, Trash2, Check, X, History, Truck, CreditCard, Landmark, Tag, Building2 } from "lucide-react";
 import { CrudTable, type CrudRow } from "@/components/shared/crud-table";
 import type { PaymentDisposition } from "@prisma/client";
 
@@ -35,10 +35,10 @@ export function FinanceiroFerramentas({
   const router = useRouter();
 
   const tools = [
-    { id: "pagamento" as const, label: "Formas de Pagamento" },
-    { id: "bancos" as const, label: "Bancos" },
-    { id: "status" as const, label: "Status de Pagamento" },
-    { id: "cnpj" as const, label: "CNPJ" },
+    { id: "pagamento" as const, label: "Formas de Pagamento", icon: <CreditCard className="h-4 w-4" /> },
+    { id: "bancos" as const, label: "Bancos", icon: <Landmark className="h-4 w-4" /> },
+    { id: "status" as const, label: "Status de Pagamento", icon: <Tag className="h-4 w-4" /> },
+    { id: "cnpj" as const, label: "CNPJ", icon: <Building2 className="h-4 w-4" /> },
   ];
 
   return (
@@ -52,7 +52,7 @@ export function FinanceiroFerramentas({
             size="sm"
             onClick={() => setOpen((cur) => (cur === t.id ? null : t.id))}
           >
-            {t.label}
+            {t.icon} {t.label}
           </Button>
         ))}
         {/* Histórico: pedidos já processados (rota própria, listagem paginada). */}

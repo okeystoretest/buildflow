@@ -47,7 +47,7 @@ export default async function ClientesPage({
   return (
     <div className="mx-auto max-w-5xl">
       <BackButton href="/vendas" />
-      <h1 className="mb-4 text-2xl font-bold text-vendas">Clientes</h1>
+      <h1 className="mb-4 text-2xl font-bold text-vendas">Cadastro de Clientes</h1>
 
       <div className="mb-4">
         <SearchBox placeholder="Buscar por nome ou código..." className="max-w-sm" />

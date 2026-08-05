@@ -42,7 +42,6 @@ export default async function FluxoPage({
     return <StorePicker stores={pickerStores} basePath="/fluxo" title="Fluxo de Pedidos" />;
   }
   const simplified = store.simplifiedFlow;
-  const lojaName = store.name;
 
   // Escopo de visualizacao (doc — Regras de Visibilidade):
   // Mostra TODOS os pedidos daquela Loja de Origem, independentemente de quem
@@ -95,7 +94,7 @@ export default async function FluxoPage({
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">
-          Fluxo de Pedidos → Fábrica (VENDAS) — {lojaName}
+          Fluxo de Pedidos → Fábrica (VENDAS)
         </h1>
         <p className="text-sm text-muted-foreground">Acompanhamento de todos os pedidos por status.</p>
       </div>
@@ -105,7 +104,6 @@ export default async function FluxoPage({
         canManage={session.role === "GESTAO"}
         userRole={session.role}
         boardModule="Fluxo de Pedidos → Fábrica (VENDAS)"
-        boardTitle={lojaName.toUpperCase()}
         stageLimits={stageLimits}
         simplified={simplified}
       />

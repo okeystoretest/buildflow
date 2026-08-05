@@ -13,7 +13,7 @@ export async function createCustomer(
   raw: unknown,
 ): Promise<ActionResult<{ id: string; name: string }>> {
   try {
-    await requireRoleAction(["VENDAS", "GESTAO"]);
+    await requireRoleAction(["VENDAS", "GESTAO", "FINANCEIRO"]);
     const parsed = createCustomerSchema.safeParse(raw);
     if (!parsed.success) {
       return actionError("Dados invalidos.", parsed.error.flatten().fieldErrors);
@@ -38,7 +38,7 @@ export async function createCustomer(
 /** Edita um cliente existente. */
 export async function updateCustomer(raw: unknown): Promise<ActionResult<void>> {
   try {
-    await requireRoleAction(["VENDAS", "GESTAO"]);
+    await requireRoleAction(["VENDAS", "GESTAO", "FINANCEIRO"]);
     const parsed = updateCustomerSchema.safeParse(raw);
     if (!parsed.success) {
       return actionError("Dados invalidos.", parsed.error.flatten().fieldErrors);
@@ -65,7 +65,7 @@ export async function updateCustomer(raw: unknown): Promise<ActionResult<void>> 
 /** Exclui um cliente (bloqueia se houver pedidos vinculados). */
 export async function deleteCustomer(id: string): Promise<ActionResult<void>> {
   try {
-    await requireRoleAction(["VENDAS", "GESTAO"]);
+    await requireRoleAction(["VENDAS", "GESTAO", "FINANCEIRO"]);
     const count = await prisma.order.count({ where: { customerId: id } });
     if (count > 0) {
       return actionError(`Não é possível excluir: cliente possui ${count} pedido(s) vinculado(s).`);
