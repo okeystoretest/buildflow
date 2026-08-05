@@ -1,6 +1,9 @@
+import Link from "next/link";
+import { PackageCheck } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
 import { columnsForFlow } from "@/lib/order-flow";
 import { KanbanBoard, type KanbanCard } from "@/components/shared/kanban-board";
 import { StorePicker } from "@/components/shared/store-picker";
@@ -139,13 +142,23 @@ export default async function LogisticaPage({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-distribuicao">
-          Fluxo de Pedidos → Fábrica (LOGÍSTICA) — {lojaName}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Acompanhe o status dos pedidos e avance manualmente os que estão prontos para entrega.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-distribuicao">
+            Fluxo de Pedidos → Fábrica (LOGÍSTICA) — {lojaName}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Acompanhe o status dos pedidos e avance manualmente os que estão prontos para entrega.
+          </p>
+        </div>
+        {/* Histórico de Entregas: exclusivo de LOGISTICA/GESTAO. */}
+        {isLogisticaOuGestao && (
+          <Button asChild variant="outline">
+            <Link href="/logistica/entregas">
+              <PackageCheck className="h-4 w-4" /> Histórico de Entregas
+            </Link>
+          </Button>
+        )}
       </div>
       <KanbanBoard
         cards={cards}

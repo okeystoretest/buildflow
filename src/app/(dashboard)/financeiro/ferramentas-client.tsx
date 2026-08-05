@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Check, X, History } from "lucide-react";
+import { Pencil, Trash2, Check, X, History, Truck } from "lucide-react";
 import { CrudTable, type CrudRow } from "@/components/shared/crud-table";
 import type { PaymentDisposition } from "@prisma/client";
 
@@ -58,6 +58,10 @@ export function FinanceiroFerramentas({
         {/* Histórico: pedidos já processados (rota própria, listagem paginada). */}
         <Button variant="outline" size="sm" onClick={() => router.push("/financeiro/historico")}>
           <History className="h-4 w-4" /> Histórico
+        </Button>
+        {/* Entregas: entregas efetuadas pelos motoristas (rota própria). */}
+        <Button variant="outline" size="sm" onClick={() => router.push("/financeiro/entregas")}>
+          <Truck className="h-4 w-4" /> Entregas
         </Button>
       </div>
 
