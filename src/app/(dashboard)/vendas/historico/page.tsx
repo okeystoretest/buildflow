@@ -6,18 +6,11 @@ import { BackButton } from "@/components/shared/back-button";
 import { HistoricoFiltros } from "./filtros-client";
 import { HistoricoList, type HistoricoItem } from "./historico-list";
 import { Pagination } from "@/components/shared/pagination";
+import type { Prisma } from "@prisma/client";
 
 // Itens por pagina. O historico so cresce (todo pedido concluido fica aqui),
 // entao a consulta e paginada no banco em vez de trazer tudo.
 const PER_PAGE = 20;
-
-function firstDayOfMonth(): string {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-}
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export default async function HistoricoPage({
   searchParams,
@@ -26,21 +19,33 @@ export default async function HistoricoPage({
 }) {
   const session = await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
-  // Padrao: mes atual.
-  const de = searchParams.de || firstDayOfMonth();
-  const ate = searchParams.ate || todayStr();
+  // IMPORTANTE (correcao 2.1): NAO ha mais filtro de data padrao. Antes o
+  // periodo caia no "mes atual", o que ocultava silenciosamente todos os
+  // pedidos legados/anteriores. Agora, sem "de"/"ate" na URL, o historico
+  // exibe TODOS os pedidos concluidos, independentemente da data. O filtro de
+  // periodo so e aplicado quando o usuario o define explicitamente.
+  const de = searchParams.de?.trim() || "";
+  const ate = searchParams.ate?.trim() || "";
   const comanda = searchParams.comanda?.trim() || "";
   const page = Math.max(1, Number(searchParams.page ?? 1) || 1);
 
-  const dataInicio = new Date(de + "T00:00:00");
-  const dataFim = new Date(ate + "T23:59:59");
+  // Intervalo de data condicional: so entra no filtro se informado.
+  const updatedAt: Prisma.DateTimeFilter = {};
+  if (de) updatedAt.gte = new Date(de + "T00:00:00");
+  if (ate) updatedAt.lte = new Date(ate + "T23:59:59");
+  const temPeriodo = de !== "" || ate !== "";
 
   // O mesmo filtro serve para listar a pagina e para contar o total.
-  const where = {
-    status: "CONCLUIDO" as const,
-    ...(session.role === "GESTAO" ? {} : { sellerId: session.userId }),
-    updatedAt: { gte: dataInicio, lte: dataFim },
-    ...(comanda ? { comandaNumber: { contains: comanda, mode: "insensitive" as const } } : {}),
+  const where: Prisma.OrderWhereInput = {
+    status: "CONCLUIDO",
+    // GESTAO/FINANCEIRO veem tudo; VENDAS ve apenas os proprios pedidos.
+    ...(session.role === "GESTAO" || session.role === "FINANCEIRO"
+      ? {}
+      : { sellerId: session.userId }),
+    ...(temPeriodo ? { updatedAt } : {}),
+    ...(comanda
+      ? { comandaNumber: { contains: comanda, mode: "insensitive" } }
+      : {}),
   };
 
   // As duas consultas correm em paralelo.
@@ -58,18 +63,27 @@ export default async function HistoricoPage({
     prisma.order.count({ where }),
   ]);
 
+  // Fallback (correcao 2.1): registros antigos podem ter campos ausentes
+  // (customer nulo, total nulo). Blindamos a montagem para nunca quebrar a
+  // renderizacao nem ocultar o item.
   const items: HistoricoItem[] = orders.map((o) => ({
     id: o.id,
-    orderNumber: o.orderNumber,
+    orderNumber: o.orderNumber ?? "—",
     comandaNumber: o.comandaNumber,
-    customerName: o.customer.name,
-    total: formatBRL(o.total.toString()),
+    customerName: o.customer?.name ?? "Cliente não informado",
+    total: formatBRL((o.total ?? 0).toString()),
     driverName: o.delivery?.driver?.name ?? null,
     paymentProofPath: o.paymentProofPath,
     invoicePath: o.invoicePath,
     trackingCode: o.trackingCode,
     proofs: (o.delivery?.proofs ?? []).map((p) => ({ id: p.id, filePath: p.filePath })),
   }));
+
+  const resumoPeriodo = temPeriodo
+    ? ` entre ${de ? new Date(de).toLocaleDateString("pt-BR") : "início"} e ${
+        ate ? new Date(ate).toLocaleDateString("pt-BR") : "hoje"
+      }`
+    : " (todos os períodos)";
 
   return (
     <div className="space-y-6">
@@ -79,7 +93,7 @@ export default async function HistoricoPage({
       <HistoricoFiltros defaultDe={de} defaultAte={ate} defaultComanda={comanda} />
 
       <p className="text-sm text-muted-foreground">
-        {total} pedido(s) encontrado(s) entre {new Date(de).toLocaleDateString("pt-BR")} e {new Date(ate).toLocaleDateString("pt-BR")}.
+        {total} pedido(s) encontrado(s){resumoPeriodo}.
       </p>
 
       {total === 0 && (

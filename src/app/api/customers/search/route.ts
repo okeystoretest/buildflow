@@ -8,10 +8,13 @@ import { getSession } from "@/lib/auth";
 // <select> geraria um HTML gigantesco e travaria o celular da vendedora.
 // Aqui a busca acontece no BANCO e devolve no maximo 20 resultados.
 //
+// ACESSO: VENDAS, GESTAO e FINANCEIRO. O Financeiro passou a poder criar
+// pedidos (paridade com Vendas), entao precisa selecionar clientes no combobox.
+//
 // Uso: /api/customers/search?q=merc
 export async function GET(req: Request) {
   const session = await getSession();
-  if (!session || !["VENDAS", "GESTAO"].includes(session.role)) {
+  if (!session || !["VENDAS", "GESTAO", "FINANCEIRO"].includes(session.role)) {
     return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   }
 

@@ -21,14 +21,6 @@ const PROCESSED_STATUSES: OrderStatus[] = [
   "CANCELADO",
 ];
 
-function firstDayOfMonth(): string {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-}
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function outcomeOf(status: OrderStatus): FinHistItem["outcome"] {
   if (status === "AGUARDANDO_IMPRESSAO") return "APROVADO";
   if (status === "PAGO") return "PAGO";
@@ -42,13 +34,17 @@ export default async function FinanceiroHistoricoPage({
 }) {
   await requireRole(["FINANCEIRO", "GESTAO"]);
 
-  const de = searchParams.de || firstDayOfMonth();
-  const ate = searchParams.ate || todayStr();
+  // Correcao 2.1: sem periodo padrao. Sem "de"/"ate" na URL, exibe TODOS os
+  // pedidos processados (inclusive legados), independentemente da data.
+  const de = searchParams.de?.trim() || "";
+  const ate = searchParams.ate?.trim() || "";
   const busca = searchParams.busca?.trim() || "";
   const page = Math.max(1, Number(searchParams.page ?? 1) || 1);
 
-  const dataInicio = new Date(de + "T00:00:00");
-  const dataFim = new Date(ate + "T23:59:59");
+  const createdAt: Prisma.DateTimeFilter = {};
+  if (de) createdAt.gte = new Date(de + "T00:00:00");
+  if (ate) createdAt.lte = new Date(ate + "T23:59:59");
+  const temPeriodo = de !== "" || ate !== "";
 
   // Filtro sobre as ENTRADAS de historico que marcam o processamento pelo
   // Financeiro. A data considerada e a do processamento (createdAt do historico).
@@ -64,7 +60,7 @@ export default async function FinanceiroHistoricoPage({
 
   const where: Prisma.OrderStatusHistoryWhereInput = {
     status: { in: PROCESSED_STATUSES },
-    createdAt: { gte: dataInicio, lte: dataFim },
+    ...(temPeriodo ? { createdAt } : {}),
     order: orderFilter,
   };
 
@@ -92,21 +88,21 @@ export default async function FinanceiroHistoricoPage({
     prisma.orderStatusHistory.count({ where }),
   ]);
 
+  // Fallback (correcao 2.1): registros antigos podem ter relacoes ausentes.
   const items: FinHistItem[] = hist.map((h) => {
     const o = h.order;
     const outcome = outcomeOf(h.status);
-    // Rotulo do desfecho: usa a nota do historico quando util, senao o proprio.
     const outcomeLabel =
       outcome === "APROVADO" ? "Aprovado" : outcome === "PAGO" ? "Pago" : (h.note || "Interrompido");
     return {
       id: o.id,
-      orderNumber: o.orderNumber,
+      orderNumber: o.orderNumber ?? "—",
       comandaNumber: o.comandaNumber,
-      customerName: o.customer.name,
-      sellerName: o.seller.name,
-      total: formatBRL(o.total.toString()),
-      orderValue: formatBRL(o.orderValue.toString()),
-      freight: formatBRL(o.freight.toString()),
+      customerName: o.customer?.name ?? "Cliente não informado",
+      sellerName: o.seller?.name ?? "—",
+      total: formatBRL((o.total ?? 0).toString()),
+      orderValue: formatBRL((o.orderValue ?? 0).toString()),
+      freight: formatBRL((o.freight ?? 0).toString()),
       processedAt: h.createdAt.toISOString(),
       outcome,
       outcomeLabel,
@@ -124,6 +120,12 @@ export default async function FinanceiroHistoricoPage({
     };
   });
 
+  const resumoPeriodo = temPeriodo
+    ? ` entre ${de ? new Date(de).toLocaleDateString("pt-BR") : "início"} e ${
+        ate ? new Date(ate).toLocaleDateString("pt-BR") : "hoje"
+      }`
+    : " (todos os períodos)";
+
   return (
     <div className="space-y-6">
       <BackButton href="/financeiro" />
@@ -135,7 +137,7 @@ export default async function FinanceiroHistoricoPage({
       <FinHistoricoFiltros defaultDe={de} defaultAte={ate} defaultBusca={busca} />
 
       <p className="text-sm text-muted-foreground">
-        {total} pedido(s) processado(s) entre {new Date(de).toLocaleDateString("pt-BR")} e {new Date(ate).toLocaleDateString("pt-BR")}.
+        {total} pedido(s) processado(s){resumoPeriodo}.
       </p>
 
       {total === 0 && (
