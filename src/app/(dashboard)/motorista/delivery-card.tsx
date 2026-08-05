@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OrderStatus } from "@prisma/client";
 import { startRoute, completeDelivery } from "@/lib/actions/deliveries";
@@ -8,6 +8,7 @@ import { claimOpenOrder, unassignMyOrder } from "@/lib/actions/logistics";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
+import { CompletePhotoModal } from "./complete-photo-modal";
 import { Truck, Camera, Eye, CheckCircle2, Hand, X } from "lucide-react";
 
 export interface DriverOrderView {
@@ -29,7 +30,7 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [photoModal, setPhotoModal] = useState(false);
 
   function iniciar() {
     setError(null);
@@ -55,18 +56,21 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
     });
   }
 
-  function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function concluirComFotos(files: File[]) {
     setError(null);
     const fd = new FormData();
     fd.append("orderId", order.id);
-    fd.append("photo", file);
+    // Envia todas as fotos sob o mesmo campo "photos" (a action lê via getAll).
+    for (const f of files) fd.append("photos", f);
     start(async () => {
       const res = await completeDelivery(fd);
-      if (res.ok) router.refresh(); else setError(res.error);
+      if (res.ok) {
+        setPhotoModal(false);
+        router.refresh();
+      } else {
+        setError(res.error);
+      }
     });
-    e.target.value = "";
   }
 
   // Card em aberto: só permite "Atribuir" (pegar para si). Sem iniciar/concluir.
@@ -129,13 +133,10 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
         )}
 
         {podeConcluir && (
-          <>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
-            <Button variant="motorista" size="lg" className="w-full" onClick={() => fileRef.current?.click()} disabled={pending}>
-              <Camera className="mr-2 h-5 w-5" />
-              {pending ? "Enviando foto..." : "Concluir com foto"}
-            </Button>
-          </>
+          <Button variant="motorista" size="lg" className="w-full" onClick={() => setPhotoModal(true)} disabled={pending}>
+            <Camera className="mr-2 h-5 w-5" />
+            {pending ? "Enviando..." : "Concluir com foto"}
+          </Button>
         )}
 
         {entregue && (
@@ -164,6 +165,14 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
 
       {detail && (
         <OrderDetailModal orderId={order.id} onClose={() => setDetail(false)} driverMode />
+      )}
+
+      {photoModal && (
+        <CompletePhotoModal
+          pending={pending}
+          onSubmit={concluirComFotos}
+          onClose={() => setPhotoModal(false)}
+        />
       )}
     </div>
   );

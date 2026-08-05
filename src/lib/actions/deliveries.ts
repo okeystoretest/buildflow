@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
-import { processAndSaveImage, validateUpload } from "@/lib/image";
+import { processAndSaveImage, validateUpload, type ProcessedImage } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 
 /** Motorista inicia a rota (ENVIADO -> EM_ROTA). */
@@ -34,62 +34,91 @@ export async function startRoute(orderId: string): Promise<ActionResult<void>> {
 }
 
 /**
- * Motorista conclui a entrega com foto.
- *  sharp -> redimensiona, reduz qualidade, converte p/ webp -> salva em disco.
- *  Banco grava SO o caminho. Apos salvar: pedido -> CONCLUIDO (sai do dashboard ativo,
- *  vai pro Historico de Vendas).
+ * Motorista conclui a entrega com 1 a 3 fotos.
+ *  Cada foto: sharp -> redimensiona, reduz qualidade, converte p/ webp -> disco.
+ *  Banco grava SO o caminho (uma linha Proof por foto). Apos salvar: pedido ->
+ *  CONCLUIDO (sai do dashboard ativo, vai pro Historico de Vendas).
+ *
+ * Compatibilidade: aceita tanto o campo novo "photos" (multiplas) quanto o
+ * antigo "photo" (uma), para não quebrar clientes desatualizados.
  */
+const MAX_PHOTOS = 3;
+
 export async function completeDelivery(
   formData: FormData,
-): Promise<ActionResult<{ filePath: string }>> {
+): Promise<ActionResult<{ filePaths: string[] }>> {
   try {
     const session = await requireRoleAction(["MOTORISTA", "GESTAO"]);
 
     const orderId = String(formData.get("orderId") ?? "");
-    const file = formData.get("photo");
     if (!orderId) return actionError("Pedido nao informado.");
-    if (!(file instanceof File)) return actionError("Foto de comprovacao obrigatoria.");
 
-    const invalid = validateUpload(file);
-    if (invalid) return actionError(invalid);
+    // Coleta as fotos: "photos" (novo, múltiplo) + "photo" (legado, único).
+    const raw = [...formData.getAll("photos"), ...formData.getAll("photo")];
+    const files = raw.filter((f): f is File => f instanceof File && f.size > 0);
+
+    if (files.length === 0) return actionError("Envie ao menos 1 foto de comprovacao.");
+    if (files.length > MAX_PHOTOS) {
+      return actionError(`Máximo de ${MAX_PHOTOS} fotos por pedido.`);
+    }
+
+    // Valida cada arquivo antes de processar qualquer um.
+    for (const f of files) {
+      const invalid = validateUpload(f);
+      if (invalid) return actionError(invalid);
+    }
 
     const order = await prisma.order.findUnique({ where: { id: orderId }, include: { delivery: true } });
     if (!order || !order.delivery) return actionError("Entrega nao encontrada.");
     if (order.delivery.driverId !== session.userId && session.role !== "GESTAO") {
       return actionError("Esta entrega nao e sua.");
     }
+    const deliveryId = order.delivery.id;
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const processed = await processAndSaveImage(buffer, {
-      folder: "comprovantes",
-      fileName: `${order.delivery.id}_${Date.now()}`,
-    });
+    // Processa e salva cada foto (sharp -> webp) ANTES da transação, para não
+    // manter a transação aberta durante I/O de disco.
+    const processedAll: ProcessedImage[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const buffer = Buffer.from(await files[i].arrayBuffer());
+      const processed = await processAndSaveImage(buffer, {
+        folder: "comprovantes",
+        fileName: `${deliveryId}_${Date.now()}_${i}`,
+      });
+      processedAll.push(processed);
+    }
 
     await prisma.$transaction(async (tx) => {
-      await tx.proof.create({
-        data: {
-          deliveryId: order.delivery!.id,
-          filePath: processed.filePath,
-          width: processed.width,
-          height: processed.height,
-          sizeBytes: processed.sizeBytes,
-        },
-      });
+      for (const processed of processedAll) {
+        await tx.proof.create({
+          data: {
+            deliveryId,
+            filePath: processed.filePath,
+            width: processed.width,
+            height: processed.height,
+            sizeBytes: processed.sizeBytes,
+          },
+        });
+      }
       await tx.delivery.update({
-        where: { id: order.delivery!.id },
+        where: { id: deliveryId },
         data: { status: "ENTREGUE", deliveredAt: new Date() },
       });
-      // doc: apos foto salva -> CONCLUIDO
+      // doc: apos foto(s) salva(s) -> CONCLUIDO
       await tx.order.update({ where: { id: orderId }, data: { status: "CONCLUIDO" } });
       await tx.orderStatusHistory.create({
-        data: { orderId, status: "CONCLUIDO", changedBy: session.userId, note: "Entregue com comprovante" },
+        data: {
+          orderId,
+          status: "CONCLUIDO",
+          changedBy: session.userId,
+          note: `Entregue com ${processedAll.length} comprovante(s)`,
+        },
       });
     });
 
     revalidatePath("/motorista");
     revalidatePath("/dashboard");
     revalidatePath("/vendas");
-    return actionOk({ filePath: processed.filePath });
+    return actionOk({ filePaths: processedAll.map((p) => p.filePath) });
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao concluir entrega.");
   }
