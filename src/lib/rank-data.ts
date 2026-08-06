@@ -172,11 +172,27 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
       .sort((a, b) => b.vendido - a.vendido);
 
   // Campanhas ativas + pedidos vinculados + metas (SalesGoal) vinculadas.
+  // REGRA DE NEGÓCIO (multilojas): itens de campanha vendidos em QUALQUER loja
+  // contam no ranking — inclusive nas Lojas de Origem de fluxo SIMPLIFICADO,
+  // que NÃO geram comanda. O filtro antigo (comandaNumber != null) excluía
+  // essas vendas. Passamos a usar o mesmo critério de "faturado" do rank geral:
+  //  - fluxo padrão: comanda gerada (comandaNumber != null); ou
+  //  - fluxo simplificado: status PAGO/EMBALADO/ENTREGUE/CONCLUIDO.
+  // Também descartamos os pedidos interrompidos (estorno/cancelado).
   const campaignsRaw = await prisma.campaign.findMany({
     where: { active: true },
     include: {
       orders: {
-        where: { comandaNumber: { not: null } },
+        where: {
+          status: { notIn: ["ESTORNO", "ESTORNO_PARCIAL", "CANCELADO"] },
+          OR: [
+            { comandaNumber: { not: null } },
+            {
+              originStore: { simplifiedFlow: true },
+              status: { in: ["PAGO", "EMBALADO", "ENTREGUE", "CONCLUIDO"] },
+            },
+          ],
+        },
         include: { seller: true, campaignItems: true },
       },
       goals: { where: { month, year }, include: { user: true } },

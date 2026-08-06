@@ -126,6 +126,10 @@ export function KanbanBoard({
   const canAdvanceCard = useCallback(
     (card: KanbanCard): boolean => {
       if (!advance?.enabled || !nextInFlow(card.status)) return false;
+      // Trava (doc 3.1): se o pedido já tem motorista atribuído, a Logística
+      // não avança mais o status manualmente — a entrega está com o motorista.
+      // Exceção: já ENTREGUE não tem seta de qualquer forma (sem próximo passo).
+      if (card.hasDriver && card.status !== "ENTREGUE") return false;
       if (card.status === "EM_ANALISE" && userRole !== "FINANCEIRO" && userRole !== "GESTAO") {
         return false;
       }

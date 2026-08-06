@@ -17,7 +17,7 @@ const PER_PAGE = 20;
 export default async function FinanceiroEntregasPage({
   searchParams,
 }: {
-  searchParams: { busca?: string; driver?: string; de?: string; ate?: string; page?: string };
+  searchParams: { busca?: string; driver?: string; de?: string; ate?: string; situacao?: string; page?: string };
 }) {
   await requireRole(["FINANCEIRO", "GESTAO"]);
 
@@ -25,6 +25,8 @@ export default async function FinanceiroEntregasPage({
   const driverId = searchParams.driver?.trim() || "";
   const de = searchParams.de?.trim() || "";
   const ate = searchParams.ate?.trim() || "";
+  // Situação do pagamento: "" (todas) | "pagas" (Entrega Paga) | "nao_pagas".
+  const situacao = searchParams.situacao?.trim() || "";
   const page = Math.max(1, Number(searchParams.page ?? 1) || 1);
 
   // Motoristas ATIVOS (para o dropdown de filtro).
@@ -56,6 +58,12 @@ export default async function FinanceiroEntregasPage({
 
   const where: Prisma.OrderWhereInput = {
     delivery: { is: deliveryWhere },
+    // Filtro por situação de pagamento da entrega:
+    //  - "pagas": só as que já têm DriverPayment (Entrega Paga).
+    //  - "nao_pagas": só as ainda sem pagamento (a pagar).
+    //  - "" (Entregues): todas as entregues, pagas ou não.
+    ...(situacao === "pagas" ? { driverPayment: { isNot: null } } : {}),
+    ...(situacao === "nao_pagas" ? { driverPayment: { is: null } } : {}),
     ...(busca
       ? {
           OR: [
@@ -99,6 +107,7 @@ export default async function FinanceiroEntregasPage({
         defaultDriver={driverId}
         defaultDe={de}
         defaultAte={ate}
+        defaultSituacao={situacao}
       />
 
       <p className="text-sm text-muted-foreground">

@@ -67,6 +67,39 @@ export async function sendPushToRole(role: Role, payload: PushPayload): Promise<
     console.error("[push] falha ao carregar inscrições:", err);
     return;
   }
+  await deliver(subs, payload);
+}
+
+/**
+ * Envia um push para TODOS os dispositivos inscritos de UM usuário específico
+ * (ex.: a vendedora responsável por um pedido). Mesmo tratamento de inscrições
+ * inválidas e mesmo caráter fire-and-forget de sendPushToRole.
+ */
+export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
+  if (!ensureConfigured()) return;
+  if (!userId) return;
+
+  let subs: { id: string; endpoint: string; p256dh: string; auth: string }[] = [];
+  try {
+    subs = await prisma.pushSubscription.findMany({
+      where: { userId, user: { active: true } },
+      select: { id: true, endpoint: true, p256dh: true, auth: true },
+    });
+  } catch (err) {
+    console.error("[push] falha ao carregar inscrições do usuário:", err);
+    return;
+  }
+  await deliver(subs, payload);
+}
+
+/**
+ * Dispara o payload para uma lista de inscrições e remove as expiradas
+ * (404/410). Extraído para reuso entre envio por papel e por usuário.
+ */
+async function deliver(
+  subs: { id: string; endpoint: string; p256dh: string; auth: string }[],
+  payload: PushPayload,
+): Promise<void> {
   if (subs.length === 0) return;
 
   const body = JSON.stringify(payload);

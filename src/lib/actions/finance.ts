@@ -7,6 +7,7 @@ import { processAndSaveImage, saveDocument, isPdfDataUrl, deleteUploadedFile } f
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/finance-constants";
 import { emitOrderUpdated } from "@/lib/realtime/emit";
+import { sendPushToUser } from "@/lib/push";
 import { isDoacao } from "@/lib/validations/order";
 import type { PaymentDisposition } from "@prisma/client";
 
@@ -535,6 +536,26 @@ export async function flagOrderIssue(args: {
         financeIssueResolvedAt: null, // nova pendencia reabre (limpa resolucao anterior)
       },
     });
+
+    // Notifica a vendedora responsável pelo pedido sobre a pendência financeira:
+    // registro in-app (bell) + Web Push (chega mesmo com o app fechado).
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: order.sellerId,
+          orderId: order.id,
+          message: `Pendência financeira no pedido ${order.orderNumber}: ${texto}`,
+        },
+      });
+    } catch (e) {
+      console.error("[notif] falha ao registrar pendência financeira:", e);
+    }
+    void sendPushToUser(order.sellerId, {
+      title: "Pendência financeira",
+      body: `Pedido ${order.orderNumber}: ${texto}`,
+      url: "/vendas",
+      tag: `order-${order.id}`,
+    }).catch((err) => console.error("[push] envio falhou:", err));
 
     revalidatePath("/financeiro");
     revalidatePath("/vendas");

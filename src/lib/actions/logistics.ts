@@ -8,6 +8,7 @@ import { nextStatus, canTransition, nextSimplifiedStatus, canTransitionSimplifie
 import { canInteractWithOrder } from "@/lib/permissions";
 import { isAnexoDispensavel } from "@/lib/validations/order";
 import { emitOrderUpdated, emitOrderAvailableForDrivers } from "@/lib/realtime/emit";
+import { sendPushToUser } from "@/lib/push";
 import type { OrderStatus } from "@prisma/client";
 
 /**
@@ -140,6 +141,18 @@ export async function advanceOrderStatus(args: {
         });
       }
 
+      // Regra: ao entrar em PENDENTE (fluxo logístico), notifica a vendedora
+      // responsável sobre a pendência registrada.
+      if (target === "PENDENTE") {
+        await tx.notification.create({
+          data: {
+            userId: order.sellerId,
+            orderId: order.id,
+            message: `Pendência na logística do pedido ${order.orderNumber}: ${args.pendencyNote!.trim()}`,
+          },
+        });
+      }
+
       // Ao ENVIADO/EM_ROTA, sincroniza a entrega.
       if (target === "ENVIADO" || target === "EM_ROTA") {
         await tx.delivery.updateMany({
@@ -153,6 +166,15 @@ export async function advanceOrderStatus(args: {
     revalidatePath("/fluxo");
     revalidatePath("/motorista");
     emitOrderUpdated({ orderId: args.orderId, status: target });
+    // Web Push da pendência para a vendedora (após confirmar a transição).
+    if (target === "PENDENTE") {
+      void sendPushToUser(order.sellerId, {
+        title: "Pendência na logística",
+        body: `Pedido ${order.orderNumber}: ${args.pendencyNote!.trim()}`,
+        url: "/vendas",
+        tag: `order-${order.id}`,
+      }).catch((err) => console.error("[push] envio falhou:", err));
+    }
     return actionOk({ status: target });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao avancar status.";
@@ -570,7 +592,7 @@ export async function setOrderStatus(args: {
 
     const order = await prisma.order.findUnique({
       where: { id: args.orderId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, orderNumber: true, sellerId: true },
     });
     if (!order) return actionError("Pedido nao encontrado.");
 
@@ -587,6 +609,16 @@ export async function setOrderStatus(args: {
           note: "Status alterado pela Gestão.",
         },
       });
+      // Ao arrastar para PENDENTE, notifica a vendedora (in-app).
+      if (args.to === "PENDENTE") {
+        await tx.notification.create({
+          data: {
+            userId: order.sellerId,
+            orderId: order.id,
+            message: `Pendência na logística do pedido ${order.orderNumber}.`,
+          },
+        });
+      }
     });
 
     revalidatePath("/logistica");
@@ -594,6 +626,14 @@ export async function setOrderStatus(args: {
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
     emitOrderUpdated({ orderId: args.orderId });
+    if (args.to === "PENDENTE") {
+      void sendPushToUser(order.sellerId, {
+        title: "Pendência na logística",
+        body: `Pedido ${order.orderNumber}.`,
+        url: "/vendas",
+        tag: `order-${order.id}`,
+      }).catch((err) => console.error("[push] envio falhou:", err));
+    }
     return actionOk({ status: args.to });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao alterar status.";

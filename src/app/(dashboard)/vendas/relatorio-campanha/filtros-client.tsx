@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -8,7 +9,7 @@ interface Opt { id: string; name: string; }
 
 /**
  * Filtros do Relatório de Campanha. Aplicam imediatamente ao trocar o valor
- * (sem botões). O escopo por vendedora só aparece para GESTÃO.
+ * (sem botões). O escopo por vendedora só aparece para GESTÃO/FINANCEIRO.
  */
 export function RelatorioCampanhaFiltros({
   campaigns,
@@ -16,12 +17,16 @@ export function RelatorioCampanhaFiltros({
   showSellerFilter,
   defaultCampaign,
   defaultSeller,
+  defaultDe,
+  defaultAte,
 }: {
   campaigns: Opt[];
   sellers: Opt[];
   showSellerFilter: boolean;
   defaultCampaign: string;
   defaultSeller: string;
+  defaultDe: string;
+  defaultAte: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -68,6 +73,15 @@ export function RelatorioCampanhaFiltros({
             </select>
           </div>
         )}
+
+        <div className="space-y-1.5">
+          <Label>De</Label>
+          <Input type="date" value={defaultDe} onChange={(e) => apply("de", e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Até</Label>
+          <Input type="date" value={defaultAte} onChange={(e) => apply("ate", e.target.value)} />
+        </div>
       </CardContent>
     </Card>
   );

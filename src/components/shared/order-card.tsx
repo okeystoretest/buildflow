@@ -19,6 +19,9 @@ export interface OrderCardData {
   // Pedido do tipo Troca: isento do bloqueio "Processando sem NF" (doc §5).
   isExchange?: boolean;
   approvedByFinance: boolean;
+  // Pedido já tem motorista atribuído para a entrega. Quando true, a Logística
+  // não deve mais avançar o status manualmente (a entrega está com o motorista).
+  hasDriver?: boolean;
   // ISO da entrada em ENTREGUE (usado para sumir do fluxo após 15 min).
   deliveredAt?: string | null;
   // ISO de quando o pedido entrou no status atual (para alerta temporal).

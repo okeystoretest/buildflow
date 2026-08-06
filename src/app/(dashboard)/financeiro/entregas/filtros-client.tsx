@@ -23,16 +23,18 @@ export function EntregasFinFiltros({
   defaultDriver,
   defaultDe,
   defaultAte,
+  defaultSituacao,
 }: {
   drivers: DriverOption[];
   defaultBusca: string;
   defaultDriver: string;
   defaultDe: string;
   defaultAte: string;
+  defaultSituacao: string;
 }) {
   const f = useFilterQuery(
     { busca: defaultBusca },
-    { instant: { driver: defaultDriver, de: defaultDe, ate: defaultAte } },
+    { instant: { driver: defaultDriver, de: defaultDe, ate: defaultAte, situacao: defaultSituacao } },
   );
 
   return (
@@ -72,6 +74,19 @@ export function EntregasFinFiltros({
             {drivers.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Situação</Label>
+          <select
+            className="h-10 rounded-lg border border-input bg-background px-2 text-sm"
+            value={f.instant.situacao}
+            onChange={(e) => f.setInstant("situacao", e.target.value)}
+          >
+            <option value="">Entregues</option>
+            <option value="nao_pagas">A pagar</option>
+            <option value="pagas">Entrega Paga</option>
           </select>
         </div>
 
