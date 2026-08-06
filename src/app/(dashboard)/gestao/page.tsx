@@ -51,7 +51,7 @@ export default async function GestaoPage({
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Gestão — Parâmetros</h1>
       <GestaoTabs
-        users={users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, active: u.active, salesModel: u.salesModel, originStoreIds: u.originStores.map((s) => s.id) }))}
+        users={users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, active: u.active, salesModel: u.salesModel, originStoreIds: u.originStores.map((s) => s.id), pixKey: u.pixKey ?? null }))}
         stores={stores.map((s) => ({ id: s.id, name: s.name, active: s.active }))}
         originStores={originStores.map((s) => ({ id: s.id, name: s.name, active: s.active, simplifiedFlow: s.simplifiedFlow }))}
         orderTypes={orderTypes.map((s) => ({ id: s.id, name: s.name, active: s.active }))}

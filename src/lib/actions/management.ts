@@ -137,6 +137,8 @@ export async function createUser(args: {
   role: Role;
   salesModel?: SalesModel | null;
   originStoreIds?: string[];
+  // Chave PIX — só para MOTORISTA (ignorada nos demais perfis).
+  pixKey?: string | null;
 }): Promise<ActionResult<void>> {
   try {
     await requireRoleAction(["GESTAO"]);
@@ -161,6 +163,8 @@ export async function createUser(args: {
         password: await hashPassword(args.password),
         role: args.role,
         salesModel: args.role === "VENDAS" ? args.salesModel : null,
+        // PIX apenas para MOTORISTA; nos demais perfis grava null.
+        pixKey: args.role === "MOTORISTA" ? (args.pixKey?.trim() || null) : null,
         originStores: originStoreIds.length
           ? { connect: originStoreIds.map((id) => ({ id })) }
           : undefined,
@@ -185,6 +189,8 @@ export async function updateUser(args: {
   role: Role;
   salesModel?: SalesModel | null;
   originStoreIds?: string[];
+  // Chave PIX — só para MOTORISTA (ignorada nos demais perfis).
+  pixKey?: string | null;
 }): Promise<ActionResult<void>> {
   try {
     await requireRoleAction(["GESTAO"]);
@@ -225,6 +231,8 @@ export async function updateUser(args: {
         email,
         role: args.role,
         salesModel: args.role === "VENDAS" ? args.salesModel : null,
+        // PIX apenas para MOTORISTA; nos demais perfis limpa (null).
+        pixKey: args.role === "MOTORISTA" ? (args.pixKey?.trim() || null) : null,
         // Substitui todas as Lojas de Origem atreladas (set).
         originStores: { set: originStoreIds.map((id) => ({ id })) },
         // Só regrava a senha quando uma nova foi informada.

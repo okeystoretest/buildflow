@@ -1,22 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { useFilterQuery } from "@/hooks/use-filter-query";
 
 export interface DriverOption {
   id: string;
   name: string;
 }
 
-// Filtros do submódulo "Entregas" do Financeiro:
-//  - Busca rápida: nº da comanda ou nome do vendedor(a).
-//  - Filtro por Motorista ativo (dropdown).
-//  - Intervalo de datas (data da entrega).
+/**
+ * Filtros do submódulo "Pagamentos de Motoristas" (ex-"Entregas") do
+ * Financeiro. Busca por comanda/vendedor em tempo real (debounced); filtro de
+ * Motorista (select) e intervalo de datas aplicam na hora. Sem botões
+ * "Filtrar"/"Limpar"; ícone "X" limpa o texto.
+ */
 export function EntregasFinFiltros({
   drivers,
   defaultBusca,
@@ -30,29 +30,10 @@ export function EntregasFinFiltros({
   defaultDe: string;
   defaultAte: string;
 }) {
-  const router = useRouter();
-  const [busca, setBusca] = useState(defaultBusca);
-  const [driver, setDriver] = useState(defaultDriver);
-  const [de, setDe] = useState(defaultDe);
-  const [ate, setAte] = useState(defaultAte);
-
-  function aplicar() {
-    const params = new URLSearchParams();
-    if (busca.trim()) params.set("busca", busca.trim());
-    if (driver) params.set("driver", driver);
-    if (de) params.set("de", de);
-    if (ate) params.set("ate", ate);
-    const qs = params.toString();
-    router.push(qs ? `/financeiro/entregas?${qs}` : "/financeiro/entregas");
-  }
-
-  function limpar() {
-    setBusca("");
-    setDriver("");
-    setDe("");
-    setAte("");
-    router.push("/financeiro/entregas");
-  }
+  const f = useFilterQuery(
+    { busca: defaultBusca },
+    { instant: { driver: defaultDriver, de: defaultDe, ate: defaultAte } },
+  );
 
   return (
     <Card>
@@ -62,12 +43,21 @@ export function EntregasFinFiltros({
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              className="pl-8"
+              className="pl-8 pr-9"
               placeholder="Nº da comanda ou nome do vendedor(a)"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && aplicar()}
+              value={f.text.busca}
+              onChange={(e) => f.setText("busca", e.target.value)}
             />
+            {f.text.busca && (
+              <button
+                type="button"
+                onClick={() => f.clear("busca")}
+                aria-label="Limpar busca"
+                className="absolute right-2 top-2 rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -75,8 +65,8 @@ export function EntregasFinFiltros({
           <Label>Motorista (ativo)</Label>
           <select
             className="h-10 rounded-lg border border-input bg-background px-2 text-sm"
-            value={driver}
-            onChange={(e) => setDriver(e.target.value)}
+            value={f.instant.driver}
+            onChange={(e) => f.setInstant("driver", e.target.value)}
           >
             <option value="">Todos</option>
             {drivers.map((d) => (
@@ -87,19 +77,12 @@ export function EntregasFinFiltros({
 
         <div className="space-y-1.5">
           <Label>De</Label>
-          <Input type="date" value={de} onChange={(e) => setDe(e.target.value)} />
+          <Input type="date" value={f.instant.de} onChange={(e) => f.setInstant("de", e.target.value)} />
         </div>
         <div className="space-y-1.5">
           <Label>Até</Label>
-          <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
+          <Input type="date" value={f.instant.ate} onChange={(e) => f.setInstant("ate", e.target.value)} />
         </div>
-
-        <Button variant="financeiro" onClick={aplicar}>
-          <Search className="h-4 w-4" /> Filtrar
-        </Button>
-        <Button variant="outline" onClick={limpar}>
-          <X className="h-4 w-4" /> Limpar
-        </Button>
       </CardContent>
     </Card>
   );

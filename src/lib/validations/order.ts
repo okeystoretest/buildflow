@@ -29,6 +29,10 @@ export const createOrderSchema = z.object({
   shipDistrict: z.string().max(120).optional(),
   shipCity: z.string().max(120).optional(),
   shipState: z.string().max(2).optional(),
+  // Excursao selecionada (opcional). So relevante quando a forma de envio e a
+  // de Excursao (requiresAddress). O endereco da excursao pre-preenche os
+  // campos ship* na UI; aqui guardamos apenas o vinculo.
+  excursaoId: z.string().optional(),
   // "Observacoes de Pagamento" (exclusivo do Financeiro).
   paymentNotes: z.string().max(1000).optional(),
   // Campanha opcional + quantidade de itens (volume) quando vinculado.
@@ -123,3 +127,23 @@ export const updateCustomerSchema = createCustomerSchema.extend({
   id: z.string().min(1),
 });
 export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
+
+// ===========================================================================
+// EXCURSAO (cadastro em Vendas, padrao visual do cadastro de Clientes)
+// ===========================================================================
+
+export const createExcursaoSchema = z.object({
+  name: z.string().trim().min(2, "Nome da excursao obrigatorio.").max(160),
+  address: z.string().trim().min(3, "Endereco obrigatorio.").max(300),
+  // "Funciona ate as" (horario limite) — texto livre, ex.: "18:00".
+  cutoffTime: z.string().trim().max(40).optional().or(z.literal("")),
+  // Dias de funcionamento — texto livre, ex.: "Seg a Sex".
+  operatingDays: z.string().trim().max(120).optional().or(z.literal("")),
+  notes: z.string().trim().max(1000).optional().or(z.literal("")),
+});
+export type CreateExcursaoInput = z.infer<typeof createExcursaoSchema>;
+
+export const updateExcursaoSchema = createExcursaoSchema.extend({
+  id: z.string().min(1),
+});
+export type UpdateExcursaoInput = z.infer<typeof updateExcursaoSchema>;

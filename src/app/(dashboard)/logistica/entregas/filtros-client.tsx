@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { useFilterQuery } from "@/hooks/use-filter-query";
 
-// Filtros do Histórico de Entregas da Logística:
-//  - Busca multi-critério: cliente, comanda ou vendedora.
-//  - Intervalo de datas sobre a data de conclusão da entrega.
+/**
+ * Filtros do Histórico de Entregas da Logística. Busca multi-critério
+ * (cliente, comanda ou vendedora) em tempo real (debounced) + intervalo de
+ * datas (aplica na hora). Sem botões "Filtrar"/"Limpar"; ícone "X" limpa o
+ * texto.
+ */
 export function EntregasLogFiltros({
   defaultBusca,
   defaultDe,
@@ -20,26 +21,10 @@ export function EntregasLogFiltros({
   defaultDe: string;
   defaultAte: string;
 }) {
-  const router = useRouter();
-  const [busca, setBusca] = useState(defaultBusca);
-  const [de, setDe] = useState(defaultDe);
-  const [ate, setAte] = useState(defaultAte);
-
-  function aplicar() {
-    const params = new URLSearchParams();
-    if (busca.trim()) params.set("busca", busca.trim());
-    if (de) params.set("de", de);
-    if (ate) params.set("ate", ate);
-    const qs = params.toString();
-    router.push(qs ? `/logistica/entregas?${qs}` : "/logistica/entregas");
-  }
-
-  function limpar() {
-    setBusca("");
-    setDe("");
-    setAte("");
-    router.push("/logistica/entregas");
-  }
+  const f = useFilterQuery(
+    { busca: defaultBusca },
+    { instant: { de: defaultDe, ate: defaultAte } },
+  );
 
   return (
     <Card>
@@ -49,30 +34,32 @@ export function EntregasLogFiltros({
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              className="pl-8"
+              className="pl-8 pr-9"
               placeholder="Nome da cliente, nº da comanda ou vendedora"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && aplicar()}
+              value={f.text.busca}
+              onChange={(e) => f.setText("busca", e.target.value)}
             />
+            {f.text.busca && (
+              <button
+                type="button"
+                onClick={() => f.clear("busca")}
+                aria-label="Limpar busca"
+                className="absolute right-2 top-2 rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 
         <div className="space-y-1.5">
           <Label>De</Label>
-          <Input type="date" value={de} onChange={(e) => setDe(e.target.value)} />
+          <Input type="date" value={f.instant.de} onChange={(e) => f.setInstant("de", e.target.value)} />
         </div>
         <div className="space-y-1.5">
           <Label>Até</Label>
-          <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
+          <Input type="date" value={f.instant.ate} onChange={(e) => f.setInstant("ate", e.target.value)} />
         </div>
-
-        <Button variant="distribuicao" onClick={aplicar}>
-          <Search className="h-4 w-4" /> Filtrar
-        </Button>
-        <Button variant="outline" onClick={limpar}>
-          <X className="h-4 w-4" /> Limpar
-        </Button>
       </CardContent>
     </Card>
   );

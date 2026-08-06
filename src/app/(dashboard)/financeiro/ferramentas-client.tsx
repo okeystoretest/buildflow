@@ -55,13 +55,13 @@ export function FinanceiroFerramentas({
             {t.icon} {t.label}
           </Button>
         ))}
-        {/* Histórico: pedidos já processados (rota própria, listagem paginada). */}
+        {/* Histórico de Pedidos: pedidos já processados (rota própria, paginada). */}
         <Button variant="outline" size="sm" onClick={() => router.push("/financeiro/historico")}>
-          <History className="h-4 w-4" /> Histórico
+          <History className="h-4 w-4" /> Histórico de Pedidos
         </Button>
-        {/* Entregas: entregas efetuadas pelos motoristas (rota própria). */}
+        {/* Pagamentos de Motoristas: entregas efetuadas + pagamento ao motorista. */}
         <Button variant="outline" size="sm" onClick={() => router.push("/financeiro/entregas")}>
-          <Truck className="h-4 w-4" /> Entregas
+          <Truck className="h-4 w-4" /> Pagamentos de Motoristas
         </Button>
       </div>
 

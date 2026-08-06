@@ -19,10 +19,11 @@ export const entregaInclude = {
   financeProofs: { orderBy: { createdAt: "asc" }, select: { id: true, filePath: true } },
   delivery: {
     include: {
-      driver: { select: { name: true } },
+      driver: { select: { name: true, pixKey: true } },
       proofs: { orderBy: { createdAt: "asc" }, select: { id: true, filePath: true } },
     },
   },
+  driverPayment: { select: { id: true, amount: true, pixKey: true, createdAt: true } },
 } as const;
 
 // Monta o endereço completo (Excursão), ou null se não houver.
@@ -72,10 +73,17 @@ export function toEntregaItem(o: any): EntregaItem {
     shippingNotes: o.notes ?? null,
     address: buildAddress(o),
     driverName: o.delivery?.driver?.name ?? null,
+    driverId: o.delivery?.driverId ?? null,
+    driverPixKey: o.delivery?.driver?.pixKey ?? null,
     assignedAt: o.delivery?.assignedAt?.toISOString() ?? null,
     startedAt: o.delivery?.startedAt?.toISOString() ?? null,
     deliveredAt: o.delivery?.deliveredAt?.toISOString() ?? null,
     failReason: o.delivery?.failReason ?? null,
+    // Pagamento da entrega ao motorista (se já registrado).
+    paid: !!o.driverPayment,
+    paymentAmount: o.driverPayment ? formatBRL((o.driverPayment.amount ?? 0).toString()) : null,
+    paymentPixKey: o.driverPayment?.pixKey ?? null,
+    paidAt: o.driverPayment?.createdAt?.toISOString() ?? null,
     proofs,
   };
 }

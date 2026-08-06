@@ -12,7 +12,7 @@ import { EditarPedidoForm } from "./form";
 export default async function EditarPedidoPage({ params }: { params: { id: string } }) {
   const session = await requireRole(["GESTAO", "VENDAS", "FINANCEIRO"]);
 
-  const [order, stores, orderTypes, operations, paymentMethods, shippingMethods, banks, campaigns, me, allOriginStores] =
+  const [order, stores, orderTypes, operations, paymentMethods, shippingMethods, banks, campaigns, me, allOriginStores, excursoes] =
     await Promise.all([
       prisma.order.findUnique({
         where: { id: params.id },
@@ -34,9 +34,25 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
         include: { originStores: { where: { active: true }, orderBy: { name: "asc" } } },
       }),
       prisma.originStore.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+      prisma.excursao.findMany({
+        where: { active: true },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, address: true, cutoffTime: true, operatingDays: true },
+      }),
     ]);
 
   if (!order) notFound();
+
+  // Garante que a excursao atual do pedido apareca no dropdown mesmo se
+  // inativada depois (para nao "sumir" o vinculo ao abrir a edicao).
+  const excursoesList = [...excursoes];
+  if (order.excursaoId && !excursoesList.some((e) => e.id === order.excursaoId)) {
+    const atual = await prisma.excursao.findUnique({
+      where: { id: order.excursaoId },
+      select: { id: true, name: true, address: true, cutoffTime: true, operatingDays: true },
+    });
+    if (atual) excursoesList.unshift(atual);
+  }
 
   // Paridade com o Novo Pedido: VENDAS vê apenas as lojas de origem atreladas;
   // GESTAO e FINANCEIRO veem todas as ativas. Garante que a de origem do pedido
@@ -80,6 +96,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
               shipDistrict: order.shipDistrict ?? "",
               shipCity: order.shipCity ?? "",
               shipState: order.shipState ?? "",
+              excursaoId: order.excursaoId ?? "",
               campaignId: order.campaignId ?? "",
               itemCount: order.itemCount ?? 0,
               campaignDiscount: order.campaignDiscount ?? false,

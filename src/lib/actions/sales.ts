@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { processAndSaveImage, saveDocument, isPdfDataUrl, validateUpload, deleteUploadedFile } from "@/lib/image";
-import { createCustomerSchema, updateCustomerSchema } from "@/lib/validations/order";
+import {
+  createCustomerSchema,
+  updateCustomerSchema,
+  createExcursaoSchema,
+  updateExcursaoSchema,
+} from "@/lib/validations/order";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import type { OrderStatus } from "@prisma/client";
 
@@ -75,6 +80,93 @@ export async function deleteCustomer(id: string): Promise<ActionResult<void>> {
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao excluir cliente.");
+  }
+}
+
+// ===========================================================================
+// EXCURSOES (cadastro em Vendas)
+// ===========================================================================
+
+function normalizeOpt(v?: string): string | null {
+  const t = (v ?? "").trim();
+  return t.length ? t : null;
+}
+
+/** Cadastra uma excursao (Vendas/Gestao/Financeiro). */
+export async function createExcursao(
+  raw: unknown,
+): Promise<ActionResult<{ id: string; name: string }>> {
+  try {
+    await requireRoleAction(["VENDAS", "GESTAO", "FINANCEIRO"]);
+    const parsed = createExcursaoSchema.safeParse(raw);
+    if (!parsed.success) {
+      return actionError("Dados invalidos.", parsed.error.flatten().fieldErrors);
+    }
+    const d = parsed.data;
+    const excursao = await prisma.excursao.create({
+      data: {
+        name: d.name.trim(),
+        address: d.address.trim(),
+        cutoffTime: normalizeOpt(d.cutoffTime),
+        operatingDays: normalizeOpt(d.operatingDays),
+        notes: normalizeOpt(d.notes),
+      },
+      select: { id: true, name: true },
+    });
+    revalidatePath("/vendas/excursoes");
+    revalidatePath("/vendas/novo");
+    return actionOk(excursao);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao cadastrar excursao.");
+  }
+}
+
+/** Edita uma excursao existente. */
+export async function updateExcursao(raw: unknown): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["VENDAS", "GESTAO", "FINANCEIRO"]);
+    const parsed = updateExcursaoSchema.safeParse(raw);
+    if (!parsed.success) {
+      return actionError("Dados invalidos.", parsed.error.flatten().fieldErrors);
+    }
+    const d = parsed.data;
+    await prisma.excursao.update({
+      where: { id: d.id },
+      data: {
+        name: d.name.trim(),
+        address: d.address.trim(),
+        cutoffTime: normalizeOpt(d.cutoffTime),
+        operatingDays: normalizeOpt(d.operatingDays),
+        notes: normalizeOpt(d.notes),
+      },
+    });
+    revalidatePath("/vendas/excursoes");
+    revalidatePath("/vendas/novo");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao editar excursao.");
+  }
+}
+
+/**
+ * Exclui/inativa uma excursao. Se houver pedidos vinculados, NAO apaga (a FK e
+ * SET NULL, mas o vinculo historico se perderia); apenas inativa para sumir do
+ * dropdown. Sem pedidos, remove de vez.
+ */
+export async function deleteExcursao(id: string): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["VENDAS", "GESTAO", "FINANCEIRO"]);
+    const count = await prisma.order.count({ where: { excursaoId: id } });
+    if (count > 0) {
+      await prisma.excursao.update({ where: { id }, data: { active: false } });
+    } else {
+      await prisma.excursao.delete({ where: { id } });
+    }
+    revalidatePath("/vendas/excursoes");
+    revalidatePath("/vendas/novo");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao excluir excursao.");
   }
 }
 

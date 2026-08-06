@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ExternalLink } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronDown, ExternalLink, Wallet } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { payDriverDelivery } from "@/lib/actions/driver-payments";
 import { cn } from "@/lib/utils";
 
 // Ficha completa de uma entrega concluída. Sem ocultar/resumir: exibe todos os
@@ -44,10 +49,17 @@ export interface EntregaItem {
   address: string | null;
   // Entrega
   driverName: string | null;
+  driverId: string | null;
+  driverPixKey: string | null;
   assignedAt: string | null;
   startedAt: string | null;
   deliveredAt: string | null;
   failReason: string | null;
+  // Pagamento ao motorista (Financeiro)
+  paid: boolean;
+  paymentAmount: string | null;
+  paymentPixKey: string | null;
+  paidAt: string | null;
   // Anexos
   proofs: EntregaProof[];
 }
@@ -58,8 +70,53 @@ function fmtDateTime(iso: string | null): string {
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-export function EntregasList({ orders }: { orders: EntregaItem[] }) {
+export function EntregasList({
+  orders,
+  enablePayment = false,
+}: {
+  orders: EntregaItem[];
+  // Quando true (tela de "Pagamentos de Motoristas" do Financeiro), habilita o
+  // botão "Pagar Entrega" nos pedidos ENTREGUE.
+  enablePayment?: boolean;
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
+
+  // Fluxo de pagamento: 1) modal com PIX + valor; 2) modal de confirmação.
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [payOrder, setPayOrder] = useState<EntregaItem | null>(null);
+  const [amount, setAmount] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function openPay(o: EntregaItem) {
+    setPayOrder(o);
+    setAmount("");
+    setConfirming(false);
+    setError(null);
+  }
+  function closePay() {
+    setPayOrder(null);
+    setAmount("");
+    setConfirming(false);
+    setError(null);
+  }
+  function askConfirm() {
+    setError(null);
+    const value = Number(amount.replace(",", "."));
+    if (!(value > 0)) { setError("Informe um valor de entrega maior que zero."); return; }
+    setConfirming(true);
+  }
+  function confirmPay() {
+    if (!payOrder) return;
+    const value = Number(amount.replace(",", "."));
+    setError(null);
+    start(async () => {
+      const res = await payDriverDelivery({ orderId: payOrder.id, amount: value });
+      if (res.ok) { closePay(); router.refresh(); }
+      else { setError(res.error); setConfirming(false); }
+    });
+  }
 
   return (
     <div className="space-y-3">
@@ -84,6 +141,9 @@ export function EntregasList({ orders }: { orders: EntregaItem[] }) {
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <Badge className="bg-motorista/15 text-motorista">Entregue</Badge>
+                {enablePayment && o.paid && (
+                  <Badge className="bg-financeiro/15 text-financeiro">Pago</Badge>
+                )}
                 <span className="font-data text-sm font-medium">{o.total}</span>
                 <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
               </div>
@@ -132,6 +192,31 @@ export function EntregasList({ orders }: { orders: EntregaItem[] }) {
                   {o.failReason && <Info label="Observação de falha" value={o.failReason} full />}
                 </Section>
 
+                {/* Pagamento ao motorista (só na tela do Financeiro). */}
+                {enablePayment && (
+                  <Section title="Pagamento da Entrega">
+                    <Info label="Chave PIX do motorista" value={o.driverPixKey ?? "—"} />
+                    {o.paid ? (
+                      <>
+                        <Info label="Valor pago" value={o.paymentAmount ?? "—"} />
+                        <Info label="Pago em" value={fmtDateTime(o.paidAt)} />
+                      </>
+                    ) : (
+                      <div className="col-span-2 flex items-end sm:col-span-3">
+                        <Button
+                          variant="financeiro"
+                          size="sm"
+                          onClick={() => openPay(o)}
+                          disabled={!o.driverId}
+                          title={!o.driverId ? "Pedido sem motorista atribuído" : undefined}
+                        >
+                          <Wallet className="h-4 w-4" /> Pagar Entrega
+                        </Button>
+                      </div>
+                    )}
+                  </Section>
+                )}
+
                 {(o.paymentNotes || o.shippingNotes) && (
                   <Section title="Observações">
                     {o.paymentNotes && <Info label="Pagamento" value={o.paymentNotes} full />}
@@ -163,6 +248,72 @@ export function EntregasList({ orders }: { orders: EntregaItem[] }) {
           </Card>
         );
       })}
+
+      {/* Modal 1: exibe a Chave PIX do motorista e o campo "Valor da Entrega". */}
+      {payOrder && !confirming && (
+        <Modal onClose={closePay}>
+          <h2 className="mb-1 text-lg font-bold">Pagar entrega</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Pedido {payOrder.orderNumber}
+            {payOrder.driverName ? ` · Motorista: ${payOrder.driverName}` : ""}
+          </p>
+
+          <div className="mb-3 rounded-lg border border-border bg-secondary/40 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Chave PIX do motorista</p>
+            <p className="break-words font-data text-sm font-medium">
+              {payOrder.driverPixKey ?? "— (motorista sem chave PIX cadastrada)"}
+            </p>
+          </div>
+
+          <div className="mb-3 space-y-1.5">
+            <Label>Valor da Entrega *</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              inputMode="decimal"
+              placeholder="0,00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closePay}>Cancelar</Button>
+            <Button variant="financeiro" onClick={askConfirm}>Confirmar Pagamento</Button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal 2: verificação final. */}
+      {payOrder && confirming && (
+        <Modal onClose={() => setConfirming(false)}>
+          <h2 className="mb-1 text-lg font-bold">Tem certeza de que deseja realizar esta ação?</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Pagamento da entrega do pedido {payOrder.orderNumber}
+            {payOrder.driverName ? ` para ${payOrder.driverName}` : ""}.
+          </p>
+          {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirming(false)} disabled={pending}>Voltar</Button>
+            <Button variant="financeiro" onClick={confirmPay} disabled={pending}>
+              {pending ? "Confirmando..." : "Sim, confirmar"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
     </div>
   );
 }

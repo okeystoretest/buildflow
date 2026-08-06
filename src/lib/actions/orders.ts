@@ -131,6 +131,9 @@ export async function createOrder(
         shipDistrict: requiresAddress ? input.shipDistrict?.trim() || null : null,
         shipCity: requiresAddress ? input.shipCity?.trim() || null : null,
         shipState: requiresAddress ? input.shipState?.trim().toUpperCase() || null : null,
+        // Vinculo com a Excursao escolhida: so quando a forma de envio exige
+        // endereco (Excursao). Fora disso, sempre nulo.
+        excursaoId: requiresAddress ? input.excursaoId?.trim() || null : null,
         campaignId,
         itemCount: campaignId ? itemCount : 0,
         // Desconto só faz sentido quando há campanha; sem campanha, força false.
@@ -251,6 +254,8 @@ export async function updateOrder(args: {
   shipDistrict?: string | null;
   shipCity?: string | null;
   shipState?: string | null;
+  // Excursao vinculada. undefined = não mexe; limpa quando a forma não exige.
+  excursaoId?: string | null;
   // Campanha
   campaignId?: string | null;
   itemCount?: number;
@@ -356,6 +361,13 @@ export async function updateOrder(args: {
         shipState: args.shipState === undefined
           ? (requiresAddress ? order.shipState : null)
           : (requiresAddress ? (args.shipState?.trim() ? args.shipState.trim().toUpperCase() : null) : null),
+        // Excursao: limpa quando a forma nao exige endereco; senao respeita
+        // "undefined = nao mexe".
+        excursaoId: !requiresAddress
+          ? null
+          : (args.excursaoId === undefined
+              ? order.excursaoId
+              : (args.excursaoId ? args.excursaoId : null)),
         // Numero do pedido (editavel como no cadastro).
         orderNumber: args.orderNumber?.trim() ? args.orderNumber.trim() : order.orderNumber,
         // Campanha (legado derivado). Se veio lista de itens, ela manda; senão

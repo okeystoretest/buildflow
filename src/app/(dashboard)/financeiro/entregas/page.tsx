@@ -88,9 +88,9 @@ export default async function FinanceiroEntregasPage({
   return (
     <div className="space-y-6">
       <BackButton href="/financeiro" />
-      <h1 className="text-2xl font-bold text-financeiro">Entregas</h1>
+      <h1 className="text-2xl font-bold text-financeiro">Pagamentos de Motoristas</h1>
       <p className="text-sm text-muted-foreground">
-        Todas as entregas efetuadas pelos motoristas. Clique em uma para ver a ficha completa.
+        Entregas efetuadas pelos motoristas. Clique em uma para ver a ficha completa e registrar o pagamento da entrega.
       </p>
 
       <EntregasFinFiltros
@@ -109,7 +109,7 @@ export default async function FinanceiroEntregasPage({
         <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhuma entrega encontrada.</CardContent></Card>
       )}
 
-      <EntregasList orders={items} />
+      <EntregasList orders={items} enablePayment />
 
       <Pagination page={page} perPage={PER_PAGE} total={total} label="entregas" />
     </div>

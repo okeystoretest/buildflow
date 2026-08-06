@@ -52,6 +52,9 @@ model User {
   role      Role
   // Obrigatorio para VENDAS; null para os demais perfis.
   salesModel SalesModel?
+  // Chave PIX do MOTORISTA (para o pagamento de entregas pelo Financeiro).
+  // Opcional; so faz sentido para o perfil MOTORISTA (validado na action).
+  pixKey    String?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -65,6 +68,7 @@ model User {
   // Usado por VENDAS para escopo de criacao e por quem opera o fluxo por loja.
   originStores   OriginStore[]  @relation("UserOriginStores")
   pushSubscriptions PushSubscription[]
+  driverPayments   DriverPayment[] @relation("DriverPaymentDriver")
 
   @@index([role])
 }
@@ -208,6 +212,28 @@ model Customer {
   @@index([name])
 }
 
+// "Excursao": ponto de entrega coletivo (padrao visual do cadastro de
+// Clientes). Selecionavel no Novo Pedido quando a forma de envio e a de
+// Excursao (ShippingMethod.requiresAddress = true). Ao escolher, o endereco
+// da excursao pre-preenche os campos ship* do pedido (editaveis).
+model Excursao {
+  id          String   @id @default(cuid())
+  name        String
+  address     String
+  // "Funciona ate as" (horario limite). Texto livre (ex.: "18:00").
+  cutoffTime  String?
+  // Dias de funcionamento (texto livre, ex.: "Seg a Sex").
+  operatingDays String?
+  notes       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([name])
+}
+
 // ===========================================================================
 // PRODUTOS / ESTOQUE
 // ===========================================================================
@@ -334,6 +360,10 @@ model Order {
   shipDistrict    String?  // Bairro
   shipCity        String?  // Cidade
   shipState       String?  // UF
+  // Excursao selecionada (opcional). So faz sentido quando a forma de envio e
+  // a de Excursao; o endereco da excursao pre-preenche os campos ship* acima.
+  excursao   Excursao? @relation(fields: [excursaoId], references: [id])
+  excursaoId String?
   // "Observacoes de Pagamento": exclusivo do FINANCEIRO na aprovacao.
   // NAO e exibido para motorista/logistica.
   paymentNotes String?
@@ -353,6 +383,7 @@ model Order {
   paymentProofs OrderPaymentProof[]
   financeProofs OrderFinanceProof[]
   delivery      Delivery?
+  driverPayment DriverPayment?
   history       OrderStatusHistory[]
 
   createdAt DateTime @default(now())
@@ -364,6 +395,7 @@ model Order {
   @@index([createdAt])
   @@index([campaignId])
   @@index([cnpjId])
+  @@index([excursaoId])
 }
 
 model OrderItem {
@@ -470,6 +502,30 @@ model Proof {
   createdAt  DateTime @default(now())
 
   @@index([deliveryId])
+}
+
+// Pagamento da ENTREGA ao motorista (Financeiro > "Pagamentos de Motoristas").
+// Registrado quando o Financeiro confirma o pagamento de um pedido ENTREGUE.
+// Um pagamento por pedido (1-1). Guarda o valor pago, a chave PIX usada (copia
+// no momento do pagamento, para nao mudar se o cadastro do motorista mudar
+// depois) e quem confirmou. NUNCA movimenta dinheiro: e apenas o registro.
+model DriverPayment {
+  id      String @id @default(cuid())
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String @unique
+
+  driver   User   @relation("DriverPaymentDriver", fields: [driverId], references: [id])
+  driverId String
+
+  // Valor da entrega pago ao motorista.
+  amount   Decimal @db.Decimal(10, 2)
+  // Chave PIX usada no pagamento (snapshot; pode diferir do cadastro atual).
+  pixKey   String?
+  // Usuario (Financeiro/Gestao) que confirmou o pagamento.
+  confirmedById String?
+  createdAt DateTime @default(now())
+
+  @@index([driverId])
 }
 
 // ===========================================================================

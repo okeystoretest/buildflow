@@ -16,6 +16,13 @@ import { CampaignItemRow } from "@/components/shared/campaign-item-row";
 interface Opt { id: string; name: string; }
 // Forma de envio carrega o flag que exige endereço de entrega (ex.: Excursão).
 interface ShipOpt extends Opt { requiresAddress?: boolean; }
+// Excursão cadastrada: além do nome, traz o endereço para pré-preencher os
+// campos de entrega ao ser selecionada.
+interface ExcursaoOpt extends Opt {
+  address: string;
+  cutoffTime?: string | null;
+  operatingDays?: string | null;
+}
 
 interface CampItem { campaignId: string; reference: string; quantity: number; value: number; }
 function emptyCampItem(): CampItem { return { campaignId: "", reference: "", quantity: 0, value: 0 }; }
@@ -36,10 +43,10 @@ function Select({ label, value, onChange, options, placeholder }: {
 }
 
 export function NovoPedidoForm({
-  stores, defaultStoreId = "", originStores, orderTypes, operations, shippingMethods, campaigns,
+  stores, defaultStoreId = "", originStores, orderTypes, operations, shippingMethods, campaigns, excursoes = [],
 }: {
   stores: Opt[]; defaultStoreId?: string; originStores: Opt[]; orderTypes: Opt[];
-  operations: Opt[]; shippingMethods: ShipOpt[]; campaigns: Opt[];
+  operations: Opt[]; shippingMethods: ShipOpt[]; campaigns: Opt[]; excursoes?: ExcursaoOpt[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -65,6 +72,18 @@ export function NovoPedidoForm({
   const [shipDistrict, setShipDistrict] = useState("");
   const [shipCity, setShipCity] = useState("");
   const [shipState, setShipState] = useState("");
+
+  // Excursão selecionada (dropdown exibido junto ao endereço de entrega).
+  const [excursaoId, setExcursaoId] = useState("");
+
+  // Ao escolher uma excursão, pré-preenche o Logradouro com o endereço dela
+  // (os demais campos — CEP, número, bairro, cidade, UF — permanecem editáveis,
+  // pois o endereço da excursão é um texto único). O usuário pode ajustar tudo.
+  function onExcursaoChange(id: string) {
+    setExcursaoId(id);
+    const ex = excursoes.find((e) => e.id === id);
+    if (ex) setShipStreet(ex.address);
+  }
 
   // A forma de envio selecionada exige endereço completo?
   const requiresAddress =
@@ -149,6 +168,7 @@ export function NovoPedidoForm({
         shipDistrict: requiresAddress ? shipDistrict.trim() : undefined,
         shipCity: requiresAddress ? shipCity.trim() : undefined,
         shipState: requiresAddress ? shipState.trim().toUpperCase() : undefined,
+        excursaoId: requiresAddress ? (excursaoId || undefined) : undefined,
         campaignItems: inCampaign
           ? campItems.map((it) => ({
               campaignId: it.campaignId,
@@ -223,7 +243,30 @@ export function NovoPedidoForm({
           (ex.: "1 - Excursão"). Todos os campos são obrigatórios. */}
       {requiresAddress && (
         <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-4">
-          <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Excursão)</p>
+          <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Cliente)</p>
+
+          {/* Seleção da Excursão: alimenta os campos de endereço abaixo. */}
+          <div className="mb-4 max-w-md">
+            <Select
+              label="Excursão"
+              value={excursaoId}
+              onChange={onExcursaoChange}
+              options={excursoes}
+              placeholder={excursoes.length ? "Selecione a excursão..." : "Nenhuma excursão cadastrada"}
+            />
+            {excursaoId && (() => {
+              const ex = excursoes.find((e) => e.id === excursaoId);
+              if (!ex) return null;
+              const detalhes = [
+                ex.operatingDays ? `Dias: ${ex.operatingDays}` : "",
+                ex.cutoffTime ? `Funciona até às ${ex.cutoffTime}` : "",
+              ].filter(Boolean).join(" · ");
+              return detalhes ? (
+                <p className="mt-1.5 text-xs text-muted-foreground">{detalhes}</p>
+              ) : null;
+            })()}
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <div className="space-y-1.5 lg:col-span-1">
               <Label>CEP *</Label>

@@ -12,7 +12,7 @@ export default async function NovoPedidoPage() {
   // NOTA: a lista de clientes NAO e carregada aqui. Com dezenas de milhares
   // de registros isso geraria um HTML gigante. O formulario usa o
   // CustomerCombobox, que busca sob demanda em /api/customers/search.
-  const [stores, orderTypes, operations, shippingMethods, campaigns, me, allOriginStores] =
+  const [stores, orderTypes, operations, shippingMethods, campaigns, me, allOriginStores, excursoes] =
     await Promise.all([
       prisma.store.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.orderType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
@@ -30,6 +30,12 @@ export default async function NovoPedidoPage() {
       }),
       // GESTAO nao tem lojas atreladas; pode escolher qualquer loja ativa.
       prisma.originStore.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      // Excursoes ativas (para o dropdown do endereco de entrega).
+      prisma.excursao.findMany({
+        where: { active: true },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, address: true, cutoffTime: true, operatingDays: true },
+      }),
     ]);
 
   // VENDAS ve apenas as lojas atreladas; GESTAO e FINANCEIRO veem todas as ativas.
@@ -60,6 +66,7 @@ export default async function NovoPedidoPage() {
             operations={sortOperationsByCode(operations).map((o) => ({ id: o.id, name: `${o.code} - ${o.name}` }))}
             shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name, requiresAddress: s.requiresAddress }))}
             campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
+            excursoes={excursoes.map((e) => ({ id: e.id, name: e.name, address: e.address, cutoffTime: e.cutoffTime, operatingDays: e.operatingDays }))}
           />
         </CardContent>
       </Card>

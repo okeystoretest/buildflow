@@ -26,6 +26,12 @@ export const metadata: Metadata = {
     title: "Build.Flow",
     statusBarStyle: "black-translucent",
   },
+  // Equivalente moderno de "apple-mobile-web-app-capable" (que o Next emite a
+  // partir de appleWebApp.capable). O Chrome recomenda incluir os dois; sem
+  // isto, o console mostra um aviso de depreciacao em todas as rotas.
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {

@@ -103,7 +103,10 @@ export default async function MotoristaPage() {
                 </span>
                 <span className="font-data rounded-full bg-background/60 px-2 text-xs">{list.length}</span>
               </div>
-              <div className="space-y-3">
+              {/* Rolagem independente por coluna — SOMENTE no desktop
+                  (sm+). No mobile as colunas empilham e a lista cresce
+                  livremente (sem scroll interno), preservando o toque. */}
+              <div className="kanban-scroll space-y-3 sm:max-h-[calc(100vh-16rem)] sm:overflow-y-auto sm:pr-1">
                 {list.map((o, i) => (
                   <EntregaCard key={o.id} order={o} index={i} />
                 ))}

@@ -29,7 +29,7 @@ import type { Role, SalesModel, OrderStatus } from "@prisma/client";
 
 interface Row { id: string; name: string; active: boolean; }
 interface OpRow { id: string; code: string; name: string; active: boolean; }
-interface UserRow { id: string; name: string; email: string; role: Role; active: boolean; salesModel: SalesModel | null; originStoreIds: string[]; }
+interface UserRow { id: string; name: string; email: string; role: Role; active: boolean; salesModel: SalesModel | null; originStoreIds: string[]; pixKey: string | null; }
 interface OriginStoreRow { id: string; name: string; active: boolean; simplifiedFlow: boolean; }
 interface SellerOpt { id: string; name: string; salesModel: SalesModel | null; }
 interface GoalRow { id: string; userName: string; amount: number; targetItems: number | null; month: number; year: number; scope: SalesModel; campaignName: string | null; }
@@ -207,7 +207,7 @@ function FieldHint({ children }: { children: React.ReactNode }) {
 function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: OriginStoreRow[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const EMPTY = { name: "", email: "", password: "", role: "VENDAS" as Role, salesModel: "VAREJO" as SalesModel };
+  const EMPTY = { name: "", email: "", password: "", role: "VENDAS" as Role, salesModel: "VAREJO" as SalesModel, pixKey: "" };
   const [f, setF] = useState(EMPTY);
   // Lojas de Origem selecionadas (max 2). Separado de `f` por ser lista.
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
@@ -240,6 +240,7 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
       password: "",
       role: u.role as Role,
       salesModel: (u.salesModel ?? "VAREJO") as SalesModel,
+      pixKey: u.pixKey ?? "",
     });
     setSelectedStores(u.originStoreIds ?? []);
     setError(null);
@@ -263,6 +264,8 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
       const salesModel = f.role === "VENDAS" ? f.salesModel : null;
       // Lojas de Origem so valem para VENDAS.
       const originStoreIds = f.role === "VENDAS" ? selectedStores : [];
+      // Chave PIX so vale para MOTORISTA.
+      const pixKey = f.role === "MOTORISTA" ? (f.pixKey.trim() || null) : null;
       const res = editId
         ? await updateUser({
             id: editId,
@@ -273,8 +276,9 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
             role: f.role,
             salesModel,
             originStoreIds,
+            pixKey,
           })
-        : await createUser({ ...f, salesModel, originStoreIds });
+        : await createUser({ ...f, salesModel, originStoreIds, pixKey });
 
       if (res.ok) {
         setMsg(editId ? "Usuário atualizado." : "Usuário criado.");
@@ -355,6 +359,17 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
                 <option value="ATACADO">Atacado</option>
               </select>
               <FieldHint>Obrigatório para vendedores; trava o escopo das vendas.</FieldHint>
+            </div>
+          )}
+          {f.role === "MOTORISTA" && (
+            <div className="space-y-1">
+              <Label>Chave PIX</Label>
+              <Input
+                placeholder="CPF, e-mail, telefone ou chave aleatória"
+                value={f.pixKey}
+                onChange={(e) => setF({ ...f, pixKey: e.target.value })}
+              />
+              <FieldHint>Usada pelo Financeiro no pagamento das entregas do motorista.</FieldHint>
             </div>
           )}
         </div>

@@ -15,6 +15,11 @@ import { CampaignItemRow, type CampaignItemData } from "@/components/shared/camp
 
 interface Opt { id: string; name: string; }
 interface ShipOpt extends Opt { requiresAddress?: boolean; }
+interface ExcursaoOpt extends Opt {
+  address: string;
+  cutoffTime?: string | null;
+  operatingDays?: string | null;
+}
 interface OrderData {
   id: string;
   orderNumber: string;
@@ -26,6 +31,7 @@ interface OrderData {
   campaignDiscount: boolean;
   shipCep: string; shipStreet: string; shipNumber: string;
   shipDistrict: string; shipCity: string; shipState: string;
+  excursaoId: string;
 }
 interface ExistingProof { id: string; filePath: string; }
 
@@ -35,7 +41,7 @@ const MAX_PROOFS = 5;
 
 export function EditarPedidoForm({
   order, existingProofs, selectedCustomer, stores, originStores, orderTypes, operations,
-  paymentMethods, shippingMethods, banks, campaigns, canEditFinance = false,
+  paymentMethods, shippingMethods, banks, campaigns, canEditFinance = false, excursoes = [],
 }: {
   order: OrderData;
   existingProofs: ExistingProof[];
@@ -43,6 +49,7 @@ export function EditarPedidoForm({
   stores: Opt[]; originStores: Opt[]; orderTypes: Opt[]; operations: Opt[];
   paymentMethods: Opt[]; shippingMethods: ShipOpt[]; banks: Opt[]; campaigns: Opt[];
   canEditFinance?: boolean;
+  excursoes?: ExcursaoOpt[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -69,6 +76,15 @@ export function EditarPedidoForm({
   const [shipDistrict, setShipDistrict] = useState(order.shipDistrict);
   const [shipCity, setShipCity] = useState(order.shipCity);
   const [shipState, setShipState] = useState(order.shipState);
+  const [excursaoId, setExcursaoId] = useState(order.excursaoId);
+
+  // Ao trocar a excursão, pré-preenche o Logradouro com o endereço dela
+  // (os demais campos continuam editáveis).
+  function onExcursaoChange(id: string) {
+    setExcursaoId(id);
+    const ex = excursoes.find((e) => e.id === id);
+    if (ex) setShipStreet(ex.address);
+  }
 
   const requiresAddress =
     shippingMethods.find((s) => s.id === shippingMethodId)?.requiresAddress === true;
@@ -150,6 +166,7 @@ export function EditarPedidoForm({
         // Endereço de entrega (Excursão). Enviado sempre; a action limpa quando
         // a forma de envio não exige.
         shipCep, shipStreet, shipNumber, shipDistrict, shipCity, shipState,
+        excursaoId,
         // Lista de itens de campanha substitui o conjunto atual no servidor.
         campaignItems: inCampaign
           ? campItems.map((it) => ({
@@ -217,7 +234,18 @@ export function EditarPedidoForm({
       {/* Endereço de entrega — só quando a forma de envio exige (Excursão). */}
       {requiresAddress && (
         <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-4">
-          <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Excursão)</p>
+          <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Cliente)</p>
+
+          <div className="mb-4 max-w-md">
+            <Select
+              label="Excursão"
+              value={excursaoId}
+              onChange={onExcursaoChange}
+              options={excursoes}
+              placeholder={excursoes.length ? "Selecione a excursão..." : "Nenhuma excursão cadastrada"}
+            />
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <div className="space-y-1.5 lg:col-span-1">
               <Label>CEP *</Label>
