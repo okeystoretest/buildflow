@@ -59,6 +59,47 @@ function dropHeader(rows: string[][], headerHints: string[]): string[][] {
   return rows;
 }
 
+// Normaliza um rotulo de cabecalho: sem acento, minusculo, sem espacos/pontuacao.
+function normHeader(s?: string): string {
+  return (s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+// Mapa de aliases de cabecalho -> campo canonico do cliente. Aceita variacoes
+// comuns (com/sem acento, "logradouro"/"endereco", "uf"/"estado", etc.).
+const CUSTOMER_HEADER_ALIASES: Record<string, string> = {
+  codigo: "code", code: "code",
+  nome: "name", name: "name", cliente: "name",
+  cep: "cep",
+  logradouro: "street", endereco: "street", rua: "street", street: "street",
+  bairro: "district", district: "district",
+  cidade: "city", municipio: "city", city: "city",
+  uf: "state", estado: "state", state: "state",
+  contato: "contact", telefone: "contact", celular: "contact",
+  email: "contact", responsavel: "contact", contact: "contact",
+};
+
+// Detecta a ordem das colunas a partir da PRIMEIRA linha, quando ela e um
+// cabecalho reconhecivel. Retorna um indice campo->coluna, ou null se a
+// primeira linha nao parece um cabecalho (dai usamos a ordem posicional
+// padrao). Isso torna a importacao imune a ordem das colunas do arquivo.
+function detectCustomerHeader(firstRow: string[]): Record<string, number> | null {
+  const idx: Record<string, number> = {};
+  let hits = 0;
+  firstRow.forEach((cell, i) => {
+    const field = CUSTOMER_HEADER_ALIASES[normHeader(cell)];
+    if (field && !(field in idx)) { idx[field] = i; hits++; }
+  });
+  // Só tratamos como cabecalho se reconhecemos ao menos "code" e "name":
+  // evita confundir uma linha de dados com cabecalho.
+  if (hits >= 2 && "code" in idx && "name" in idx) return idx;
+  return null;
+}
+
 const ROLE_MAP: Record<string, Role> = {
   "gestao": "GESTAO", "gestão": "GESTAO",
   "vendas": "VENDAS", "venda": "VENDAS",
@@ -160,32 +201,44 @@ export async function importOperationsCsv(csv: string): Promise<ActionResult<Imp
 export async function importCustomersCsv(csv: string): Promise<ActionResult<ImportSummary>> {
   try {
     await requireRoleAction(["GESTAO", "VENDAS"]);
-    let rows = parseCsv(csv);
-    rows = dropHeader(rows, ["codigo", "código", "code"]);
-    if (rows.length === 0) return actionError("Arquivo vazio ou sem linhas válidas.");
+    const all = parseCsv(csv);
+    if (all.length === 0) return actionError("Arquivo vazio ou sem linhas válidas.");
 
-    // Normaliza celula opcional: vazio -> null. UF em caixa alta.
-    const opt = (v?: string): string | null => {
-      const t = (v ?? "").trim();
-      return t.length ? t : null;
+    // Detecta o cabecalho para mapear colunas por NOME (imune a ordem). Se a
+    // 1a linha for um cabecalho reconhecivel, usamos o mapa e a descartamos;
+    // senao, caimos na ordem posicional padrao documentada.
+    const headerMap = detectCustomerHeader(all[0]);
+    const POSICIONAL: Record<string, number> = {
+      code: 0, name: 1, cep: 2, street: 3, district: 4, city: 5, state: 6, contact: 7,
     };
+    const col = headerMap ?? POSICIONAL;
+    const rows = headerMap ? all.slice(1) : all;
+    if (rows.length === 0) return actionError("Arquivo sem linhas de dados (apenas cabeçalho).");
+
+    // Le a celula do campo pelo indice mapeado (ou vazio se ausente).
+    const cell = (r: string[], field: string): string => {
+      const i = col[field];
+      return i == null ? "" : (r[i] ?? "").trim();
+    };
+    // Normaliza celula opcional: vazio -> null.
+    const opt = (v: string): string | null => (v.length ? v : null);
 
     const summary: ImportSummary = { created: 0, updated: 0, skipped: 0, errors: [] };
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const ln = i + 1;
-      const code = (r[0] ?? "").trim();
-      const name = (r[1] ?? "").trim();
+      const code = cell(r, "code");
+      const name = cell(r, "name");
       if (!code) { summary.skipped++; summary.errors.push(`Linha ${ln}: código é obrigatório.`); continue; }
       if (!name) { summary.skipped++; summary.errors.push(`Linha ${ln}: nome é obrigatório.`); continue; }
 
-      // Campos opcionais de endereco/contato (colunas 3..8).
-      const cep = opt(r[2]);
-      const street = opt(r[3]);
-      const district = opt(r[4]);
-      const city = opt(r[5]);
-      const state = opt(r[6])?.toUpperCase() ?? null;
-      const contact = opt(r[7]);
+      // Campos opcionais de endereco/contato.
+      const cep = opt(cell(r, "cep"));
+      const street = opt(cell(r, "street"));
+      const district = opt(cell(r, "district"));
+      const city = opt(cell(r, "city"));
+      const state = opt(cell(r, "state"))?.toUpperCase() ?? null;
+      const contact = opt(cell(r, "contact"));
       const dados = { name, cep, street, district, city, state, contact };
 
       // UPSERT pelo "code" (unico): existe -> ATUALIZA nome + endereco/contato

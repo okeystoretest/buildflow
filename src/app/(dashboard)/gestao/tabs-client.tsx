@@ -574,7 +574,7 @@ function CustomersPanel({ customers }: { customers: ClienteRow[] }) {
     <div className="space-y-4">
       <CsvImport
         title="Importar clientes via CSV"
-        description="Cadastro em lote. Colunas: código e nome (obrigatórios); cep, logradouro, bairro, cidade, uf e contato (opcionais). Código existente é atualizado."
+        description="Cadastro em lote. Inclua uma linha de cabeçalho (codigo, nome, cep, logradouro, bairro, cidade, uf, contato) — com cabeçalho, a ordem das colunas não importa. Código e nome são obrigatórios; os demais opcionais. Código existente é atualizado."
         columns={["codigo", "nome", "cep", "logradouro", "bairro", "cidade", "uf", "contato"]}
         sample={["CLI-0001", "Loja do João", "60000-000", "Rua A", "Centro", "Fortaleza", "CE", "(85) 99999-0000"]}
         action={importCustomersCsv}
