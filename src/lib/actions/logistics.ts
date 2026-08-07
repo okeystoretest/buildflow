@@ -250,8 +250,11 @@ export async function shipWithTracking(args: {
 }
 
 /**
- * Pop-up obrigatorio no PROCESSADO: atribui motorista a entrega.
- * Move o pedido para PROCESSADO e a entrega para ATRIBUIDA.
+ * Pop-up obrigatorio no PROCESSADO: atribui um motorista especifico a entrega.
+ * Move o pedido para ENVIADO (status visivel no Kanban do Motorista) e a
+ * entrega para ATRIBUIDA com o driverId. Como a entrega tem dono, o card
+ * aparece SO para o motorista atribuido, nunca na coluna "Aguardando
+ * Entregador".
  */
 export async function assignDriverToOrder(args: {
   orderId: string;
@@ -263,10 +266,14 @@ export async function assignDriverToOrder(args: {
 
     const tracking = args.trackingCode?.trim() || null;
 
-    await prisma.$transaction(async (tx) => {
+    // Retornamos os dados do pedido da transação para o push ao motorista
+    // (evita mutar variável externa dentro do callback).
+    const pushInfo = await prisma.$transaction<
+      { orderNumber: string; customerName?: string } | null
+    >(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: args.orderId },
-        include: { delivery: true },
+        include: { delivery: true, customer: true },
       });
       if (!order) throw new Error("Pedido nao encontrado.");
 
@@ -277,10 +284,15 @@ export async function assignDriverToOrder(args: {
         update: { status: "ATRIBUIDA", driverId: args.driverId, assignedAt: new Date() },
         create: { orderId: order.id, status: "ATRIBUIDA", driverId: args.driverId, assignedAt: new Date() },
       });
+      // O pedido AVANCA para ENVIADO: e o status que o Kanban do Motorista
+      // enxerga (MOTORISTA_COLUMNS). Como a entrega tem driverId, o card aparece
+      // apenas para o motorista atribuido — nao na coluna "Aguardando
+      // Entregador" (que exige driverId null). Sem isso, o pedido ficaria preso
+      // em PROCESSADO e invisivel ao motorista.
       await tx.order.update({
         where: { id: order.id },
         data: {
-          status: "PROCESSADO",
+          status: "ENVIADO",
           // So sobrescreve o rastreio se um novo codigo foi informado.
           ...(tracking ? { trackingCode: tracking } : {}),
         },
@@ -288,17 +300,31 @@ export async function assignDriverToOrder(args: {
       await tx.orderStatusHistory.create({
         data: {
           orderId: order.id,
-          status: "PROCESSADO",
+          status: "ENVIADO",
           changedBy: session.userId,
           note: tracking ? `Motorista atribuido · Rastreio: ${tracking}` : "Motorista atribuido",
         },
       });
+
+      // Com rastreio, o pedido segue por transportadora e nao aparece no Kanban
+      // de Motoristas — nesse caso nao faz sentido notificar o motorista.
+      return tracking
+        ? null
+        : { orderNumber: order.orderNumber, customerName: order.customer?.name };
     });
 
     revalidatePath("/logistica");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
     emitOrderUpdated({ orderId: args.orderId });
+    // Web Push a nivel de SO para o motorista atribuido (fire-and-forget).
+    if (pushInfo) {
+      void sendPushToUser(args.driverId, {
+        title: "Nova entrega atribuída",
+        body: `Pedido ${pushInfo.orderNumber}${pushInfo.customerName ? ` · ${pushInfo.customerName}` : ""} foi atribuído a você.`,
+        url: "/motorista",
+      });
+    }
     return actionOk(undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao atribuir motorista.";
