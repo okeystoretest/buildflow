@@ -95,7 +95,7 @@ export function NotificationBell() {
     }
   }
 
-  function goTo(n: NotificationItem) {
+  function goTo() {
     setOpen(false);
     // As pendências aparecem destacadas na listagem de Vendas.
     router.push("/vendas");
@@ -169,7 +169,7 @@ export function NotificationBell() {
                 {items.map((n) => (
                   <li key={n.id}>
                     <button
-                      onClick={() => goTo(n)}
+                      onClick={() => goTo()}
                       className={`flex w-full flex-col items-start gap-0.5 border-b border-border/60 px-3 py-2.5 text-left transition-colors last:border-0 hover:bg-secondary/60 ${
                         n.read ? "" : "bg-primary/5"
                       }`}
