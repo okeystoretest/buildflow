@@ -59,6 +59,9 @@ export const createOrderSchema = z.object({
     .optional(),
   // Nome do tipo de pedido (ex.: "Troca"). Usado para a regra de anexo.
   orderTypeName: z.string().optional(),
+  // Nome da operação (ex.: "20 - Venda para Funcionário Interno"). Usado para
+  // dispensar anexo por operação. A action revalida contra o banco.
+  operationName: z.string().optional(),
   // Comprovantes de pagamento (ate 5, cada um em data URL base64).
   // Opcional no schema; a obrigatoriedade (ao menos 1) e aplicada abaixo,
   // dispensada na Troca.
@@ -67,7 +70,9 @@ export const createOrderSchema = z.object({
   // Comprovante de pagamento dispensado quando o tipo isenta anexo
   // (Troca ou Doação).
   .refine(
-    (d) => isAnexoDispensavel(d.orderTypeName) || !!(d.paymentProofsBase64 && d.paymentProofsBase64.length > 0),
+    (d) =>
+      isAnexoDispensavelPorContexto({ orderTypeName: d.orderTypeName, operationName: d.operationName }) ||
+      !!(d.paymentProofsBase64 && d.paymentProofsBase64.length > 0),
     { message: "Anexe o comprovante de pagamento.", path: ["paymentProofsBase64"] },
   )
   // "Valor Total do Pedido" obrigatorio (> 0), EXCETO Troca e Doação.
@@ -98,11 +103,34 @@ export function isDoacao(orderTypeName?: string | null): boolean {
   return normalize(orderTypeName) === normalize("9 - Doação");
 }
 
-// Isenção de ANEXO (comprovante de pagamento + Nota Fiscal). Vale para Troca e
-// Doação. NÃO implica pular o Financeiro nem dispensar o valor — para isso,
-// use isTroca diretamente.
+// "3 - Transferência" — tipo de pedido interno entre lojas/estoques. Dispensa
+// Comprovante de Pagamento e Nota Fiscal. Comparação tolerante a acentos/caixa.
+export function isTransferencia(orderTypeName?: string | null): boolean {
+  return normalize(orderTypeName) === normalize("3 - Transferência");
+}
+
+// "20 - Venda para Funcionário Interno" — OPERAÇÃO (não é tipo de pedido).
+// Dispensa Comprovante de Pagamento e Nota Fiscal. Comparação tolerante.
+export function isVendaFuncionarioInterno(operationName?: string | null): boolean {
+  return normalize(operationName) === normalize("20 - Venda para Funcionário Interno");
+}
+
+// Isenção de ANEXO (comprovante de pagamento + Nota Fiscal). Vale para Troca,
+// Doação e Transferência (por TIPO de pedido). NÃO implica pular o Financeiro
+// nem dispensar o valor — para isso, use isTroca diretamente.
 export function isAnexoDispensavel(orderTypeName?: string | null): boolean {
-  return isTroca(orderTypeName) || isDoacao(orderTypeName);
+  return isTroca(orderTypeName) || isDoacao(orderTypeName) || isTransferencia(orderTypeName);
+}
+
+// Regra COMPLETA de isenção de anexos considerando TIPO de pedido E OPERAÇÃO.
+// Anexos (Comprovante + NF) são opcionais quando o pedido é Troca, Doação,
+// Transferência, OU quando a operação é "20 - Venda para Funcionário Interno".
+// Use esta função no fluxo logístico (transição de status) e na exigência de UI.
+export function isAnexoDispensavelPorContexto(args: {
+  orderTypeName?: string | null;
+  operationName?: string | null;
+}): boolean {
+  return isAnexoDispensavel(args.orderTypeName) || isVendaFuncionarioInterno(args.operationName);
 }
 
 // Normaliza para comparação tolerante a acentos, caixa e espaços.

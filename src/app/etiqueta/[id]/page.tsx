@@ -19,7 +19,7 @@ export default async function EtiquetaPage({ params }: { params: { id: string } 
 
   const order = await prisma.order.findUnique({
     where: { id: params.id },
-    include: { customer: true, seller: true, shippingMethod: true },
+    include: { customer: true, seller: true, shippingMethod: true, excursao: true },
   });
   if (!order) notFound();
 
@@ -97,9 +97,27 @@ export default async function EtiquetaPage({ params }: { params: { id: string } 
           <div className="val">{order.seller.name}</div>
         </div>
 
-        {/* Endereço completo */}
+        {/* Excursão (despacho) — endereço da excursão vinculada, exibido
+            somente na etiqueta. Independente do endereço do cliente. */}
+        {order.excursao && (
+          <div className="etq-block etq-sec etq-addr">
+            <span className="lbl">Excursão · Despacho</span>
+            <div className="l1">{order.excursao.name}</div>
+            <div className="l2">{order.excursao.address}</div>
+            {(order.excursao.operatingDays || order.excursao.cutoffTime) && (
+              <div className="l2">
+                {[
+                  order.excursao.operatingDays ? `Dias: ${order.excursao.operatingDays}` : "",
+                  order.excursao.cutoffTime ? `Até às ${order.excursao.cutoffTime}` : "",
+                ].filter(Boolean).join(" · ")}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Endereço de entrega do cliente */}
         <div className="etq-block etq-sec etq-addr">
-          <span className="lbl">Endereço de Entrega</span>
+          <span className="lbl">Endereço de Entrega (Cliente)</span>
           <div className="l1">{enderecoLinha1 || "—"}</div>
           {enderecoLinha2 && <div className="l2">{enderecoLinha2}</div>}
           {order.shipCep && <div className="cep">CEP {order.shipCep}</div>}

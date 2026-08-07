@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { canInteractWithOrder, INTERACTION_DENIED_MSG } from "@/lib/permissions";
-import { createOrderSchema, isTroca } from "@/lib/validations/order";
+import { createOrderSchema, isTroca, isAnexoDispensavelPorContexto } from "@/lib/validations/order";
 import { processAndSaveImage, saveDocument, isPdfDataUrl } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { emitOrderCreated, emitOrderUpdated } from "@/lib/realtime/emit";
@@ -42,6 +42,23 @@ export async function createOrder(
     });
     if (!orderType) return actionError("Tipo de pedido invalido.");
     const troca = isTroca(orderType.name);
+
+    // Nome da operação (fonte confiável = banco) para a regra de anexo por
+    // operação ("20 - Venda para Funcionário Interno").
+    const operation = await prisma.operation.findUnique({
+      where: { id: input.operationId },
+      select: { name: true },
+    });
+
+    // Anexo (comprovante) opcional por TIPO (Troca/Doação/Transferência) OU por
+    // OPERAÇÃO (Funcionário Interno). Fora desses casos, ao menos 1 comprovante.
+    const anexoDispensavel = isAnexoDispensavelPorContexto({
+      orderTypeName: orderType.name,
+      operationName: operation?.name,
+    });
+    if (!anexoDispensavel && (input.paymentProofsBase64 ?? []).length === 0) {
+      return actionError("Anexe o comprovante de pagamento.");
+    }
 
     // Descobre se a Loja de Origem escolhida usa fluxo simplificado.
     let simplifiedStore = false;

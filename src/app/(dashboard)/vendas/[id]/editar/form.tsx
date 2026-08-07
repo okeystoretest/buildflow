@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CustomerCombobox, type CustomerOpt } from "@/components/shared/customer-combobox";
 import { prepareProofFile } from "@/lib/client-image";
-import { isAnexoDispensavel } from "@/lib/validations/order";
+import { isAnexoDispensavel, isAnexoDispensavelPorContexto } from "@/lib/validations/order";
 import { formatBRL } from "@/lib/utils";
 import { CampaignItemRow, type CampaignItemData } from "@/components/shared/campaign-item-row";
 
@@ -78,12 +78,11 @@ export function EditarPedidoForm({
   const [shipState, setShipState] = useState(order.shipState);
   const [excursaoId, setExcursaoId] = useState(order.excursaoId);
 
-  // Ao trocar a excursão, pré-preenche o Logradouro com o endereço dela
-  // (os demais campos continuam editáveis).
+  // A excursão é INDEPENDENTE do endereço de entrega do cliente: selecioná-la
+  // NÃO preenche nenhum campo ship*. O endereço da excursão vai apenas para a
+  // etiqueta de envio, via vínculo excursaoId.
   function onExcursaoChange(id: string) {
     setExcursaoId(id);
-    const ex = excursoes.find((e) => e.id === id);
-    if (ex) setShipStreet(ex.address);
   }
 
   const requiresAddress =
@@ -146,7 +145,11 @@ export function EditarPedidoForm({
 
   const total = (orderValue || 0) + (freight || 0);
   const orderTypeName = orderTypes.find((t) => t.id === orderTypeId)?.name ?? "";
-  const anexoDispensavel = isAnexoDispensavel(orderTypeName);
+  const operationName = operations.find((o) => o.id === operationId)?.name ?? "";
+  // Anexo opcional por TIPO (Troca/Doação/Transferência) OU OPERAÇÃO
+  // (Funcionário Interno). Valor segue só o TIPO.
+  const anexoDispensavel = isAnexoDispensavelPorContexto({ orderTypeName, operationName });
+  const valorDispensavel = isAnexoDispensavel(orderTypeName);
   const campaignOk =
     !inCampaign ||
     (campItems.length > 0 &&
@@ -186,7 +189,7 @@ export function EditarPedidoForm({
   }
 
   // Valor obrigatório (> 0), EXCETO Troca e Doação.
-  const valorOk = anexoDispensavel || orderValue > 0;
+  const valorOk = valorDispensavel || orderValue > 0;
   const podeSalvar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId
     && shippingMethodId && valorOk && campaignOk && anexoOk && addressOk;
 
@@ -219,10 +222,40 @@ export function EditarPedidoForm({
         )}
       </div>
 
+      {/* Seleção de Excursão — FORA do endereço do cliente, logo após o bloco
+          de Forma de Envio. O endereço da excursão vai só para a etiqueta. */}
+      {requiresAddress && (
+        <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-4">
+          <div className="max-w-md">
+            <Select
+              label="Excursão"
+              value={excursaoId}
+              onChange={onExcursaoChange}
+              options={excursoes}
+              placeholder={excursoes.length ? "Selecione a excursão..." : "Nenhuma excursão cadastrada"}
+            />
+            {excursaoId && (() => {
+              const ex = excursoes.find((e) => e.id === excursaoId);
+              if (!ex) return null;
+              const detalhes = [
+                ex.operatingDays ? `Dias: ${ex.operatingDays}` : "",
+                ex.cutoffTime ? `Funciona até às ${ex.cutoffTime}` : "",
+              ].filter(Boolean).join(" · ");
+              return (
+                <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                  <p><span className="font-semibold text-vendas">Endereço (etiqueta):</span> {ex.address}</p>
+                  {detalhes && <p>{detalhes}</p>}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CustomerCombobox label="Cliente" value={customerId} onChange={setCustomerId} initialSelected={selectedCustomer} />
         <div className="space-y-1.5">
-          <Label>Valor Total do Pedido {anexoDispensavel ? "(opcional)" : "*"}</Label>
+          <Label>Valor Total do Pedido {valorDispensavel ? "(opcional)" : "*"}</Label>
           <Input type="number" min={0} step="0.01" value={orderValue || ""} onChange={(e) => setOrderValue(Number(e.target.value))} placeholder="0,00" />
         </div>
         <div className="space-y-1.5">
@@ -235,16 +268,6 @@ export function EditarPedidoForm({
       {requiresAddress && (
         <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-4">
           <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Cliente)</p>
-
-          <div className="mb-4 max-w-md">
-            <Select
-              label="Excursão"
-              value={excursaoId}
-              onChange={onExcursaoChange}
-              options={excursoes}
-              placeholder={excursoes.length ? "Selecione a excursão..." : "Nenhuma excursão cadastrada"}
-            />
-          </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <div className="space-y-1.5 lg:col-span-1">

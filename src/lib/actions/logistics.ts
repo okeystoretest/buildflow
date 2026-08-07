@@ -6,7 +6,7 @@ import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { nextStatus, canTransition, nextSimplifiedStatus, canTransitionSimplified } from "@/lib/order-flow";
 import { canInteractWithOrder } from "@/lib/permissions";
-import { isAnexoDispensavel } from "@/lib/validations/order";
+import { isAnexoDispensavelPorContexto } from "@/lib/validations/order";
 import { emitOrderUpdated, emitOrderAvailableForDrivers } from "@/lib/realtime/emit";
 import { sendPushToUser } from "@/lib/push";
 import type { OrderStatus } from "@prisma/client";
@@ -30,6 +30,7 @@ export async function advanceOrderStatus(args: {
       include: {
         originStore: { select: { simplifiedFlow: true } },
         orderType: { select: { name: true } },
+        operation: { select: { name: true } },
       },
     });
     if (!order) return actionError("Pedido nao encontrado.");
@@ -61,8 +62,13 @@ export async function advanceOrderStatus(args: {
         return actionError("Você não tem permissão para avançar este pedido.");
       }
     }
-    // Pedido tipo "Troca" ou "Doação" dispensa a Nota Fiscal.
-    const semNfObrigatoria = isAnexoDispensavel(order.orderType?.name);
+    // Anexos (NF/Comprovante) dispensados por TIPO (Troca, Doação,
+    // Transferência) OU por OPERAÇÃO ("20 - Venda para Funcionário Interno").
+    // Nesses casos a Logística avança livremente por todos os status.
+    const semNfObrigatoria = isAnexoDispensavelPorContexto({
+      orderTypeName: order.orderType?.name,
+      operationName: order.operation?.name,
+    });
 
     // Regra de permissão: sair de EM_ANALISE é exclusivo do Financeiro (e Gestão).
     // A Logística não avança o pedido enquanto estiver Em Análise.

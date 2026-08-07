@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { CustomerCombobox } from "@/components/shared/customer-combobox";
 import { formatBRL } from "@/lib/utils";
 import { prepareProofFile } from "@/lib/client-image";
-import { isAnexoDispensavel } from "@/lib/validations/order";
+import { isAnexoDispensavel, isAnexoDispensavelPorContexto } from "@/lib/validations/order";
 import { CampaignItemRow } from "@/components/shared/campaign-item-row";
 
 interface Opt { id: string; name: string; }
@@ -73,16 +73,14 @@ export function NovoPedidoForm({
   const [shipCity, setShipCity] = useState("");
   const [shipState, setShipState] = useState("");
 
-  // Excursão selecionada (dropdown exibido junto ao endereço de entrega).
+  // Excursão selecionada (seletor isolado, exibido após a Forma de Envio).
   const [excursaoId, setExcursaoId] = useState("");
 
-  // Ao escolher uma excursão, pré-preenche o Logradouro com o endereço dela
-  // (os demais campos — CEP, número, bairro, cidade, UF — permanecem editáveis,
-  // pois o endereço da excursão é um texto único). O usuário pode ajustar tudo.
+  // A excursão é INDEPENDENTE do endereço de entrega do cliente: selecioná-la
+  // NÃO preenche nenhum campo ship*. O endereço da excursão vai apenas para a
+  // etiqueta de envio (impressão), a partir do vínculo excursaoId.
   function onExcursaoChange(id: string) {
     setExcursaoId(id);
-    const ex = excursoes.find((e) => e.id === id);
-    if (ex) setShipStreet(ex.address);
   }
 
   // A forma de envio selecionada exige endereço completo?
@@ -148,8 +146,13 @@ export function NovoPedidoForm({
 
   // Anexo (comprovante) e valor dispensados na Troca e na Doação.
   const orderTypeName = orderTypes.find((t) => t.id === orderTypeId)?.name ?? "";
-  const anexoDispensavel = isAnexoDispensavel(orderTypeName);
-  const valorDispensavel = anexoDispensavel;
+  const operationName = operations.find((o) => o.id === operationId)?.name ?? "";
+  // Anexo (comprovante/NF) opcional por TIPO (Troca/Doação/Transferência) ou
+  // por OPERAÇÃO ("20 - Venda para Funcionário Interno").
+  const anexoDispensavel = isAnexoDispensavelPorContexto({ orderTypeName, operationName });
+  // Valor obrigatório segue só o TIPO (Troca/Doação); Funcionário Interno é
+  // venda real e mantém o valor exigido.
+  const valorDispensavel = isAnexoDispensavel(orderTypeName);
 
   function onSubmit() {
     setError(null);
@@ -160,6 +163,7 @@ export function NovoPedidoForm({
         notes: notes || undefined,
         paymentNotes: paymentNotes || undefined,
         orderTypeName,
+        operationName,
         // Endereço de entrega (só relevante quando a forma de envio exige).
         requiresAddress,
         shipCep: requiresAddress ? shipCep.trim() : undefined,
@@ -222,6 +226,38 @@ export function NovoPedidoForm({
         <Select label="Forma de Envio" value={shippingMethodId} onChange={setShippingMethodId} options={shippingMethods} placeholder="Selecione..." />
       </div>
 
+      {/* Seleção de Excursão — FORA do formulário de endereço do cliente.
+          Aparece logo após a Forma de Envio e somente quando a forma exige
+          endereço (ex.: "1 - Excursão"). O endereço da excursão vai apenas para
+          a etiqueta; não preenche o endereço de entrega do cliente. */}
+      {requiresAddress && (
+        <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-4">
+          <div className="max-w-md">
+            <Select
+              label="Excursão"
+              value={excursaoId}
+              onChange={onExcursaoChange}
+              options={excursoes}
+              placeholder={excursoes.length ? "Selecione a excursão..." : "Nenhuma excursão cadastrada"}
+            />
+            {excursaoId && (() => {
+              const ex = excursoes.find((e) => e.id === excursaoId);
+              if (!ex) return null;
+              const detalhes = [
+                ex.operatingDays ? `Dias: ${ex.operatingDays}` : "",
+                ex.cutoffTime ? `Funciona até às ${ex.cutoffTime}` : "",
+              ].filter(Boolean).join(" · ");
+              return (
+                <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                  <p><span className="font-semibold text-vendas">Endereço (etiqueta):</span> {ex.address}</p>
+                  {detalhes && <p>{detalhes}</p>}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Cliente + valores na mesma faixa */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-1">
@@ -244,28 +280,6 @@ export function NovoPedidoForm({
       {requiresAddress && (
         <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-4">
           <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Cliente)</p>
-
-          {/* Seleção da Excursão: alimenta os campos de endereço abaixo. */}
-          <div className="mb-4 max-w-md">
-            <Select
-              label="Excursão"
-              value={excursaoId}
-              onChange={onExcursaoChange}
-              options={excursoes}
-              placeholder={excursoes.length ? "Selecione a excursão..." : "Nenhuma excursão cadastrada"}
-            />
-            {excursaoId && (() => {
-              const ex = excursoes.find((e) => e.id === excursaoId);
-              if (!ex) return null;
-              const detalhes = [
-                ex.operatingDays ? `Dias: ${ex.operatingDays}` : "",
-                ex.cutoffTime ? `Funciona até às ${ex.cutoffTime}` : "",
-              ].filter(Boolean).join(" · ");
-              return detalhes ? (
-                <p className="mt-1.5 text-xs text-muted-foreground">{detalhes}</p>
-              ) : null;
-            })()}
-          </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <div className="space-y-1.5 lg:col-span-1">
