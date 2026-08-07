@@ -68,7 +68,8 @@ export function NovoPedidoForm({
   // Endereço de entrega (exibido só quando a forma de envio exige, ex.: Excursão).
   const [shipCep, setShipCep] = useState("");
   const [shipStreet, setShipStreet] = useState("");
-  const [shipNumber, setShipNumber] = useState("");
+  // "N°" removido do formulário de Excursão (Req. 2.1). Não há mais estado
+  // para número; o endereço da Excursão não usa numeração de porta.
   const [shipDistrict, setShipDistrict] = useState("");
   const [shipCity, setShipCity] = useState("");
   const [shipState, setShipState] = useState("");
@@ -86,9 +87,23 @@ export function NovoPedidoForm({
   // A forma de envio selecionada exige endereço completo?
   const requiresAddress =
     shippingMethods.find((s) => s.id === shippingMethodId)?.requiresAddress === true;
+
+  // Autopreenchimento (Req. 2.2): ao escolher o cliente na forma Excursão,
+  // preenche o Endereço de Entrega com os dados cadastrais do cliente. Campos
+  // continuam editáveis. Ao limpar o cliente, não apaga o que já foi digitado.
+  function onCustomerSelect(c: { cep?: string | null; street?: string | null; district?: string | null; city?: string | null; state?: string | null } | null) {
+    if (!c || !requiresAddress) return;
+    if (c.cep) setShipCep(c.cep);
+    if (c.street) setShipStreet(c.street);
+    if (c.district) setShipDistrict(c.district);
+    if (c.city) setShipCity(c.city);
+    if (c.state) setShipState(c.state.toUpperCase());
+  }
+
+  // Req. 2.1: na Excursão o campo "N°" é ocultado e deixa de ser obrigatório.
   const addressOk =
     !requiresAddress ||
-    [shipCep, shipStreet, shipNumber, shipDistrict, shipCity, shipState].every((v) => v.trim());
+    [shipCep, shipStreet, shipDistrict, shipCity, shipState].every((v) => v.trim());
   const [paymentNotes, setPaymentNotes] = useState("");
   // Campanha — lista dinâmica de itens (campanha, referência, qtd, valor).
   const [inCampaign, setInCampaign] = useState(false);
@@ -168,7 +183,6 @@ export function NovoPedidoForm({
         requiresAddress,
         shipCep: requiresAddress ? shipCep.trim() : undefined,
         shipStreet: requiresAddress ? shipStreet.trim() : undefined,
-        shipNumber: requiresAddress ? shipNumber.trim() : undefined,
         shipDistrict: requiresAddress ? shipDistrict.trim() : undefined,
         shipCity: requiresAddress ? shipCity.trim() : undefined,
         shipState: requiresAddress ? shipState.trim().toUpperCase() : undefined,
@@ -263,7 +277,7 @@ export function NovoPedidoForm({
         <div className="lg:col-span-1">
           {/* Busca no SERVIDOR: a base tem dezenas de milhares de clientes,
               entao nunca carregamos todos no navegador. */}
-          <CustomerCombobox label="Cliente" value={customerId} onChange={setCustomerId} />
+          <CustomerCombobox label="Cliente" value={customerId} onChange={setCustomerId} onSelect={onCustomerSelect} />
         </div>
         <div className="space-y-1.5">
           <Label>Valor Total do Pedido {valorDispensavel ? "(opcional)" : "*"}</Label>
@@ -282,23 +296,20 @@ export function NovoPedidoForm({
           <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Cliente)</p>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
-            <div className="space-y-1.5 lg:col-span-1">
+            <div className="space-y-1.5 lg:col-span-2">
               <Label>CEP *</Label>
               <Input value={shipCep} onChange={(e) => setShipCep(e.target.value)} placeholder="00000-000" />
             </div>
-            <div className="space-y-1.5 lg:col-span-3">
+            <div className="space-y-1.5 lg:col-span-4">
               <Label>Logradouro *</Label>
               <Input value={shipStreet} onChange={(e) => setShipStreet(e.target.value)} placeholder="Rua, Av..." />
             </div>
-            <div className="space-y-1.5 lg:col-span-1">
-              <Label>Número *</Label>
-              <Input value={shipNumber} onChange={(e) => setShipNumber(e.target.value)} placeholder="Nº" />
-            </div>
-            <div className="space-y-1.5 lg:col-span-1">
+            {/* Req. 2.1: campo "N°" ocultado na forma Excursão. */}
+            <div className="space-y-1.5 lg:col-span-2">
               <Label>Bairro *</Label>
               <Input value={shipDistrict} onChange={(e) => setShipDistrict(e.target.value)} placeholder="Bairro" />
             </div>
-            <div className="space-y-1.5 lg:col-span-4">
+            <div className="space-y-1.5 lg:col-span-2">
               <Label>Cidade *</Label>
               <Input value={shipCity} onChange={(e) => setShipCity(e.target.value)} placeholder="Cidade" />
             </div>

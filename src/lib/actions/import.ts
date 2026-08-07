@@ -154,7 +154,8 @@ export async function importOperationsCsv(csv: string): Promise<ActionResult<Imp
 }
 
 // ---------------------------------------------------------------------------
-// CLIENTES — colunas: codigo, nome
+// CLIENTES — colunas: codigo, nome, cep, logradouro, bairro, cidade, uf, contato
+// (do 3o campo em diante, todos opcionais).
 // ---------------------------------------------------------------------------
 export async function importCustomersCsv(csv: string): Promise<ActionResult<ImportSummary>> {
   try {
@@ -162,6 +163,12 @@ export async function importCustomersCsv(csv: string): Promise<ActionResult<Impo
     let rows = parseCsv(csv);
     rows = dropHeader(rows, ["codigo", "código", "code"]);
     if (rows.length === 0) return actionError("Arquivo vazio ou sem linhas válidas.");
+
+    // Normaliza celula opcional: vazio -> null. UF em caixa alta.
+    const opt = (v?: string): string | null => {
+      const t = (v ?? "").trim();
+      return t.length ? t : null;
+    };
 
     const summary: ImportSummary = { created: 0, updated: 0, skipped: 0, errors: [] };
     for (let i = 0; i < rows.length; i++) {
@@ -172,19 +179,23 @@ export async function importCustomersCsv(csv: string): Promise<ActionResult<Impo
       if (!code) { summary.skipped++; summary.errors.push(`Linha ${ln}: código é obrigatório.`); continue; }
       if (!name) { summary.skipped++; summary.errors.push(`Linha ${ln}: nome é obrigatório.`); continue; }
 
-      // UPSERT pelo "code" (unico): se o cliente ja existe, ATUALIZA o nome
-      // (permite corrigir cadastros em lote sem apagar nada, preservando os
-      // pedidos ja ligados). Se nao existe, cria.
+      // Campos opcionais de endereco/contato (colunas 3..8).
+      const cep = opt(r[2]);
+      const street = opt(r[3]);
+      const district = opt(r[4]);
+      const city = opt(r[5]);
+      const state = opt(r[6])?.toUpperCase() ?? null;
+      const contact = opt(r[7]);
+      const dados = { name, cep, street, district, city, state, contact };
+
+      // UPSERT pelo "code" (unico): existe -> ATUALIZA nome + endereco/contato
+      // (corrige cadastros em lote sem apagar pedidos ligados). Nao existe -> cria.
       const existente = await prisma.customer.findUnique({ where: { code } });
       if (existente) {
-        if (existente.name !== name) {
-          await prisma.customer.update({ where: { code }, data: { name } });
-          summary.updated = (summary.updated ?? 0) + 1;
-        } else {
-          summary.skipped++; // ja estava igual, nada a fazer
-        }
+        await prisma.customer.update({ where: { code }, data: dados });
+        summary.updated = (summary.updated ?? 0) + 1;
       } else {
-        await prisma.customer.create({ data: { code, name } });
+        await prisma.customer.create({ data: { code, ...dados } });
         summary.created++;
       }
     }

@@ -11,11 +11,16 @@ import { Label } from "@/components/ui/label";
 
 export interface ClienteRow {
   id: string; code: string; name: string;
+  cep?: string | null; street?: string | null; district?: string | null;
+  city?: string | null; state?: string | null; contact?: string | null;
 }
 
 type Draft = Omit<ClienteRow, "id"> & { id?: string };
 
-const empty: Draft = { code: "", name: "" };
+const empty: Draft = {
+  code: "", name: "",
+  cep: "", street: "", district: "", city: "", state: "", contact: "",
+};
 
 export function ClientesManager({ customers }: { customers: ClienteRow[] }) {
   const router = useRouter();
@@ -34,7 +39,14 @@ export function ClientesManager({ customers }: { customers: ClienteRow[] }) {
   function set(k: keyof Draft, v: string) { setDraft((p) => ({ ...p, [k]: v })); }
 
   function openNew() { setDraft(empty); setEditing(null); setShowForm(true); setMsg(null); }
-  function openEdit(c: ClienteRow) { setDraft(c); setEditing(c.id); setShowForm(true); setMsg(null); }
+  function openEdit(c: ClienteRow) {
+    setDraft({
+      id: c.id, code: c.code, name: c.name,
+      cep: c.cep ?? "", street: c.street ?? "", district: c.district ?? "",
+      city: c.city ?? "", state: c.state ?? "", contact: c.contact ?? "",
+    });
+    setEditing(c.id); setShowForm(true); setMsg(null);
+  }
   function cancel() { setShowForm(false); setEditing(null); setDraft(empty); }
 
   function save() {
@@ -77,6 +89,16 @@ export function ClientesManager({ customers }: { customers: ClienteRow[] }) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Código *" value={draft.code} onChange={(v) => set("code", v)} />
               <Field label="Nome *" value={draft.name} onChange={(v) => set("name", v)} />
+            </div>
+            {/* Endereço e contato — opcionais. Pré-preenchem o Endereço de
+                Entrega no Novo Pedido (forma Excursão). */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="CEP" value={draft.cep ?? ""} onChange={(v) => set("cep", v)} />
+              <div className="lg:col-span-2"><Field label="Logradouro" value={draft.street ?? ""} onChange={(v) => set("street", v)} /></div>
+              <Field label="Bairro" value={draft.district ?? ""} onChange={(v) => set("district", v)} />
+              <div className="lg:col-span-2"><Field label="Cidade" value={draft.city ?? ""} onChange={(v) => set("city", v)} /></div>
+              <Field label="UF" value={draft.state ?? ""} onChange={(v) => set("state", v.toUpperCase())} />
+              <Field label="Contato" value={draft.contact ?? ""} onChange={(v) => set("contact", v)} />
             </div>
             <div className="flex items-center gap-3">
               <Button variant="vendas" onClick={save} disabled={pending || !draft.name || !draft.code}>

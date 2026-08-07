@@ -72,7 +72,9 @@ export function EditarPedidoForm({
   // Endereço de entrega (Excursão).
   const [shipCep, setShipCep] = useState(order.shipCep);
   const [shipStreet, setShipStreet] = useState(order.shipStreet);
-  const [shipNumber, setShipNumber] = useState(order.shipNumber);
+  // "N°" removido da UI (Req. 2.1), mas o valor legado do pedido é preservado
+  // no salvamento — não apagamos números já cadastrados em pedidos antigos.
+  const shipNumber = order.shipNumber;
   const [shipDistrict, setShipDistrict] = useState(order.shipDistrict);
   const [shipCity, setShipCity] = useState(order.shipCity);
   const [shipState, setShipState] = useState(order.shipState);
@@ -87,9 +89,21 @@ export function EditarPedidoForm({
 
   const requiresAddress =
     shippingMethods.find((s) => s.id === shippingMethodId)?.requiresAddress === true;
+  // Req. 2.1: "N°" ocultado na Excursão e fora da obrigatoriedade.
   const addressOk =
     !requiresAddress ||
-    [shipCep, shipStreet, shipNumber, shipDistrict, shipCity, shipState].every((v) => (v ?? "").trim());
+    [shipCep, shipStreet, shipDistrict, shipCity, shipState].every((v) => (v ?? "").trim());
+
+  // Req. 2.2: autopreenche o Endereço de Entrega com os dados do cliente ao
+  // selecioná-lo na Excursão. Campos seguem editáveis.
+  function onCustomerSelect(c: CustomerOpt | null) {
+    if (!c || !requiresAddress) return;
+    if (c.cep) setShipCep(c.cep);
+    if (c.street) setShipStreet(c.street);
+    if (c.district) setShipDistrict(c.district);
+    if (c.city) setShipCity(c.city);
+    if (c.state) setShipState(c.state.toUpperCase());
+  }
 
   // Campanha — lista dinâmica de itens. Pré-carrega os itens existentes;
   // se não houver, começa com uma linha vazia quando o toggle é ligado.
@@ -253,7 +267,7 @@ export function EditarPedidoForm({
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <CustomerCombobox label="Cliente" value={customerId} onChange={setCustomerId} initialSelected={selectedCustomer} />
+        <CustomerCombobox label="Cliente" value={customerId} onChange={setCustomerId} onSelect={onCustomerSelect} initialSelected={selectedCustomer} />
         <div className="space-y-1.5">
           <Label>Valor Total do Pedido {valorDispensavel ? "(opcional)" : "*"}</Label>
           <Input type="number" min={0} step="0.01" value={orderValue || ""} onChange={(e) => setOrderValue(Number(e.target.value))} placeholder="0,00" />
@@ -270,23 +284,20 @@ export function EditarPedidoForm({
           <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Cliente)</p>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
-            <div className="space-y-1.5 lg:col-span-1">
+            <div className="space-y-1.5 lg:col-span-2">
               <Label>CEP *</Label>
               <Input value={shipCep} onChange={(e) => setShipCep(e.target.value)} placeholder="00000-000" />
             </div>
-            <div className="space-y-1.5 lg:col-span-3">
+            <div className="space-y-1.5 lg:col-span-4">
               <Label>Logradouro *</Label>
               <Input value={shipStreet} onChange={(e) => setShipStreet(e.target.value)} placeholder="Rua, Av..." />
             </div>
-            <div className="space-y-1.5 lg:col-span-1">
-              <Label>Número *</Label>
-              <Input value={shipNumber} onChange={(e) => setShipNumber(e.target.value)} placeholder="Nº" />
-            </div>
-            <div className="space-y-1.5 lg:col-span-1">
+            {/* Req. 2.1: campo "N°" ocultado na forma Excursão. */}
+            <div className="space-y-1.5 lg:col-span-2">
               <Label>Bairro *</Label>
               <Input value={shipDistrict} onChange={(e) => setShipDistrict(e.target.value)} placeholder="Bairro" />
             </div>
-            <div className="space-y-1.5 lg:col-span-4">
+            <div className="space-y-1.5 lg:col-span-2">
               <Label>Cidade *</Label>
               <Input value={shipCity} onChange={(e) => setShipCity(e.target.value)} placeholder="Cidade" />
             </div>

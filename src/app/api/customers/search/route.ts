@@ -36,7 +36,10 @@ export async function GET(req: Request) {
     where,
     orderBy: { name: "asc" },
     take: 20, // teto rigido: protege o servidor e o cliente
-    select: { id: true, code: true, name: true },
+    select: {
+      id: true, code: true, name: true,
+      cep: true, street: true, district: true, city: true, state: true, contact: true,
+    },
   });
 
   return NextResponse.json({ customers });

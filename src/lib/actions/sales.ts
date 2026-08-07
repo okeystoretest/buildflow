@@ -30,6 +30,12 @@ export async function createCustomer(
       data: {
         code: d.code.trim(),
         name: d.name,
+        cep: normalizeOpt(d.cep),
+        street: normalizeOpt(d.street),
+        district: normalizeOpt(d.district),
+        city: normalizeOpt(d.city),
+        state: normalizeOpt(d.state)?.toUpperCase() ?? null,
+        contact: normalizeOpt(d.contact),
       },
       select: { id: true, name: true },
     });
@@ -58,6 +64,12 @@ export async function updateCustomer(raw: unknown): Promise<ActionResult<void>> 
       data: {
         code: d.code.trim(),
         name: d.name,
+        cep: normalizeOpt(d.cep),
+        street: normalizeOpt(d.street),
+        district: normalizeOpt(d.district),
+        city: normalizeOpt(d.city),
+        state: normalizeOpt(d.state)?.toUpperCase() ?? null,
+        contact: normalizeOpt(d.contact),
       },
     });
     revalidatePath("/vendas/clientes");

@@ -84,7 +84,6 @@ export const createOrderSchema = z.object({
   // Cada campo faltante aponta o erro no próprio campo para a UI destacar.
   .refine((d) => !d.requiresAddress || !!d.shipCep?.trim(), { message: "Informe o CEP.", path: ["shipCep"] })
   .refine((d) => !d.requiresAddress || !!d.shipStreet?.trim(), { message: "Informe o logradouro.", path: ["shipStreet"] })
-  .refine((d) => !d.requiresAddress || !!d.shipNumber?.trim(), { message: "Informe o número.", path: ["shipNumber"] })
   .refine((d) => !d.requiresAddress || !!d.shipDistrict?.trim(), { message: "Informe o bairro.", path: ["shipDistrict"] })
   .refine((d) => !d.requiresAddress || !!d.shipCity?.trim(), { message: "Informe a cidade.", path: ["shipCity"] })
   .refine((d) => !d.requiresAddress || !!d.shipState?.trim(), { message: "Informe a UF.", path: ["shipState"] });
@@ -144,9 +143,21 @@ function normalize(s?: string | null): string {
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
+// Campos de endereco/contato do cliente. Todos opcionais; aceitam string
+// vazia (normalizada para undefined/null na action).
+const customerAddressFields = {
+  cep: z.string().trim().max(20).optional().or(z.literal("")),
+  street: z.string().trim().max(200).optional().or(z.literal("")),
+  district: z.string().trim().max(120).optional().or(z.literal("")),
+  city: z.string().trim().max(120).optional().or(z.literal("")),
+  state: z.string().trim().max(2).optional().or(z.literal("")),
+  contact: z.string().trim().max(200).optional().or(z.literal("")),
+};
+
 export const createCustomerSchema = z.object({
   code: z.string().min(1, "Codigo obrigatorio.").max(50, "Codigo muito longo."),
   name: z.string().min(2, "Nome obrigatorio."),
+  ...customerAddressFields,
 });
 
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;

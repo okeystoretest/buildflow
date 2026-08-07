@@ -8,6 +8,12 @@ export interface CustomerOpt {
   id: string;
   code: string;
   name: string;
+  cep?: string | null;
+  street?: string | null;
+  district?: string | null;
+  city?: string | null;
+  state?: string | null;
+  contact?: string | null;
 }
 
 /**
@@ -22,12 +28,16 @@ export function CustomerCombobox({
   label,
   value,
   onChange,
+  onSelect,
   initialSelected,
   placeholder = "Busque por nome ou código...",
 }: {
   label: string;
   value: string;                       // id do cliente selecionado ("" = nenhum)
   onChange: (id: string) => void;
+  // Opcional: recebe o cliente completo ao escolher (ou null ao limpar).
+  // Usado para autopreencher o Endereço de Entrega no Novo Pedido.
+  onSelect?: (customer: CustomerOpt | null) => void;
   initialSelected?: CustomerOpt | null; // preenche o campo ao editar um pedido
   placeholder?: string;
 }) {
@@ -69,6 +79,7 @@ export function CustomerCombobox({
   function pick(c: CustomerOpt) {
     setSelected(c);
     onChange(c.id);
+    onSelect?.(c);
     setOpen(false);
     setQuery("");
   }
@@ -76,6 +87,7 @@ export function CustomerCombobox({
   function clear() {
     setSelected(null);
     onChange("");
+    onSelect?.(null);
     setQuery("");
   }
 

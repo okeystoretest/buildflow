@@ -42,6 +42,8 @@ export default async function ClientesPage({
 
   const rows: ClienteRow[] = customers.map((c) => ({
     id: c.id, code: c.code, name: c.name,
+    cep: c.cep, street: c.street, district: c.district,
+    city: c.city, state: c.state, contact: c.contact,
   }));
 
   return (

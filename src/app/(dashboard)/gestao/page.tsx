@@ -61,7 +61,11 @@ export default async function GestaoPage({
         goals={goals.map((g) => ({ id: g.id, userName: g.user.name, amount: Number(g.amount), targetItems: g.targetItems, month: g.month, year: g.year, scope: g.scope, campaignName: g.campaign?.name ?? null }))}
         campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, active: c.active }))}
         activeCampaigns={activeCampaigns.map((c) => ({ id: c.id, name: c.name }))}
-        customers={customers.map((c) => ({ id: c.id, code: c.code, name: c.name }))}
+        customers={customers.map((c) => ({
+          id: c.id, code: c.code, name: c.name,
+          cep: c.cep, street: c.street, district: c.district,
+          city: c.city, state: c.state, contact: c.contact,
+        }))}
         currentMonth={curMonth}
         currentYear={curYear}
         goalPeriodMonth={goalMonth}

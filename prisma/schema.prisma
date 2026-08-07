@@ -204,6 +204,14 @@ model Customer {
   // Codigo do cliente (unico, obrigatorio).
   code      String   @unique
   name      String
+  // Dados de localizacao e contato (todos opcionais). Usados para
+  // pre-preencher o Endereco de Entrega no Novo Pedido (forma Excursao).
+  cep       String?
+  street    String? // Logradouro
+  district  String? // Bairro
+  city      String?
+  state     String? // UF (2 letras)
+  contact   String? // Telefone / E-mail / Responsavel (texto livre)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
