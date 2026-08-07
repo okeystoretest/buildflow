@@ -624,21 +624,51 @@ export async function setOrderStatus(args: {
 
     const order = await prisma.order.findUnique({
       where: { id: args.orderId },
-      select: { id: true, status: true, orderNumber: true, sellerId: true },
+      select: {
+        id: true, status: true, orderNumber: true, sellerId: true,
+        delivery: { select: { id: true, driverId: true } },
+      },
     });
     if (!order) return actionError("Pedido nao encontrado.");
 
     // Sem no-op: se ja esta no status alvo, nada a fazer.
     if (order.status === args.to) return actionOk({ status: order.status });
 
+    // Regra 1 (Gestão): retrocesso para PROCESSANDO desatribui o motorista e
+    // restaura a entrega ao estado padrão. Vale quando o pedido saía de um
+    // status onde o motorista já estava vinculado (PROCESSADO/ENVIADO/EM_ROTA).
+    const STATUS_COM_MOTORISTA: OrderStatus[] = ["PROCESSADO", "ENVIADO", "EM_ROTA"];
+    const desatribuirMotorista =
+      args.to === "PROCESSANDO" &&
+      STATUS_COM_MOTORISTA.includes(order.status) &&
+      !!order.delivery;
+
     await prisma.$transaction(async (tx) => {
       await tx.order.update({ where: { id: order.id }, data: { status: args.to } });
+
+      // Restaura a entrega: sem motorista, sem timestamps de rota, status
+      // AGUARDANDO (padrão). O card volta a "Processando" limpo, pronto para a
+      // Logística reatribuir depois.
+      if (desatribuirMotorista && order.delivery) {
+        await tx.delivery.update({
+          where: { id: order.delivery.id },
+          data: {
+            status: "AGUARDANDO",
+            driverId: null,
+            assignedAt: null,
+            startedAt: null,
+          },
+        });
+      }
+
       await tx.orderStatusHistory.create({
         data: {
           orderId: order.id,
           status: args.to,
           changedBy: session.userId,
-          note: "Status alterado pela Gestão.",
+          note: desatribuirMotorista
+            ? "Retrocesso para Processando pela Gestão · motorista desatribuído."
+            : "Status alterado pela Gestão.",
         },
       });
       // Ao arrastar para PENDENTE, notifica a vendedora (in-app).
