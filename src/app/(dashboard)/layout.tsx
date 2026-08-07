@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TopBarAccent, NavLinks, type NavLink as NavLinkT } from "./nav-client";
 import { RealtimeProvider } from "@/components/shared/realtime-provider";
+import { NotificationBell } from "@/components/shared/notification-bell";
 import { PackageCheck, LogOut } from "lucide-react";
 import type { Role } from "@prisma/client";
 
@@ -71,6 +72,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </nav>
           </div>
           <div className="flex items-center gap-3">
+            <NotificationBell />
             <ThemeToggle />
             <div className="hidden items-center gap-2 sm:flex">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
