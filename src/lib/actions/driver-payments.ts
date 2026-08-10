@@ -13,7 +13,8 @@ import { Prisma } from "@prisma/client";
  *
  * Regras:
  *  - Somente FINANCEIRO/GESTAO.
- *  - O pedido precisa estar ENTREGUE e ter motorista (Delivery.driverId).
+ *  - A ENTREGA precisa estar concluída (Delivery.status = ENTREGUE; o pedido
+ *    fica CONCLUIDO) e ter motorista (Delivery.driverId).
  *  - Um pagamento por pedido (idempotência via unique em orderId).
  */
 export async function payDriverDelivery(args: {
@@ -31,13 +32,23 @@ export async function payDriverDelivery(args: {
       select: {
         id: true,
         status: true,
-        delivery: { select: { driverId: true, driver: { select: { pixKey: true } } } },
+        delivery: { select: { status: true, driverId: true, driver: { select: { pixKey: true } } } },
         driverPayment: { select: { id: true } },
       },
     });
     if (!order) return actionError("Pedido não encontrado.");
-    if (order.status !== "ENTREGUE") {
-      return actionError('Só é possível pagar entregas de pedidos com status "Entregue".');
+
+    // A verdade sobre "a entrega foi concluída" está na ENTREGA, não no status
+    // do pedido: ao concluir a rota, Delivery.status vira ENTREGUE e o pedido
+    // avança para CONCLUIDO. Por isso validamos pelo Delivery.status. (Antes
+    // exigíamos Order.status === "ENTREGUE", que nunca ocorre após a conclusão,
+    // bloqueando todo pagamento — inclusive para o Financeiro.)
+    const entregaConcluida =
+      order.delivery?.status === "ENTREGUE" ||
+      order.status === "ENTREGUE" ||
+      order.status === "CONCLUIDO";
+    if (!entregaConcluida) {
+      return actionError('Só é possível pagar entregas já concluídas (status "Entregue").');
     }
     const driverId = order.delivery?.driverId;
     if (!driverId) return actionError("Este pedido não possui motorista atribuído.");
