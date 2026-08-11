@@ -78,13 +78,14 @@ export function EditProofsModal({
     const preparadas: NovaFoto[] = [];
     for (const file of aceitar) {
       const res = await shrinkImageToBase64(file, { maxDimension: 1600, quality: 0.8 });
-      if (res.error) {
-        setError(res.error);
+      if (res.error || !res.base64) {
+        if (res.error) setError(res.error);
         continue;
       }
+      const base64 = res.base64;
       preparadas.push({
         key: `${file.name}_${file.size}_${Math.random().toString(36).slice(2)}`,
-        base64: res.base64,
+        base64,
       });
     }
     if (preparadas.length) setNovas((prev) => [...prev, ...preparadas]);
