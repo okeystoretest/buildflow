@@ -30,15 +30,16 @@ export default async function LogisticaEntregasPage({
   if (ate) entregueDataFilter.lte = new Date(ate + "T23:59:59");
   const temPeriodo = de !== "" || ate !== "";
 
-  // BUGFIX: o filtro correto é o STATUS ATUAL DO PEDIDO estritamente igual a
-  // ENTREGUE — não o status da entrega (Delivery). No fluxo do motorista o
-  // pedido avança para CONCLUIDO (a entrega fica ENTREGUE), então filtrar pela
-  // entrega trazia pedidos já concluídos (status divergente); e o fluxo
-  // simplificado termina em ENTREGUE sem criar Delivery, então esses pedidos
-  // ficavam de fora (registros omitidos). Filtrar por Order.status resolve os
-  // dois casos de uma vez.
+  // BUGFIX (truncamento): o histórico listava apenas Order.status === "ENTREGUE".
+  // No fluxo do motorista, ao concluir a entrega o pedido avança para CONCLUIDO
+  // (a Delivery fica ENTREGUE) — ou seja, TODA entrega realmente concluída por
+  // motorista saía da listagem, deixando à mostra só o estado transitório e os
+  // pedidos de fluxo simplificado (que terminam em ENTREGUE sem criar Delivery).
+  // Isso divergia do Histórico de Vendas, que filtra por CONCLUIDO e exibe o
+  // volume correto. Correção: aceitar CONCLUIDO **e** ENTREGUE, cobrindo os dois
+  // caminhos (motorista → CONCLUIDO; simplificado → ENTREGUE) numa só query.
   const where: Prisma.OrderWhereInput = {
-    status: "ENTREGUE",
+    status: { in: ["CONCLUIDO", "ENTREGUE"] },
     ...(temPeriodo
       ? { history: { some: { status: "ENTREGUE", createdAt: entregueDataFilter } } }
       : {}),
@@ -98,7 +99,7 @@ export default async function LogisticaEntregasPage({
       <BackButton href="/logistica" />
       <h1 className="text-2xl font-bold text-distribuicao">Histórico de Entregas</h1>
       <p className="text-sm text-muted-foreground">
-        Pedidos com status atual &ldquo;Entregue&rdquo;. Clique em um para ver a ficha completa da venda e da entrega.
+        Pedidos concluídos (entregues). Clique em um para ver a ficha completa da venda e da entrega.
       </p>
 
       <EntregasLogFiltros defaultBusca={busca} defaultDe={de} defaultAte={ate} />

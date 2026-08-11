@@ -76,6 +76,7 @@ export default async function MotoristaHistoricoPage({
     invoicePath: o.invoicePath,
     trackingCode: o.trackingCode,
     proofs: (o.delivery?.proofs ?? []).map((p) => ({ id: p.id, filePath: p.filePath })),
+    deliveryId: o.delivery?.id ?? null,
   }));
 
   return (
@@ -93,7 +94,7 @@ export default async function MotoristaHistoricoPage({
         <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhuma entrega no período/filtro.</CardContent></Card>
       )}
 
-      <HistoricoList orders={items} />
+      <HistoricoList orders={items} editableProofs />
 
       <Pagination page={page} perPage={PER_PAGE} total={total} label="entregas" />
     </div>

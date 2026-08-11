@@ -117,8 +117,8 @@ export function OrderCard({
 
       {/* rodape: sinais (NF, comprovante) + alerta + acao (seta de status) */}
       <div className="mt-2 flex items-center gap-2 border-t border-border/60 pt-2">
-        <Signal active={data.hasPaymentProof} icon={<Receipt className="h-3 w-3" />} label="Comprov." />
-        <Signal active={data.hasInvoice} icon={<FileText className="h-3 w-3" />} label="NF" />
+        <Signal active={data.hasPaymentProof} overdue={atrasado} icon={<Receipt className="h-3 w-3" />} label="Comprov." />
+        <Signal active={data.hasInvoice} overdue={atrasado} icon={<FileText className="h-3 w-3" />} label="NF" />
         {alerta && (
           <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-semibold text-destructive">
             Sem NF
@@ -146,12 +146,36 @@ export function OrderCard({
   );
 }
 
-function Signal({ active, icon, label }: { active?: boolean; icon: React.ReactNode; label: string }) {
+function Signal({
+  active,
+  overdue,
+  icon,
+  label,
+}: {
+  active?: boolean;
+  // Card ATRASADO (fundo vermelho preenchido). Nesse contexto o verde do chip
+  // "anexado" perde contraste; trocamos por amarelo de alto contraste para que
+  // o usuário identifique de imediato quais documentos já estão no pedido.
+  overdue?: boolean;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  // Em card atrasado: anexado = chip amarelo (alto contraste sobre o vermelho);
+  // pendente = chip translúcido claro discreto. A classe `signal-overdue-active`
+  // reforça o amarelo em globals.css, vencendo o `.card-overdue *` global.
+  const cls = overdue
+    ? active
+      ? "signal-overdue-active bg-amber-300 text-red-900"
+      : "border border-white/40 text-white/80"
+    : active
+      ? "bg-motorista/15 text-motorista"
+      : "bg-secondary text-muted-foreground/60";
+
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
-        active ? "bg-motorista/15 text-motorista" : "bg-secondary text-muted-foreground/60",
+        cls,
       )}
       title={active ? `${label}: anexado` : `${label}: pendente`}
     >
