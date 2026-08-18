@@ -56,6 +56,11 @@ model User {
   // Opcional; so faz sentido para o perfil MOTORISTA (validado na action).
   pixKey    String?
   active    Boolean  @default(true)
+  // Versão da sessão. O JWT carrega este número; qualquer incremento invalida
+  // TODOS os tokens já emitidos (logout server-side real, expulsão de usuário
+  // desativado, "sair de todos os dispositivos"). Sem isto, um JWT roubado
+  // valeria pelos 7 dias inteiros mesmo após logout.
+  tokenVersion Int   @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

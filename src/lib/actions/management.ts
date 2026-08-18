@@ -249,7 +249,12 @@ export async function updateUser(args: {
 
 export async function toggleUser(id: string, active: boolean): Promise<ActionResult<void>> {  try {
     await requireRoleAction(["GESTAO"]);
-    await prisma.user.update({ where: { id }, data: { active } });
+    // Ao DESATIVAR, também incrementa tokenVersion: derruba na hora qualquer
+    // sessão ativa do usuário (o JWT emitido deixa de casar com o banco).
+    await prisma.user.update({
+      where: { id },
+      data: active ? { active } : { active, tokenVersion: { increment: 1 } },
+    });
     revalidatePath("/gestao");
     return actionOk(undefined);
   } catch (err) {

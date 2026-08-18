@@ -15,8 +15,30 @@ const nextConfig = {
     },
   },
   images: {
-    // Arquivos sao servidos estaticamente pelo Nginx a partir de /uploads.
+    // Arquivos sao servidos pela rota autenticada /api/uploads.
     unoptimized: true,
+  },
+  async rewrites() {
+    // Caminhos LEGADOS gravados no banco como "/uploads/..." passam a ser
+    // atendidos pela rota autenticada, sem precisar reescrever o banco.
+    // Arquivos novos já nascem com base "/api/uploads" (NEXT_PUBLIC_UPLOAD_BASE_URL).
+    return [
+      { source: '/uploads/:path*', destination: '/api/uploads/:path*' },
+    ];
+  },
+  async headers() {
+    // Cabeçalhos de segurança básicos em todas as respostas.
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-DNS-Prefetch-Control', value: 'off' },
+        ],
+      },
+    ];
   },
 };
 

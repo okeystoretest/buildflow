@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 /**
@@ -68,9 +69,12 @@ export async function processAndSaveImage(
   const destDirAbs = path.join(UPLOAD_DIR, folder, year, month);
   await mkdir(destDirAbs, { recursive: true });
 
-  // Sanitiza nome e forca extensao .webp
+  // Sanitiza nome e forca extensao .webp. Acrescenta um sufixo ALEATORIO
+  // (UUID) para que o caminho final nao seja adivinhavel a partir de
+  // orderId/campo/timestamp — defesa em profundidade mesmo com a rota
+  // autenticada de /api/uploads.
   const safeName = opts.fileName.replace(/[^a-zA-Z0-9_-]/g, "") || `img_${Date.now()}`;
-  const finalName = `${safeName}.webp`;
+  const finalName = `${safeName}_${randomUUID()}.webp`;
   const absolutePath = path.join(destDirAbs, finalName);
 
   // Pipeline sharp: auto-rotaciona (EXIF do celular), redimensiona se preciso, vira webp.
@@ -149,7 +153,7 @@ export async function saveDocument(
   await mkdir(destDirAbs, { recursive: true });
 
   const safeName = opts.fileName.replace(/[^a-zA-Z0-9_-]/g, "") || `doc_${Date.now()}`;
-  const finalName = `${safeName}.pdf`;
+  const finalName = `${safeName}_${randomUUID()}.pdf`;
   const absolutePath = path.join(destDirAbs, finalName);
 
   await writeFile(absolutePath, input);

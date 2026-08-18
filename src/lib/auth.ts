@@ -4,21 +4,24 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { AUTH_SECRET_KEY } from "@/lib/auth-secret";
 
 const COOKIE_NAME = "bf_session";
-const secret = new TextEncoder().encode(
-  process.env.AUTH_SECRET ?? "dev_inseguro_troque",
-);
+const secret = AUTH_SECRET_KEY;
 
 export interface SessionPayload {
   userId: string;
   role: Role;
   name: string;
+  // Versão da sessão no momento da emissão. Confrontada com User.tokenVersion
+  // para permitir revogação (logout server-side, desativação de usuário).
+  tokenVersion: number;
   [key: string]: unknown;
 }
 
 export async function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, 10);
+  // Cost 12 (era 10): ~4x mais lento p/ atacante, imperceptível no login.
+  return bcrypt.hash(plain, 12);
 }
 
 export async function verifyPassword(
@@ -44,18 +47,54 @@ export async function createSession(payload: SessionPayload): Promise<void> {
   });
 }
 
+/**
+ * Lê e VALIDA a sessão. Além de conferir a assinatura do JWT, confronta o
+ * `tokenVersion` do token com o valor atual em banco e checa se o usuário
+ * segue ativo. Se a versão divergir (logout/expulsão) ou o usuário estiver
+ * inativo, a sessão é considerada inválida. Este é o caminho autoritativo
+ * usado por páginas e Server Actions.
+ */
 export async function getSession(): Promise<SessionPayload | null> {
   const token = cookies().get(COOKIE_NAME)?.value;
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret);
-    return payload as SessionPayload;
+    const session = payload as SessionPayload;
+
+    // Revogação: confere versão e status atuais do usuário.
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { tokenVersion: true, active: true },
+    });
+    if (!user || !user.active) return null;
+    if ((session.tokenVersion ?? 0) !== user.tokenVersion) return null;
+
+    return session;
   } catch {
     return null;
   }
 }
 
+/**
+ * Encerra a sessão do usuário logado em TODOS os dispositivos: incrementa o
+ * tokenVersion (invalida os JWT já emitidos) e apaga o cookie local.
+ */
 export async function destroySession(): Promise<void> {
+  const token = cookies().get(COOKIE_NAME)?.value;
+  if (token) {
+    try {
+      const { payload } = await jwtVerify(token, secret);
+      const userId = (payload as SessionPayload).userId;
+      if (userId) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { tokenVersion: { increment: 1 } },
+        });
+      }
+    } catch {
+      // Token inválido/expirado: nada a revogar, só limpar o cookie.
+    }
+  }
   cookies().delete(COOKIE_NAME);
 }
 
