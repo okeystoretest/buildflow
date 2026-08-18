@@ -9,16 +9,28 @@ import { EtiquetaAutoPrint } from "./auto-print";
 // nova aba e dispara a impressão.
 //
 // Layout do adesivo (faixas pretas por seção, conteúdo centralizado):
-//   [ COMANDA         | CLIENTE  ]  <- topo
-//   [ ENDEREÇO ENTREGA| EXCURSÃO ]  <- meio (preenche a altura)
-//   [ OBSERVAÇÕES DE ENVIO       ]  <- rodapé
+//   [ COMANDA          | CLIENTE  ]  <- topo
+//   [ ENDEREÇO ENTREGA | EXCURSÃO ]  <- meio (preenche a altura)
+//   [ OBSERVAÇÕES DE ENVIO        ]  <- rodapé
 //
-// Hierarquia visual: Comanda (44pt), Nome da Cliente (17pt) e Endereço (15.5pt)
-// são as três informações de leitura rápida. Telefone da cliente logo abaixo do
+// Tipografia: "Aptos" para texto normal e "Aptos Black" para os destaques.
+// A Aptos é fonte de sistema (Microsoft 365); o stack tem fallback para
+// Segoe UI / Arial nas máquinas que não a tenham instalada.
+//
+// Hierarquia visual (leitura rápida): Comanda, Nome da Cliente e Endereço de
+// Entrega em corpo ampliado e Aptos Black. Telefone da cliente logo abaixo do
 // nome (origem: Customer.contact).
 //
 // O campo "Vendedora" foi REMOVIDO do layout e do fluxo de dados — a query nem
 // carrega mais a relação `seller`.
+
+// Regra de negócio da etiqueta: exibir SOMENTE os dois primeiros nomes da
+// cliente (evita quebra de linha e mantém a legibilidade em corpo grande).
+function doisPrimeirosNomes(nomeCompleto: string): string {
+  const partes = nomeCompleto.trim().split(/\s+/).filter(Boolean);
+  return partes.slice(0, 2).join(" ");
+}
+
 export default async function EtiquetaPage({ params }: { params: { id: string } }) {
   // Somente papéis que operam vendas/logística podem imprimir.
   await requireRole(["GESTAO", "VENDAS", "FINANCEIRO", "LOGISTICA"]);
@@ -42,6 +54,9 @@ export default async function EtiquetaPage({ params }: { params: { id: string } 
   }
 
   const comanda = order.comandaNumber ?? order.orderNumber;
+
+  // Nome exibido: apenas os dois primeiros nomes.
+  const nomeCliente = doisPrimeirosNomes(order.customer.name);
 
   // Contato da cliente (telefone). Campo de texto livre no cadastro de Clientes.
   const contato = order.customer.contact?.trim() ?? "";
@@ -72,46 +87,57 @@ export default async function EtiquetaPage({ params }: { params: { id: string } 
         * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
         .etq {
-          width: 140mm; height: 105mm; padding: 3mm;
-          font-family: "Helvetica Neue", Arial, sans-serif; color: #000; background: #fff;
-          display: flex; flex-direction: column; gap: 1.6mm; text-align: center;
+          /* Aptos (texto normal) com fallback de sistema */
+          --f-aptos: "Aptos", "Aptos Display", "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+          /* Aptos Black (destaques) com fallback de sistema */
+          --f-aptos-black: "Aptos Black", "Aptos ExtraBold", "Aptos Display", "Aptos",
+                           "Segoe UI Black", "Segoe UI", "Arial Black", Arial, sans-serif;
+
+          width: 140mm; height: 105mm; padding: 2.5mm;
+          font-family: var(--f-aptos); color: #000; background: #fff;
+          display: flex; flex-direction: column; gap: 1.4mm; text-align: center;
         }
+        /* Utilitário: tudo que for destaque usa Aptos Black */
+        .etq .blk { font-family: var(--f-aptos-black); font-weight: 900; }
 
         /* Faixa preta de título de seção */
         .etq-band {
-          background: #000; color: #fff; font-weight: 900; text-transform: uppercase;
-          letter-spacing: .05em; font-size: 12pt; padding: 1.2mm 2mm; line-height: 1.1;
+          background: #000; color: #fff; font-family: var(--f-aptos-black); font-weight: 900;
+          text-transform: uppercase; letter-spacing: .04em; font-size: 11.5pt;
+          padding: 1mm 2mm; line-height: 1.1;
         }
         /* Corpo da seção (borda contínua com a faixa) */
         .etq-box {
-          border: 1.2pt solid #000; border-top: none; padding: 1.8mm 2.4mm;
-          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6mm;
+          border: 1.2pt solid #000; border-top: none; padding: 1.6mm 2.2mm;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1mm;
         }
 
-        .etq-row { display: flex; gap: 1.6mm; }
+        .etq-row { display: flex; gap: 1.4mm; }
         .etq-row-mid { flex: 1; min-height: 0; }
         .etq-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-        .etq-col-addr { flex: 1.12; }
+        .etq-col-addr { flex: 1.05; }
         .etq-fill { flex: 1; }
 
         /* --- Destaque 1: número da comanda --- */
-        .etq-comanda { font-size: 44pt; font-weight: 900; line-height: 1; letter-spacing: .01em; }
+        .etq-comanda { font-size: 40pt; line-height: 1; letter-spacing: .01em; }
 
-        /* --- Destaque 2: nome da cliente (+ código e telefone) --- */
-        .etq-cli-nome { font-size: 17pt; font-weight: 900; line-height: 1.1; word-break: break-word; }
-        .etq-cli-nome .cod { font-weight: 500; font-size: 14pt; }
-        .etq-cli-fone { font-size: 14.5pt; font-weight: 700; }
+        /* --- Destaque 2: nome da cliente (dois primeiros nomes) --- */
+        .etq-cli-nome { font-size: 18pt; line-height: 1.1; text-transform: uppercase; }
+        /* Código do cliente: peso normal (Aptos), entre parênteses, ao lado do nome */
+        .etq-cli-nome .cod {
+          font-family: var(--f-aptos); font-weight: 400; font-size: 13pt; white-space: nowrap;
+        }
+        .etq-cli-fone { font-size: 14pt; font-weight: 400; }
 
         /* --- Destaque 3: endereço de entrega --- */
-        .etq-addr-l1 { font-size: 15.5pt; font-weight: 800; line-height: 1.12; }
-        .etq-addr-l2 { font-size: 11.5pt; font-weight: 600; }
-        .etq-addr-cep { font-size: 12.5pt; font-weight: 900; }
+        .etq-addr-l1 { font-size: 14pt; line-height: 1.12; text-transform: uppercase; }
+        .etq-addr-l2 { font-size: 12pt; font-weight: 400; text-transform: uppercase; }
+        .etq-addr-cep { font-size: 12pt; font-weight: 400; }
 
         /* --- Apoio: excursão e observações --- */
-        .etq-exc-nome { font-size: 13.5pt; font-weight: 900; line-height: 1.1; }
-        .etq-exc-txt { font-size: 10pt; font-weight: 600; line-height: 1.25; }
-        .etq-exc-obs { font-size: 10pt; font-weight: 800; line-height: 1.25; }
-        .etq-obs { min-height: 14mm; font-size: 11pt; font-weight: 600; line-height: 1.3; }
+        .etq-exc-nome { font-size: 12.5pt; line-height: 1.1; text-transform: uppercase; }
+        .etq-exc-txt { font-size: 11pt; font-weight: 400; line-height: 1.2; text-transform: uppercase; }
+        .etq-obs { min-height: 13mm; font-size: 11pt; font-weight: 400; line-height: 1.25; }
       `}</style>
 
       <div className="etq">
@@ -120,15 +146,15 @@ export default async function EtiquetaPage({ params }: { params: { id: string } 
           <div className="etq-col">
             <div className="etq-band">Comanda</div>
             <div className="etq-box etq-fill">
-              <div className="etq-comanda">{comanda}</div>
+              <div className="etq-comanda blk">{comanda}</div>
             </div>
           </div>
 
           <div className="etq-col">
             <div className="etq-band">Cliente</div>
             <div className="etq-box etq-fill">
-              <div className="etq-cli-nome">
-                {order.customer.name}
+              <div className="etq-cli-nome blk">
+                {nomeCliente}
                 {order.customer.code ? <span className="cod"> ({order.customer.code})</span> : null}
               </div>
               <div className="etq-cli-fone">{contato || "—"}</div>
@@ -141,7 +167,7 @@ export default async function EtiquetaPage({ params }: { params: { id: string } 
           <div className="etq-col etq-col-addr">
             <div className="etq-band">Endereço de Entrega</div>
             <div className="etq-box etq-fill">
-              <div className="etq-addr-l1">{enderecoLinha1 || "—"}</div>
+              <div className="etq-addr-l1 blk">{enderecoLinha1 || "—"}</div>
               {enderecoLinha2 ? <div className="etq-addr-l2">{enderecoLinha2}</div> : null}
               {order.shipCep ? <div className="etq-addr-cep">CEP {order.shipCep}</div> : null}
             </div>
@@ -152,11 +178,11 @@ export default async function EtiquetaPage({ params }: { params: { id: string } 
             <div className="etq-box etq-fill">
               {order.excursao ? (
                 <>
-                  <div className="etq-exc-nome">{order.excursao.name}</div>
+                  <div className="etq-exc-nome blk">{order.excursao.name}</div>
                   {order.excursao.address ? (
                     <div className="etq-exc-txt">{order.excursao.address}</div>
                   ) : null}
-                  {excursaoNotes ? <div className="etq-exc-obs">Obs.: {excursaoNotes}</div> : null}
+                  {excursaoNotes ? <div className="etq-exc-txt">{excursaoNotes}</div> : null}
                   {excursaoHorario ? <div className="etq-exc-txt">{excursaoHorario}</div> : null}
                 </>
               ) : (
@@ -169,7 +195,7 @@ export default async function EtiquetaPage({ params }: { params: { id: string } 
         {/* Rodapé: Observações de Envio */}
         <div>
           <div className="etq-band">Observações de Envio</div>
-          <div className="etq-box etq-obs">{observacoes || "—"}</div>
+          <div className="etq-box etq-obs">{observacoes || ""}</div>
         </div>
       </div>
     </>
