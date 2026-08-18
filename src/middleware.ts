@@ -1,10 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
-import { AUTH_SECRET_KEY } from "@/lib/auth-secret";
+import { getAuthSecret } from "@/lib/auth-secret";
 
-// Mesmo segredo do resto do app, sem fallback inseguro. Se AUTH_SECRET faltar,
-// o import falha e o app não sobe — comportamento desejado.
-const secret = AUTH_SECRET_KEY;
+// Mesmo segredo do resto do app, sem fallback inseguro (getAuthSecret valida
+// e cacheia na 1ª chamada). Sem AUTH_SECRET em runtime, a verificação falha.
 
 const PUBLIC_PATHS = ["/login", "/api/health"];
 
@@ -28,7 +27,7 @@ export async function middleware(req: NextRequest) {
     // Checagem barata só de assinatura/validade (Edge não acessa o banco).
     // A revogação por tokenVersion é conferida no getSession (runtime Node),
     // usado por páginas e Server Actions — a camada autoritativa.
-    await jwtVerify(token, secret);
+    await jwtVerify(token, getAuthSecret());
     return NextResponse.next();
   } catch {
     return NextResponse.redirect(new URL("/login", req.url));

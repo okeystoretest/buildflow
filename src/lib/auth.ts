@@ -4,10 +4,9 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { AUTH_SECRET_KEY } from "@/lib/auth-secret";
+import { getAuthSecret } from "@/lib/auth-secret";
 
 const COOKIE_NAME = "bf_session";
-const secret = AUTH_SECRET_KEY;
 
 export interface SessionPayload {
   userId: string;
@@ -36,7 +35,7 @@ export async function createSession(payload: SessionPayload): Promise<void> {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .sign(secret);
+    .sign(getAuthSecret());
 
   cookies().set(COOKIE_NAME, token, {
     httpOnly: true,
@@ -58,7 +57,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   const token = cookies().get(COOKIE_NAME)?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getAuthSecret());
     const session = payload as SessionPayload;
 
     // Revogação: confere versão e status atuais do usuário.
@@ -83,7 +82,7 @@ export async function destroySession(): Promise<void> {
   const token = cookies().get(COOKIE_NAME)?.value;
   if (token) {
     try {
-      const { payload } = await jwtVerify(token, secret);
+      const { payload } = await jwtVerify(token, getAuthSecret());
       const userId = (payload as SessionPayload).userId;
       if (userId) {
         await prisma.user.update({
