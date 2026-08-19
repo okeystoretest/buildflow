@@ -20,17 +20,23 @@ export function buildOrderCode(seq: number): string {
   return `BF-${year}-${String(seq).padStart(6, "0")}`;
 }
 
-/** Cor da barra de progresso por faixa: <=50 vermelho, <=75 amarelo, <=99 azul, 100 verde. */
+/**
+ * Cor da barra/valor de progresso por faixa (regra de negocio vigente):
+ *   ate 33%  -> vermelho
+ *   ate 66%  -> amarelo
+ *   ate 99%  -> azul
+ *   100%+    -> verde
+ */
 export function tierColor(pct: number): string {
   if (pct >= 100) return "bg-emerald-500";
-  if (pct >= 76) return "bg-blue-500";
-  if (pct >= 51) return "bg-amber-500";
+  if (pct >= 67) return "bg-blue-500";
+  if (pct >= 34) return "bg-amber-500";
   return "bg-red-500";
 }
 export function tierText(pct: number): string {
   if (pct >= 100) return "text-emerald-500";
-  if (pct >= 76) return "text-blue-500";
-  if (pct >= 51) return "text-amber-500";
+  if (pct >= 67) return "text-blue-500";
+  if (pct >= 34) return "text-amber-500";
   return "text-red-500";
 }
 

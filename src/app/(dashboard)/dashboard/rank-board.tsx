@@ -81,9 +81,12 @@ export function RankBoard({ initial }: { initial: RankData }) {
   const nowYear = new Date().getFullYear();
   const anos = Array.from({ length: 5 }, (_, i) => nowYear - i);
 
+  // O quadro ocupa a altura da tela. Quando a tabela de Performance cresce
+  // muito (muitos vendedores com meta), o excedente rola a PAGINA inteira —
+  // nunca uma barra de rolagem dentro do bloco de Performance.
   const wrapClass = isFull
-    ? "flex h-screen flex-col gap-2.5 overflow-hidden bg-background p-3"
-    : "flex h-[calc(100vh-7rem)] flex-col gap-2.5 overflow-hidden";
+    ? "flex min-h-screen flex-col gap-2.5 overflow-y-auto bg-background p-3"
+    : "flex min-h-[calc(100vh-7rem)] flex-col gap-2.5";
 
   return (
     <div ref={rootRef} className={wrapClass}>
@@ -144,7 +147,10 @@ export function RankBoard({ initial }: { initial: RankData }) {
             col 2/3 linha 2 -> Performance na Campanha, alinhado a esquerda com
                       o bloco Varejo (portanto mais estreito) e mais baixo.
           No mobile tudo empilha em coluna unica. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 lg:grid-cols-3 lg:grid-rows-[minmax(0,1.9fr)_minmax(0,1fr)]">
+      {/* A 2a linha e `auto`: o bloco de Performance cresce conforme o numero
+          de vendedores, sem barra de rolagem interna. Varejo/Atacado (1a linha)
+          cedem altura — tem minimo de 160px e rolam internamente se preciso. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 lg:grid-cols-3 lg:grid-rows-[minmax(160px,1fr)_auto]">
         {/* Progresso Geral: ate 20 nomes, rola se passar disso. */}
         <div className="flex min-h-0 lg:row-span-2">
           <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue compact maxRows={20} className="flex-1" />
@@ -268,10 +274,11 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
     return <p className="m-auto text-sm text-muted-foreground">Nenhuma campanha ativa ou sem metas vinculadas.</p>;
   }
   return (
-    /* Bloco reduzido: a tabela rola internamente em vez de esticar o card. */
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    /* Sem rolagem interna: a tabela exibe TODOS os vendedores e o card cresce
+       verticalmente conforme a quantidade de linhas. */
+    <div className="flex-1">
       <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-card text-left text-xs uppercase tracking-wide text-muted-foreground">
+        <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
             <th className="pb-1 pr-2">Vendedores</th>
             <th className="pb-1 pr-2 text-right">Meta</th>
@@ -282,7 +289,8 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
           </tr>
         </thead>
         <tbody>
-          {perf.rows.slice(0, 10).map((r, i) => (
+          {/* Sem corte: todos os vendedores com meta na campanha aparecem. */}
+          {perf.rows.map((r, i) => (
             <tr key={r.nome} className="border-t border-border/60">
               <td className="py-1 pr-2">
                 <span className="flex items-center gap-1.5">
