@@ -160,6 +160,9 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   const metaPorVendedor = new Map<string, number>();
   for (const g of goalsGerais) metaPorVendedor.set(g.userId + g.scope, Number(g.amount));
 
+  // REGRA DE NEGOCIO: usuarios SEM meta definida no periodo NAO aparecem no
+  // dashboard. O ranking mede progresso contra meta — sem meta cadastrada a
+  // linha nao tem leitura possivel ("s/ meta") e apenas polui o telao.
   const buildRank = (scope: "VAREJO" | "ATACADO" | null): RankRow[] =>
     [...porVendedor.entries()]
       .filter(([, v]) => (scope ? v.scope === scope : true))
@@ -169,6 +172,8 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
         const meta = escopoMeta ? (metaPorVendedor.get(id + escopoMeta) ?? 0) : 0;
         return { nome: v.nome, vendido: v.total, meta, pct: meta > 0 ? Math.round((v.total / meta) * 100) : 0 };
       })
+      // Descarta quem nao tem meta no mes/ano selecionado.
+      .filter((r) => r.meta > 0)
       .sort((a, b) => b.vendido - a.vendido);
 
   // Campanhas ativas + pedidos vinculados + metas (SalesGoal) vinculadas.
@@ -247,6 +252,9 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
       porVend.set(o.sellerId, cur);
     }
     const rows: CampaignPerfRow[] = [...porVend.values()]
+      // Mesma regra do ranking: sem meta de itens vinculada a ESTA campanha, o
+      // vendedor nao entra na tabela de performance (mesmo tendo vendido).
+      .filter((v) => v.meta > 0)
       .map((v) => {
         const pct = v.meta > 0 ? Math.round((v.qtd / v.meta) * 100) : 0;
         return { nome: v.nome, meta: v.meta, qtd: v.qtd, valor: v.valor, comissao: v.comissao, pct };

@@ -137,30 +137,37 @@ export function RankBoard({ initial }: { initial: RankData }) {
           value={String(campTotalVol?.volume ?? 0)} sub="peças" />
       </div>
 
-      {/* 3 colunas de ranking — ocupam a maior parte da altura (72%) para
-          caber mais vendedoras na lista de Progresso Geral. */}
-      <div className="grid min-h-0 grid-cols-1 gap-2.5 lg:grid-cols-3" style={{ flex: "1 1 72%" }}>
-        {/* Progresso Geral exibe ate 20 nomes (rola se passar disso). */}
-        <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue compact maxRows={20} />
+      {/* Grade principal (2 linhas x 3 colunas no desktop):
+            col 1  -> Progresso Geral de Vendedoras, ocupando as DUAS linhas
+                      (preenche verticalmente todo o espaco disponivel);
+            col 2/3 linha 1 -> Varejo e Atacado;
+            col 2/3 linha 2 -> Performance na Campanha, alinhado a esquerda com
+                      o bloco Varejo (portanto mais estreito) e mais baixo.
+          No mobile tudo empilha em coluna unica. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 lg:grid-cols-3 lg:grid-rows-[minmax(0,1.9fr)_minmax(0,1fr)]">
+        {/* Progresso Geral: ate 20 nomes, rola se passar disso. */}
+        <div className="flex min-h-0 lg:row-span-2">
+          <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue compact maxRows={20} className="flex-1" />
+        </div>
         <RankPanel title="Varejo" rows={data.rankVarejo} showTrophy compact />
         <RankPanel title="Atacado" rows={data.rankAtacado} showTrophy compact />
-      </div>
 
-      {/* Tabela de performance por campanha — bloco reduzido (28%) para ceder
-          altura ao ranking; a tabela rola internamente quando necessario. */}
-      <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3" style={{ flex: "1 1 28%" }}>
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="text-base font-semibold">Performance na</span>
-            {data.campaignPerf.length > 0 && (
-              <select className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
-                value={campSel} onChange={(e) => setCampSel(e.target.value)}>
-                {data.campaignPerf.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            )}
+        {/* Tabela de performance por campanha — ocupa apenas as colunas de
+            Varejo/Atacado, na linha de baixo. Rola internamente. */}
+        <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3 lg:col-span-2">
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-base font-semibold">Performance na</span>
+              {data.campaignPerf.length > 0 && (
+                <select className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+                  value={campSel} onChange={(e) => setCampSel(e.target.value)}>
+                  {data.campaignPerf.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
+            </div>
           </div>
+          <PerfTable perf={campPerf} />
         </div>
-        <PerfTable perf={campPerf} />
       </div>
     </div>
   );
@@ -208,11 +215,12 @@ function Kpi({ icon, iconClass, label, value, sub, subClass }: {
 
 // `maxRows` define quantos nomes o painel exibe (default 10). O container rola
 // verticalmente quando a lista nao cabe na altura disponivel.
-function RankPanel({ title, rows, showTrophy, compact, hideValue, maxRows = 10 }: {
-  title: string; rows: RankRow[]; showTrophy?: boolean; compact?: boolean; hideValue?: boolean; maxRows?: number;
+function RankPanel({ title, rows, showTrophy, compact, hideValue, maxRows = 10, className }: {
+  title: string; rows: RankRow[]; showTrophy?: boolean; compact?: boolean; hideValue?: boolean;
+  maxRows?: number; className?: string;
 }) {
   return (
-    <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3">
+    <div className={`flex min-h-0 flex-col rounded-xl border border-border bg-card p-3 ${className ?? ""}`}>
       <p className="mb-1.5 shrink-0 text-base font-semibold lg:text-lg">{title}</p>
       <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${compact ? "justify-start gap-2" : "justify-around gap-0.5"}`}>
         {rows.slice(0, maxRows).map((r, i) => (
