@@ -7,6 +7,21 @@ import { getAuthSecret } from "@/lib/auth-secret";
 
 const PUBLIC_PATHS = ["/login", "/api/health"];
 
+// Arquivos publicos servidos de /public que NAO exigem sessao. Sem esta
+// liberacao o middleware redirecionava manifest/icones/service worker para
+// /login e o navegador recebia HTML no lugar do JSON — origem do erro
+// "Manifest: Line 1, column 1, Syntax error" no console.
+const PUBLIC_FILES = [
+  "/manifest.webmanifest",
+  "/sw.js",
+  "/favicon.ico",
+  "/favicon-32.png",
+  "/icon.svg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/apple-icon.png",
+];
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -14,6 +29,7 @@ export async function middleware(req: NextRequest) {
   // agora é servido pela rota autenticada /api/uploads (ver route handler).
   if (
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    PUBLIC_FILES.includes(pathname) ||
     pathname.startsWith("/_next")
   ) {
     return NextResponse.next();

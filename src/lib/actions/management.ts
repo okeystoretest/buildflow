@@ -154,8 +154,13 @@ export async function createUser(args: {
     if (originStoreIds.length > 2) {
       return actionError("Selecione no máximo 2 Lojas de Origem.");
     }
-    const exists = await prisma.user.findUnique({ where: { email: args.email.trim() } });
-    if (exists) return actionError("Já existe usuário com este e-mail.");
+    // Unicidade do login SEM diferenciar maiusculas/minusculas: o login e
+    // resolvido de forma case-insensitive, entao "Livia#BF" e "livia#bf" nao
+    // podem coexistir (tornariam o login ambiguo).
+    const exists = await prisma.user.findFirst({
+      where: { email: { equals: args.email.trim(), mode: "insensitive" } },
+    });
+    if (exists) return actionError("Já existe usuário com este login.");
     await prisma.user.create({
       data: {
         name: args.name.trim(),
@@ -218,9 +223,12 @@ export async function updateUser(args: {
     }
 
     // O login (email) deve continuar unico.
+    // Comparacao case-insensitive (o login e resolvido sem diferenciar caixa).
     const email = args.email.trim();
-    if (email !== user.email) {
-      const exists = await prisma.user.findUnique({ where: { email } });
+    if (email.toLowerCase() !== user.email.toLowerCase()) {
+      const exists = await prisma.user.findFirst({
+        where: { email: { equals: email, mode: "insensitive" } },
+      });
       if (exists) return actionError("Já existe usuário com este login.");
     }
 

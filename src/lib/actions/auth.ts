@@ -24,7 +24,11 @@ export async function login(
     return actionError("Dados invalidos.", parsed.error.flatten().fieldErrors);
   }
 
-  const loginId = parsed.data.email.trim().toLowerCase();
+  // Identificador digitado, apenas com espacos aparados (preserva a caixa).
+  const loginInput = parsed.data.email.trim();
+  // Chave do rate limit: normalizada em minusculas para que variacoes de caixa
+  // do MESMO usuario caiam no mesmo balde de tentativas.
+  const loginKey = loginInput.toLowerCase();
 
   // Rate limiting anti-força-bruta: janela por (IP + email). Bloqueia após
   // muitas tentativas seguidas, esfriando o ataque sem punir o usuário legítimo.
@@ -32,15 +36,25 @@ export async function login(
     headers().get("x-forwarded-for")?.split(",")[0]?.trim() ||
     headers().get("x-real-ip") ||
     "desconhecido";
-  const gate = checkLoginRate(`${ip}:${loginId}`);
+  const gate = checkLoginRate(`${ip}:${loginKey}`);
   if (!gate.allowed) {
     return actionError(
       `Muitas tentativas. Tente novamente em ${gate.retryAfterSec}s.`,
     );
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: loginId },
+  // Busca CASE-INSENSITIVE do identificador de login.
+  //
+  // O cadastro de usuarios (Gestao) grava `User.email` com a caixa original
+  // digitada (ex.: "Livia#BF"). O hardening da sessao anterior normalizava o
+  // login para minusculas e consultava com `findUnique`, que e case-sensitive
+  // no Postgres — nenhum usuario cadastrado com maiusculas era encontrado e
+  // TODOS os logins falhavam com "Usuario ou senha incorretos".
+  //
+  // Solucao: consultar com `mode: "insensitive"`, aceitando qualquer caixa
+  // digitada sem exigir reescrita dos dados ja gravados no banco.
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: loginInput, mode: "insensitive" } },
   });
   if (!user || !user.active) {
     return actionError("Usuario ou senha incorretos.");
@@ -52,7 +66,7 @@ export async function login(
   }
 
   // Sucesso: zera o contador daquela chave.
-  clearLoginRate(`${ip}:${loginId}`);
+  clearLoginRate(`${ip}:${loginKey}`);
 
   await createSession({
     userId: user.id,
