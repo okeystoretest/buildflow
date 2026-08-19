@@ -137,15 +137,18 @@ export function RankBoard({ initial }: { initial: RankData }) {
           value={String(campTotalVol?.volume ?? 0)} sub="peças" />
       </div>
 
-      {/* 3 colunas de ranking */}
-      <div className="grid min-h-0 grid-cols-1 gap-2.5 lg:grid-cols-3" style={{ flex: "1 1 55%" }}>
-        <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue compact />
+      {/* 3 colunas de ranking — ocupam a maior parte da altura (72%) para
+          caber mais vendedoras na lista de Progresso Geral. */}
+      <div className="grid min-h-0 grid-cols-1 gap-2.5 lg:grid-cols-3" style={{ flex: "1 1 72%" }}>
+        {/* Progresso Geral exibe ate 20 nomes (rola se passar disso). */}
+        <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue compact maxRows={20} />
         <RankPanel title="Varejo" rows={data.rankVarejo} showTrophy compact />
         <RankPanel title="Atacado" rows={data.rankAtacado} showTrophy compact />
       </div>
 
-      {/* Tabela de performance por campanha */}
-      <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3" style={{ flex: "1 1 45%" }}>
+      {/* Tabela de performance por campanha — bloco reduzido (28%) para ceder
+          altura ao ranking; a tabela rola internamente quando necessario. */}
+      <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3" style={{ flex: "1 1 28%" }}>
         <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="text-base font-semibold">Performance na</span>
@@ -203,12 +206,16 @@ function Kpi({ icon, iconClass, label, value, sub, subClass }: {
   );
 }
 
-function RankPanel({ title, rows, showTrophy, compact, hideValue }: { title: string; rows: RankRow[]; showTrophy?: boolean; compact?: boolean; hideValue?: boolean }) {
+// `maxRows` define quantos nomes o painel exibe (default 10). O container rola
+// verticalmente quando a lista nao cabe na altura disponivel.
+function RankPanel({ title, rows, showTrophy, compact, hideValue, maxRows = 10 }: {
+  title: string; rows: RankRow[]; showTrophy?: boolean; compact?: boolean; hideValue?: boolean; maxRows?: number;
+}) {
   return (
     <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3">
       <p className="mb-1.5 shrink-0 text-base font-semibold lg:text-lg">{title}</p>
-      <div className={`flex min-h-0 flex-1 flex-col ${compact ? "justify-start gap-2" : "justify-around gap-0.5"}`}>
-        {rows.slice(0, 10).map((r, i) => (
+      <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${compact ? "justify-start gap-2" : "justify-around gap-0.5"}`}>
+        {rows.slice(0, maxRows).map((r, i) => (
           <RankLine key={r.nome} pos={i + 1} row={r} showTrophy={showTrophy} compact={compact} hideValue={hideValue} />
         ))}
         {rows.length === 0 && <p className="m-auto text-sm text-muted-foreground">Sem dados.</p>}
@@ -253,14 +260,15 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
     return <p className="m-auto text-sm text-muted-foreground">Nenhuma campanha ativa ou sem metas vinculadas.</p>;
   }
   return (
-    <div className="min-h-0 flex-1 overflow-hidden">
+    /* Bloco reduzido: a tabela rola internamente em vez de esticar o card. */
+    <div className="min-h-0 flex-1 overflow-y-auto">
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+        <thead className="sticky top-0 bg-card text-left text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
             <th className="pb-1 pr-2">Vendedores</th>
             <th className="pb-1 pr-2 text-right">Meta</th>
             <th className="pb-1 pr-2 text-center">Qtd Peças</th>
-            <th className="pb-1 pr-2 text-right">Valor</th>
+            {/* Coluna "Valor" removida a pedido do produto. */}
             <th className="pb-1 pr-2 text-right">Comissão</th>
             <th className="pb-1 pl-2" style={{ width: "28%" }}>Meta%</th>
           </tr>
@@ -276,7 +284,7 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
               </td>
               <td className="py-1 pr-2 text-right font-data">{r.meta > 0 ? r.meta : "—"}</td>
               <td className="py-1 pr-2 text-center font-data">{r.qtd}</td>
-              <td className="py-1 pr-2 text-right font-data">{formatBRL(r.valor)}</td>
+              {/* Coluna "Valor" removida a pedido do produto. */}
               <td className="py-1 pr-2 text-right font-data text-vendas">{formatBRL(r.comissao)}</td>
               <td className="py-1 pl-2">
                 <div className="flex items-center gap-2">
