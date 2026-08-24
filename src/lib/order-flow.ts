@@ -39,7 +39,9 @@ export const STATUS_LABEL: Record<OrderStatus, string> = {
   EMBALADO: "Embalado",
   PROCESSANDO: "Processando",
   PROCESSADO: "Processado",
-  ENVIADO: "Enviado",
+  // Rotulo de UI renomeado: o status ENVIADO passa a ser exibido como "Pronto".
+  // O valor do enum no banco continua ENVIADO (sem migracao, sem quebrar fluxo).
+  ENVIADO: "Pronto",
   EM_ROTA: "Em Rota",
   ENTREGUE: "Entregue",
   CONCLUIDO: "Concluído",
@@ -173,7 +175,7 @@ export const STATUS_STYLE: Record<OrderStatus, StatusStyle> = {
   EMBALADO:            { label: "Embalado",            badge: "bg-distribuicao/15 text-distribuicao", dot: "bg-violet-600",   header: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/40" },
   PROCESSANDO:          { label: "Processando",         badge: "bg-distribuicao/15 text-distribuicao", dot: "bg-fuchsia-600",  header: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/40" },
   PROCESSADO:           { label: "Processado",          badge: "bg-distribuicao/20 text-distribuicao", dot: "bg-purple-600",   header: "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/40" },
-  ENVIADO:              { label: "Enviado",             badge: "bg-motorista/15 text-motorista", dot: "bg-blue-600",          header: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/40" },
+  ENVIADO:              { label: "Pronto",             badge: "bg-motorista/15 text-motorista", dot: "bg-blue-600",          header: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/40" },
   EM_ROTA:              { label: "Em Rota",             badge: "bg-motorista/15 text-motorista", dot: "bg-lime-600",          header: "bg-lime-500/15 text-lime-700 dark:text-lime-300 border-lime-500/40" },
   ENTREGUE:             { label: "Entregue",            badge: "bg-motorista/20 text-motorista",  dot: "bg-emerald-600",      header: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40" },
   CONCLUIDO:            { label: "Concluído",           badge: "bg-motorista/20 text-motorista",  dot: "bg-green-700",        header: "bg-green-600/15 text-green-700 dark:text-green-300 border-green-600/40" },

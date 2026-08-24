@@ -7,6 +7,7 @@ import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { nextStatus, canTransition, nextSimplifiedStatus, canTransitionSimplified } from "@/lib/order-flow";
 import { canInteractWithOrder } from "@/lib/permissions";
 import { isAnexoDispensavelPorContexto } from "@/lib/validations/order";
+import { ativarPecaAoEntregar } from "@/lib/piece-sync";
 import { emitOrderUpdated, emitOrderAvailableForDrivers } from "@/lib/realtime/emit";
 import { sendPushToUser } from "@/lib/push";
 import type { OrderStatus } from "@prisma/client";
@@ -89,10 +90,15 @@ export async function advanceOrderStatus(args: {
         await tx.orderStatusHistory.create({
           data: { orderId: order.id, status: target, changedBy: session.userId },
         });
+        // Controle de Peças: a entrega registrada libera a peça para "Em Uso".
+        if (target === "ENTREGUE") {
+          await ativarPecaAoEntregar(tx, order.id, session.userId);
+        }
       });
       revalidatePath("/logistica");
       revalidatePath("/fluxo");
       revalidatePath("/dashboard");
+      if (target === "ENTREGUE") revalidatePath("/logistica/controle-pecas");
       emitOrderUpdated({ orderId: args.orderId, status: target });
       return actionOk({ status: target });
     }
@@ -166,11 +172,19 @@ export async function advanceOrderStatus(args: {
           data: { status: "EM_ROTA", startedAt: new Date() },
         });
       }
+
+      // Controle de Peças: a entrega registrada libera a peça para "Em Uso".
+      if (target === "ENTREGUE") {
+        await ativarPecaAoEntregar(tx, order.id, session.userId);
+      }
     });
 
     revalidatePath("/logistica");
     revalidatePath("/fluxo");
     revalidatePath("/motorista");
+    // Relatorio de Pendencias e Controle de Pecas leem o historico deste pedido.
+    revalidatePath("/logistica/pendencias");
+    if (target === "ENTREGUE") revalidatePath("/logistica/controle-pecas");
     emitOrderUpdated({ orderId: args.orderId, status: target });
     // Web Push da pendência para a vendedora (após confirmar a transição).
     if (target === "PENDENTE") {
@@ -596,6 +610,7 @@ export async function resolvePendency(args: {
     revalidatePath("/fluxo");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
+    revalidatePath("/logistica/pendencias");
     emitOrderUpdated({ orderId: args.orderId });
     return actionOk({ status: target });
   } catch (err) {
@@ -671,6 +686,12 @@ export async function setOrderStatus(args: {
             : "Status alterado pela Gestão.",
         },
       });
+      // Controle de Peças: arrastar para ENTREGUE/CONCLUIDO também conta como
+      // registro de entrega e libera a peça para "Em Uso".
+      if (args.to === "ENTREGUE" || args.to === "CONCLUIDO") {
+        await ativarPecaAoEntregar(tx, order.id, session.userId);
+      }
+
       // Ao arrastar para PENDENTE, notifica a vendedora (in-app).
       if (args.to === "PENDENTE") {
         await tx.notification.create({
@@ -687,6 +708,10 @@ export async function setOrderStatus(args: {
     revalidatePath("/fluxo");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
+    revalidatePath("/logistica/pendencias");
+    if (args.to === "ENTREGUE" || args.to === "CONCLUIDO") {
+      revalidatePath("/logistica/controle-pecas");
+    }
     emitOrderUpdated({ orderId: args.orderId });
     if (args.to === "PENDENTE") {
       void sendPushToUser(order.sellerId, {

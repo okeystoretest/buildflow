@@ -16,6 +16,8 @@ interface OrderDetail {
   orderNumber: string;
   comandaNumber: string | null;
   status: keyof typeof STATUS_LABEL;
+  // "N° de Peças no Pedido" (declarado em Vendas). 0 = nao informado.
+  pieceCount?: number | null;
   orderValue: string;
   freight: string;
   total: string;
@@ -296,6 +298,7 @@ export function OrderDetailModal({
               <Info label="Vendedora" value={order.seller.name} />
               <Info label="Loja" value={order.store.name} />
               <Info label="Tipo" value={order.orderType.name} />
+              <Info label="N° de Peças" value={order.pieceCount ? String(order.pieceCount) : "—"} />
               {/* 1.3 - Operacao destacada em amarelo (#FFFF00). */}
               <Info label="Operação" value={`${order.operation.code} - ${order.operation.name}`} highlight />
               {/* Pagamento e Banco são definidos pelo Financeiro na Análise. */}

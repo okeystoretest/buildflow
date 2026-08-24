@@ -297,6 +297,18 @@ model Order {
   comandaNumber String?
   status        OrderStatus @default(EM_ANALISE)
 
+  // "N° de Peças no Pedido": quantidade total de pecas vinculadas ao pedido,
+  // informada no formulario de Vendas ao lado do Numero do Pedido. E um dado
+  // DECLARADO (nao derivado de OrderItem/CampaignItem) — serve para conferencia
+  // na separacao e para o Controle de Pecas. Default 0 para pedidos antigos.
+  pieceCount    Int         @default(0)
+
+  // ----- CONTROLE DE PECAS (tipo "10 - Peças p/ Blogueira") -----
+  // Estado da peca emprestada. null = ainda nao entrou no controle (o pedido
+  // ainda nao foi ENTREGUE). A transicao para EM_USO so acontece apos o
+  // registro de entrega — regra aplicada em src/lib/actions/pieces.ts.
+  pieceStatus   PieceStatus?
+
   store       Store     @relation(fields: [storeId], references: [id])
   storeId     String
   // "Loja de Origem" do pedido (conceito novo, separado de store).
@@ -398,11 +410,13 @@ model Order {
   delivery      Delivery?
   driverPayment DriverPayment?
   history       OrderStatusHistory[]
+  pieceMovements PieceMovement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
+  @@index([pieceStatus])
   @@index([sellerId])
   @@index([customerId])
   @@index([createdAt])
@@ -466,6 +480,35 @@ model OrderStatusHistory {
   createdAt DateTime    @default(now())
 
   @@index([orderId])
+}
+
+// ===========================================================================
+// CONTROLE DE PECAS (Logistica > "Controle de Peças")
+// Aplica-se apenas aos pedidos do tipo "10 - Peças p/ Blogueira".
+// ===========================================================================
+
+enum PieceStatus {
+  EM_USO
+  DEVOLVIDO
+  EM_MANUTENCAO
+}
+
+// Trilha de auditoria das movimentacoes do quadro de Controle de Pecas.
+// Guarda de/para, observacao e quem moveu. Nunca sobrescrevemos: o estado
+// atual vive em Order.pieceStatus e o historico completo vive aqui.
+model PieceMovement {
+  id        String       @id @default(cuid())
+  order     Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  // null quando e a PRIMEIRA entrada no controle (entrega registrada).
+  fromStatus PieceStatus?
+  toStatus   PieceStatus
+  note       String?
+  changedBy  String?
+  createdAt  DateTime    @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
 }
 
 // ===========================================================================

@@ -2,6 +2,15 @@ import { z } from "zod";
 
 export const createOrderSchema = z.object({
   orderNumber: z.string().min(1, "Numero do pedido obrigatorio."),
+  // "N° de Peças no Pedido" — quantidade total de pecas vinculadas ao pedido.
+  // Opcional (default 0) para nao travar tipos que nao movimentam peca (ex.:
+  // Doacao/Transferencia) nem quebrar integracoes antigas.
+  pieceCount: z.coerce
+    .number()
+    .int("Quantidade de pecas invalida.")
+    .nonnegative("Quantidade de pecas invalida.")
+    .max(100000, "Quantidade de pecas fora do intervalo.")
+    .default(0),
   storeId: z.string().min(1, "Loja obrigatoria."),
   // "Loja de Origem" (conceito novo). Obrigatoria (doc 4.1). A UI de Novo
   // Pedido sempre envia; o vinculo com o vendedor e checado na action.

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PackageCheck } from "lucide-react";
+import { PackageCheck, AlertTriangle, Shirt, Timer } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
@@ -151,13 +151,31 @@ export default async function LogisticaPage({
             Acompanhe o status dos pedidos e avance manualmente os que estão prontos para entrega.
           </p>
         </div>
-        {/* Histórico de Entregas: exclusivo de LOGISTICA/GESTAO. */}
+        {/* Ferramentas do módulo: exclusivas de LOGISTICA/GESTAO. VENDAS com
+            loja de fluxo simplificado acessa apenas o quadro. */}
         {isLogisticaOuGestao && (
-          <Button asChild variant="outline">
-            <Link href="/logistica/entregas">
-              <PackageCheck className="h-4 w-4" /> Histórico de Entregas
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link href="/logistica/pendencias">
+                <AlertTriangle className="h-4 w-4" /> Relatório de Pendências
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/logistica/controle-pecas">
+                <Shirt className="h-4 w-4" /> Controle de Peças
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/logistica/metricas">
+                <Timer className="h-4 w-4" /> Métricas
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/logistica/entregas">
+                <PackageCheck className="h-4 w-4" /> Histórico de Entregas
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
       <KanbanBoard

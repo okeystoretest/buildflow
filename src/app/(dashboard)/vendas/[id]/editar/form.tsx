@@ -25,6 +25,7 @@ interface OrderData {
   orderNumber: string;
   customerId: string; storeId: string; originStoreId: string; orderTypeId: string; operationId: string;
   paymentMethodId: string; shippingMethodId: string; bankId: string;
+  pieceCount: number;
   orderValue: number; freight: number; notes: string; paymentNotes: string;
   campaignId: string; itemCount: number;
   campaignItems: CampaignItemData[];
@@ -56,6 +57,8 @@ export function EditarPedidoForm({
   const [error, setError] = useState<string | null>(null);
 
   const [orderNumber, setOrderNumber] = useState(order.orderNumber);
+  // "N° de Peças no Pedido" — quantidade total de pecas vinculadas ao pedido.
+  const [pieceCount, setPieceCount] = useState(order.pieceCount);
   const [customerId, setCustomerId] = useState(order.customerId);
   const [storeId, setStoreId] = useState(order.storeId);
   const [originStoreId, setOriginStoreId] = useState(order.originStoreId);
@@ -176,6 +179,7 @@ export function EditarPedidoForm({
       const res = await updateOrder({
         id: order.id,
         orderNumber,
+        pieceCount,
         customerId, storeId, originStoreId, orderTypeId, operationId,
         shippingMethodId,
         ...(canEditFinance ? { paymentMethodId, bankId: bankId || undefined } : {}),
@@ -209,30 +213,44 @@ export function EditarPedidoForm({
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="space-y-1.5">
+      {/* Mesma grade do Novo Pedido: 6 colunas no desktop. "Número do Pedido" e
+          "N° de Peças" ocupam 1 coluna cada (lado a lado); os selects, 2. */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
+        <div className="space-y-1.5 lg:col-span-1">
           <Label>Número do Pedido</Label>
           <Input value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="ex: 1024" />
         </div>
-        <Select label="Loja" value={storeId} onChange={setStoreId} options={stores} />
+        <div className="space-y-1.5 lg:col-span-1">
+          <Label>N° de Peças</Label>
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            inputMode="numeric"
+            value={pieceCount || ""}
+            onChange={(e) => setPieceCount(Math.max(0, Math.trunc(Number(e.target.value) || 0)))}
+            placeholder="ex: 12"
+          />
+        </div>
+        <Select className="col-span-2" label="Loja" value={storeId} onChange={setStoreId} options={stores} />
         {originStores.length > 0 ? (
-          <Select label="Loja de Origem" value={originStoreId} onChange={setOriginStoreId} options={originStores} placeholder="Selecione..." />
+          <Select className="col-span-2" label="Loja de Origem" value={originStoreId} onChange={setOriginStoreId} options={originStores} placeholder="Selecione..." />
         ) : (
-          <div className="space-y-1.5">
+          <div className="col-span-2 space-y-1.5">
             <Label>Loja de Origem</Label>
             <div className="flex h-10 items-center rounded-lg border border-destructive/40 bg-destructive/5 px-3 text-sm text-destructive">
               Nenhuma loja atrelada ao seu usuário.
             </div>
           </div>
         )}
-        <Select label="Tipo de Pedido" value={orderTypeId} onChange={setOrderTypeId} options={orderTypes} />
-        <Select label="Código da Operação" value={operationId} onChange={setOperationId} options={operations} />
+        <Select className="col-span-2" label="Tipo de Pedido" value={orderTypeId} onChange={setOrderTypeId} options={orderTypes} />
+        <Select className="col-span-2" label="Código da Operação" value={operationId} onChange={setOperationId} options={operations} />
         {canEditFinance && (
-          <Select label="Forma de Pagamento" value={paymentMethodId} onChange={setPaymentMethodId} options={paymentMethods} placeholder="Selecione..." />
+          <Select className="col-span-2" label="Forma de Pagamento" value={paymentMethodId} onChange={setPaymentMethodId} options={paymentMethods} placeholder="Selecione..." />
         )}
-        <Select label="Forma de Envio" value={shippingMethodId} onChange={setShippingMethodId} options={shippingMethods} />
+        <Select className="col-span-2" label="Forma de Envio" value={shippingMethodId} onChange={setShippingMethodId} options={shippingMethods} />
         {canEditFinance && (
-          <Select label="Banco" value={bankId} onChange={setBankId} options={banks} placeholder="Selecione..." />
+          <Select className="col-span-2" label="Banco" value={bankId} onChange={setBankId} options={banks} placeholder="Selecione..." />
         )}
       </div>
 
@@ -435,11 +453,13 @@ export function EditarPedidoForm({
   );
 }
 
-function Select({ label, value, onChange, options, placeholder }: {
+function Select({ label, value, onChange, options, placeholder, className }: {
   label: string; value: string; onChange: (v: string) => void; options: Opt[]; placeholder?: string;
+  // Permite controlar a largura do campo dentro da grade (col-span-*).
+  className?: string;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5 ${className ?? ""}`}>
       <Label>{label}</Label>
       <select className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"
         value={value} onChange={(e) => onChange(e.target.value)}>

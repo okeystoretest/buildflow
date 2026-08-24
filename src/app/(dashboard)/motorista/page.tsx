@@ -73,7 +73,7 @@ export default async function MotoristaPage() {
         <div>
           <h1 className="text-2xl font-bold text-motorista">Minhas entregas</h1>
           <p className="text-sm text-muted-foreground">
-            Pegue um pedido em aberto e siga: Enviado → Em Rota → Entregue.
+            Pegue um pedido em aberto e siga: Pronto → Em Rota → Entregue.
           </p>
         </div>
         <Link

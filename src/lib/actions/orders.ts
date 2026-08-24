@@ -126,6 +126,8 @@ export async function createOrder(
     const order = await prisma.order.create({
       data: {
         orderNumber: input.orderNumber,
+        // "N° de Peças no Pedido" (campo declarado ao lado do numero do pedido).
+        pieceCount: input.pieceCount ?? 0,
         storeId: input.storeId,
         originStoreId: input.originStoreId || null,
         orderTypeId: input.orderTypeId,
@@ -252,6 +254,8 @@ export async function createOrder(
 export async function updateOrder(args: {
   id: string;
   orderNumber?: string;
+  // "N° de Peças no Pedido". undefined = nao mexe.
+  pieceCount?: number;
   customerId?: string;
   storeId?: string;
   originStoreId?: string;
@@ -387,6 +391,11 @@ export async function updateOrder(args: {
               : (args.excursaoId ? args.excursaoId : null)),
         // Numero do pedido (editavel como no cadastro).
         orderNumber: args.orderNumber?.trim() ? args.orderNumber.trim() : order.orderNumber,
+        // "N° de Peças no Pedido": so altera quando enviado e valido (>= 0).
+        pieceCount:
+          args.pieceCount === undefined || !Number.isFinite(args.pieceCount) || args.pieceCount < 0
+            ? order.pieceCount
+            : Math.trunc(args.pieceCount),
         // Campanha (legado derivado). Se veio lista de itens, ela manda; senão
         // mantém o comportamento antigo baseado em campaignId/itemCount.
         campaignId: itemsProvided

@@ -78,6 +78,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
             order={{
               id: order.id,
               orderNumber: order.orderNumber,
+              pieceCount: order.pieceCount ?? 0,
               customerId: order.customerId,
               storeId: order.storeId,
               originStoreId: order.originStoreId ?? "",

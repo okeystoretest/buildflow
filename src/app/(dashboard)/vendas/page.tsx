@@ -85,7 +85,11 @@ export default async function VendasPage({
             <table className="w-full text-sm">
               <thead className="border-b text-left text-muted-foreground">
                 <tr>
-                  <th className="py-2 pr-4">Pedido</th>
+                  {/* Coluna estreita: o numero do pedido nao precisa de largura
+                      flexivel — encolhe para o conteudo e libera espaco. */}
+                  <th className="w-px whitespace-nowrap py-2 pr-4">Pedido</th>
+                  {/* "N° de Peças no Pedido" — imediatamente ao lado do numero. */}
+                  <th className="w-px whitespace-nowrap py-2 pr-4 text-right">N° Peças</th>
                   <th className="py-2 pr-4">Comanda</th>
                   <th className="py-2 pr-4">Cliente</th>
                   <th className="py-2 pr-4">Total</th>
@@ -103,11 +107,14 @@ export default async function VendasPage({
                   <tr key={o.id} className={`border-b border-border last:border-0 transition-colors ${
                     issueAtivo ? "bg-destructive/10 hover:bg-destructive/15" : "hover:bg-secondary/50"
                   }`}>
-                    <td className="py-2 pr-4 font-data">
+                    <td className="w-px whitespace-nowrap py-2 pr-4 font-data">
                       <span className="flex items-center gap-1.5">
                         {issueAtivo && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" />}
                         {o.orderNumber}
                       </span>
+                    </td>
+                    <td className="w-px whitespace-nowrap py-2 pr-4 text-right font-data">
+                      {o.pieceCount > 0 ? o.pieceCount : "—"}
                     </td>
                     <td className="py-2 pr-4 font-data">{o.comandaNumber ?? "—"}</td>
                     <td className="py-2 pr-4">{o.customer.name}</td>
@@ -120,7 +127,7 @@ export default async function VendasPage({
                   );
                 })}
                 {orders.length === 0 && (
-                  <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">
+                  <tr><td colSpan={7} className="py-6 text-center text-muted-foreground">
                     {busca ? `Nenhum pedido encontrado para "${busca}".` : "Nenhum pedido ainda."}
                   </td></tr>
                 )}

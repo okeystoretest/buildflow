@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { processAndSaveImage, validateUpload, type ProcessedImage } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
+import { ativarPecaAoEntregar } from "@/lib/piece-sync";
 
 /** Motorista inicia a rota (ENVIADO -> EM_ROTA). */
 export async function startRoute(orderId: string): Promise<ActionResult<void>> {
@@ -113,11 +114,15 @@ export async function completeDelivery(
           note: `Entregue com ${processedAll.length} comprovante(s)`,
         },
       });
+      // Controle de Peças: a entrega comprovada pelo motorista libera a peça
+      // para "Em Uso" (tipo "10 - Peças p/ Blogueira").
+      await ativarPecaAoEntregar(tx, orderId, session.userId);
     });
 
     revalidatePath("/motorista");
     revalidatePath("/dashboard");
     revalidatePath("/vendas");
+    revalidatePath("/logistica/controle-pecas");
     return actionOk({ filePaths: processedAll.map((p) => p.filePath) });
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao concluir entrega.");

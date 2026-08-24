@@ -27,11 +27,13 @@ interface ExcursaoOpt extends Opt {
 interface CampItem { campaignId: string; reference: string; quantity: number; value: number; }
 function emptyCampItem(): CampItem { return { campaignId: "", reference: "", quantity: 0, value: 0 }; }
 
-function Select({ label, value, onChange, options, placeholder }: {
+function Select({ label, value, onChange, options, placeholder, className }: {
   label: string; value: string; onChange: (v: string) => void; options: Opt[]; placeholder: string;
+  // Permite controlar a largura do campo dentro da grade (col-span-*).
+  className?: string;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5 ${className ?? ""}`}>
       <Label>{label}</Label>
       <select className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
         value={value} onChange={(e) => onChange(e.target.value)}>
@@ -53,6 +55,8 @@ export function NovoPedidoForm({
   const [error, setError] = useState<string | null>(null);
 
   const [orderNumber, setOrderNumber] = useState("");
+  // "N° de Peças no Pedido" — quantidade total de pecas vinculadas ao pedido.
+  const [pieceCount, setPieceCount] = useState(0);
   // "Planta" (campo Loja): para o FINANCEIRO ja vem preenchida com "Carlos
   // Trajano" (defaultStoreId vindo do servidor). Permanece editavel.
   const [storeId, setStoreId] = useState(defaultStoreId);
@@ -173,7 +177,7 @@ export function NovoPedidoForm({
     setError(null);
     start(async () => {
       const res = await createOrder({
-        orderNumber, storeId, originStoreId, orderTypeId, operationId, customerId,
+        orderNumber, pieceCount, storeId, originStoreId, orderTypeId, operationId, customerId,
         shippingMethodId, orderValue, freight,
         notes: notes || undefined,
         paymentNotes: paymentNotes || undefined,
@@ -216,28 +220,44 @@ export function NovoPedidoForm({
 
   return (
     <div className="space-y-5">
-      {/* Grade aproveitando o espaco horizontal: 3 colunas no desktop */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="space-y-1.5">
+      {/* Grade de 6 colunas no desktop: os selects ocupam 2 colunas (mesma
+          largura de antes, quando a grade era de 3) e os dois campos numericos
+          — "Número do Pedido" e "N° de Peças no Pedido" — ocupam 1 coluna cada,
+          lado a lado. Isso reduz a largura do numero do pedido sem deformar o
+          restante do formulario. */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
+        <div className="space-y-1.5 lg:col-span-1">
           <Label>Número do Pedido</Label>
           <Input value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="ex: 1024" />
         </div>
-        <Select label="Loja" value={storeId} onChange={setStoreId} options={stores} placeholder="Selecione..." />
+        <div className="space-y-1.5 lg:col-span-1">
+          <Label>N° de Peças</Label>
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            inputMode="numeric"
+            value={pieceCount || ""}
+            onChange={(e) => setPieceCount(Math.max(0, Math.trunc(Number(e.target.value) || 0)))}
+            placeholder="ex: 12"
+          />
+        </div>
+        <Select className="col-span-2" label="Loja" value={storeId} onChange={setStoreId} options={stores} placeholder="Selecione..." />
         {originStores.length > 0 ? (
-          <Select label="Loja de Origem" value={originStoreId} onChange={setOriginStoreId} options={originStores} placeholder="Selecione..." />
+          <Select className="col-span-2" label="Loja de Origem" value={originStoreId} onChange={setOriginStoreId} options={originStores} placeholder="Selecione..." />
         ) : (
-          <div className="space-y-1.5">
+          <div className="col-span-2 space-y-1.5">
             <Label>Loja de Origem</Label>
             <div className="flex h-10 items-center rounded-lg border border-destructive/40 bg-destructive/5 px-3 text-sm text-destructive">
               Nenhuma loja atrelada ao seu usuário.
             </div>
           </div>
         )}
-        <Select label="Tipo de Pedido" value={orderTypeId} onChange={setOrderTypeId} options={orderTypes} placeholder="Selecione..." />
-        <Select label="Código da Operação" value={operationId} onChange={setOperationId} options={operations} placeholder="Selecione..." />
+        <Select className="col-span-2" label="Tipo de Pedido" value={orderTypeId} onChange={setOrderTypeId} options={orderTypes} placeholder="Selecione..." />
+        <Select className="col-span-2" label="Código da Operação" value={operationId} onChange={setOperationId} options={operations} placeholder="Selecione..." />
         {/* "Forma de Pagamento" e "Banco" saíram daqui: agora são preenchidos
             pelo Financeiro na tela de Análise de Pedidos. */}
-        <Select label="Forma de Envio" value={shippingMethodId} onChange={setShippingMethodId} options={shippingMethods} placeholder="Selecione..." />
+        <Select className="col-span-2" label="Forma de Envio" value={shippingMethodId} onChange={setShippingMethodId} options={shippingMethods} placeholder="Selecione..." />
       </div>
 
       {/* Seleção de Excursão — FORA do formulário de endereço do cliente.
