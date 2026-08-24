@@ -1,62 +1,35 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, X, Clock, ChevronRight, Lock } from "lucide-react";
-import type { OrderStatus, PieceStatus } from "@prisma/client";
-import { STATUS_LABEL } from "@/lib/order-flow";
+import { Search, ChevronRight, ChevronLeft } from "lucide-react";
+import type { PieceStatus } from "@prisma/client";
 import {
   PIECE_COLUMNS,
   PIECE_LABEL,
   PIECE_HEADER,
+  PIECE_DOT,
   AGUARDANDO_ENTREGA_LABEL,
-  allowedPieceTargets,
+  AGUARDANDO_ENTREGA_HEADER,
+  AGUARDANDO_ENTREGA_DOT,
+  DEVOLVIDO_TTL_MS,
+  nextPieceStatus,
+  prevPieceStatus,
 } from "@/lib/piece-control";
 import { setPieceStatus } from "@/lib/actions/pieces";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { OrderCard, type OrderCardData } from "@/components/shared/order-card";
+import { OrderDetailModal } from "@/components/shared/order-detail-modal";
 
-export interface PecaMovimento {
-  id: string;
-  from: PieceStatus | null;
-  to: PieceStatus;
-  note: string | null;
-  autor: string | null;
-  createdAt: string;
-}
-
-export interface PecaCard {
-  id: string;
-  orderNumber: string;
-  comandaNumber: string | null;
-  orderStatus: OrderStatus;
-  pieceCount: number;
+/**
+ * Card do Controle de Peças: é o MESMO OrderCardData do Fluxo de Pedidos
+ * (para o card renderizar idêntico), acrescido dos campos próprios do módulo.
+ */
+export interface PecaCard extends OrderCardData {
   pieceStatus: PieceStatus | null;
-  customerName: string;
-  customerCode: string;
-  sellerName: string;
+  /** Entrega registrada? Sem isso, a peça não entra em "Em Uso". */
   entregue: boolean;
-  entregueEm: string | null;
-  createdAt: string;
-  movimentos: PecaMovimento[];
-}
-
-function fmt(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-/** Dias corridos desde a entrega — leitura rápida de "há quanto tempo está fora". */
-function diasDesde(iso: string | null): number | null {
-  if (!iso) return null;
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  /** ISO da entrada em DEVOLVIDO — base do TTL de 30 min. */
+  devolvidoEm: string | null;
 }
 
 export function ControlePecasBoard({
@@ -67,285 +40,188 @@ export function ControlePecasBoard({
   canMove: boolean;
 }) {
   const router = useRouter();
+  const [openId, setOpenId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  // Card aberto no modal de movimentação.
-  const [moving, setMoving] = useState<{ card: PecaCard; to: PieceStatus } | null>(null);
-  const [note, setNote] = useState("");
-  // Card com o histórico expandido.
-  const [openHist, setOpenHist] = useState<string | null>(null);
 
-  const visiveis = useMemo(() => {
+  // "Relógio" interno (mesmo padrão do KanbanBoard): reavalia de 30 em 30s
+  // quais cards DEVOLVIDO já passaram dos 30 min e devem sumir — sem reload.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const visibleCards = useMemo(() => {
+    // 1) Some com DEVOLVIDO que já passou de 30 min desde a devolução.
+    const afterTtl = cards.filter((c) => {
+      if (c.pieceStatus !== "DEVOLVIDO") return true;
+      if (!c.devolvidoEm) return true; // sem timestamp: mantém (não some sozinho)
+      return nowTick - new Date(c.devolvidoEm).getTime() < DEVOLVIDO_TTL_MS;
+    });
+    // 2) Aplica a busca por texto.
     const q = query.trim().toLowerCase();
-    if (!q) return cards;
-    return cards.filter((c) =>
-      [c.orderNumber, c.comandaNumber, c.customerName, c.customerCode, c.sellerName]
+    if (!q) return afterTtl;
+    return afterTtl.filter((c) =>
+      [c.comandaNumber, c.orderNumber, c.customerName, c.sellerName]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     );
-  }, [cards, query]);
+  }, [cards, query, nowTick]);
 
-  const aguardando = visiveis.filter((c) => c.pieceStatus === null);
-  const porStatus = (s: PieceStatus) => visiveis.filter((c) => c.pieceStatus === s);
+  const byPiece = (s: PieceStatus | null) => visibleCards.filter((c) => c.pieceStatus === s);
 
-  function confirmarMovimento() {
-    if (!moving) return;
+  function move(card: PecaCard, to: PieceStatus) {
     setError(null);
-    const { card, to } = moving;
     start(async () => {
-      const res = await setPieceStatus({ orderId: card.id, to, note: note.trim() || undefined });
-      if (res.ok) {
-        setMoving(null);
-        setNote("");
-        router.refresh();
-      } else {
-        setError(res.error);
-      }
+      const res = await setPieceStatus({ orderId: card.id, to });
+      if (res.ok) router.refresh();
+      else setError(res.error);
     });
   }
 
+  /**
+   * Renderiza uma coluna — mesma marcação do KanbanBoard: header colorido com
+   * ponto + rótulo + contador, e a lista com scroll minimalista limitada a
+   * ~3 cards visíveis.
+   */
+  function renderColumn(status: PieceStatus | null) {
+    const list = byPiece(status);
+    const label = status ? PIECE_LABEL[status] : AGUARDANDO_ENTREGA_LABEL;
+    const headerClass = status ? PIECE_HEADER[status] : AGUARDANDO_ENTREGA_HEADER;
+    const dot = status ? PIECE_DOT[status] : AGUARDANDO_ENTREGA_DOT;
+
+    return (
+      <div key={status ?? "AGUARDANDO"} className="flex flex-col">
+        <div className={`mb-2 flex items-center justify-between rounded-lg border px-2.5 py-1.5 ${headerClass}`}>
+          <span className="flex items-center gap-1.5 text-xs font-semibold leading-tight">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
+            <span className="truncate">{label}</span>
+          </span>
+          <span className="font-data ml-1 shrink-0 rounded-full bg-background/60 px-1.5 text-[11px]">
+            {list.length}
+          </span>
+        </div>
+
+        <div className="kanban-scroll flex max-h-[23.5rem] flex-col gap-2 overflow-y-auto rounded-lg pr-1">
+          {list.map((card, i) => {
+            const proximo = nextPieceStatus(card.pieceStatus);
+            const anterior = prevPieceStatus(card.pieceStatus);
+            // "Em Uso" exige entrega registrada — a seta some enquanto não houver.
+            const podeAvancar =
+              canMove && proximo !== null && !(proximo === "EM_USO" && !card.entregue);
+            const podeVoltar = canMove && anterior !== null;
+
+            return (
+              <OrderCard
+                key={card.id}
+                data={card}
+                onClick={() => setOpenId(card.id)}
+                style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
+                action={
+                  podeAvancar || podeVoltar ? (
+                    <span className="flex items-center gap-1">
+                      {podeVoltar && anterior && (
+                        <PieceArrow
+                          direction="back"
+                          label={`Voltar para ${PIECE_LABEL[anterior]}`}
+                          onClick={() => move(card, anterior)}
+                          disabled={pending}
+                        />
+                      )}
+                      {podeAvancar && proximo && (
+                        <PieceArrow
+                          direction="forward"
+                          label={`Avançar para ${PIECE_LABEL[proximo]}`}
+                          onClick={() => move(card, proximo)}
+                          disabled={pending}
+                        />
+                      )}
+                    </span>
+                  ) : undefined
+                }
+              />
+            );
+          })}
+          {list.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border/50 py-4 text-center text-[11px] text-muted-foreground/50">
+              Vazio
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      {/* Busca + resumo por coluna */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[240px] flex-1">
+    <div className="space-y-3">
+      {/* Busca, no mesmo padrão do Fluxo de Pedidos. */}
+      <div className="flex items-center gap-3">
+        <div className="relative w-full max-w-xs shrink-0">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-8 pr-9"
-            placeholder="Buscar por pedido, comanda, cliente ou vendedora"
+          <input
+            className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-sm"
+            placeholder="Buscar comanda, pedido ou cliente..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              aria-label="Limpar busca"
-              className="absolute right-2 top-2 rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
         </div>
-        <p className="text-sm text-muted-foreground">
-          {visiveis.length} peça(s) no quadro
-        </p>
+        <p className="text-sm text-muted-foreground">{visibleCards.length} peça(s) no quadro</p>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
           {error}
-        </div>
-      )}
-
-      {/* 4 colunas: a virtual "Aguardando Entrega" + os 3 status reais. */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Coluna
-          titulo={AGUARDANDO_ENTREGA_LABEL}
-          headerClass="bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/40"
-          total={aguardando.length}
-          vazio="Nenhuma peça aguardando entrega."
-        >
-          {aguardando.map((c) => (
-            <CardPeca
-              key={c.id}
-              card={c}
-              canMove={canMove}
-              onMove={(to) => { setNote(""); setError(null); setMoving({ card: c, to }); }}
-              histAberto={openHist === c.id}
-              onToggleHist={() => setOpenHist(openHist === c.id ? null : c.id)}
-            />
-          ))}
-        </Coluna>
-
-        {PIECE_COLUMNS.map((s) => {
-          const lista = porStatus(s);
-          return (
-            <Coluna
-              key={s}
-              titulo={PIECE_LABEL[s]}
-              headerClass={PIECE_HEADER[s]}
-              total={lista.length}
-              vazio="Nenhuma peça nesta coluna."
-            >
-              {lista.map((c) => (
-                <CardPeca
-                  key={c.id}
-                  card={c}
-                  canMove={canMove}
-                  onMove={(to) => { setNote(""); setError(null); setMoving({ card: c, to }); }}
-                  histAberto={openHist === c.id}
-                  onToggleHist={() => setOpenHist(openHist === c.id ? null : c.id)}
-                />
-              ))}
-            </Coluna>
-          );
-        })}
-      </div>
-
-      {/* Modal de confirmação da movimentação (com observação opcional). */}
-      {moving && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-xl">
-            <h2 className="text-lg font-bold">
-              Mover para &quot;{PIECE_LABEL[moving.to]}&quot;
-            </h2>
-            <p className="mb-3 mt-0.5 text-sm text-muted-foreground">
-              Pedido {moving.card.orderNumber} · {moving.card.customerName}
-            </p>
-
-            <div className="space-y-1.5">
-              <Label>Observação (opcional)</Label>
-              <textarea
-                className="min-h-[80px] w-full rounded-lg border border-input bg-background p-2 text-sm"
-                placeholder="Ex.: peça devolvida com defeito na costura."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </div>
-
-            {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setMoving(null); setError(null); }} disabled={pending}>
-                Cancelar
-              </Button>
-              <Button variant="distribuicao" onClick={confirmarMovimento} disabled={pending}>
-                {pending ? "Salvando..." : "Confirmar"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Coluna({
-  titulo,
-  headerClass,
-  total,
-  vazio,
-  children,
-}: {
-  titulo: string;
-  headerClass: string;
-  total: number;
-  vazio: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col rounded-xl border border-border bg-secondary/30">
-      <div className={`flex items-center justify-between rounded-t-xl border-b px-3 py-2 text-sm font-semibold ${headerClass}`}>
-        <span>{titulo}</span>
-        <span className="font-data rounded-md bg-background/60 px-1.5 py-0.5 text-xs">{total}</span>
-      </div>
-      <div className="flex flex-col gap-2 p-2">
-        {total === 0 ? (
-          <p className="px-1 py-6 text-center text-xs text-muted-foreground">{vazio}</p>
-        ) : (
-          children
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CardPeca({
-  card,
-  canMove,
-  onMove,
-  histAberto,
-  onToggleHist,
-}: {
-  card: PecaCard;
-  canMove: boolean;
-  onMove: (to: PieceStatus) => void;
-  histAberto: boolean;
-  onToggleHist: () => void;
-}) {
-  const dias = diasDesde(card.entregueEm);
-  // Sem entrega registrada, o único destino possível (EM_USO) fica bloqueado.
-  const bloqueado = !card.entregue;
-  const destinos = allowedPieceTargets(card.pieceStatus).filter(
-    (t) => !(t === "EM_USO" && bloqueado),
-  );
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-data text-sm font-semibold">
-            {card.comandaNumber ? `Comanda ${card.comandaNumber}` : `Pedido ${card.orderNumber}`}
-          </p>
-          <p className="truncate text-sm">{card.customerName}</p>
-          <p className="font-data text-xs text-muted-foreground">Cód. {card.customerCode}</p>
-        </div>
-        <span className="font-data shrink-0 rounded-md bg-secondary px-1.5 py-0.5 text-xs">
-          {card.pieceCount > 0 ? `${card.pieceCount} pç` : "— pç"}
-        </span>
-      </div>
-
-      <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-        <p>Vendedora: {card.sellerName}</p>
-        <p>Status do pedido: {STATUS_LABEL[card.orderStatus]}</p>
-        {card.entregue ? (
-          <p className="flex items-center gap-1">
-            <Clock className="h-3 w-3" /> Entregue em {fmt(card.entregueEm)}
-            {dias !== null && ` · há ${dias} dia(s)`}
-          </p>
-        ) : (
-          <p className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-            <Lock className="h-3 w-3" /> Entrega ainda não registrada
-          </p>
-        )}
-      </div>
-
-      {canMove && destinos.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {destinos.map((t) => (
-            <Button key={t} size="sm" variant="outline" onClick={() => onMove(t)}>
-              {PIECE_LABEL[t]}
-            </Button>
-          ))}
-        </div>
-      )}
-
-      {canMove && bloqueado && (
-        <p className="mt-3 rounded-md bg-secondary px-2 py-1 text-[11px] leading-snug text-muted-foreground">
-          Disponível para &quot;Em Uso&quot; assim que o pedido for marcado como Entregue.
         </p>
       )}
 
-      {card.movimentos.length > 0 && (
-        <div className="mt-3 border-t border-border pt-2">
-          <button
-            type="button"
-            onClick={onToggleHist}
-            className="flex w-full items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-          >
-            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${histAberto ? "rotate-90" : ""}`} />
-            Histórico ({card.movimentos.length})
-          </button>
-          {histAberto && (
-            <ul className="mt-2 space-y-2">
-              {card.movimentos.map((m) => (
-                <li key={m.id} className="rounded-md bg-secondary/60 px-2 py-1.5 text-[11px] leading-snug">
-                  <p className="font-medium">
-                    {m.from ? PIECE_LABEL[m.from] : "Entrada no controle"} → {PIECE_LABEL[m.to]}
-                  </p>
-                  <p className="text-muted-foreground">
-                    {fmt(m.createdAt)}
-                    {m.autor && ` · por ${m.autor}`}
-                  </p>
-                  {m.note && <p className="mt-0.5">{m.note}</p>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {renderColumn(null)}
+        {PIECE_COLUMNS.map((s) => renderColumn(s))}
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Peças devolvidas saem do quadro 30 minutos após a devolução. O registro permanece no
+        histórico do pedido.
+      </p>
+
+      {openId && <OrderDetailModal orderId={openId} onClose={() => setOpenId(null)} />}
     </div>
+  );
+}
+
+/**
+ * Setas de movimentação. Mesmo desenho do StatusArrow do KanbanBoard; aqui são
+ * duas — voltar (contorno) e avançar (preenchida) — porque o quadro de peças é
+ * bidirecional: uma peça devolvida pode ir para manutenção e voltar.
+ */
+function PieceArrow({
+  direction,
+  label,
+  onClick,
+  disabled,
+}: {
+  direction: "back" | "forward";
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const forward = direction === "forward";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={
+        forward
+          ? "inline-flex h-7 w-7 items-center justify-center rounded-full bg-distribuicao text-distribuicao-fg shadow-sm transition-transform hover:scale-105 disabled:opacity-50"
+          : "inline-flex h-7 w-7 items-center justify-center rounded-full border border-distribuicao/50 bg-background text-distribuicao shadow-sm transition-transform hover:scale-105 disabled:opacity-50"
+      }
+    >
+      {forward ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+    </button>
   );
 }

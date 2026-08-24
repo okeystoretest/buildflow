@@ -3,6 +3,8 @@ import { requireRole } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/shared/back-button";
 import { isPecasBlogueira, foiEntregue, TIPO_PECAS_BLOGUEIRA } from "@/lib/piece-control";
+import { isAnexoDispensavel } from "@/lib/validations/order";
+import { formatBRL } from "@/lib/utils";
 import { ControlePecasBoard, type PecaCard } from "./board-client";
 
 /**
@@ -10,6 +12,10 @@ import { ControlePecasBoard, type PecaCard } from "./board-client";
  * ---------------------------------------------------------------------------
  * Quadro exclusivo dos pedidos do tipo "10 - Peças p/ Blogueira".
  * Colunas: Aguardando Entrega (virtual) · Em Uso · Devolvido · Em Manutenção.
+ *
+ * Cards e colunas são os MESMOS do Fluxo de Pedidos (componente OrderCard e a
+ * marcação de coluna do KanbanBoard). A diferença é a navegação: aqui há duas
+ * setas — avançar e voltar — porque o ciclo da peça é bidirecional.
  *
  * A coluna "Aguardando Entrega" não é um estado do enum: agrupa as peças cujo
  * pedido ainda não registrou entrega. Ela existe porque a regra do módulo é que
@@ -43,85 +49,54 @@ export default async function ControlePecasPage() {
 
   const orders = await prisma.order.findMany({
     where: { orderTypeId: { in: tipoIds } },
-    select: {
-      id: true,
-      orderNumber: true,
-      comandaNumber: true,
-      status: true,
-      pieceCount: true,
-      pieceStatus: true,
-      createdAt: true,
-      customer: { select: { name: true, code: true } },
-      seller: { select: { name: true } },
-      delivery: { select: { status: true, deliveredAt: true } },
-      history: { select: { status: true, createdAt: true } },
+    include: {
+      customer: true,
+      seller: true,
+      orderType: { select: { name: true } },
+      delivery: { select: { driverId: true, status: true, deliveredAt: true } },
+      history: { select: { status: true } },
+      // Última movimentação para DEVOLVIDO: base do TTL de 30 min no quadro.
       pieceMovements: {
+        where: { toStatus: "DEVOLVIDO" },
         orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          fromStatus: true,
-          toStatus: true,
-          note: true,
-          changedBy: true,
-          createdAt: true,
-        },
+        take: 1,
+        select: { createdAt: true },
       },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  // Traduz os IDs de quem movimentou para NOMES numa única consulta.
-  const autorIds = Array.from(
-    new Set(
-      orders
-        .flatMap((o) => o.pieceMovements.map((m) => m.changedBy))
-        .filter((v): v is string => !!v),
-    ),
-  );
-  const autores = autorIds.length
-    ? await prisma.user.findMany({ where: { id: { in: autorIds } }, select: { id: true, name: true } })
-    : [];
-  const nomePorId = new Map(autores.map((u) => [u.id, u.name]));
-
-  const cards: PecaCard[] = orders.map((o) => {
-    // Data da entrega registrada (histórico ENTREGUE ou, no fluxo do motorista,
-    // o deliveredAt da entrega).
-    const histEntrega = o.history
-      .filter((h) => h.status === "ENTREGUE")
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
-    const entregueEm = o.delivery?.deliveredAt ?? histEntrega?.createdAt ?? null;
-
-    return {
-      id: o.id,
-      orderNumber: o.orderNumber,
-      comandaNumber: o.comandaNumber,
-      orderStatus: o.status,
-      pieceCount: o.pieceCount,
-      pieceStatus: o.pieceStatus,
-      customerName: o.customer.name,
-      customerCode: o.customer.code,
-      sellerName: o.seller.name,
-      entregue: foiEntregue({
-        status: o.status,
-        deliveryStatus: o.delivery?.status ?? null,
-        deliveredAt: o.delivery?.deliveredAt ?? null,
-        historyStatuses: o.history.map((h) => h.status),
-      }),
-      entregueEm: entregueEm ? entregueEm.toISOString() : null,
-      createdAt: o.createdAt.toISOString(),
-      movimentos: o.pieceMovements.map((m) => ({
-        id: m.id,
-        from: m.fromStatus,
-        to: m.toStatus,
-        note: m.note,
-        autor: m.changedBy ? nomePorId.get(m.changedBy) ?? null : null,
-        createdAt: m.createdAt.toISOString(),
-      })),
-    };
-  });
+  const cards: PecaCard[] = orders.map((o) => ({
+    // ---- Campos idênticos aos do Fluxo de Pedidos (OrderCardData) ----
+    id: o.id,
+    status: o.status,
+    orderNumber: o.orderNumber,
+    comandaNumber: o.comandaNumber,
+    sellerName: o.seller.name,
+    customerName: o.customer.name,
+    customerCode: o.customer.code,
+    total: formatBRL(o.total.toString()),
+    approvedByFinance: o.comandaNumber != null,
+    hasDriver: o.delivery?.driverId != null,
+    hasInvoice: o.invoicePath != null,
+    hasPaymentProof: o.paymentProofPath != null,
+    isExchange: isAnexoDispensavel(o.orderType?.name),
+    // ---- Campos próprios do Controle de Peças ----
+    pieceStatus: o.pieceStatus,
+    entregue: foiEntregue({
+      status: o.status,
+      deliveryStatus: o.delivery?.status ?? null,
+      deliveredAt: o.delivery?.deliveredAt ?? null,
+      historyStatuses: o.history.map((h) => h.status),
+    }),
+    devolvidoEm:
+      o.pieceStatus === "DEVOLVIDO" && o.pieceMovements[0]
+        ? o.pieceMovements[0].createdAt.toISOString()
+        : null,
+  }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <BackButton href="/logistica" />
       <div>
         <h1 className="text-2xl font-bold text-distribuicao">Controle de Peças</h1>
@@ -131,7 +106,10 @@ export default async function ControlePecasPage() {
         </p>
       </div>
 
-      <ControlePecasBoard cards={cards} canMove={session.role === "LOGISTICA" || session.role === "GESTAO"} />
+      <ControlePecasBoard
+        cards={cards}
+        canMove={session.role === "LOGISTICA" || session.role === "GESTAO"}
+      />
     </div>
   );
 }

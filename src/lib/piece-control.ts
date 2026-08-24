@@ -28,7 +28,15 @@ export function isPecasBlogueira(orderTypeName?: string | null): boolean {
 // COLUNAS DO QUADRO
 // ---------------------------------------------------------------------------
 
-export const PIECE_COLUMNS: PieceStatus[] = ["EM_USO", "DEVOLVIDO", "EM_MANUTENCAO"];
+/**
+ * Sequência LINEAR das colunas. O quadro replica o Fluxo de Pedidos: o card
+ * anda um passo por vez, com seta para frente e seta para trás. Por isso a
+ * ordem aqui não é decorativa — ela define o que cada seta faz.
+ */
+export const PIECE_FLOW: PieceStatus[] = ["EM_USO", "DEVOLVIDO", "EM_MANUTENCAO"];
+
+/** Alias mantido para leitura: as colunas exibidas são a própria sequência. */
+export const PIECE_COLUMNS: PieceStatus[] = PIECE_FLOW;
 
 export const PIECE_LABEL: Record<PieceStatus, string> = {
   EM_USO: "Em Uso",
@@ -43,8 +51,28 @@ export const PIECE_HEADER: Record<PieceStatus, string> = {
   EM_MANUTENCAO: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/40",
 };
 
+/** Ponto colorido do cabeçalho (equivalente ao STATUS_STYLE[...].dot). */
+export const PIECE_DOT: Record<PieceStatus, string> = {
+  EM_USO: "bg-amber-600",
+  DEVOLVIDO: "bg-emerald-600",
+  EM_MANUTENCAO: "bg-red-600",
+};
+
 /** Coluna virtual (não é valor do enum): peça ainda não entregue à blogueira. */
 export const AGUARDANDO_ENTREGA_LABEL = "Aguardando Entrega";
+export const AGUARDANDO_ENTREGA_HEADER =
+  "bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/40";
+export const AGUARDANDO_ENTREGA_DOT = "bg-slate-600";
+
+/**
+ * Janela de permanência de um card DEVOLVIDO no quadro ativo: 30 minutos.
+ *
+ * Mesma mecânica do card ENTREGUE no Fluxo de Pedidos (que some após 15 min):
+ * a peça devolvida encerrou o ciclo e não deve poluir o quadro operacional. O
+ * registro NÃO é apagado — `Order.pieceStatus` continua DEVOLVIDO e o histórico
+ * em PieceMovement permanece íntegro; o card apenas deixa de ser exibido.
+ */
+export const DEVOLVIDO_TTL_MS = 30 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // REGRA DE TRANSIÇÃO PARA "EM USO"
@@ -73,17 +101,39 @@ export function foiEntregue(args: {
   return (args.historyStatuses ?? []).some((s) => s === "ENTREGUE" || s === "CONCLUIDO");
 }
 
+// ---------------------------------------------------------------------------
+// NAVEGAÇÃO LINEAR (setas para frente e para trás)
+// ---------------------------------------------------------------------------
+
 /**
- * Transições permitidas no quadro, a partir do estado atual.
- * - Sem estado (null): só entra em EM_USO, e apenas se a entrega foi registrada
- *   (a checagem de entrega é feita na action, com dados do banco).
- * - EM_USO        -> DEVOLVIDO | EM_MANUTENCAO
- * - EM_MANUTENCAO -> EM_USO | DEVOLVIDO
- * - DEVOLVIDO     -> EM_USO | EM_MANUTENCAO  (reempréstimo / defeito detectado)
+ * Próxima coluna. A partir de `null` (Aguardando Entrega) o próximo é EM_USO —
+ * mas a liberação depende da entrega registrada, checada na action.
  */
+export function nextPieceStatus(current: PieceStatus | null): PieceStatus | null {
+  if (!current) return PIECE_FLOW[0];
+  const i = PIECE_FLOW.indexOf(current);
+  if (i === -1 || i === PIECE_FLOW.length - 1) return null;
+  return PIECE_FLOW[i + 1];
+}
+
+/**
+ * Coluna anterior. Retorna null em EM_USO de propósito: voltar para
+ * "Aguardando Entrega" significaria zerar `pieceStatus` e apagar o registro de
+ * entrada no controle. A entrada é sempre consequência da entrega, nunca uma
+ * escolha manual reversível.
+ */
+export function prevPieceStatus(current: PieceStatus | null): PieceStatus | null {
+  if (!current) return null;
+  const i = PIECE_FLOW.indexOf(current);
+  if (i <= 0) return null;
+  return PIECE_FLOW[i - 1];
+}
+
+/** Destinos válidos a partir do estado atual: só os vizinhos imediatos. */
 export function allowedPieceTargets(current: PieceStatus | null): PieceStatus[] {
-  if (!current) return ["EM_USO"];
-  return PIECE_COLUMNS.filter((s) => s !== current);
+  return [nextPieceStatus(current), prevPieceStatus(current)].filter(
+    (s): s is PieceStatus => s !== null,
+  );
 }
 
 export function canMovePiece(current: PieceStatus | null, to: PieceStatus): boolean {
