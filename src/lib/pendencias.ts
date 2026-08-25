@@ -42,6 +42,28 @@ export interface CicloPendencia {
   duracaoMin: number | null;
 }
 
+/**
+ * Ficha de um pedido no relatório. Vive aqui (e não no componente de tela)
+ * porque agora tem DOIS consumidores: a listagem em React e o gerador de PDF.
+ */
+export interface PendenciaPedido {
+  id: string;
+  orderNumber: string;
+  comandaNumber: string | null;
+  status: OrderStatus;
+  pieceCount: number;
+  customerName: string;
+  customerCode: string;
+  sellerName: string;
+  orderTypeName: string;
+  originStoreName: string | null;
+  criadoEm: string;
+  ciclos: CicloPendencia[];
+  financeIssue: string | null;
+  financeIssueAt: string | null;
+  financeIssueResolvedAt: string | null;
+}
+
 function semPrefixo(note: string | null, prefixo: string): string {
   if (!note) return "";
   const t = note.trim();
@@ -108,6 +130,54 @@ export function montarCiclos(historico: HistoricoEntrada[]): CicloPendencia[] {
 
   if (atual) ciclos.push(atual);
   return ciclos;
+}
+
+export interface ResumoPendencias {
+  pedidos: number;
+  ciclos: number;
+  emAberto: number;
+  resolvidas: number;
+  /** Média de duração das pendências JÁ RESOLVIDAS, em minutos. */
+  mediaResolucaoMin: number | null;
+  /** Mediana das resolvidas — menos sensível a um caso esquecido por semanas. */
+  medianaResolucaoMin: number | null;
+}
+
+/**
+ * Consolida os números do cabeçalho do relatório.
+ *
+ * Só as pendências RESOLVIDAS entram na média/mediana: uma pendência ainda
+ * aberta não tem duração final, e contá-la com o tempo parcial puxaria o
+ * indicador para baixo (mesma regra usada em src/lib/sla-metrics.ts).
+ */
+export function resumirPendencias(pedidos: PendenciaPedido[]): ResumoPendencias {
+  const ciclos = pedidos.flatMap((p) => p.ciclos);
+  const duracoes = ciclos
+    .filter((c) => c.resolvidaEm && c.duracaoMin !== null)
+    .map((c) => c.duracaoMin as number)
+    .sort((a, b) => a - b);
+
+  const media = duracoes.length
+    ? Math.round(duracoes.reduce((s, v) => s + v, 0) / duracoes.length)
+    : null;
+
+  let mediana: number | null = null;
+  if (duracoes.length) {
+    const meio = Math.floor(duracoes.length / 2);
+    mediana =
+      duracoes.length % 2 === 0
+        ? Math.round((duracoes[meio - 1] + duracoes[meio]) / 2)
+        : duracoes[meio];
+  }
+
+  return {
+    pedidos: pedidos.length,
+    ciclos: ciclos.length,
+    emAberto: ciclos.filter((c) => !c.resolvidaEm).length,
+    resolvidas: duracoes.length,
+    mediaResolucaoMin: media,
+    medianaResolucaoMin: mediana,
+  };
 }
 
 /** Formata minutos como "2d 3h 15min" (leitura rápida no relatório). */

@@ -2,29 +2,14 @@
 
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, Clock } from "lucide-react";
-import type { OrderStatus } from "@prisma/client";
 import { STATUS_LABEL } from "@/lib/order-flow";
-import { formatDuracao, type CicloPendencia } from "@/lib/pendencias";
+import { formatDuracao, type CicloPendencia, type PendenciaPedido } from "@/lib/pendencias";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 
-export interface PendenciaPedido {
-  id: string;
-  orderNumber: string;
-  comandaNumber: string | null;
-  status: OrderStatus;
-  pieceCount: number;
-  customerName: string;
-  customerCode: string;
-  sellerName: string;
-  orderTypeName: string;
-  originStoreName: string | null;
-  criadoEm: string;
-  ciclos: CicloPendencia[];
-  financeIssue: string | null;
-  financeIssueAt: string | null;
-  financeIssueResolvedAt: string | null;
-}
+// O tipo da ficha passou para src/lib/pendencias.ts, porque agora e consumido
+// tambem pelo gerador de PDF. Reexportado aqui para nao quebrar imports.
+export type { PendenciaPedido };
 
 function fmt(iso: string | null): string {
   if (!iso) return "—";
