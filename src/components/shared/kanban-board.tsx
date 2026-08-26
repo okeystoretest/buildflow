@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Maximize2, Minimize2, Search, ChevronRight } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
 import { STATUS_LABEL, STATUS_STYLE, nextStatus, nextSimplifiedStatus, stageAlertLevel, type StageLimitMap } from "@/lib/order-flow";
+import { CardScroller } from "@/components/shared/card-scroller";
 import { OrderCard, type OrderCardData } from "@/components/shared/order-card";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
 import { Button } from "@/components/ui/button";
@@ -344,11 +345,17 @@ export function KanbanBoard({
             {list.length}
           </span>
         </div>
-        {/* Cards da coluna: mostra até 3 completos e o restante fica acessível
-            por uma barra de rolagem minimalista (sem botão "mostrar mais"). */}
-        <div className={`kanban-scroll flex max-h-[23.5rem] flex-col gap-2 overflow-y-auto pr-1 rounded-lg transition-colors ${
-          canDrag && dragOverStatus === status ? "ring-2 ring-primary/60 bg-primary/5" : ""
-        }`}>
+        {/* Cards da coluna: mostra 3 completos e o restante fica acessível por
+            uma barra de rolagem minimalista (sem botão "mostrar mais").
+            O CardScroller mede o 3o card em vez de usar altura fixa — os cards
+            variam de altura (alerta de etapa, observacoes) e a altura fixa ora
+            sobrava, ora cortava o ultimo card no meio. */}
+        <CardScroller
+          visibleItems={3}
+          className={`transition-colors ${
+            canDrag && dragOverStatus === status ? "ring-2 ring-primary/60 bg-primary/5" : ""
+          }`}
+        >
           {list.map((card, i) => (
             <div
               key={card.id}
@@ -375,7 +382,7 @@ export function KanbanBoard({
               Vazio
             </div>
           )}
-        </div>
+        </CardScroller>
       </div>
     );
   }

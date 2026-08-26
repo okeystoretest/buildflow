@@ -9,7 +9,7 @@ import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/finan
 const PROCESSED_WINDOW_MIN = 15;
 
 export default async function FinanceiroPage() {
-  await requireRole(["FINANCEIRO", "GESTAO"]);
+  const session = await requireRole(["FINANCEIRO", "GESTAO"]);
 
   const desde = new Date(Date.now() - PROCESSED_WINDOW_MIN * 60 * 1000);
 
@@ -51,7 +51,14 @@ export default async function FinanceiroPage() {
           history: { none: { note: PAYMENT_CONFIRMED_NOTE } },
           status: { notIn: ["CANCELADO", "ESTORNO", "ESTORNO_PARCIAL"] },
         },
-        include: { customer: true, seller: true },
+        include: {
+          customer: true,
+          seller: true,
+          // Necessarios para o botao "Inserir Comprovante" do card: a contagem
+          // controla o teto de 5 e a lista permite abrir o que ja foi anexado.
+          _count: { select: { financeProofs: true } },
+          financeProofs: { orderBy: { createdAt: "asc" }, select: { id: true, filePath: true } },
+        },
         orderBy: { createdAt: "asc" },
       }),
     ]);
@@ -143,8 +150,8 @@ export default async function FinanceiroPage() {
     currentCnpjId: o.cnpjId,
     currentPaymentMethodId: o.paymentMethodId,
     currentBankId: o.bankId,
-    proof2Count: 0,
-    proof2List: [],
+    proof2Count: o._count.financeProofs,
+    proof2List: o.financeProofs.map((p) => ({ id: p.id, filePath: p.filePath })),
     simplifiedFlow: false,
     paymentProofList: [],
     shippingNotes: o.notes,
@@ -177,6 +184,11 @@ export default async function FinanceiroPage() {
         paymentMethods={formasAtivas}
         banks={bancosAtivos}
         processedWindowMin={PROCESSED_WINDOW_MIN}
+        // Anexar comprovante e do setor Financeiro. GESTAO entra junto por ser
+        // o perfil administrativo do sistema (mesma regra das demais actions
+        // do modulo); para restringir apenas a FINANCEIRO, remova o segundo
+        // termo aqui E em requireRoleAction de uploadSecondPaymentProof.
+        podeAnexarComprovante={session.role === "FINANCEIRO" || session.role === "GESTAO"}
       />
     </div>
   );

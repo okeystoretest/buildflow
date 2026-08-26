@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign, Wallet, Truck } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign, Wallet, Truck, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { flagOrderIssue, confirmPayment, markOrderPaid } from "@/lib/actions/finance";
+import { CardScroller } from "@/components/shared/card-scroller";
+import { flagOrderIssue, confirmPayment, markOrderPaid, uploadSecondPaymentProof } from "@/lib/actions/finance";
+import { prepareProofFile } from "@/lib/client-image";
 import { useRouter } from "next/navigation";
 import { AuditarPedido } from "./audit-client";
 
@@ -41,7 +43,15 @@ interface StatusOpt { id: string; name: string; disposition: "APROVA" | "INTERRO
 interface CnpjOpt { id: string; name: string; document: string; }
 interface Opt { id: string; name: string; }
 
-const PAGE = 3; // cards visiveis por vez em cada coluna
+/**
+ * Cards visiveis por vez em cada coluna. O restante fica acessivel pela barra
+ * de rolagem (o botao "Ver mais" foi removido): a fila do Financeiro e de
+ * trabalho continuo, e o clique extra a cada 3 pedidos so atrapalhava.
+ */
+const VISIVEIS_POR_COLUNA = 3;
+
+/** Teto de comprovantes por pedido — mesmo limite aplicado no servidor. */
+const MAX_COMPROVANTES = 5;
 
 export function AnaliseKanban({
   pendentes,
@@ -52,6 +62,7 @@ export function AnaliseKanban({
   paymentMethods,
   banks,
   processedWindowMin,
+  podeAnexarComprovante,
 }: {
   pendentes: FinanceCard[];
   processados: FinanceCard[];
@@ -61,13 +72,12 @@ export function AnaliseKanban({
   paymentMethods: Opt[];
   banks: Opt[];
   processedWindowMin: number;
+  /** Anexar comprovante e exclusivo do setor Financeiro (Gestao inclusa). */
+  podeAnexarComprovante: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   // Card cujo modal "Qual o problema?" esta aberto.
   const [issueId, setIssueId] = useState<string | null>(null);
-  const [showAllPend, setShowAllPend] = useState(false);
-  const [showAllProc, setShowAllProc] = useState(false);
-  const [showAllPag, setShowAllPag] = useState(false);
   const router = useRouter();
 
   // "Relogio" interno: reavalia de 30 em 30s quais processados ja passaram
@@ -100,10 +110,6 @@ export function AnaliseKanban({
     [processados, nowTick, windowMs],
   );
 
-  const pendVis = showAllPend ? pendentes : pendentes.slice(0, PAGE);
-  const procVis = showAllProc ? procVisiveis : procVisiveis.slice(0, PAGE);
-  const pagVis = showAllPag ? pagPendentes : pagPendentes.slice(0, PAGE);
-
   const aberto = openId ? pendentes.find((c) => c.id === openId) ?? null : null;
   const cardIssue = issueId ? pendentes.find((c) => c.id === issueId) ?? null : null;
 
@@ -116,14 +122,10 @@ export function AnaliseKanban({
         tone="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
         dot="bg-amber-500"
       >
-        {pendVis.map((c) => (
+        {pendentes.map((c) => (
           <PendingCard key={c.id} card={c} onOpen={() => setOpenId(c.id)} onFlag={() => setIssueId(c.id)} />
         ))}
         {pendentes.length === 0 && <Empty>Nenhum pedido aguardando análise.</Empty>}
-        {pendentes.length > PAGE && (
-          <VerMais total={pendentes.length} shown={pendVis.length}
-            expanded={showAllPend} onToggle={() => setShowAllPend((v) => !v)} />
-        )}
       </Column>
 
       {/* COLUNA PROCESSADO */}
@@ -134,14 +136,10 @@ export function AnaliseKanban({
         dot="bg-emerald-500"
         hint={`Somem após ${processedWindowMin} min`}
       >
-        {procVis.map((c) => (
+        {procVisiveis.map((c) => (
           <ProcessedCard key={c.id} card={c} />
         ))}
         {procVisiveis.length === 0 && <Empty>Nenhum pedido processado recentemente.</Empty>}
-        {procVisiveis.length > PAGE && (
-          <VerMais total={procVisiveis.length} shown={procVis.length}
-            expanded={showAllProc} onToggle={() => setShowAllProc((v) => !v)} />
-        )}
       </Column>
 
       {/* COLUNA PAGAMENTO PENDENTE (azul claro) */}
@@ -152,14 +150,10 @@ export function AnaliseKanban({
         dot="bg-sky-400"
         hint="Aguardando confirmação"
       >
-        {pagVis.map((c) => (
-          <PaidPendingCard key={c.id} card={c} />
+        {pagPendentes.map((c) => (
+          <PaidPendingCard key={c.id} card={c} podeAnexar={podeAnexarComprovante} />
         ))}
         {pagPendentes.length === 0 && <Empty>Nenhum pagamento pendente.</Empty>}
-        {pagPendentes.length > PAGE && (
-          <VerMais total={pagPendentes.length} shown={pagVis.length}
-            expanded={showAllPag} onToggle={() => setShowAllPag((v) => !v)} />
-        )}
       </Column>
 
       {/* MODAL de auditoria (expansao do card Pendente). */}
@@ -299,7 +293,11 @@ function Column({
         </span>
         {hint && <span className="text-[11px] opacity-80">{hint}</span>}
       </div>
-      <div className="flex flex-col gap-2">{children}</div>
+      {/* Empilhamento com rolagem: 3 cards visiveis, o resto rola. A altura e
+          medida pelo 3o card (ver CardScroller) porque os cards do Financeiro
+          variam de altura conforme as observacoes — com altura fixa o ultimo
+          aparecia cortado ao meio. */}
+      <CardScroller visibleItems={VISIVEIS_POR_COLUNA}>{children}</CardScroller>
     </div>
   );
 }
@@ -458,10 +456,58 @@ function SimplifiedPaidPanel({ orderId, proofs, onDone }: {
   );
 }
 
-function PaidPendingCard({ card }: { card: FinanceCard }) {
+/**
+ * Card da coluna "Pagamento pendente".
+ *
+ * Alem do "Pago", traz o "Inserir Comprovante" a ESQUERDA dele: o Financeiro
+ * costuma receber o comprovante depois da liberacao, e ate aqui era preciso
+ * voltar pela Analise para anexar. Reaproveita a mesma Server Action do 2o
+ * comprovante (uploadSecondPaymentProof) — mesmo teto de 5 arquivos, mesmo
+ * pipeline do sharp (.webp no disco, so o caminho no banco) e PDF gravado
+ * como esta.
+ */
+function PaidPendingCard({ card, podeAnexar }: { card: FinanceCard; podeAnexar: boolean }) {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [anexando, setAnexando] = useState(false);
+  const [anexos, setAnexos] = useState(card.proof2Count);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+
+  const cheio = anexos >= MAX_COMPROVANTES;
+
+  async function onArquivos(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+
+    const espacoLivre = MAX_COMPROVANTES - anexos;
+    if (espacoLivre <= 0) {
+      setErr(`Limite de ${MAX_COMPROVANTES} comprovantes atingido.`);
+      return;
+    }
+
+    setErr(null); setOkMsg(null); setAnexando(true);
+    const base64List: string[] = [];
+    for (const file of files.slice(0, espacoLivre)) {
+      const pronto = await prepareProofFile(file, { maxDimension: 1600, quality: 0.8 });
+      if (pronto.error || !pronto.base64) {
+        setErr(pronto.error ?? "Não foi possível processar o arquivo.");
+        continue;
+      }
+      base64List.push(pronto.base64);
+    }
+    if (base64List.length === 0) { setAnexando(false); return; }
+
+    const res = await uploadSecondPaymentProof({ orderId: card.id, base64List });
+    setAnexando(false);
+    if (res.ok) {
+      setAnexos((n) => Math.min(n + res.data.count, MAX_COMPROVANTES));
+      setOkMsg(`${res.data.count} comprovante(s) anexado(s).`);
+      router.refresh();
+    } else setErr(res.error);
+  }
 
   async function pay() {
     setBusy(true); setErr(null);
@@ -487,28 +533,53 @@ function PaidPendingCard({ card }: { card: FinanceCard }) {
         })}
       </div>
 
+      {podeAnexar && anexos > 0 && (
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {anexos}/{MAX_COMPROVANTES} comprovante(s) anexado(s).
+        </p>
+      )}
+
       {err && <p className="mt-2 text-[11px] text-destructive">{err}</p>}
+      {okMsg && <p className="mt-2 text-[11px] text-motorista">{okMsg}</p>}
 
-      <Button
-        onClick={pay}
-        disabled={busy}
-        size="sm"
-        className="mt-3 w-full bg-sky-500 text-white hover:bg-sky-600"
-      >
-        <BadgeDollarSign className="mr-1 h-4 w-4" />
-        {busy ? "Confirmando..." : "Pago"}
-      </Button>
+      <div className="mt-3 flex items-center gap-2">
+        {podeAnexar && (
+          <>
+            {/* Input escondido: o botao e quem dispara a selecao de arquivos. */}
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.pdf"
+              onChange={onArquivos}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={anexando || busy || cheio}
+              size="sm"
+              variant="outline"
+              className="flex-1"
+              title={cheio ? `Limite de ${MAX_COMPROVANTES} comprovantes atingido` : "Anexar comprovante"}
+            >
+              <Paperclip className="mr-1 h-4 w-4" />
+              {anexando ? "Enviando..." : cheio ? "Limite atingido" : "Inserir Comprovante"}
+            </Button>
+          </>
+        )}
+
+        <Button
+          onClick={pay}
+          disabled={busy || anexando}
+          size="sm"
+          className={`${podeAnexar ? "flex-1" : "w-full"} bg-sky-500 text-white hover:bg-sky-600`}
+        >
+          <BadgeDollarSign className="mr-1 h-4 w-4" />
+          {busy ? "Confirmando..." : "Pago"}
+        </Button>
+      </div>
     </div>
-  );
-}
-
-function VerMais({ total, shown, expanded, onToggle }: {
-  total: number; shown: number; expanded: boolean; onToggle: () => void;
-}) {
-  return (
-    <Button variant="outline" size="sm" className="mt-1" onClick={onToggle}>
-      {expanded ? "Ver menos" : `Ver mais (${total - shown} restantes)`}
-    </Button>
   );
 }
 

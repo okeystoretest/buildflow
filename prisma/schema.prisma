@@ -487,10 +487,23 @@ model OrderStatusHistory {
 // Aplica-se apenas aos pedidos do tipo "10 - Peças p/ Blogueira".
 // ===========================================================================
 
+// Estados do Controle de Pecas.
+//
+// ORDEM DAS COLUNAS NO QUADRO (definida em src/lib/piece-control.ts):
+//   Em Uso -> Reprocessamento -> Devolvido -> Finalizado
+//
+// EM_MANUTENCAO continua sendo o valor gravado no banco; o rotulo exibido
+// passou a ser "Reprocessamento". Mesma decisao ja tomada em ENVIADO -> "Pronto":
+// renomear o valor do enum exigiria reescrever historico e integracoes sem
+// nenhum ganho funcional.
+//
+// FINALIZADO e o estado TERMINAL: so ao chegar nele o fluxo do pedido e
+// considerado encerrado.
 enum PieceStatus {
   EM_USO
   DEVOLVIDO
   EM_MANUTENCAO
+  FINALIZADO
 }
 
 // Trilha de auditoria das movimentacoes do quadro de Controle de Pecas.

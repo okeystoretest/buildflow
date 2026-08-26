@@ -8,21 +8,28 @@ import {
   isPecasBlogueira,
   canMovePiece,
   foiEntregue,
+  podeMoverDe,
+  exigeGestaoParaMover,
+  ENCERRA_PEDIDO_AO_FINALIZAR,
+  STATUS_TERMINAIS,
   PIECE_LABEL,
 } from "@/lib/piece-control";
 import type { PieceStatus } from "@prisma/client";
 
 /**
  * Move uma peça entre as colunas do Controle de Peças
- * (Em Uso · Devolvido · Em Manutenção).
+ * (Em Uso · Reprocessamento · Devolvido · Finalizado).
  *
  * Travas aplicadas no SERVIDOR (nunca confiar só na tela):
  *  1. O pedido precisa ser do tipo "10 - Peças p/ Blogueira".
- *  2. A transição precisa ser válida para o estado atual.
+ *  2. A transição precisa ser válida para o estado atual (vizinho imediato).
  *  3. Entrar em "Em Uso" exige que a ENTREGA já tenha sido registrada.
+ *  4. Sair de "Finalizado" exige perfil GESTÃO — para o usuário padrão o card
+ *     está congelado.
  *
- * Estado atual (Order.pieceStatus) e histórico (PieceMovement) são gravados na
- * mesma transação: ou os dois acontecem, ou nenhum.
+ * Estado atual (Order.pieceStatus), histórico (PieceMovement) e — quando a peça
+ * é finalizada — o encerramento do PEDIDO são gravados na MESMA transação: ou
+ * tudo acontece, ou nada.
  */
 export async function setPieceStatus(args: {
   orderId: string;
@@ -53,6 +60,15 @@ export async function setPieceStatus(args: {
       return actionOk({ pieceStatus: args.to });
     }
 
+    // Trava de perfil: card em "Finalizado" só se move pela Gestão.
+    if (!podeMoverDe(order.pieceStatus, session.role)) {
+      return actionError(
+        exigeGestaoParaMover(order.pieceStatus)
+          ? 'Pedido finalizado: apenas o perfil Gestão pode movimentá-lo.'
+          : "Sem permissão para movimentar esta peça.",
+      );
+    }
+
     if (!canMovePiece(order.pieceStatus, args.to)) {
       return actionError(
         `Transição inválida: não é possível ir para "${PIECE_LABEL[args.to]}" a partir do estado atual.`,
@@ -76,10 +92,20 @@ export async function setPieceStatus(args: {
 
     const note = args.note?.trim() || null;
 
+    // O pedido é encerrado junto com a finalização da peça — mas nunca
+    // "desencerrado": um pedido cancelado/estornado não volta para CONCLUIDO.
+    const encerraPedido =
+      ENCERRA_PEDIDO_AO_FINALIZAR &&
+      args.to === "FINALIZADO" &&
+      !STATUS_TERMINAIS.includes(order.status);
+
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { id: order.id },
-        data: { pieceStatus: args.to },
+        data: {
+          pieceStatus: args.to,
+          ...(encerraPedido ? { status: "CONCLUIDO" as const } : {}),
+        },
       });
       await tx.pieceMovement.create({
         data: {
@@ -90,9 +116,24 @@ export async function setPieceStatus(args: {
           changedBy: session.userId,
         },
       });
+      if (encerraPedido) {
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: order.id,
+            status: "CONCLUIDO",
+            changedBy: session.userId,
+            note: "Controle de Peças: peça finalizada — fluxo do pedido encerrado.",
+          },
+        });
+      }
     });
 
     revalidatePath("/logistica/controle-pecas");
+    if (encerraPedido) {
+      revalidatePath("/logistica");
+      revalidatePath("/fluxo");
+      revalidatePath("/dashboard");
+    }
     return actionOk({ pieceStatus: args.to });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao mover a peça.";
