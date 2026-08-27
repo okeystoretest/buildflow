@@ -9,15 +9,19 @@ export interface RankRow {
   vendido: number;
   meta: number;
   pct: number;
-  /** true = o valor exibido veio de um ajuste manual, não do consolidado. */
+  /** true = o valor exibido tem um ajuste manual na base. */
   ajustado: boolean;
   /** Consolidado pelo sistema agora — usado para comparar e para restaurar. */
   vendidoSistema: number;
+  /** Valor digitado no ajuste (base). null quando não há ajuste. */
+  ajusteBase: number | null;
+  /** Instante do corte do ajuste (ISO). null quando não há ajuste. */
+  ajusteCorte: string | null;
   /**
-   * Consolidado no instante em que o ajuste foi salvo. Se hoje difere de
-   * `vendidoSistema`, entraram pedidos depois e o ajuste está defasado.
+   * Faturado pelo sistema DEPOIS do corte do ajuste — a parcela que soma sobre
+   * a base. 0 quando não há ajuste ou quando nada entrou desde então.
    */
-  sistemaNoAjuste: number | null;
+  vendidoAposAjuste: number;
 }
 export interface CampaignData {
   id: string; name: string; volume: number; receita: number;
@@ -56,6 +60,14 @@ export interface RankData {
   campaignPerf: CampaignPerf[];
   updatedAt: string;
 }
+
+/**
+ * CORTE PADRAO dos ajustes gravados ANTES da regra incremental (baselineAt
+ * nulo). Combinado com o negocio: o valor digitado nesses ajustes responde
+ * pelos pedidos criados ate 27/08/2026 as 10:00; tudo criado a partir dai soma.
+ * Data em horario LOCAL do servidor, igual as demais janelas deste arquivo.
+ */
+export const AJUSTE_CORTE_PADRAO = new Date(2026, 7, 27, 10, 0, 0, 0);
 
 // Parametro opcional de periodo. Sem ele, usa o mes/ano corrente.
 export interface RankPeriod {
@@ -116,14 +128,25 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     include: { seller: true },
   });
 
-  // AJUSTES MANUAIS do periodo (Ranking > modo de edicao). Quando existe um
-  // ajuste para o vendedor, o valor digitado SUBSTITUI o consolidado no
-  // ranking. Ver src/lib/actions/rank-adjustments.ts.
+  // AJUSTES MANUAIS do periodo (Ranking > modo de edicao).
+  //
+  // REGRA DE NEGOCIO (ajuste INCREMENTAL): o valor digitado responde pelo
+  // realizado do vendedor SOMENTE ate o instante do corte (`baselineAt`, o
+  // momento em que o ajuste foi salvo). Os pedidos criados a partir do corte
+  // NAO sao descartados — eles SOMAM sobre o valor digitado. Antes o ajuste
+  // substituia o mes inteiro e congelava a linha: qualquer venda registrada
+  // depois sumia do ranking.
+  //
+  // Ajustes gravados antes desta regra nao tem corte; para eles vale o corte
+  // padrao (AJUSTE_CORTE_PADRAO). Ver src/lib/actions/rank-adjustments.ts.
   const ajustes = await prisma.rankAdjustment.findMany({ where: { month, year } });
   const ajustePorUser = new Map(
     ajustes.map((a) => [
       a.userId,
-      { amount: Number(a.amount), systemAmount: Number(a.systemAmount) },
+      {
+        amount: Number(a.amount),
+        corte: a.baselineAt ? new Date(a.baselineAt) : AJUSTE_CORTE_PADRAO,
+      },
     ]),
   );
 
@@ -164,10 +187,14 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
 
   // Acumula por vendedor SOMENTE o faturado no mês selecionado, para casar com
   // a meta mensal e o progresso ficar correto.
-  const porVendedor = new Map<string, { nome: string; scope: string | null; total: number }>();
+  // `posCorte` acumula, em paralelo, so o que entrou a partir do corte do
+  // ajuste daquele vendedor — a parcela que soma sobre o valor digitado.
+  const porVendedor = new Map<string, { nome: string; scope: string | null; total: number; posCorte: number }>();
   for (const o of doMes) {
-    const cur = porVendedor.get(o.sellerId) ?? { nome: o.seller.name, scope: o.seller.salesModel, total: 0 };
+    const cur = porVendedor.get(o.sellerId) ?? { nome: o.seller.name, scope: o.seller.salesModel, total: 0, posCorte: 0 };
     cur.total += receita(o);
+    const corte = ajustePorUser.get(o.sellerId)?.corte;
+    if (corte && new Date(o.createdAt) >= corte) cur.posCorte += receita(o);
     porVendedor.set(o.sellerId, cur);
   }
   // Vendedor COM meta e SEM pedido registrado no periodo entra na lista com 0.
@@ -183,6 +210,7 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
       nome: g.user.name,
       scope: g.user.salesModel ?? g.scope,
       total: 0,
+      posCorte: 0,
     });
   }
 
@@ -192,17 +220,21 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
 
   // O ajuste manual tambem corrige o REALIZADO GERAL: se a venda existiu mas
   // nao foi registrada, ela falta tanto na linha do vendedor quanto no total.
-  // Soma-se a DIFERENCA (manual - consolidado), que pode ser negativa.
   //
-  // Um ajuste para vendedor SEM pedido no periodo tambem conta: `consolidado`
-  // cai para 0 e a diferenca vira o valor digitado inteiro.
+  // Como o ajuste e incremental, ele so substitui o consolidado ATE o corte —
+  // a diferenca somada e (manual - consolidado ANTES do corte). O que entrou
+  // depois ja esta em `realizadoSistema` e continua valendo.
+  //
+  // Um ajuste para vendedor SEM pedido no periodo tambem conta: o consolidado
+  // ate o corte cai para 0 e a diferenca vira o valor digitado inteiro.
   //
   // maiorSemana / maiorMes NAO sao ajustados de proposito: sao recordes de UM
   // pedido especifico, e um ajuste agregado nao diz qual pedido teria mudado.
   let ajusteManualTotal = 0;
   for (const [userId, aj] of ajustePorUser.entries()) {
-    const consolidado = porVendedor.get(userId)?.total ?? 0;
-    ajusteManualTotal += aj.amount - consolidado;
+    const v = porVendedor.get(userId);
+    const consolidadoAteCorte = (v?.total ?? 0) - (v?.posCorte ?? 0);
+    ajusteManualTotal += aj.amount - consolidadoAteCorte;
   }
 
   const realizadoGeral = realizadoSistema + ajusteManualTotal;
@@ -218,9 +250,10 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
         // No painel Geral (scope null), usa a meta do vendedor pelo escopo dele.
         const escopoMeta = scope ?? v.scope;
         const meta = escopoMeta ? (metaPorVendedor.get(id + escopoMeta) ?? 0) : 0;
-        // Ajuste manual: substitui o consolidado no valor exibido e no %.
+        // Ajuste manual INCREMENTAL: o valor digitado responde pelo periodo
+        // ate o corte e o faturado posterior soma sobre ele.
         const aj = ajustePorUser.get(id);
-        const vendido = aj ? aj.amount : v.total;
+        const vendido = aj ? aj.amount + v.posCorte : v.total;
         return {
           userId: id,
           nome: v.nome,
@@ -229,7 +262,9 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
           pct: meta > 0 ? Math.round((vendido / meta) * 100) : 0,
           ajustado: !!aj,
           vendidoSistema: v.total,
-          sistemaNoAjuste: aj ? aj.systemAmount : null,
+          ajusteBase: aj ? aj.amount : null,
+          ajusteCorte: aj ? aj.corte.toISOString() : null,
+          vendidoAposAjuste: aj ? v.posCorte : 0,
         };
       })
       // Descarta quem nao tem meta no mes/ano selecionado.

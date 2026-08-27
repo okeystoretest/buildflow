@@ -12,10 +12,13 @@ import { computeRankData } from "@/lib/rank-data";
  * Permite corrigir o valor realizado de um vendedor quando a venda aconteceu
  * mas o pedido não foi registrado na plataforma.
  *
- * O valor digitado SUBSTITUI o consolidado daquele vendedor no período — não
- * soma. Junto dele guardamos `systemAmount` (quanto o sistema calculava no
- * instante do ajuste), para que a tela consiga avisar quando pedidos novos
- * entraram depois e o ajuste ficou defasado.
+ * O valor digitado responde pelo realizado daquele vendedor ATE o instante em
+ * que foi salvo (`baselineAt`, o corte). Os pedidos criados a partir do corte
+ * NAO sao ignorados: continuam sendo contabilizados e SOMAM sobre o valor
+ * digitado. Assim o ajuste corrige o passado sem congelar a linha.
+ *
+ * Junto dele guardamos `systemAmount` (quanto o sistema calculava no instante
+ * do ajuste), apenas como registro de auditoria.
  *
  * PERFIL: exclusivo de GESTÃO. O dashboard é liberado para VENDAS também, mas
  * deixar a vendedora editar o próprio número realizado é conflito de interesse
@@ -62,11 +65,16 @@ export async function setRankAdjustment(args: {
     });
     if (!user) return actionError("Vendedor não encontrado.");
 
-    // Consolidado ATUAL do vendedor no período — guardado junto do ajuste para
-    // permitir detectar defasagem depois.
+    // Consolidado ATUAL do vendedor no período — registro de auditoria do que
+    // o sistema calculava quando o ajuste foi salvo.
     const dados = await computeRankData({ month: args.month, year: args.year });
     const linha = dados.rankGeral.find((r) => r.userId === args.userId);
     const systemAmount = linha?.vendidoSistema ?? 0;
+
+    // CORTE: a partir deste instante os pedidos voltam a somar sobre o ajuste.
+    // Regravar o ajuste move o corte para agora — o valor digitado passa a
+    // representar o realizado até este momento.
+    const baselineAt = new Date();
 
     await prisma.rankAdjustment.upsert({
       where: {
@@ -78,12 +86,14 @@ export async function setRankAdjustment(args: {
         year: args.year,
         amount: args.amount,
         systemAmount,
+        baselineAt,
         note: args.note?.trim() || null,
         changedBy: session.userId,
       },
       update: {
         amount: args.amount,
         systemAmount,
+        baselineAt,
         note: args.note?.trim() || null,
         changedBy: session.userId,
       },

@@ -667,6 +667,11 @@ model RankAdjustment {
   amount       Decimal @db.Decimal(12, 2)
   // Consolidado pelo sistema no momento em que o ajuste foi salvo.
   systemAmount Decimal @db.Decimal(12, 2) @default(0)
+  // CORTE do ajuste: instante ate o qual `amount` responde pelo realizado.
+  // Pedidos criados a partir daqui NAO sao substituidos pelo ajuste — eles
+  // SOMAM sobre ele. Null = ajuste anterior a esta regra; nesse caso o corte
+  // usado e a constante AJUSTE_CORTE_PADRAO (ver src/lib/rank-data.ts).
+  baselineAt   DateTime?
   note      String?
   changedBy String?
   createdAt DateTime @default(now())

@@ -260,8 +260,8 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
       {editMode && (
         <p className="shrink-0 rounded-lg border border-vendas/40 bg-vendas/5 px-3 py-2 text-xs text-muted-foreground">
           Modo de edição ativo: clique no valor de uma vendedora para informar manualmente o
-          realizado do período. O valor digitado substitui o consolidado e vale para os painéis
-          Geral, Varejo e Atacado.
+          realizado até agora. O valor digitado vale para os painéis Geral, Varejo e Atacado —
+          e os pedidos registrados depois da edição continuam somando sobre ele.
         </p>
       )}
 
@@ -388,12 +388,9 @@ function RankLine({ pos, row, showTrophy, compact, hideValue, edicao }: { pos: n
   const semMeta = !(row.meta > 0);
   const pct = semMeta ? 0 : row.pct;
   const editando = edicao?.ativo === true;
-  // Entraram pedidos depois que o ajuste foi salvo? O numero manual ficou para
-  // tras e a tela avisa, em vez de esconder a divergencia.
-  const defasado =
-    row.ajustado &&
-    row.sistemaNoAjuste !== null &&
-    Math.abs(row.vendidoSistema - row.sistemaNoAjuste) >= 0.01;
+  // Pedidos registrados DEPOIS do ajuste somam sobre o valor digitado (ajuste
+  // incremental). A tela mostra essa parcela para o numero ficar auditavel.
+  const somouDepois = row.ajustado && row.vendidoAposAjuste > 0;
 
   return (
     <div className={compact ? "py-1" : ""}>
@@ -404,16 +401,18 @@ function RankLine({ pos, row, showTrophy, compact, hideValue, edicao }: { pos: n
           {row.ajustado && (
             <span
               title={
-                `Valor informado manualmente. Sistema: ${formatBRL(row.vendidoSistema)}.` +
-                (defasado
-                  ? ` Atenção: o consolidado mudou desde o ajuste (era ${formatBRL(row.sistemaNoAjuste ?? 0)}).`
-                  : "")
+                `Valor informado manualmente: ${formatBRL(row.ajusteBase ?? 0)}` +
+                (row.ajusteCorte
+                  ? ` (até ${new Date(row.ajusteCorte).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })})`
+                  : "") +
+                (somouDepois
+                  ? ` + ${formatBRL(row.vendidoAposAjuste)} registrados depois.`
+                  : ".") +
+                ` Consolidado do sistema no mês: ${formatBRL(row.vendidoSistema)}.`
               }
-              className={`shrink-0 rounded px-1 text-[10px] font-bold ${
-                defasado ? "bg-amber-500/20 text-amber-500" : "bg-sky-500/15 text-sky-500"
-              }`}
+              className="shrink-0 rounded bg-sky-500/15 px-1 text-[10px] font-bold text-sky-500"
             >
-              M
+              M{somouDepois ? "+" : ""}
             </span>
           )}
         </span>
