@@ -68,6 +68,7 @@ model User {
   deliveries     Delivery[]     @relation("DeliveryDriver")
   notifications  Notification[]
   salesGoals     SalesGoal[]
+  rankAdjustments RankAdjustment[]
   dailyTasks     DailyTask[]
   // "Lojas de Origem" atreladas ao usuario (max 2, validado na action).
   // Usado por VENDAS para escopo de criacao e por quem opera o fluxo por loja.
@@ -641,6 +642,38 @@ model SalesGoal {
   @@index([userId, month, year])
   @@index([month, year])
   @@index([campaignId])
+}
+
+// AJUSTE MANUAL DO REALIZADO NO RANKING DE VENDAS.
+//
+// Existe para o caso em que a venda aconteceu mas o pedido NAO foi registrado
+// na plataforma: sem isso o ranking mostraria um numero menor que o real e a
+// vendedora apareceria abaixo da posicao dela.
+//
+// `amount` e o valor DIGITADO manualmente e SUBSTITUI o consolidado do periodo
+// para aquele vendedor. `systemAmount` guarda quanto o sistema havia calculado
+// no instante do ajuste — assim a tela consegue avisar quando novos pedidos
+// entraram depois e o ajuste ficou defasado.
+//
+// Um registro por vendedor/mes/ano: o ajuste vale para os tres paineis (Geral,
+// Varejo e Atacado), que sao recortes do MESMO numero.
+model RankAdjustment {
+  id     String @id @default(cuid())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  month  Int    // 1-12
+  year   Int
+  // Valor manual do realizado, em R$.
+  amount       Decimal @db.Decimal(12, 2)
+  // Consolidado pelo sistema no momento em que o ajuste foi salvo.
+  systemAmount Decimal @db.Decimal(12, 2) @default(0)
+  note      String?
+  changedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, month, year])
+  @@index([month, year])
 }
 
 // Campanha: apenas o nome (cadastro simples). As metas vinculadas

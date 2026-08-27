@@ -1,10 +1,22 @@
 import { prisma } from "@/lib/prisma";
 
 export interface RankRow {
+  /** Necessário para o ajuste manual (a linha precisa saber a quem pertence). */
+  userId: string;
   nome: string;
+  /** Valor exibido: o ajuste manual quando existe, senão o consolidado. */
   vendido: number;
   meta: number;
   pct: number;
+  /** true = o valor exibido veio de um ajuste manual, não do consolidado. */
+  ajustado: boolean;
+  /** Consolidado pelo sistema agora — usado para comparar e para restaurar. */
+  vendidoSistema: number;
+  /**
+   * Consolidado no instante em que o ajuste foi salvo. Se hoje difere de
+   * `vendidoSistema`, entraram pedidos depois e o ajuste está defasado.
+   */
+  sistemaNoAjuste: number | null;
 }
 export interface CampaignData {
   id: string; name: string; volume: number; receita: number;
@@ -28,6 +40,10 @@ export interface RankData {
   isCurrent: boolean;     // true = mês/ano corrente (habilita "semana" e auto-refresh)
   metaGeral: number;
   realizadoGeral: number; // soma faturada no período selecionado (base do progresso)
+  /** Soma dos ajustes manuais aplicada ao realizado geral (pode ser negativa). */
+  ajusteManualTotal: number;
+  /** Quantos vendedores estão com valor ajustado no período. */
+  ajustesCount: number;
   metaGeralPct: number;   // progresso da meta geral (realizadoGeral / metaGeral)
   goalsCount: number;
   maiorSemana: { total: number; nome: string } | null;
@@ -115,8 +131,22 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     include: { seller: true },
   });
 
+  // AJUSTES MANUAIS do periodo (Ranking > modo de edicao). Quando existe um
+  // ajuste para o vendedor, o valor digitado SUBSTITUI o consolidado no
+  // ranking. Ver src/lib/actions/rank-adjustments.ts.
+  const ajustes = await prisma.rankAdjustment.findMany({ where: { month, year } });
+  const ajustePorUser = new Map(
+    ajustes.map((a) => [
+      a.userId,
+      { amount: Number(a.amount), systemAmount: Number(a.systemAmount) },
+    ]),
+  );
+
   // Metas Gerais = apenas as nao vinculadas a campanha (campaignId null).
-  const goals = await prisma.salesGoal.findMany({ where: { month, year } });
+  const goals = await prisma.salesGoal.findMany({
+    where: { month, year },
+    include: { user: { select: { name: true, salesModel: true } } },
+  });
   const goalsGerais = goals.filter((g) => !g.campaignId);
   const metaGeral = goalsGerais.reduce((a, g) => a + Number(g.amount), 0);
 
@@ -140,8 +170,7 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   // frete). Helper único para manter a regra consistente em todo o rank.
   const receita = (o: { orderValue: unknown }) => Number(o.orderValue);
 
-  const realizadoGeral = doMes.reduce((a, o) => a + receita(o), 0);
-  const metaGeralPct = metaGeral > 0 ? Math.round((realizadoGeral / metaGeral) * 100) : 0;
+  const realizadoSistema = doMes.reduce((a, o) => a + receita(o), 0);
   const maior = (arr: typeof faturados) =>
     arr.reduce<{ total: number; nome: string } | null>((acc, o) => {
       const t = receita(o);
@@ -156,9 +185,43 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     cur.total += receita(o);
     porVendedor.set(o.sellerId, cur);
   }
+  // Vendedor COM meta e SEM pedido registrado no periodo entra na lista com 0.
+  //
+  // Antes ele simplesmente nao aparecia (a lista nascia dos pedidos), e isso
+  // inviabilizaria justamente o caso de uso do ajuste manual: quem vendeu fora
+  // da plataforma tem zero pedidos e nao teria linha para ser editada. Como
+  // efeito colateral, o ranking passa a mostrar tambem quem esta em 0% — o que
+  // e a leitura correta de um quadro que mede progresso contra meta.
+  for (const g of goalsGerais) {
+    if (porVendedor.has(g.userId)) continue;
+    porVendedor.set(g.userId, {
+      nome: g.user.name,
+      scope: g.user.salesModel ?? g.scope,
+      total: 0,
+    });
+  }
+
   // Meta por vendedor: usa as metas Gerais (escopo do vendedor).
   const metaPorVendedor = new Map<string, number>();
   for (const g of goalsGerais) metaPorVendedor.set(g.userId + g.scope, Number(g.amount));
+
+  // O ajuste manual tambem corrige o REALIZADO GERAL: se a venda existiu mas
+  // nao foi registrada, ela falta tanto na linha do vendedor quanto no total.
+  // Soma-se a DIFERENCA (manual - consolidado), que pode ser negativa.
+  //
+  // Um ajuste para vendedor SEM pedido no periodo tambem conta: `consolidado`
+  // cai para 0 e a diferenca vira o valor digitado inteiro.
+  //
+  // maiorSemana / maiorMes NAO sao ajustados de proposito: sao recordes de UM
+  // pedido especifico, e um ajuste agregado nao diz qual pedido teria mudado.
+  let ajusteManualTotal = 0;
+  for (const [userId, aj] of ajustePorUser.entries()) {
+    const consolidado = porVendedor.get(userId)?.total ?? 0;
+    ajusteManualTotal += aj.amount - consolidado;
+  }
+
+  const realizadoGeral = realizadoSistema + ajusteManualTotal;
+  const metaGeralPct = metaGeral > 0 ? Math.round((realizadoGeral / metaGeral) * 100) : 0;
 
   // REGRA DE NEGOCIO: usuarios SEM meta definida no periodo NAO aparecem no
   // dashboard. O ranking mede progresso contra meta — sem meta cadastrada a
@@ -170,7 +233,19 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
         // No painel Geral (scope null), usa a meta do vendedor pelo escopo dele.
         const escopoMeta = scope ?? v.scope;
         const meta = escopoMeta ? (metaPorVendedor.get(id + escopoMeta) ?? 0) : 0;
-        return { nome: v.nome, vendido: v.total, meta, pct: meta > 0 ? Math.round((v.total / meta) * 100) : 0 };
+        // Ajuste manual: substitui o consolidado no valor exibido e no %.
+        const aj = ajustePorUser.get(id);
+        const vendido = aj ? aj.amount : v.total;
+        return {
+          userId: id,
+          nome: v.nome,
+          vendido,
+          meta,
+          pct: meta > 0 ? Math.round((vendido / meta) * 100) : 0,
+          ajustado: !!aj,
+          vendidoSistema: v.total,
+          sistemaNoAjuste: aj ? aj.systemAmount : null,
+        };
       })
       // Descarta quem nao tem meta no mes/ano selecionado.
       .filter((r) => r.meta > 0)
@@ -266,6 +341,7 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   return {
     month, year, isCurrent,
     metaGeral, realizadoGeral, metaGeralPct, goalsCount: goalsGerais.length,
+    ajusteManualTotal, ajustesCount: ajustePorUser.size,
     maiorSemana: maior(daSemana), maiorMes: maior(doMes),
     rankGeral: buildRank(null), rankVarejo: buildRank("VAREJO"), rankAtacado: buildRank("ATACADO"),
     campaigns, campaignPerf, updatedAt: new Date().toISOString(),

@@ -1,9 +1,33 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { RefreshCw, Target, TrendingUp, BarChart3, Flame, Trophy, Maximize2, Minimize2, CalendarClock } from "lucide-react";
+import { RefreshCw, Target, TrendingUp, BarChart3, Flame, Trophy, Maximize2, Minimize2, CalendarClock, Pencil, Check, RotateCcw, Undo2 } from "lucide-react";
 import { formatBRL, tierColor, tierText } from "@/lib/utils";
+import { setRankAdjustment, clearRankAdjustment, clearRankAdjustments } from "@/lib/actions/rank-adjustments";
 import type { RankData, RankRow, CampaignPerf } from "@/lib/rank-data";
+
+/**
+ * Converte o texto digitado no modo de edicao em numero.
+ * Aceita "1.234,56", "1234,56", "1234.56" e "R$ 1.234,56".
+ */
+export function parseValorBR(txt: string): number | null {
+  const limpo = txt.replace(/[^\d,.-]/g, "").trim();
+  if (!limpo) return null;
+
+  let normalizado: string;
+  if (limpo.includes(",")) {
+    // Virgula presente = separador decimal; os pontos sao milhar.
+    normalizado = limpo.replace(/\./g, "").replace(",", ".");
+  } else if (/^-?\d{1,3}(\.\d{3})+$/.test(limpo)) {
+    // "1.234" / "12.345.678": pontos em grupos de 3 = separador de milhar.
+    normalizado = limpo.replace(/\./g, "");
+  } else {
+    normalizado = limpo;
+  }
+
+  const n = Number(normalizado);
+  return Number.isFinite(n) ? n : null;
+}
 
 const REFRESH_MS = 30 * 60 * 1000; // 30 minutos
 
@@ -12,12 +36,17 @@ const MESES = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
-export function RankBoard({ initial }: { initial: RankData }) {
+export function RankBoard({ initial, canEdit = false }: { initial: RankData; canEdit?: boolean }) {
   const [data, setData] = useState<RankData>(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<Date>(new Date());
   const [campSel, setCampSel] = useState<string>(initial.campaignPerf[0]?.id ?? "");
   const [isFull, setIsFull] = useState(false);
+  // Modo de edicao manual dos valores realizados. Exclusivo da GESTAO e
+  // indisponivel em tela cheia (o telao e so exibicao).
+  const [editMode, setEditMode] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [editErro, setEditErro] = useState<string | null>(null);
   // Periodo selecionado. Comeca no periodo que veio do servidor (corrente).
   const [selMonth, setSelMonth] = useState<number>(initial.month);
   const [selYear, setSelYear] = useState<number>(initial.year);
@@ -74,6 +103,51 @@ export function RankBoard({ initial }: { initial: RankData }) {
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
+  // Tela cheia encerra a edicao: o recurso so existe fora do modo telao.
+  useEffect(() => {
+    if (isFull) setEditMode(false);
+  }, [isFull]);
+
+  // Grava o ajuste de uma linha e recarrega o periodo, para que os tres
+  // paineis e o KPI de Meta Geral reflitam o novo valor de uma vez so.
+  const salvarAjuste = useCallback(
+    async (userId: string, valor: number) => {
+      setSavingId(userId);
+      setEditErro(null);
+      const res = await setRankAdjustment({ userId, month: selMonth, year: selYear, amount: valor });
+      setSavingId(null);
+      if (res.ok) await fetchPeriod(selMonth, selYear);
+      else setEditErro(res.error);
+    },
+    [fetchPeriod, selMonth, selYear],
+  );
+
+  // Desfaz o ajuste de UMA linha: volta ao consolidado do sistema.
+  const desfazerLinha = useCallback(
+    async (userId: string) => {
+      setSavingId(userId);
+      setEditErro(null);
+      const res = await clearRankAdjustment({ userId, month: selMonth, year: selYear });
+      setSavingId(null);
+      if (res.ok) await fetchPeriod(selMonth, selYear);
+      else setEditErro(res.error);
+    },
+    [fetchPeriod, selMonth, selYear],
+  );
+
+  // "Restaurar padrao": descarta TODOS os ajustes do periodo.
+  const restaurarTudo = useCallback(async () => {
+    const confirmar = window.confirm(
+      `Descartar os ${data.ajustesCount} ajuste(s) manual(is) de ${MESES[selMonth - 1]}/${selYear}? ` +
+        "O quadro volta a exibir apenas os valores consolidados pelo sistema.",
+    );
+    if (!confirmar) return;
+    setEditErro(null);
+    const res = await clearRankAdjustments({ month: selMonth, year: selYear });
+    if (res.ok) await fetchPeriod(selMonth, selYear);
+    else setEditErro(res.error);
+  }, [data.ajustesCount, fetchPeriod, selMonth, selYear]);
+
   const campPerf = data.campaignPerf.find((c) => c.id === campSel) ?? data.campaignPerf[0];
   const campTotalVol = data.campaigns.find((c) => c.id === campSel) ?? data.campaigns[0];
 
@@ -87,6 +161,15 @@ export function RankBoard({ initial }: { initial: RankData }) {
   const wrapClass = isFull
     ? "flex min-h-screen flex-col gap-2.5 overflow-y-auto bg-background p-3"
     : "flex min-h-[calc(100vh-7rem)] flex-col gap-2.5";
+
+  // Contexto de edicao repassado as linhas. `ativo` fica false em tela cheia
+  // ou para quem nao e GESTAO — nesse caso as linhas renderizam normalmente.
+  const edicao: EdicaoCtx = {
+    ativo: editMode && canEdit && !isFull,
+    savingId,
+    onSalvar: salvarAjuste,
+    onDesfazer: desfazerLinha,
+  };
 
   return (
     <div ref={rootRef} className={wrapClass}>
@@ -103,6 +186,14 @@ export function RankBoard({ initial }: { initial: RankData }) {
             value={selYear} onChange={(e) => changePeriod(selMonth, Number(e.target.value))}>
             {anos.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
+          {data.ajustesCount > 0 && (
+            <span
+              title="Há valores informados manualmente neste período."
+              className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-500"
+            >
+              {data.ajustesCount} ajuste(s) manual(is)
+            </span>
+          )}
           {!data.isCurrent && (
             <>
               <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-500">
@@ -116,6 +207,37 @@ export function RankBoard({ initial }: { initial: RankData }) {
           )}
         </div>
         <div className="flex items-center gap-1.5">
+          {/* EDICAO MANUAL — some por completo em tela cheia. */}
+          {canEdit && !isFull && (
+            <>
+              <button
+                onClick={() => { setEditMode((v) => !v); setEditErro(null); }}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                  editMode
+                    ? "border-vendas bg-vendas/10 text-vendas"
+                    : "border-border bg-card text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {editMode ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">{editMode ? "Concluir edição" : "Editar valores"}</span>
+              </button>
+              {(editMode || data.ajustesCount > 0) && (
+                <button
+                  onClick={restaurarTudo}
+                  disabled={data.ajustesCount === 0 || refreshing}
+                  title={
+                    data.ajustesCount === 0
+                      ? "Nenhum ajuste manual neste período"
+                      : "Descartar os ajustes e voltar aos valores do sistema"
+                  }
+                  className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Restaurar padrão</span>
+                </button>
+              )}
+            </>
+          )}
           <button onClick={refresh}
             className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
@@ -128,6 +250,20 @@ export function RankBoard({ initial }: { initial: RankData }) {
           </button>
         </div>
       </div>
+
+      {editErro && (
+        <p className="shrink-0 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+          {editErro}
+        </p>
+      )}
+
+      {editMode && (
+        <p className="shrink-0 rounded-lg border border-vendas/40 bg-vendas/5 px-3 py-2 text-xs text-muted-foreground">
+          Modo de edição ativo: clique no valor de uma vendedora para informar manualmente o
+          realizado do período. O valor digitado substitui o consolidado e vale para os painéis
+          Geral, Varejo e Atacado.
+        </p>
+      )}
 
       {/* KPIs */}
       <div className="grid shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-4">
@@ -153,10 +289,11 @@ export function RankBoard({ initial }: { initial: RankData }) {
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 lg:grid-cols-3 lg:grid-rows-[minmax(160px,1fr)_auto]">
         {/* Progresso Geral: ate 20 nomes, rola se passar disso. */}
         <div className="flex min-h-0 lg:row-span-2">
-          <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue compact maxRows={20} className="flex-1" />
+          <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue compact maxRows={20} className="flex-1"
+            edicao={edicao} />
         </div>
-        <RankPanel title="Varejo" rows={data.rankVarejo} showTrophy compact />
-        <RankPanel title="Atacado" rows={data.rankAtacado} showTrophy compact />
+        <RankPanel title="Varejo" rows={data.rankVarejo} showTrophy compact edicao={edicao} />
+        <RankPanel title="Atacado" rows={data.rankAtacado} showTrophy compact edicao={edicao} />
 
         {/* Tabela de performance por campanha — ocupa apenas as colunas de
             Varejo/Atacado, na linha de baixo. Rola internamente. */}
@@ -219,18 +356,26 @@ function Kpi({ icon, iconClass, label, value, sub, subClass }: {
   );
 }
 
+/** Estado da edicao manual repassado do quadro para cada linha do ranking. */
+export interface EdicaoCtx {
+  ativo: boolean;
+  savingId: string | null;
+  onSalvar: (userId: string, valor: number) => void | Promise<void>;
+  onDesfazer: (userId: string) => void | Promise<void>;
+}
+
 // `maxRows` define quantos nomes o painel exibe (default 10). O container rola
 // verticalmente quando a lista nao cabe na altura disponivel.
-function RankPanel({ title, rows, showTrophy, compact, hideValue, maxRows = 10, className }: {
+function RankPanel({ title, rows, showTrophy, compact, hideValue, maxRows = 10, className, edicao }: {
   title: string; rows: RankRow[]; showTrophy?: boolean; compact?: boolean; hideValue?: boolean;
-  maxRows?: number; className?: string;
+  maxRows?: number; className?: string; edicao?: EdicaoCtx;
 }) {
   return (
     <div className={`flex min-h-0 flex-col rounded-xl border border-border bg-card p-3 ${className ?? ""}`}>
       <p className="mb-1.5 shrink-0 text-base font-semibold lg:text-lg">{title}</p>
       <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${compact ? "justify-start gap-2" : "justify-around gap-0.5"}`}>
         {rows.slice(0, maxRows).map((r, i) => (
-          <RankLine key={r.nome} pos={i + 1} row={r} showTrophy={showTrophy} compact={compact} hideValue={hideValue} />
+          <RankLine key={r.userId} pos={i + 1} row={r} showTrophy={showTrophy} compact={compact} hideValue={hideValue} edicao={edicao} />
         ))}
         {rows.length === 0 && <p className="m-auto text-sm text-muted-foreground">Sem dados.</p>}
       </div>
@@ -238,19 +383,48 @@ function RankPanel({ title, rows, showTrophy, compact, hideValue, maxRows = 10, 
   );
 }
 
-function RankLine({ pos, row, showTrophy, compact, hideValue }: { pos: number; row: RankRow; showTrophy?: boolean; compact?: boolean; hideValue?: boolean }) {
+function RankLine({ pos, row, showTrophy, compact, hideValue, edicao }: { pos: number; row: RankRow; showTrophy?: boolean; compact?: boolean; hideValue?: boolean; edicao?: EdicaoCtx }) {
   // Progresso real: vendido / meta. Sem meta cadastrada, mostra 0%.
   const semMeta = !(row.meta > 0);
   const pct = semMeta ? 0 : row.pct;
+  const editando = edicao?.ativo === true;
+  // Entraram pedidos depois que o ajuste foi salvo? O numero manual ficou para
+  // tras e a tela avisa, em vez de esconder a divergencia.
+  const defasado =
+    row.ajustado &&
+    row.sistemaNoAjuste !== null &&
+    Math.abs(row.vendidoSistema - row.sistemaNoAjuste) >= 0.01;
+
   return (
     <div className={compact ? "py-1" : ""}>
       <div className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5">
           {showTrophy && pos <= 3 && <RankTrophy pos={pos} />}
           <span className="truncate text-sm font-medium lg:text-base">{row.nome}</span>
+          {row.ajustado && (
+            <span
+              title={
+                `Valor informado manualmente. Sistema: ${formatBRL(row.vendidoSistema)}.` +
+                (defasado
+                  ? ` Atenção: o consolidado mudou desde o ajuste (era ${formatBRL(row.sistemaNoAjuste ?? 0)}).`
+                  : "")
+              }
+              className={`shrink-0 rounded px-1 text-[10px] font-bold ${
+                defasado ? "bg-amber-500/20 text-amber-500" : "bg-sky-500/15 text-sky-500"
+              }`}
+            >
+              M
+            </span>
+          )}
         </span>
         <span className="flex shrink-0 items-center gap-2">
-          {!hideValue && row.vendido > 0 && <span className="font-data text-sm lg:text-base">{formatBRL(row.vendido)}</span>}
+          {editando ? (
+            <ValorEditavel row={row} edicao={edicao!} />
+          ) : (
+            !hideValue && row.vendido > 0 && (
+              <span className="font-data text-sm lg:text-base">{formatBRL(row.vendido)}</span>
+            )
+          )}
           <span className={`font-data text-sm font-bold lg:text-base ${semMeta ? "text-muted-foreground" : tierText(pct)}`}>
             {semMeta ? "s/ meta" : `${pct}%`}
           </span>
@@ -261,6 +435,60 @@ function RankLine({ pos, row, showTrophy, compact, hideValue }: { pos: number; r
           style={{ width: `${Math.min(pct, 100)}%`, transition: "width .5s ease" }} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Campo de valor no modo de edicao.
+ *
+ * Grava no `blur` e no Enter; `Esc` cancela e devolve o valor anterior. Nao
+ * salva quando o texto nao mudou, para nao gravar ajuste identico ao
+ * consolidado a cada clique acidental.
+ */
+function ValorEditavel({ row, edicao }: { row: RankRow; edicao: EdicaoCtx }) {
+  const inicial = String(row.vendido.toFixed(2)).replace(".", ",");
+  const [texto, setTexto] = useState(inicial);
+  const salvando = edicao.savingId === row.userId;
+
+  // Se o valor mudar por fora (refetch apos salvar), reflete no campo.
+  useEffect(() => { setTexto(inicial); }, [inicial]);
+
+  function confirmar() {
+    if (texto === inicial) return;
+    const valor = parseValorBR(texto);
+    if (valor === null || valor < 0) { setTexto(inicial); return; }
+    edicao.onSalvar(row.userId, valor);
+  }
+
+  return (
+    <span className="flex items-center gap-1">
+      <input
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={confirmar}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.currentTarget.blur(); }
+          if (e.key === "Escape") { setTexto(inicial); e.currentTarget.blur(); }
+        }}
+        disabled={salvando}
+        inputMode="decimal"
+        aria-label={`Valor realizado de ${row.nome}`}
+        className="font-data h-7 w-28 rounded-md border border-input bg-background px-2 text-right text-sm disabled:opacity-50"
+      />
+      {row.ajustado && (
+        <button
+          type="button"
+          onClick={() => edicao.onDesfazer(row.userId)}
+          disabled={salvando}
+          title={`Desfazer ajuste e voltar a ${formatBRL(row.vendidoSistema)}`}
+          aria-label="Desfazer ajuste desta vendedora"
+          className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+        >
+          <Undo2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </span>
   );
 }
 
