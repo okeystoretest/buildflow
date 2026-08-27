@@ -234,7 +234,15 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
       })
       // Descarta quem nao tem meta no mes/ano selecionado.
       .filter((r) => r.meta > 0)
-      .sort((a, b) => b.vendido - a.vendido);
+      // ORDEM DO RANKING: pelo PROGRESSO DA META (%), nao pelo valor vendido.
+      // O quadro mede cumprimento de meta, e metas sao diferentes entre as
+      // vendedoras — quem vendeu menos em R$ pode estar a frente por ter
+      // batido uma proporcao maior da propria meta.
+      //
+      // Desempate 1: maior valor realizado (entre dois 100%, quem entregou o
+      // numero maior fica na frente). Desempate 2: nome, so para a ordem nao
+      // oscilar entre recarregamentos quando tudo mais e igual.
+      .sort((a, b) => b.pct - a.pct || b.vendido - a.vendido || a.nome.localeCompare(b.nome, "pt-BR"));
 
   // Campanhas ativas + pedidos vinculados + metas (SalesGoal) vinculadas.
   // REGRA DE NEGÓCIO (multilojas): itens de campanha vendidos em QUALQUER loja
