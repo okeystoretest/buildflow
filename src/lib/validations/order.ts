@@ -52,7 +52,6 @@ export const createOrderSchema = z.object({
   itemCount: z.coerce.number().int().nonnegative().default(0),
   // "Possui desconto?" — quando marcado, a premiação por item de campanha usa o
   // valor reduzido (Atacado R$2,00 / Varejo R$2,50). Default false = integral.
-  campaignDiscount: z.coerce.boolean().default(false),
   // Itens de campanha (lista dinâmica): cada linha tem campanha, referência,
   // quantidade e valor próprios. Opcional; quando presente, cada item é validado.
   campaignItems: z

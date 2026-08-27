@@ -512,7 +512,7 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
             <th className="pb-1 pr-2 text-right">Meta</th>
             <th className="pb-1 pr-2 text-center">Qtd Peças</th>
             {/* Coluna "Valor" removida a pedido do produto. */}
-            <th className="pb-1 pr-2 text-right">Comissão</th>
+            <th className="pb-1 pr-2 text-right">Premiação</th>
             <th className="pb-1 pl-2" style={{ width: "28%" }}>Meta%</th>
           </tr>
         </thead>
@@ -529,7 +529,7 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
               <td className="py-1 pr-2 text-right font-data">{r.meta > 0 ? r.meta : "—"}</td>
               <td className="py-1 pr-2 text-center font-data">{r.qtd}</td>
               {/* Coluna "Valor" removida a pedido do produto. */}
-              <td className="py-1 pr-2 text-right font-data text-vendas">{formatBRL(r.comissao)}</td>
+              <td className="py-1 pr-2 text-right font-data text-vendas">{formatBRL(r.premiacao)}</td>
               <td className="py-1 pl-2">
                 <div className="flex items-center gap-2">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">

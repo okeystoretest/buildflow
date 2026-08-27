@@ -4,7 +4,7 @@ import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBRL } from "@/lib/utils";
-import { comissaoDoItem, type CommissionScope } from "@/lib/campaign-commission";
+import { premiacaoDoItem, PREMIACAO_POR_PECA } from "@/lib/campaign-commission";
 import { RelatorioCampanhaFiltros } from "./filtros-client";
 import type { Prisma } from "@prisma/client";
 
@@ -12,7 +12,12 @@ const PER_PAGE = 20;
 
 // Relatório de Campanha (Vendas): detalhamento de TODOS os itens de campanha
 // (CampaignItem) — cada linha traz campanha, referência, quantidade, valor,
-// pedido, cliente, vendedora, indicador de desconto e a comissão da peça.
+// número da comanda, premiação, pedido, cliente e vendedora.
+//
+// A coluna "Desconto" saiu: a premiação passou a ser R$ 5,00 fixos por peça,
+// então o indicador 100%/50% não representava mais nada. O espaço foi ocupado
+// pelo Nº da Comanda, que é o dado que a operação usa para conferir o item no
+// sistema do Financeiro.
 //
 // RBAC:
 //  - VENDAS: vê apenas os itens dos SEUS pedidos (escopo forçado no servidor).
@@ -49,22 +54,21 @@ export default async function RelatorioCampanhaPage({
     order: { is: sellerScope },
   };
 
-  // Include comum: campanha + dados do pedido (inclui desconto e escopo da
-  // vendedora, necessários para calcular a comissão por peça).
+  // Include comum: campanha + dados do pedido. `salesModel` nao e mais
+  // necessario para o calculo (premiacao fixa), mas continua util na leitura.
   const itemInclude = {
     campaign: { select: { name: true } },
     order: {
       select: {
         orderNumber: true,
         comandaNumber: true,
-        campaignDiscount: true,
         customer: { select: { name: true } },
-        seller: { select: { name: true, salesModel: true } },
+        seller: { select: { name: true } },
       },
     },
   } as const;
 
-  const [items, total, campaigns, sellers, agg, allForTotals] = await Promise.all([
+  const [items, total, campaigns, sellers, agg] = await Promise.all([
     prisma.campaignItem.findMany({
       where,
       include: itemInclude,
@@ -78,28 +82,15 @@ export default async function RelatorioCampanhaPage({
       ? prisma.user.findMany({ where: { role: "VENDAS" }, orderBy: { name: "asc" }, select: { id: true, name: true } })
       : Promise.resolve([] as { id: string; name: string }[]),
     prisma.campaignItem.aggregate({ where, _sum: { quantity: true, value: true } }),
-    // Para os TOTAIS consolidados de comissão precisamos varrer TODOS os itens
-    // do filtro (não só a página), pois a comissão depende do desconto e do
-    // escopo de cada pedido. Trazemos só os campos necessários.
-    prisma.campaignItem.findMany({
-      where,
-      select: {
-        quantity: true,
-        order: { select: { campaignDiscount: true, seller: { select: { salesModel: true } } } },
-      },
-    }),
   ]);
 
   const totalQtd = agg._sum.quantity ?? 0;
   const totalValor = Number(agg._sum.value ?? 0);
 
-  // Comissão consolidada: soma a comissão de CADA item do filtro atual. Como o
-  // filtro já reflete a vendedora selecionada (quando ativo), este total
-  // recalcula dinamicamente por vendedora.
-  const totalComissao = allForTotals.reduce((acc, it) => {
-    const scope = (it.order?.seller?.salesModel ?? null) as CommissionScope;
-    return acc + comissaoDoItem(scope, it.order?.campaignDiscount === true, it.quantity);
-  }, 0);
+  // Premiacao consolidada: com o valor fixo por peca, o total sai direto da
+  // soma de quantidade que o proprio banco ja agrega — nao e mais preciso
+  // varrer item a item para descobrir a taxa de cada pedido.
+  const totalPremiacao = premiacaoDoItem(totalQtd);
 
   const resumoPeriodo = temPeriodo
     ? ` no período de ${de ? new Date(de).toLocaleDateString("pt-BR") : "início"} a ${ate ? new Date(ate).toLocaleDateString("pt-BR") : "hoje"}`
@@ -135,8 +126,8 @@ export default async function RelatorioCampanhaPage({
           <p className="font-data text-2xl font-bold text-vendas">{formatBRL(totalValor)}</p>
         </CardContent></Card>
         <Card><CardContent className="pt-5">
-          <p className="text-xs text-muted-foreground">Comissão total</p>
-          <p className="font-data text-2xl font-bold text-vendas">{formatBRL(totalComissao)}</p>
+          <p className="text-xs text-muted-foreground">Premiação total</p>
+          <p className="font-data text-2xl font-bold text-vendas">{formatBRL(totalPremiacao)}</p>
         </CardContent></Card>
       </div>
 
@@ -151,8 +142,8 @@ export default async function RelatorioCampanhaPage({
                   <th className="py-2 pr-4">Referência</th>
                   <th className="py-2 pr-4">Qtd</th>
                   <th className="py-2 pr-4">Valor</th>
-                  <th className="py-2 pr-4">Desconto</th>
-                  <th className="py-2 pr-4">Comissão</th>
+                  <th className="py-2 pr-4">Nº Comanda</th>
+                  <th className="py-2 pr-4">Premiação</th>
                   <th className="py-2 pr-4">Pedido</th>
                   <th className="py-2 pr-4">Cliente</th>
                   {veTudo && <th className="py-2 pr-4">Vendedora</th>}
@@ -160,27 +151,16 @@ export default async function RelatorioCampanhaPage({
               </thead>
               <tbody>
                 {items.map((it) => {
-                  const desconto = it.order?.campaignDiscount === true;
-                  const scope = (it.order?.seller?.salesModel ?? null) as CommissionScope;
-                  const comissao = comissaoDoItem(scope, desconto, it.quantity);
+                  const premiacao = premiacaoDoItem(it.quantity);
                   return (
                     <tr key={it.id} className="border-b border-border last:border-0 transition-colors hover:bg-secondary/50">
                       <td className="py-2 pr-4 font-medium">{it.campaign?.name ?? "—"}</td>
                       <td className="py-2 pr-4">{it.reference}</td>
                       <td className="py-2 pr-4 font-data">{it.quantity}</td>
                       <td className="py-2 pr-4 font-data">{formatBRL(Number(it.value))}</td>
-                      <td className="py-2 pr-4">
-                        {desconto ? (
-                          <span className="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400">
-                            50%
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                            100%
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4 font-data">{formatBRL(comissao)}</td>
+                      {/* Comanda ainda nao gerada (pedido nao faturado) mostra "—". */}
+                      <td className="py-2 pr-4 font-data">{it.order?.comandaNumber ?? "—"}</td>
+                      <td className="py-2 pr-4 font-data">{formatBRL(premiacao)}</td>
                       <td className="py-2 pr-4 font-data">{it.order?.orderNumber ?? "—"}</td>
                       <td className="py-2 pr-4">{it.order?.customer?.name ?? "—"}</td>
                       {veTudo && <td className="py-2 pr-4">{it.order?.seller?.name ?? "—"}</td>}
@@ -202,7 +182,7 @@ export default async function RelatorioCampanhaPage({
                     <td className="py-2 pr-4 font-data">{totalQtd}</td>
                     <td className="py-2 pr-4 font-data">{formatBRL(totalValor)}</td>
                     <td className="py-2 pr-4">—</td>
-                    <td className="py-2 pr-4 font-data text-vendas">{formatBRL(totalComissao)}</td>
+                    <td className="py-2 pr-4 font-data text-vendas">{formatBRL(totalPremiacao)}</td>
                     <td className="py-2 pr-4" colSpan={veTudo ? 3 : 2}></td>
                   </tr>
                 </tfoot>
@@ -211,6 +191,7 @@ export default async function RelatorioCampanhaPage({
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             A linha de Total consolida todos os itens do filtro atual (não apenas a página exibida).
+            Premiação de {formatBRL(PREMIACAO_POR_PECA)} por peça de campanha.
           </p>
         </CardContent>
       </Card>

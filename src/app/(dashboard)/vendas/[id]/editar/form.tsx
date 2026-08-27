@@ -29,7 +29,6 @@ interface OrderData {
   orderValue: number; freight: number; notes: string; paymentNotes: string;
   campaignId: string; itemCount: number;
   campaignItems: CampaignItemData[];
-  campaignDiscount: boolean;
   shipCep: string; shipStreet: string; shipNumber: string;
   shipDistrict: string; shipCity: string; shipState: string;
   excursaoId: string;
@@ -111,7 +110,6 @@ export function EditarPedidoForm({
   // Campanha — lista dinâmica de itens. Pré-carrega os itens existentes;
   // se não houver, começa com uma linha vazia quando o toggle é ligado.
   const [inCampaign, setInCampaign] = useState(order.campaignItems.length > 0 || !!order.campaignId);
-  const [campaignDiscount, setCampaignDiscount] = useState(order.campaignDiscount);
   const [campItems, setCampItems] = useState<CampaignItemData[]>(
     order.campaignItems.length > 0 ? order.campaignItems : [emptyCampItem()],
   );
@@ -197,7 +195,6 @@ export function EditarPedidoForm({
               value: it.value,
             }))
           : [],
-        campaignDiscount: inCampaign ? campaignDiscount : false,
         paymentProofsBase64: newProofs.length ? newProofs.map((p) => p.base64) : undefined,
         removeProofIds: removedIds.length ? removedIds : undefined,
       });
@@ -351,15 +348,6 @@ export function EditarPedidoForm({
         </label>
         {inCampaign && (
           <div className="mt-3 space-y-3">
-            <label className="flex w-fit cursor-pointer items-center gap-2">
-              <input type="checkbox" className="h-4 w-4 accent-vendas"
-                checked={campaignDiscount}
-                onChange={(e) => setCampaignDiscount(e.target.checked)} />
-              <span className="text-sm font-medium">Possui desconto?</span>
-              <span className="text-xs text-muted-foreground">
-                (premiação por item: {campaignDiscount ? "reduzida" : "integral"})
-              </span>
-            </label>
             {campItems.map((it, idx) => (
               <CampaignItemRow
                 key={idx}

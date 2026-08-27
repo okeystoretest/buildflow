@@ -100,7 +100,6 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
               excursaoId: order.excursaoId ?? "",
               campaignId: order.campaignId ?? "",
               itemCount: order.itemCount ?? 0,
-              campaignDiscount: order.campaignDiscount ?? false,
               campaignItems: order.campaignItems.map((it) => ({
                 campaignId: it.campaignId,
                 reference: it.reference,
