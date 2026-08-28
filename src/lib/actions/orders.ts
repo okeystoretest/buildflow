@@ -484,29 +484,64 @@ export async function updateOrder(args: {
 }
 
 /**
- * Exclusão de pedido — exclusiva da Gestão.
+ * Remoção FÍSICA do pedido: apaga o registro e revalida as telas afetadas.
  * OrderItem e OrderStatusHistory caem por cascade; Delivery (e Proof) são
  * removidos manualmente dentro de uma transação.
+ *
+ * NÃO checa papel — quem chama é responsável por autorizar. Só existe para as
+ * duas portas de entrada abaixo (`deleteOrder` e `deleteHistoryOrder`)
+ * compartilharem a mesma remoção sem duplicá-la.
+ */
+async function removeOrderRecord(id: string): Promise<ActionResult<void>> {
+  const order = await prisma.order.findUnique({ where: { id }, include: { delivery: true } });
+  if (!order) return actionError("Pedido não encontrado.");
+
+  await prisma.$transaction(async (tx) => {
+    if (order.delivery) {
+      await tx.proof.deleteMany({ where: { deliveryId: order.delivery.id } });
+      await tx.delivery.delete({ where: { id: order.delivery.id } });
+    }
+    await tx.order.delete({ where: { id } });
+  });
+
+  revalidatePath("/vendas");
+  revalidatePath("/vendas/historico");
+  revalidatePath("/fluxo");
+  revalidatePath("/logistica");
+  revalidatePath("/financeiro/historico");
+  emitOrderUpdated({ orderId: id });
+  return actionOk(undefined);
+}
+
+/**
+ * Exclusão de pedido no fluxo ativo (Vendas / Kanban) — exclusiva da Gestão.
  */
 export async function deleteOrder(id: string): Promise<ActionResult<void>> {
   try {
     await requireRoleAction(["GESTAO"]);
-    const order = await prisma.order.findUnique({ where: { id }, include: { delivery: true } });
+    return await removeOrderRecord(id);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao excluir pedido.");
+  }
+}
+
+/**
+ * Exclusão de comanda a partir do HISTÓRICO. Além da Gestão, o Financeiro
+ * também pode apagar comandas nessa tela.
+ *
+ * Restrita a pedidos CONCLUIDO — que é exatamente o que o histórico lista.
+ * A trava importa porque esta é uma porta de entrada separada: sem ela, a
+ * permissão extra do Financeiro vazaria para pedidos ainda em andamento.
+ */
+export async function deleteHistoryOrder(id: string): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO", "FINANCEIRO"]);
+    const order = await prisma.order.findUnique({ where: { id }, select: { status: true } });
     if (!order) return actionError("Pedido não encontrado.");
-
-    await prisma.$transaction(async (tx) => {
-      if (order.delivery) {
-        await tx.proof.deleteMany({ where: { deliveryId: order.delivery.id } });
-        await tx.delivery.delete({ where: { id: order.delivery.id } });
-      }
-      await tx.order.delete({ where: { id } });
-    });
-
-    revalidatePath("/vendas");
-    revalidatePath("/fluxo");
-    revalidatePath("/logistica");
-    emitOrderUpdated({ orderId: id });
-    return actionOk(undefined);
+    if (order.status !== "CONCLUIDO") {
+      return actionError("Apenas pedidos concluídos podem ser excluídos pelo histórico.");
+    }
+    return await removeOrderRecord(id);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao excluir pedido.");
   }

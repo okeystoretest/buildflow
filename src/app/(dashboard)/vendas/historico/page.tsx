@@ -100,7 +100,11 @@ export default async function HistoricoPage({
         <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido no período/filtro.</CardContent></Card>
       )}
 
-      <HistoricoList orders={items} />
+      {/* Exclusão definitiva do pedido: perfis Gestão e Financeiro. */}
+      <HistoricoList
+        orders={items}
+        canDelete={session.role === "GESTAO" || session.role === "FINANCEIRO"}
+      />
 
       <Pagination page={page} perPage={PER_PAGE} total={total} label="pedidos" />
     </div>

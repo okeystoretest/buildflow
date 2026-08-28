@@ -117,6 +117,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
             shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name, requiresAddress: s.requiresAddress }))}
             banks={banks.map((b) => ({ id: b.id, name: b.name }))}
             campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
+            excursoes={excursoesList.map((e) => ({ id: e.id, name: e.name, address: e.address, cutoffTime: e.cutoffTime, operatingDays: e.operatingDays }))}
             canEditFinance={session.role === "GESTAO" || session.role === "FINANCEIRO"}
           />
         </CardContent>

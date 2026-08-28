@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, Pencil } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { EditProofsModal } from "@/app/(dashboard)/motorista/historico/edit-proofs-modal";
+import { deleteHistoryOrder } from "@/lib/actions/orders";
 
 export interface HistoricoProof { id: string; filePath: string; }
 export interface HistoricoItem {
@@ -30,12 +32,17 @@ export interface HistoricoItem {
 // `editableProofs`: quando true, exibe a ação "Editar Entrega" nos itens que têm
 // entrega (deliveryId), abrindo o modal de gestão de fotos. Usado no Histórico
 // do Motorista. Nas demais telas (Vendas) fica desligado — comportamento igual.
+// `canDelete`: quando true, exibe a ação "Excluir" (remoção DEFINITIVA do pedido
+// no banco). Restrito aos perfis GESTAO e FINANCEIRO — quem chama decide pela
+// sessão, e a action `deleteHistoryOrder` reconfere o papel no servidor.
 export function HistoricoList({
   orders,
   editableProofs = false,
+  canDelete = false,
 }: {
   orders: HistoricoItem[];
   editableProofs?: boolean;
+  canDelete?: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -48,6 +55,7 @@ export function HistoricoList({
           open={openId === o.id}
           onToggle={() => setOpenId(openId === o.id ? null : o.id)}
           editableProofs={editableProofs}
+          canDelete={canDelete}
         />
       ))}
     </div>
@@ -59,15 +67,37 @@ function HistoricoRow({
   open,
   onToggle,
   editableProofs,
+  canDelete,
 }: {
   item: HistoricoItem;
   open: boolean;
   onToggle: () => void;
   editableProofs: boolean;
+  canDelete: boolean;
 }) {
+  const router = useRouter();
   // Estado local das fotos, para refletir edições em tempo real sem recarregar.
   const [proofs, setProofs] = useState<HistoricoProof[]>(o.proofs);
   const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  // Exclusão DEFINITIVA: a action apaga o pedido no banco (entrega e
+  // comprovantes vão junto). Só Gestão e Financeiro veem o botão, e o servidor
+  // reconfere o papel.
+  function remover() {
+    setErro(null);
+    start(async () => {
+      const res = await deleteHistoryOrder(o.id);
+      if (res.ok) {
+        setConfirming(false);
+        router.refresh();
+      } else {
+        setErro(res.error);
+      }
+    });
+  }
 
   // Só dá para editar quando a tela permite E o pedido tem entrega (Delivery).
   const podeEditar = editableProofs && !!o.deliveryId;
@@ -141,7 +171,35 @@ function HistoricoRow({
               <p className="text-xs text-muted-foreground">Nenhuma foto anexada.</p>
             )}
           </div>
+
+          {/* Exclusão definitiva — Gestão e Financeiro. */}
+          {canDelete && (
+            <div className="flex justify-end border-t border-border pt-3">
+              <Button variant="destructive" size="sm" onClick={() => setConfirming(true)}>
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir
+              </Button>
+            </div>
+          )}
         </div>
+      )}
+
+      {confirming && (
+        <ConfirmModal onClose={() => !pending && setConfirming(false)}>
+          <h2 className="mb-1 text-lg font-bold">Excluir pedido</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Tem certeza que deseja excluir o pedido {o.orderNumber} do histórico? O
+            registro é apagado definitivamente do banco e esta ação não pode ser desfeita.
+          </p>
+          {erro && <p className="mb-2 text-sm text-destructive">{erro}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirming(false)} disabled={pending}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={remover} disabled={pending}>
+              {pending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </div>
+        </ConfirmModal>
       )}
 
       {editing && o.deliveryId && (
@@ -153,6 +211,22 @@ function HistoricoRow({
         />
       )}
     </Card>
+  );
+}
+
+function ConfirmModal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 
