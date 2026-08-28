@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { premiacaoDoItem } from "@/lib/campaign-commission";
 
@@ -62,6 +63,36 @@ export interface RankData {
 }
 
 /**
+ * "FATURADO" = pedido efetivamente confirmado como venda. Filtro UNICO, usado
+ * tanto pelo rank geral quanto pelo rank de campanhas.
+ *
+ * REGRA (independente da Loja de Origem): conta o pedido que JA SAIU da analise
+ * do Financeiro e nao foi interrompido. Os tres caminhos de confirmacao levam a
+ * isso, em qualquer loja:
+ *  - Fluxo PADRAO: o Financeiro aprova, gera a comanda e manda para
+ *    AGUARDANDO_IMPRESSAO.
+ *  - Fluxo SIMPLIFICADO: o Financeiro marca "Pago" -> PAGO.
+ *  - TROCA ("4 - Troca"): dispensa o Financeiro e NASCE aprovada — ja entra em
+ *    AGUARDANDO_IMPRESSAO (loja padrao) ou PAGO (loja simplificada).
+ *
+ * POR QUE MUDOU: o criterio anterior dependia da loja — "comandaNumber != null"
+ * para as lojas de fluxo padrao, "status PAGO/EMBALADO/ENTREGUE/CONCLUIDO" para
+ * as simplificadas. Quem entra no fluxo SEM passar pelo Financeiro nunca recebe
+ * comanda, entao a MESMA venda somava na loja simplificada e sumia na loja de
+ * fluxo padrao — o total do dashboard ficava incompleto justamente nas lojas
+ * padrao. Com um unico criterio de status, toda loja com vendas soma igual.
+ *
+ * A janela EM_ANALISE continua de fora de proposito: ali a venda ainda nao foi
+ * confirmada. Sair de EM_ANALISE e privilegio do Financeiro/Gestao, e o caminho
+ * de recusa termina em ESTORNO/ESTORNO_PARCIAL/CANCELADO, que seguem excluidos.
+ */
+const FATURADO_WHERE = {
+  status: {
+    notIn: ["EM_ANALISE", "ESTORNO", "ESTORNO_PARCIAL", "CANCELADO"],
+  },
+} satisfies Prisma.OrderWhereInput;
+
+/**
  * CORTE PADRAO dos ajustes gravados ANTES da regra incremental (baselineAt
  * nulo). Combinado com o negocio: o valor digitado nesses ajustes responde
  * pelos pedidos criados ate 27/08/2026 as 10:00; tudo criado a partir dai soma.
@@ -104,27 +135,13 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   inicioSemana.setDate(now.getDate() - now.getDay());
   inicioSemana.setHours(0, 0, 0, 0);
 
-  // Base de calculo: TODOS os pedidos faturados (comanda gerada), exceto os
-  // interrompidos. Nao ha filtro por campanha aqui de proposito:
+  // Base de calculo: TODOS os pedidos faturados de TODAS as lojas (ver
+  // FATURADO_WHERE). Nao ha filtro por campanha aqui de proposito:
   // REGRA DE NEGOCIO -> vendas de itens de CAMPANHA tambem contam no valor
   // total da Meta Geral (e no rank por vendedor). Nao adicionar filtro de
   // campaignId nesta query, senao a meta geral passa a ignorar essas vendas.
-  // "Faturado" = pedido efetivamente confirmado como venda:
-  //  - Fluxo PADRAO: teve comanda gerada pelo Financeiro (comandaNumber != null).
-  //  - Fluxo SIMPLIFICADO: nao gera comanda; e confirmado quando o Financeiro
-  //    marca como PAGO. A partir de PAGO (inclui EMBALADO/ENTREGUE) o pedido
-  //    conta no ranking. Sem isso, vendas de loja simplificada ficam de fora.
   const faturados = await prisma.order.findMany({
-    where: {
-      status: { notIn: ["ESTORNO", "ESTORNO_PARCIAL", "CANCELADO"] },
-      OR: [
-        { comandaNumber: { not: null } },
-        {
-          originStore: { simplifiedFlow: true },
-          status: { in: ["PAGO", "EMBALADO", "ENTREGUE", "CONCLUIDO"] },
-        },
-      ],
-    },
+    where: FATURADO_WHERE,
     include: { seller: true },
   });
 
@@ -281,26 +298,13 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
 
   // Campanhas ativas + pedidos vinculados + metas (SalesGoal) vinculadas.
   // REGRA DE NEGÓCIO (multilojas): itens de campanha vendidos em QUALQUER loja
-  // contam no ranking — inclusive nas Lojas de Origem de fluxo SIMPLIFICADO,
-  // que NÃO geram comanda. O filtro antigo (comandaNumber != null) excluía
-  // essas vendas. Passamos a usar o mesmo critério de "faturado" do rank geral:
-  //  - fluxo padrão: comanda gerada (comandaNumber != null); ou
-  //  - fluxo simplificado: status PAGO/EMBALADO/ENTREGUE/CONCLUIDO.
-  // Também descartamos os pedidos interrompidos (estorno/cancelado).
+  // contam no ranking. Usa o MESMO filtro do rank geral (FATURADO_WHERE) — é o
+  // que garante que as duas somas não divirjam quando o critério mudar.
   const campaignsRaw = await prisma.campaign.findMany({
     where: { active: true },
     include: {
       orders: {
-        where: {
-          status: { notIn: ["ESTORNO", "ESTORNO_PARCIAL", "CANCELADO"] },
-          OR: [
-            { comandaNumber: { not: null } },
-            {
-              originStore: { simplifiedFlow: true },
-              status: { in: ["PAGO", "EMBALADO", "ENTREGUE", "CONCLUIDO"] },
-            },
-          ],
-        },
+        where: FATURADO_WHERE,
         include: { seller: true, campaignItems: true },
       },
       goals: { where: { month, year }, include: { user: true } },
