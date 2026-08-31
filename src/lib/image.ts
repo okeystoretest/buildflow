@@ -19,8 +19,20 @@ import path from "node:path";
 //   Dev:          ./uploads
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "./uploads";
 
-// Base publica servida pelo Nginx (ou rota dev). Ex: /uploads
-const PUBLIC_BASE = process.env.NEXT_PUBLIC_UPLOAD_BASE_URL ?? "/uploads";
+// Base publica gravada no `filePath` dos registros novos.
+//
+// Default passou de "/uploads" para "/api/uploads": a rota /uploads nao servia
+// arquivo com checagem de sessao propria, so a /api/uploads faz isso. Arquivos
+// novos ja nascem apontando para a rota autenticada.
+const PUBLIC_BASE = process.env.NEXT_PUBLIC_UPLOAD_BASE_URL ?? "/api/uploads";
+
+// Bases que podem aparecer no inicio de um `filePath` gravado no banco. A
+// ordem nao importa (o match e pelo mais longo), mas a LISTA importa: registros
+// antigos guardaram "/uploads/..." e precisam continuar sendo localizaveis no
+// disco depois da troca do default acima.
+const KNOWN_PUBLIC_BASES = Array.from(
+  new Set([PUBLIC_BASE, "/api/uploads", "/uploads"]),
+).sort((a, b) => b.length - a.length);
 
 const MAX_DIMENSION = 1600; // lado maior em px
 const WEBP_QUALITY = 72; // 0-100; equilibrio tamanho/qualidade
@@ -188,9 +200,13 @@ export function isPdfDataUrl(dataUrl: string): boolean {
 export async function deleteUploadedFile(publicPath: string): Promise<void> {
   try {
     if (!publicPath) return;
-    // Tira a base publica ("/uploads") do inicio, sobra "<folder>/ano/mes/arquivo".
+    // Tira a base publica do inicio, sobra "<folder>/ano/mes/arquivo". Testa
+    // TODAS as bases conhecidas: sem isso, depois da troca do default, os
+    // registros gravados com "/uploads/..." nao seriam encontrados no disco e
+    // os arquivos ficariam orfaos na exclusao.
     let rel = publicPath;
-    if (rel.startsWith(PUBLIC_BASE)) rel = rel.slice(PUBLIC_BASE.length);
+    const base = KNOWN_PUBLIC_BASES.find((b) => rel.startsWith(b));
+    if (base) rel = rel.slice(base.length);
     rel = rel.replace(/^\/+/, ""); // remove barras iniciais
     if (!rel) return;
     const absolutePath = path.join(UPLOAD_DIR, rel);
