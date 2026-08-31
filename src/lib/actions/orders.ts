@@ -6,6 +6,7 @@ import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { canInteractWithOrder, INTERACTION_DENIED_MSG } from "@/lib/permissions";
 import { createOrderSchema, isTroca, isAnexoDispensavelPorContexto } from "@/lib/validations/order";
 import { processAndSaveImage, saveDocument, isPdfDataUrl } from "@/lib/image";
+import { newTrackingToken } from "@/lib/tracking-auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { emitOrderCreated, emitOrderUpdated } from "@/lib/realtime/emit";
 import { Prisma } from "@prisma/client";
@@ -169,6 +170,9 @@ export async function createOrder(
             }
           : undefined,
         status: initialStatus,
+        // Link de acompanhamento do cliente final: nasce junto com o pedido,
+        // para que a vendedora possa copiar e enviar assim que cadastra.
+        trackingToken: newTrackingToken(),
         history: {
           create: {
             status: initialStatus,

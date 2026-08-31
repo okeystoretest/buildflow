@@ -349,6 +349,14 @@ model Order {
   // Codigo de rastreio informado na transicao para PROCESSADO (opcional).
   trackingCode String?
 
+  // Token do LINK DE ACOMPANHAMENTO enviado ao cliente final
+  // (/acompanhar/<trackingToken>). E opaco e independente do `id` de propósito:
+  // o id circula em rotas internas (ex.: /etiqueta/<id>), e vazar o link do
+  // cliente nao pode virar um palpite de URL administrativa.
+  // Nullable porque pedidos anteriores a este recurso nao tinham o campo; a
+  // migration faz o backfill e a action gera sob demanda no que faltar.
+  trackingToken String? @unique
+
   // Vinculo opcional a uma campanha (meta por volume de itens).
   campaign   Campaign? @relation(fields: [campaignId], references: [id])
   campaignId String?

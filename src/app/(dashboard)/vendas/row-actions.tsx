@@ -3,13 +3,16 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Pencil, Trash2, AlertTriangle, CheckCircle2, Link2, Check } from "lucide-react";
 import { deleteOrder, resolveFinanceIssue } from "@/lib/actions/orders";
+import { getTrackingLink } from "@/lib/actions/tracking";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 /**
  * Ações de pedido na tela de Vendas.
  *
+ * - LINK: copia o Link de Acompanhamento para enviar ao cliente final.
  * - EDITAR: disponivel para a Gestao e para a vendedora (nos proprios pedidos).
  * - EXCLUIR: exclusivo da GESTAO.
  * - PENDENCIA: se o Financeiro sinalizou um problema ativo, mostra o botao
@@ -32,6 +35,33 @@ export function VendaRowActions({
   const [confirming, setConfirming] = useState(false);
   const [showIssue, setShowIssue] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Confirmacao visual efemera do "copiado" (o icone vira um check por 2s).
+  const [copied, setCopied] = useState(false);
+  // Modal de apoio: aparece quando o navegador nega a area de transferencia
+  // (a Clipboard API so funciona em contexto seguro — HTTPS ou localhost) ou
+  // quando a action falha. Sem isso, o clique nao daria retorno nenhum.
+  const [linkModal, setLinkModal] = useState<{ url?: string; error?: string } | null>(null);
+
+  function copyLink() {
+    setError(null);
+    start(async () => {
+      const res = await getTrackingLink(orderId);
+      if (!res.ok) {
+        setLinkModal({ error: res.error });
+        return;
+      }
+      // A URL absoluta e montada aqui com a origem da propria aba: o dominio
+      // publico e sempre o mesmo pelo qual a vendedora esta acessando.
+      const url = `${window.location.origin}${res.data.path}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        setLinkModal({ url });
+      }
+    });
+  }
 
   function resolve() {
     setError(null);
@@ -69,6 +99,16 @@ export function VendaRowActions({
             <AlertTriangle className="mr-1 h-4 w-4" /> Pendência
           </Button>
         )}
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          title="Copiar Link de Acompanhamento"
+          onClick={copyLink}
+          disabled={pending}
+        >
+          {copied ? <Check className="h-4 w-4 text-vendas" /> : <Link2 className="h-4 w-4" />}
+        </Button>
         <Button asChild variant="outline" size="icon" className="h-8 w-8" title="Editar pedido">
           <Link href={`/vendas/${orderId}/editar`}>
             <Pencil className="h-4 w-4" />
@@ -86,6 +126,32 @@ export function VendaRowActions({
           </Button>
         )}
       </div>
+
+      {/* Link de acompanhamento: so aparece se a copia automatica nao rolou. */}
+      {linkModal && (
+        <Modal onClose={() => setLinkModal(null)}>
+          <h2 className="mb-1 text-lg font-bold">Link de Acompanhamento</h2>
+          <p className="mb-3 text-sm text-muted-foreground">Pedido {orderNumber}</p>
+          {linkModal.error ? (
+            <p className="mb-4 text-sm text-destructive">{linkModal.error}</p>
+          ) : (
+            <>
+              <p className="mb-2 text-sm text-muted-foreground">
+                Copie o link abaixo e envie para a cliente:
+              </p>
+              <Input
+                readOnly
+                value={linkModal.url}
+                onFocus={(e) => e.currentTarget.select()}
+                className="mb-4 font-data text-xs"
+              />
+            </>
+          )}
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setLinkModal(null)}>Fechar</Button>
+          </div>
+        </Modal>
+      )}
 
       {/* Detalhe da pendencia + botao Resolvido (so aparece com pendencia ativa). */}
       {showIssue && issue && (

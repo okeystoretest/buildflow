@@ -5,7 +5,10 @@ import { getAuthSecret } from "@/lib/auth-secret";
 // Mesmo segredo do resto do app, sem fallback inseguro (getAuthSecret valida
 // e cacheia na 1ª chamada). Sem AUTH_SECRET em runtime, a verificação falha.
 
-const PUBLIC_PATHS = ["/login", "/api/health"];
+// /acompanhar e a area PUBLICA do cliente final (link enviado pela vendedora).
+// Nao usa a sessao do sistema: a propria pagina exige o Codigo de Cliente e
+// grava um cookie proprio (bf_track), restrito a este path.
+const PUBLIC_PATHS = ["/login", "/api/health", "/acompanhar"];
 
 // Arquivos publicos servidos de /public que NAO exigem sessao. Sem esta
 // liberacao o middleware redirecionava manifest/icones/service worker para
