@@ -58,5 +58,32 @@ export async function GET(
     changedByName: h.changedBy ? nameById.get(h.changedBy) ?? null : null,
   }));
 
+  // RECORTE POR PAPEL (motorista).
+  //
+  // O motorista abre este pedido pelo OrderDetailModal em `driverMode`, que ja
+  // esconde na tela os valores, os comprovantes, a Nota Fiscal e a edicao. Mas
+  // esconder no cliente nao esconde no servidor: a resposta trazia o pacote
+  // financeiro inteiro para qualquer sessao de motorista — bastava abrir a aba
+  // Rede do navegador. Pior, os `filePath` dos comprovantes/NF eram a porta de
+  // entrada para /api/uploads, que serve o arquivo a qualquer sessao valida.
+  //
+  // Os campos abaixo sao exatamente os que a UI ja nao renderiza em driverMode,
+  // entao a omissao aqui nao muda nenhuma tela — apenas para de enviar o que o
+  // motorista nunca deveria receber.
+  if (session.role === "MOTORISTA") {
+    const {
+      orderValue,
+      freight,
+      total,
+      paymentProofPath,
+      paymentProof2Path,
+      invoicePath,
+      paymentProofs,
+      financeProofs,
+      ...visivelAoMotorista
+    } = order;
+    return NextResponse.json({ ...visivelAoMotorista, history });
+  }
+
   return NextResponse.json({ ...order, history });
 }

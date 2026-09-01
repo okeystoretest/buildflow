@@ -1,9 +1,9 @@
 "use server";
 
-import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
-import { checkLoginRate, clearLoginRate } from "@/lib/rate-limit";
+import { checkLoginRate, checkRate, clearLoginRate } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-ip";
 import {
   createTrackingSession,
   destroyTrackingSession,
@@ -85,14 +85,23 @@ export async function verifyTrackingCode(
 ): Promise<ActionResult<void>> {
   // Freio de força bruta: o Código de Cliente é curto, então sem isto um link
   // vazado permitiria varrer o espaço de códigos. Janela por (IP + link).
-  const ip =
-    headers().get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    headers().get("x-real-ip") ||
-    "desconhecido";
+  const ip = getClientIp();
   const gate = checkLoginRate(`track:${ip}:${token}`);
   if (!gate.allowed) {
     return actionError(
       `Muitas tentativas. Tente novamente em ${gate.retryAfterSec}s.`,
+    );
+  }
+
+  // SEGUNDO balde, por LINK e independente do IP. O de cima sozinho não basta:
+  // esta é a única barreira entre um link vazado e os dados da cliente, e um
+  // atacante com vários IPs (ou botnet) varreria o espaço de códigos mesmo com
+  // o limite por IP intacto. Teto mais alto porque o link é legitimamente
+  // compartilhado — a cliente pode abrir de mais de um aparelho.
+  const linkGate = checkRate(`track:link:${token}`, { max: 20 });
+  if (!linkGate.allowed) {
+    return actionError(
+      `Muitas tentativas para este link. Tente novamente em ${linkGate.retryAfterSec}s.`,
     );
   }
 
@@ -112,6 +121,7 @@ export async function verifyTrackingCode(
   if (!ok) return actionError("Código de cliente inválido para este pedido.");
 
   clearLoginRate(`track:${ip}:${token}`);
+  clearLoginRate(`track:link:${token}`);
   await createTrackingSession(token);
   return actionOk(undefined);
 }

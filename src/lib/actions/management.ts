@@ -232,6 +232,12 @@ export async function updateUser(args: {
       if (exists) return actionError("Já existe usuário com este login.");
     }
 
+    // Trocar PAPEL ou SENHA precisa derrubar as sessões já emitidas. O JWT vale
+    // 7 dias, entao sem o incremento um rebaixamento de perfil nao teria efeito
+    // ate o token expirar, e uma troca de senha por suspeita de invasao nao
+    // expulsaria quem estivesse com o cookie. Mesma mecanica do toggleUser.
+    const revogarSessoes = args.role !== user.role || Boolean(novaSenha);
+
     await prisma.user.update({
       where: { id: args.id },
       data: {
@@ -245,6 +251,7 @@ export async function updateUser(args: {
         originStores: { set: originStoreIds.map((id) => ({ id })) },
         // Só regrava a senha quando uma nova foi informada.
         ...(novaSenha ? { password: await hashPassword(novaSenha) } : {}),
+        ...(revogarSessoes ? { tokenVersion: { increment: 1 } } : {}),
       },
     });
 

@@ -1,7 +1,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import {
   createSession,
@@ -10,6 +9,7 @@ import {
 } from "@/lib/auth";
 import { loginSchema } from "@/lib/validations/auth";
 import { checkLoginRate, clearLoginRate } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-ip";
 import { actionError, type ActionResult } from "@/types/action";
 
 export async function login(
@@ -32,10 +32,9 @@ export async function login(
 
   // Rate limiting anti-força-bruta: janela por (IP + email). Bloqueia após
   // muitas tentativas seguidas, esfriando o ataque sem punir o usuário legítimo.
-  const ip =
-    headers().get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    headers().get("x-real-ip") ||
-    "desconhecido";
+  // O IP vem de getClientIp (lê o X-Forwarded-For a partir do salto confiável);
+  // pegar o primeiro elemento do header deixava o balde à escolha do atacante.
+  const ip = getClientIp();
   const gate = checkLoginRate(`${ip}:${loginKey}`);
   if (!gate.allowed) {
     return actionError(

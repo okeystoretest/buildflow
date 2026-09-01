@@ -195,6 +195,17 @@ export async function uploadPaymentProof(
 export async function uploadInvoice(
   formData: FormData,
 ): Promise<ActionResult<{ filePath: string }>> {
+  // Autentica ANTES de consultar o banco. Server Actions sao resolvidas por ID
+  // da acao, nao pela URL: um POST anonimo para uma rota publica (/acompanhar)
+  // chegava ate aqui e as mensagens de erro distinguiam "pedido inexistente" de
+  // "pedido existe, mas nao esta embalado" — um oraculo sem sessao. A checagem
+  // segue tambem no uploadOrderFile, que e chamado pelo uploadPaymentProof.
+  try {
+    await requireRoleAction(["VENDAS", "GESTAO"]);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Nao autenticado.");
+  }
+
   const orderId = String(formData.get("orderId") ?? "");
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return actionError("Pedido nao encontrado.");

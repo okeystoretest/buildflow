@@ -30,20 +30,36 @@ function sweep(now: number): void {
   }
 }
 
-export function checkLoginRate(key: string): {
+export interface RateOptions {
+  /** Teto de tentativas na janela. Padrão: MAX_ATTEMPTS. */
+  max?: number;
+  /** Tamanho da janela em ms. Padrão: WINDOW_MS. */
+  windowMs?: number;
+}
+
+/**
+ * Verificação genérica. `checkLoginRate` é o caso padrão (8 / 15min); baldes
+ * com outro teto (ex.: o por link do acompanhamento) passam `opts`.
+ */
+export function checkRate(
+  key: string,
+  opts: RateOptions = {},
+): {
   allowed: boolean;
   retryAfterSec: number;
 } {
+  const max = opts.max ?? MAX_ATTEMPTS;
+  const windowMs = opts.windowMs ?? WINDOW_MS;
   const now = Date.now();
   sweep(now);
 
   const bucket = buckets.get(key) ?? { hits: [] };
   // Descarta tentativas fora da janela.
-  bucket.hits = bucket.hits.filter((t) => now - t < WINDOW_MS);
+  bucket.hits = bucket.hits.filter((t) => now - t < windowMs);
 
-  if (bucket.hits.length >= MAX_ATTEMPTS) {
+  if (bucket.hits.length >= max) {
     const oldest = bucket.hits[0];
-    const retryAfterSec = Math.ceil((WINDOW_MS - (now - oldest)) / 1000);
+    const retryAfterSec = Math.ceil((windowMs - (now - oldest)) / 1000);
     buckets.set(key, bucket);
     return { allowed: false, retryAfterSec };
   }
@@ -51,6 +67,14 @@ export function checkLoginRate(key: string): {
   bucket.hits.push(now);
   buckets.set(key, bucket);
   return { allowed: true, retryAfterSec: 0 };
+}
+
+/** Caso padrão (8 tentativas / 15 min), usado pelo login. */
+export function checkLoginRate(key: string): {
+  allowed: boolean;
+  retryAfterSec: number;
+} {
+  return checkRate(key);
 }
 
 /** Zera o contador de uma chave (chamado após login bem-sucedido). */

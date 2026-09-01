@@ -6,3 +6,17 @@ node_modules
 *.log
 .DS_Store
 next-env.d.ts
+
+# Segredos e credenciais: .env* nao cobre .env.production/.staging, e chaves
+# privadas/certificados nao tinham padrao algum.
+.env.production
+.env.staging
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account.json
+# Cache do compilador TypeScript ("incremental": true no tsconfig).
+# Artefato local: o tsc recria sozinho. Padrao do .gitignore do Next.js.
+*.tsbuildinfo

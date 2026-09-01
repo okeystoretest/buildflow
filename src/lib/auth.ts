@@ -63,12 +63,16 @@ export async function getSession(): Promise<SessionPayload | null> {
     // Revogação: confere versão e status atuais do usuário.
     const user = await prisma.user.findUnique({
       where: { id: session.userId },
-      select: { tokenVersion: true, active: true },
+      // O `role` também é relido do banco: o JWT vale 7 dias e carrega o papel
+      // do momento do login. Sem esta releitura, um rebaixamento de perfil
+      // (GESTAO -> VENDAS) só valeria no próximo login. É o mesmo round-trip
+      // que já era feito para a revogação — apenas um campo a mais no select.
+      select: { tokenVersion: true, active: true, role: true },
     });
     if (!user || !user.active) return null;
     if ((session.tokenVersion ?? 0) !== user.tokenVersion) return null;
 
-    return session;
+    return { ...session, role: user.role };
   } catch {
     return null;
   }
