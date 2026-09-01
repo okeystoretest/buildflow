@@ -111,15 +111,22 @@ export function VendaRowActions({
             <AlertTriangle className="mr-1 h-4 w-4" /> Pendência
           </Button>
         )}
+        {/* Rotulo visivel (nao so o icone): a acao mais usada da linha nao
+            depende de o usuario passar o mouse para descobrir o que faz. */}
         <Button
           variant="outline"
-          size="icon"
-          className="h-8 w-8"
-          title="Copiar rastreio"
+          size="sm"
+          className="h-8"
+          title="Copiar link"
           onClick={copyLink}
           disabled={pending}
         >
-          {copied ? <Check className="h-4 w-4 text-vendas" /> : <Link2 className="h-4 w-4" />}
+          {copied ? (
+            <Check className="mr-1 h-4 w-4 text-vendas" />
+          ) : (
+            <Link2 className="mr-1 h-4 w-4" />
+          )}
+          Copiar link
         </Button>
         <Button asChild variant="outline" size="icon" className="h-8 w-8" title="Editar pedido">
           <Link href={`/vendas/${orderId}/editar`}>
