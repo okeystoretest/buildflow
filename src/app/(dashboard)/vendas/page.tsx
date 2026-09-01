@@ -87,16 +87,16 @@ export default async function VendasPage({
                 <tr>
                   {/* Coluna estreita: o numero do pedido nao precisa de largura
                       flexivel — encolhe para o conteudo e libera espaco. */}
-                  <th className="w-px whitespace-nowrap py-2 pr-4">Pedido</th>
+                  <th className="w-px whitespace-nowrap border-r border-border py-2 pr-4">Pedido</th>
                   {/* "N° de Peças no Pedido" — imediatamente ao lado do numero. */}
-                  <th className="w-px whitespace-nowrap py-2 pr-4 text-right">N° Peças</th>
-                  <th className="py-2 pr-4">Comanda</th>
-                  <th className="py-2 pr-4">Cliente</th>
-                  <th className="py-2 pr-4">Total</th>
-                  <th className="py-2 pr-4">Status</th>
+                  <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4 text-right">N° Peças</th>
+                  <th className="border-r border-border py-2 pl-4 pr-4">Comanda</th>
+                  <th className="border-r border-border py-2 pl-4 pr-4">Cliente</th>
+                  <th className="border-r border-border py-2 pl-4 pr-4">Total</th>
+                  <th className="border-r border-border py-2 pl-4 pr-4">Status</th>
                   {/* Acoes visiveis para todos: a vendedora pode EDITAR os proprios
                       pedidos (a lista ja e restrita a eles). Excluir segue so na Gestao. */}
-                  <th className="py-2 pr-4 text-right">Ações</th>
+                  <th className="py-2 pl-4 pr-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -107,20 +107,20 @@ export default async function VendasPage({
                   <tr key={o.id} className={`border-b border-border last:border-0 transition-colors ${
                     issueAtivo ? "bg-destructive/10 hover:bg-destructive/15" : "hover:bg-secondary/50"
                   }`}>
-                    <td className="w-px whitespace-nowrap py-2 pr-4 font-data">
+                    <td className="w-px whitespace-nowrap border-r border-border py-2 pr-4 font-data">
                       <span className="flex items-center gap-1.5">
                         {issueAtivo && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" />}
                         {o.orderNumber}
                       </span>
                     </td>
-                    <td className="w-px whitespace-nowrap py-2 pr-4 text-right font-data">
+                    <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4 text-right font-data">
                       {o.pieceCount > 0 ? o.pieceCount : "—"}
                     </td>
-                    <td className="py-2 pr-4 font-data">{o.comandaNumber ?? "—"}</td>
-                    <td className="py-2 pr-4">{o.customer.name}</td>
-                    <td className="py-2 pr-4">{formatBRL(o.total.toString())}</td>
-                    <td className="py-2 pr-4"><StatusBadge status={o.status} /></td>
-                    <td className="py-2 pr-4">
+                    <td className="border-r border-border py-2 pl-4 pr-4 font-data">{o.comandaNumber ?? "—"}</td>
+                    <td className="border-r border-border py-2 pl-4 pr-4">{o.customer.name}</td>
+                    <td className="border-r border-border py-2 pl-4 pr-4">{formatBRL(o.total.toString())}</td>
+                    <td className="border-r border-border py-2 pl-4 pr-4"><StatusBadge status={o.status} /></td>
+                    <td className="py-2 pl-4 pr-4">
                       <VendaRowActions orderId={o.id} orderNumber={o.orderNumber} canDelete={session.role === "GESTAO"} issue={issueAtivo} />
                     </td>
                   </tr>

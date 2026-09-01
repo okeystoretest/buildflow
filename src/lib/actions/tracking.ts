@@ -17,7 +17,7 @@ import { actionOk, actionError, type ActionResult } from "@/types/action";
  *
  * Duas portas bem separadas:
  *  - `getTrackingLink`: interna (Vendas/Gestão/Financeiro), devolve o caminho
- *    do link para o vendedor copiar e mandar para a cliente.
+ *    do link (e o Código de Cliente) para o vendedor copiar e mandar para a cliente.
  *  - `verifyTrackingCode`: PÚBLICA, sem sessão do sistema. É o único ponto em
  *    que um visitante anônimo consulta o banco — por isso o rate limit e as
  *    mensagens genéricas.
@@ -34,13 +34,20 @@ import { actionOk, actionError, type ActionResult } from "@/types/action";
  */
 export async function getTrackingLink(
   orderId: string,
-): Promise<ActionResult<{ path: string }>> {
+): Promise<ActionResult<{ path: string; customerCode: string }>> {
   try {
     const session = await requireRoleAction(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { id: true, sellerId: true, trackingToken: true },
+      select: {
+        id: true,
+        sellerId: true,
+        trackingToken: true,
+        // O Código de Cliente entra na mensagem pronta que a vendedora copia:
+        // sem ele, a cliente recebe o link e trava na tela de verificação.
+        customer: { select: { code: true } },
+      },
     });
     if (!order) return actionError("Pedido não encontrado.");
 
@@ -59,7 +66,7 @@ export async function getTrackingLink(
       });
     }
 
-    return actionOk({ path: trackingPath(token) });
+    return actionOk({ path: trackingPath(token), customerCode: order.customer.code });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao gerar o link.";
     return actionError(msg);

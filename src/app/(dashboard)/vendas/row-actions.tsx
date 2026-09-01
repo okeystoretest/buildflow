@@ -7,12 +7,21 @@ import { Pencil, Trash2, AlertTriangle, CheckCircle2, Link2, Check } from "lucid
 import { deleteOrder, resolveFinanceIssue } from "@/lib/actions/orders";
 import { getTrackingLink } from "@/lib/actions/tracking";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
+/**
+ * Mensagem pronta de rastreio. Vai inteira para a area de transferencia — a
+ * cliente recebe o link e o codigo no mesmo texto, sem precisar de duas
+ * mensagens nem de explicacao extra da vendedora.
+ */
+function mensagemRastreio(url: string, customerCode: string) {
+  return `Acesse o link ${url} e insira o código de cliente ${customerCode} para acessar a plataforma.`;
+}
 
 /**
  * Ações de pedido na tela de Vendas.
  *
- * - LINK: copia o Link de Acompanhamento para enviar ao cliente final.
+ * - RASTREIO: copia a mensagem pronta de acompanhamento (link + Codigo de
+ *   Cliente) para a vendedora colar direto na conversa com a cliente.
  * - EDITAR: disponivel para a Gestao e para a vendedora (nos proprios pedidos).
  * - EXCLUIR: exclusivo da GESTAO.
  * - PENDENCIA: se o Financeiro sinalizou um problema ativo, mostra o botao
@@ -40,7 +49,7 @@ export function VendaRowActions({
   // Modal de apoio: aparece quando o navegador nega a area de transferencia
   // (a Clipboard API so funciona em contexto seguro — HTTPS ou localhost) ou
   // quando a action falha. Sem isso, o clique nao daria retorno nenhum.
-  const [linkModal, setLinkModal] = useState<{ url?: string; error?: string } | null>(null);
+  const [linkModal, setLinkModal] = useState<{ mensagem?: string; error?: string } | null>(null);
 
   function copyLink() {
     setError(null);
@@ -53,12 +62,15 @@ export function VendaRowActions({
       // A URL absoluta e montada aqui com a origem da propria aba: o dominio
       // publico e sempre o mesmo pelo qual a vendedora esta acessando.
       const url = `${window.location.origin}${res.data.path}`;
+      // Copia a mensagem pronta, e nao a URL pura: a cliente ainda precisa do
+      // Codigo de Cliente para passar da tela de verificacao.
+      const mensagem = mensagemRastreio(url, res.data.customerCode);
       try {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(mensagem);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch {
-        setLinkModal({ url });
+        setLinkModal({ mensagem });
       }
     });
   }
@@ -103,7 +115,7 @@ export function VendaRowActions({
           variant="outline"
           size="icon"
           className="h-8 w-8"
-          title="Copiar Link de Acompanhamento"
+          title="Copiar rastreio"
           onClick={copyLink}
           disabled={pending}
         >
@@ -127,23 +139,24 @@ export function VendaRowActions({
         )}
       </div>
 
-      {/* Link de acompanhamento: so aparece se a copia automatica nao rolou. */}
+      {/* Mensagem de rastreio: so aparece se a copia automatica nao rolou. */}
       {linkModal && (
         <Modal onClose={() => setLinkModal(null)}>
-          <h2 className="mb-1 text-lg font-bold">Link de Acompanhamento</h2>
+          <h2 className="mb-1 text-lg font-bold">Rastreio do pedido</h2>
           <p className="mb-3 text-sm text-muted-foreground">Pedido {orderNumber}</p>
           {linkModal.error ? (
             <p className="mb-4 text-sm text-destructive">{linkModal.error}</p>
           ) : (
             <>
               <p className="mb-2 text-sm text-muted-foreground">
-                Copie o link abaixo e envie para a cliente:
+                Copie a mensagem abaixo e envie para a cliente:
               </p>
-              <Input
+              <textarea
                 readOnly
-                value={linkModal.url}
+                rows={4}
+                value={linkModal.mensagem}
                 onFocus={(e) => e.currentTarget.select()}
-                className="mb-4 font-data text-xs"
+                className="mb-4 w-full rounded-lg border border-input bg-background p-3 text-xs"
               />
             </>
           )}
