@@ -9,7 +9,7 @@ import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/finan
 import { emitOrderUpdated } from "@/lib/realtime/emit";
 import { sendPushToUser } from "@/lib/push";
 import { isDoacao } from "@/lib/validations/order";
-import type { PaymentDisposition } from "@prisma/client";
+import type { PaymentDisposition, Prisma } from "@prisma/client";
 
 /**
  * Financeiro define o BANCO e a FORMA DE PAGAMENTO do pedido.
@@ -178,6 +178,53 @@ export async function deleteSecondPaymentProof(args: {
 }
 
 /**
+ * Abre (ou reabre) a fase logistica do pedido recem-aprovado.
+ *
+ * A Delivery pode JA existir: se a Gestao devolveu o pedido para Em Analise
+ * depois de ja aprovado, a entrega da primeira aprovacao continua la — e
+ * Delivery.orderId e @unique, entao o `create` estourava com "Unique
+ * constraint failed on the fields: (orderId)". E a mesma situacao que a
+ * Logistica ja trata com upsert em shipWithTracking, assignDriverToOrder e
+ * openOrderForDrivers; o caminho do Financeiro nunca recebeu o mesmo cuidado.
+ *
+ * Entrega JA CONCLUIDA e preservada como esta: ela e a base do pagamento do
+ * motorista em Financeiro > Entregas, que filtra por status ENTREGUE +
+ * driverId. Resetar apagaria daquela tela o servico que ele de fato prestou.
+ *
+ * Nao exportada de proposito: em arquivo "use server" todo export vira Server
+ * Action, e isto e helper interno.
+ */
+async function abrirEntregaLogistica(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+): Promise<void> {
+  const entregaExistente = await tx.delivery.findUnique({
+    where: { orderId },
+    select: { id: true, status: true },
+  });
+
+  if (!entregaExistente) {
+    await tx.delivery.create({ data: { orderId, status: "AGUARDANDO" } });
+    return;
+  }
+
+  if (entregaExistente.status === "ENTREGUE") return;
+
+  // Reaprovacao reinicia a fase logistica: a entrega volta ao estado padrao,
+  // sem motorista e sem marcos de rota, pronta para a Logistica reatribuir.
+  await tx.delivery.update({
+    where: { id: entregaExistente.id },
+    data: {
+      status: "AGUARDANDO",
+      driverId: null,
+      assignedAt: null,
+      startedAt: null,
+      failReason: null,
+    },
+  });
+}
+
+/**
  * Financeiro audita o pedido: define numero da comanda + status de pagamento.
  *
  * Regra do doc:
@@ -225,9 +272,7 @@ export async function auditOrder(args: {
         await tx.orderStatusHistory.create({
           data: { orderId: order.id, status: "AGUARDANDO_IMPRESSAO", changedBy: session.userId, note: "Aprovado: Doação" },
         });
-        await tx.delivery.create({
-          data: { orderId: order.id, status: "AGUARDANDO" },
-        });
+        await abrirEntregaLogistica(tx, order.id);
         return { status: "AGUARDANDO_IMPRESSAO" };
       }
 
@@ -289,9 +334,7 @@ export async function auditOrder(args: {
       await tx.orderStatusHistory.create({
         data: { orderId: order.id, status: "AGUARDANDO_IMPRESSAO", changedBy: session.userId, note: `Aprovado: ${payStatus.name}` },
       });
-      await tx.delivery.create({
-        data: { orderId: order.id, status: "AGUARDANDO" },
-      });
+      await abrirEntregaLogistica(tx, order.id);
 
       return { status: "AGUARDANDO_IMPRESSAO" };
     });
