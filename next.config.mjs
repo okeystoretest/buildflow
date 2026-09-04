@@ -8,7 +8,9 @@ const nextConfig = {
     instrumentationHook: true,
     // sharp e binario nativo: nao deve ser empacotado pelo webpack, e sim
     // resolvido em runtime pelo Node.
-    serverComponentsExternalPackages: ['sharp'],
+    // baileys/pino/qrcode entram pelo mesmo motivo: o baileys carrega
+    // protobuf e libsignal, que o empacotamento quebra.
+    serverComponentsExternalPackages: ['sharp', '@whiskeysockets/baileys', 'pino', 'qrcode'],
     serverActions: {
       // Uploads de imagem passam por Server Action; video usa Route Handler.
       bodySizeLimit: '12mb',
