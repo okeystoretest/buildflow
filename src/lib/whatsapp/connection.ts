@@ -60,8 +60,17 @@ function publicarEstado(): void {
  */
 export async function registrarEtapa(stage: string, erro?: unknown): Promise<void> {
   const rt = getRuntime();
+  // undefined = nao mexe no erro gravado; null = LIMPA; qualquer outra coisa =
+  // grava a mensagem. Sem o "limpa", um erro antigo ficava no painel para
+  // sempre, mesmo depois da conexao voltar ao normal.
   const lastError =
-    erro === undefined ? undefined : erro instanceof Error ? erro.message : String(erro);
+    erro === undefined
+      ? undefined
+      : erro === null
+        ? null
+        : erro instanceof Error
+          ? erro.message
+          : String(erro);
   try {
     await prisma.whatsappConfig.upsert({
       where: { id: "singleton" },
@@ -269,7 +278,9 @@ async function connect(): Promise<void> {
       rt.connectedNumber = sock.user?.id?.split(":")[0]?.split("@")[0] ?? null;
       rt.state = "CONECTADO";
       publicarEstado();
-      void registrarEtapa("conectado");
+      // null limpa o ultimo erro: uma vez conectado, o que falhou antes ja foi
+      // superado e nao deve seguir em vermelho no painel.
+      void registrarEtapa("conectado", null);
       console.log("[whatsapp] conectado.");
       return;
     }
@@ -286,13 +297,20 @@ async function handleClose(lastDisconnect: unknown): Promise<void> {
   const code = extractStatusCode(lastDisconnect);
   // O fechamento nao aparecia no diagnostico, entao "socket criado e nada
   // aconteceu" era indistinguivel de "socket criado e a conexao caiu".
-  const motivo = (lastDisconnect as { error?: { message?: string } } | undefined)?.error?.message;
-  void registrarEtapa(`conexao-fechada-${code ?? "sem-codigo"}`, motivo);
+  //
+  // O 515 fica de fora: ele e o reinicio OBRIGATORIO logo apos o pareamento, e
+  // registra-lo como erro fazia o painel exibir "Stream Errored (restart
+  // required)" em vermelho num fluxo que estava dando certo.
+  if (code !== DisconnectReason.restartRequired) {
+    const motivo = (lastDisconnect as { error?: { message?: string } } | undefined)?.error?.message;
+    void registrarEtapa(`conexao-fechada-${code ?? "sem-codigo"}`, motivo);
+  }
 
   // 515 (restartRequired) NAO e erro: acontece logo apos parear o QR, e o
   // Baileys exige reabrir o socket. Reconecta na hora, sem backoff.
   if (code === DisconnectReason.restartRequired) {
     console.log("[whatsapp] reinicio solicitado apos pareamento; reconectando.");
+    void registrarEtapa("reinicio-apos-pareamento");
     rt.attempt = 0;
     await connect().catch((err) => console.error("[whatsapp] falha ao reconectar:", err));
     return;
