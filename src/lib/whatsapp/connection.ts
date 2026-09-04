@@ -12,6 +12,7 @@
 import makeWASocket, {
   Browsers,
   DisconnectReason,
+  fetchLatestBaileysVersion,
   type WASocket,
 } from "@whiskeysockets/baileys";
 import pino from "pino";
@@ -186,14 +187,45 @@ function registrarEncerramento(): void {
   process.once("beforeExit", devolver);
 }
 
+/** Tempo maximo esperando o primeiro QR antes de declarar que ele nao veio. */
+const QR_TIMEOUT_MS = 25_000;
+
+/**
+ * Descobre a versao do WhatsApp Web a ser usada.
+ *
+ * O pacote traz uma versao FIXA, congelada na data em que foi publicado. Quando
+ * o WhatsApp avanca, essa versao velha e recusada — e a recusa costuma ser
+ * silenciosa: o socket abre, nenhum QR chega e nenhum fechamento e reportado.
+ *
+ * A busca tambem funciona como teste de saida de rede do container: se ela
+ * falhar, o problema e egress bloqueado, e isso fica registrado no diagnostico.
+ */
+async function resolverVersao(): Promise<[number, number, number] | undefined> {
+  try {
+    // Timeout explicito: sem ele, um container sem saida de rede ficaria
+    // pendurado aqui e o boot nunca terminaria.
+    const { version, isLatest } = await fetchLatestBaileysVersion({ timeout: 10_000 });
+    await registrarEtapa(`versao-${version.join(".")}${isLatest ? "" : "-nao-e-a-ultima"}`);
+    return version;
+  } catch (err) {
+    // Nao aborta: segue com a versao embutida. Mas registra, porque falhar
+    // aqui e forte indicio de que o container nao tem saida para a internet.
+    await registrarEtapa("falha-ao-buscar-versao", err);
+    return undefined;
+  }
+}
+
 async function connect(): Promise<void> {
   const rt = getRuntime();
   const { state: authState, saveCreds } = await useDatabaseAuthState();
   setState(authState.creds.registered ? "CONECTANDO" : "AGUARDANDO_QR");
 
+  const version = await resolverVersao();
+
   const sock = makeWASocket({
     auth: authState,
     logger,
+    ...(version ? { version } : {}),
     // O QR vai para a tela de Gestao, nunca para o log do container.
     printQRInTerminal: false,
     browser: Browsers.appropriate("Build.Flow"),
@@ -204,6 +236,15 @@ async function connect(): Promise<void> {
   });
   rt.socket = sock;
   void registrarEtapa("socket-criado");
+
+  // Se nenhum QR chegar, o silencio precisa virar informacao: sem isto o painel
+  // ficava eternamente em "Aguardando leitura do QR" sem QR nenhum na tela.
+  const semQr = setTimeout(() => {
+    if (rt.qr == null && rt.state !== "CONECTADO") {
+      void registrarEtapa("qr-nao-recebido-em-25s");
+    }
+  }, QR_TIMEOUT_MS);
+  (semQr as unknown as { unref?: () => void }).unref?.();
 
   sock.ev.on("creds.update", () => {
     void saveCreds().catch((err) =>
@@ -243,6 +284,10 @@ async function handleClose(lastDisconnect: unknown): Promise<void> {
   const rt = getRuntime();
   rt.socket = null;
   const code = extractStatusCode(lastDisconnect);
+  // O fechamento nao aparecia no diagnostico, entao "socket criado e nada
+  // aconteceu" era indistinguivel de "socket criado e a conexao caiu".
+  const motivo = (lastDisconnect as { error?: { message?: string } } | undefined)?.error?.message;
+  void registrarEtapa(`conexao-fechada-${code ?? "sem-codigo"}`, motivo);
 
   // 515 (restartRequired) NAO e erro: acontece logo apos parear o QR, e o
   // Baileys exige reabrir o socket. Reconecta na hora, sem backoff.
