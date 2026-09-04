@@ -35,6 +35,14 @@ export interface WhatsappRuntime {
   connectedNumber: string | null;
   attempt: number;
   starting: boolean;
+  /**
+   * Ja existe um supervisor de lideranca rodando neste processo?
+   *
+   * Uma vez ligado, nunca desliga: o supervisor insiste indefinidamente, e um
+   * segundo supervisor poderia abrir um SEGUNDO socket com a mesma credencial
+   * — exatamente o que a concessao existe para impedir.
+   */
+  supervising: boolean;
   stopHeartbeat: (() => void) | null;
   /** Id desta instancia, usado pela concessao. Criado uma unica vez. */
   instanceId: string;
@@ -57,6 +65,7 @@ export function getRuntime(): WhatsappRuntime {
     connectedNumber: null,
     attempt: 0,
     starting: false,
+    supervising: false,
     stopHeartbeat: null,
     instanceId: `${process.pid}-${Math.random().toString(36).slice(2, 10)}`,
   };

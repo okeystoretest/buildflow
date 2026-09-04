@@ -18,7 +18,8 @@ import pino from "pino";
 import { prisma } from "@/lib/prisma";
 import { useDatabaseAuthState, clearWhatsappSession } from "./auth-store";
 import { acquireLease, startHeartbeat } from "./lease";
-import { nextBackoffDelay } from "./pure";
+import { nextBackoffDelay, LEASE_RETRY_MS } from "./pure";
+import { superviseLeadership } from "./supervisor";
 import { getRuntime, type WhatsappState } from "./runtime-state";
 
 export type { WhatsappState } from "./runtime-state";
@@ -80,18 +81,36 @@ export function getConnectionSnapshot(): {
  */
 export async function startWhatsapp(): Promise<void> {
   const rt = getRuntime();
-  if (rt.starting || rt.socket) return;
+  if (rt.supervising || rt.starting || rt.socket) return;
+  rt.supervising = true;
   rt.starting = true;
+
+  // Loga a espera uma vez a cada bloco de tentativas, e nao a cada 15s, para
+  // nao encher o log do container quando outro processo detem a conexao.
+  let jaAvisou = false;
+
   try {
-    const lider = await acquireLease(rt.instanceId);
-    if (!lider) {
-      setState("SEM_LIDERANCA");
-      // Uma linha so: outro processo ja conectou, e isso e o esperado.
-      console.log("[whatsapp] outro processo detem a conexao; este nao vai conectar.");
-      return;
-    }
-    rt.stopHeartbeat ??= startHeartbeat(rt.instanceId);
-    await connect();
+    await superviseLeadership({
+      tryAcquire: () => acquireLease(rt.instanceId),
+      onLeader: async () => {
+        rt.stopHeartbeat ??= startHeartbeat(rt.instanceId);
+        await connect();
+      },
+      onWaiting: () => {
+        setState("SEM_LIDERANCA");
+        if (!jaAvisou) {
+          jaAvisou = true;
+          console.log(
+            `[whatsapp] concessao ocupada por outro processo; tentando de novo a cada ${LEASE_RETRY_MS}ms.`,
+          );
+        }
+      },
+      setTimer: (fn, ms) => {
+        const t = setTimeout(fn, ms);
+        (t as unknown as { unref?: () => void }).unref?.();
+      },
+      retryMs: LEASE_RETRY_MS,
+    });
   } finally {
     rt.starting = false;
   }

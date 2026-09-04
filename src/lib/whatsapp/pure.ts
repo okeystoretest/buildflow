@@ -15,6 +15,15 @@ export const LEASE_TTL_MS = 90_000;
 /** Intervalo de renovacao do heartbeat. Bem menor que o TTL, de proposito. */
 export const LEASE_HEARTBEAT_MS = 30_000;
 
+/**
+ * Intervalo entre tentativas de assumir a concessao quando ela esta ocupada.
+ *
+ * Precisa ser bem menor que o TTL: apos um redeploy, o processo novo espera a
+ * concessao do container antigo expirar, e este intervalo define quanto tempo a
+ * mais ele leva para perceber que ela vagou.
+ */
+export const LEASE_RETRY_MS = 15_000;
+
 const BACKOFF_BASE_MS = 2_000;
 const BACKOFF_MAX_MS = 60_000;
 const BACKOFF_JITTER = 0.2;
