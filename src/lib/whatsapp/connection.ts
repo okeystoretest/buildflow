@@ -17,7 +17,7 @@ import makeWASocket, {
 import pino from "pino";
 import { prisma } from "@/lib/prisma";
 import { useDatabaseAuthState, clearWhatsappSession } from "./auth-store";
-import { acquireLease, startHeartbeat } from "./lease";
+import { acquireLease, startHeartbeat, releaseLease } from "./lease";
 import { nextBackoffDelay, LEASE_RETRY_MS } from "./pure";
 import { superviseLeadership } from "./supervisor";
 import { getRuntime, type WhatsappState } from "./runtime-state";
@@ -125,6 +125,7 @@ export async function startWhatsapp(): Promise<void> {
   let jaAvisou = false;
 
   await registrarEtapa("boot");
+  registrarEncerramento();
 
   try {
     await superviseLeadership({
@@ -158,6 +159,31 @@ export async function startWhatsapp(): Promise<void> {
   } finally {
     rt.starting = false;
   }
+}
+
+/**
+ * Devolve a concessao quando o container e encerrado.
+ *
+ * O EasyPanel manda SIGTERM a cada implantacao e o Dockerfile usa `exec` para
+ * o Node receber esse sinal como PID 1. Sem esta devolucao, o container NOVO
+ * espera o TTL inteiro antes de conseguir conectar — e como isso acontece em
+ * todo deploy, era o caso comum, nao a excecao.
+ *
+ * Os listeners nao chamam process.exit(): o Next tem o proprio encerramento, e
+ * interromper aqui derrubaria requisicoes em andamento.
+ */
+function registrarEncerramento(): void {
+  const rt = getRuntime();
+  if (rt.shutdownHooked) return;
+  rt.shutdownHooked = true;
+
+  const devolver = () => {
+    void releaseLease(rt.instanceId);
+  };
+  process.once("SIGTERM", devolver);
+  process.once("SIGINT", devolver);
+  // beforeExit cobre o encerramento por fim natural do event loop.
+  process.once("beforeExit", devolver);
 }
 
 async function connect(): Promise<void> {

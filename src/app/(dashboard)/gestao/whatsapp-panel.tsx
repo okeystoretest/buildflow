@@ -18,12 +18,14 @@ const ROTULO: Record<string, string> = {
   CONECTANDO: "Conectando...",
   CONECTADO: "Conectado",
   SEM_LIDERANCA: "Outro processo detém a conexão",
+  AGUARDANDO_CONCESSAO: "Aguardando a instância anterior liberar a conexão",
   BLOQUEADO: "Conexão bloqueada — precisa de intervenção",
 };
 
 const TOM: Record<string, string> = {
   CONECTADO: "border-motorista/40 bg-motorista/10 text-motorista",
   AGUARDANDO_QR: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  AGUARDANDO_CONCESSAO: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
   BLOQUEADO: "border-destructive/40 bg-destructive/10 text-destructive",
 };
 
@@ -127,6 +129,16 @@ export function WhatsappPanel() {
                 ? "nenhuma"
                 : `${info.diag.leaseAlive ? "viva" : "vencida"} · ${info.diag.leaseAgeSec}s atrás`}
             </dd>
+            {info.state === "AGUARDANDO_CONCESSAO" && (
+              <>
+                <dt className="text-muted-foreground">Situação</dt>
+                <dd>
+                  A instância anterior não devolveu a conexão ao ser encerrada.
+                  Esta assume automaticamente assim que a concessão vencer — sem
+                  necessidade de nova implantação.
+                </dd>
+              </>
+            )}
             {info.diag.lastError && (
               <>
                 <dt className="text-muted-foreground">Último erro</dt>

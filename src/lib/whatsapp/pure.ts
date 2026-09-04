@@ -9,11 +9,21 @@ const JID_SUFFIX = "@s.whatsapp.net";
 /** Codigo do pais. O banco guarda o numero SEM ele (ver src/lib/phone.ts). */
 const COUNTRY_CODE = "55";
 
-/** Tempo sem heartbeat apos o qual a concessao e considerada abandonada. */
-export const LEASE_TTL_MS = 90_000;
+/**
+ * Tempo sem heartbeat apos o qual a concessao e considerada abandonada.
+ *
+ * Era 90s, o que fazia todo redeploy custar ate 90s de espera antes do
+ * processo novo assumir — tempo em que o painel nao mostra QR nenhum. Com o
+ * encerramento limpo (ver releaseLease) a devolucao normalmente e imediata, e
+ * este TTL passa a valer so para o caso de morte abrupta do processo.
+ *
+ * O heartbeat renova 3x dentro do TTL, entao uma renovacao perdida por lentidao
+ * momentanea nao faz a concessao ser tomada de outro processo vivo.
+ */
+export const LEASE_TTL_MS = 40_000;
 
 /** Intervalo de renovacao do heartbeat. Bem menor que o TTL, de proposito. */
-export const LEASE_HEARTBEAT_MS = 30_000;
+export const LEASE_HEARTBEAT_MS = 12_000;
 
 /**
  * Intervalo entre tentativas de assumir a concessao quando ela esta ocupada.
@@ -22,7 +32,7 @@ export const LEASE_HEARTBEAT_MS = 30_000;
  * concessao do container antigo expirar, e este intervalo define quanto tempo a
  * mais ele leva para perceber que ela vagou.
  */
-export const LEASE_RETRY_MS = 15_000;
+export const LEASE_RETRY_MS = 8_000;
 
 const BACKOFF_BASE_MS = 2_000;
 const BACKOFF_MAX_MS = 60_000;

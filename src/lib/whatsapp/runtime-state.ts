@@ -43,6 +43,8 @@ export interface WhatsappRuntime {
    * — exatamente o que a concessao existe para impedir.
    */
   supervising: boolean;
+  /** Os listeners de encerramento ja foram registrados neste processo? */
+  shutdownHooked: boolean;
   stopHeartbeat: (() => void) | null;
   /** Id desta instancia, usado pela concessao. Criado uma unica vez. */
   instanceId: string;
@@ -66,6 +68,7 @@ export function getRuntime(): WhatsappRuntime {
     attempt: 0,
     starting: false,
     supervising: false,
+    shutdownHooked: false,
     stopHeartbeat: null,
     instanceId: `${process.pid}-${Math.random().toString(36).slice(2, 10)}`,
   };

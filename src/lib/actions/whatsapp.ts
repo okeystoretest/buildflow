@@ -60,8 +60,18 @@ export async function getWhatsappPanelState(): Promise<ActionResult<WhatsappPane
     const qrDataUrl =
       vivo && lock?.qr ? await QRCode.toDataURL(lock.qr, { margin: 1, width: 280 }) : null;
 
+    // Enquanto este processo espera a concessao anterior expirar, o `state`
+    // gravado no lock e o do dono ANTERIOR (tipicamente "CONECTANDO", deixado
+    // pelo container que morreu no deploy). Mostrar isso enganava: parecia que
+    // algo estava progredindo. A etapa corrente e a fonte de verdade aqui.
+    const esperandoConcessao = cfg?.stage === "sem-lideranca";
+
     return actionOk({
-      state: vivo ? (lock?.state ?? "DESCONECTADO") : "DESCONECTADO",
+      state: esperandoConcessao
+        ? "AGUARDANDO_CONCESSAO"
+        : vivo
+          ? (lock?.state ?? "DESCONECTADO")
+          : "DESCONECTADO",
       qrDataUrl,
       connectedNumber: vivo ? maskNumber(lock?.connectedNumber ?? null) : null,
       enabled: cfg?.enabled ?? false,

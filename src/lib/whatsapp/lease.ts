@@ -73,6 +73,20 @@ export function startHeartbeat(instanceId: string): () => void {
   return () => clearInterval(timer);
 }
 
-// Nao existe "liberar concessao" de proposito: se o processo morre, o
-// heartbeat para e a linha expira sozinha pelo TTL. Uma liberacao explicita so
-// teria valor num encerramento limpo, que nao e garantido de qualquer forma.
+/**
+ * Devolve a concessao, se ainda for deste processo.
+ *
+ * Isto e o que torna o redeploy indolor. Sem devolucao, o container novo tem de
+ * esperar o TTL inteiro expirar antes de assumir — e como o EasyPanel mata o
+ * container antigo a cada implantacao, esse era o caso COMUM, nao a excecao.
+ * O Dockerfile ja usa `exec` justamente para o processo receber o SIGTERM.
+ *
+ * Best-effort: se falhar, o TTL ainda resolve, so que mais devagar.
+ */
+export async function releaseLease(instanceId: string): Promise<void> {
+  try {
+    await prisma.whatsappLock.deleteMany({ where: { id: LOCK_ID, instanceId } });
+  } catch {
+    // Encerrando: nao ha o que fazer com o erro.
+  }
+}
