@@ -797,3 +797,62 @@ model RealtimeEvent {
 
   @@index([createdAt])
 }
+
+// ===========================================================================
+// WHATSAPP (notificacao de motoristas via Baileys)
+// ===========================================================================
+
+// Estado de autenticacao do Baileys. Uma linha por chave.
+// `id` = "creds" ou "<tipo>:<id>" (pre-key, session, app-state-sync-key, ...).
+// Fica no banco, e nao em disco, para sobreviver a recriacao do container:
+// todo deploy do EasyPanel monta um container novo.
+model WhatsappSession {
+  id        String   @id
+  // JSON serializado com BufferJSON do Baileys (contem Buffer/Uint8Array).
+  data      String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+// Configuracao do canal. Linha unica ("singleton").
+model WhatsappConfig {
+  id        String   @id @default("singleton")
+  // Interruptor de envio. Nasce FALSE: nada e enviado ate alguem parear o
+  // numero e ligar deliberadamente na tela de Gestao.
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+// Concessao de instancia unica. Duas conexoes com a mesma credencial se
+// derrubam e colocam o numero em risco de bloqueio, entao so um processo
+// conecta. Linha unica ("singleton").
+model WhatsappLock {
+  id          String   @id @default("singleton")
+  instanceId  String
+  heartbeatAt DateTime
+}
+
+enum WhatsappSendStatus {
+  ENVIADO
+  FALHOU
+  // Numero ausente ou invalido: nao houve tentativa de envio.
+  IGNORADO
+}
+
+// Log por destinatario. NUNCA guarda o numero inteiro.
+// Sem relacao Prisma com Order/User de proposito: e registro historico e nao
+// deve impedir a exclusao de um pedido ou usuario (deleteOrder apaga de fato).
+model WhatsappSendLog {
+  id          String             @id @default(cuid())
+  orderId     String?
+  userId      String
+  // 4 ultimos digitos, para conferencia sem expor o numero.
+  phoneSuffix String?
+  status      WhatsappSendStatus
+  error       String?
+  createdAt   DateTime           @default(now())
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([createdAt])
+}
