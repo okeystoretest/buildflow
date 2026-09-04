@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   getWhatsappPanelState,
   setWhatsappEnabled,
   resetWhatsappSession,
+  getWhatsappLogs,
   type WhatsappPanelState,
+  type WhatsappLogRow,
 } from "@/lib/actions/whatsapp";
 
 const ROTULO: Record<string, string> = {
@@ -26,6 +29,7 @@ const TOM: Record<string, string> = {
 
 export function WhatsappPanel() {
   const [info, setInfo] = useState<WhatsappPanelState | null>(null);
+  const [logs, setLogs] = useState<WhatsappLogRow[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -35,7 +39,12 @@ export function WhatsappPanel() {
     else setErro(res.error);
   }, []);
 
-  useEffect(() => { void carregar(); }, [carregar]);
+  const carregarLogs = useCallback(async () => {
+    const res = await getWhatsappLogs();
+    if (res.ok) setLogs(res.data);
+  }, []);
+
+  useEffect(() => { void carregar(); void carregarLogs(); }, [carregar, carregarLogs]);
 
   // Atualiza de 3 em 3s enquanto NAO estiver conectado.
   //
@@ -114,6 +123,80 @@ export function WhatsappPanel() {
         <Button variant="outline" onClick={reiniciar} disabled={pending}>
           Desconectar e reparear
         </Button>
+      </div>
+
+      <div className="rounded-lg border border-border p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div>
+            <p className="font-medium">Histórico de envios</p>
+            <p className="text-sm text-muted-foreground">
+              Últimos {logs.length} registros, mais recentes primeiro. Um por motorista
+              por disparo.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => { void carregarLogs(); }} disabled={pending}>
+            Atualizar
+          </Button>
+        </div>
+
+        {logs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhum envio registrado até agora.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border text-left text-muted-foreground">
+                <tr>
+                  <th className="py-2 pr-4">Quando</th>
+                  <th className="py-2 pr-4">Motorista</th>
+                  <th className="py-2 pr-4">Número</th>
+                  <th className="py-2 pr-4">Pedido</th>
+                  <th className="py-2 pr-4">Resultado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((l) => (
+                  <tr key={l.id} className="border-b border-border last:border-0">
+                    <td className="whitespace-nowrap py-2 pr-4">
+                      {new Date(l.createdAt).toLocaleString("pt-BR", {
+                        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+                      })}
+                    </td>
+                    <td className="py-2 pr-4">{l.driverName}</td>
+                    {/* So o final do numero: o telefone completo nunca sai do servidor. */}
+                    <td className="py-2 pr-4 font-data">
+                      {l.phoneSuffix ? `•••• ${l.phoneSuffix}` : "—"}
+                    </td>
+                    <td className="py-2 pr-4">{l.orderNumber ?? "—"}</td>
+                    <td className="py-2 pr-4">
+                      {l.status === "ENVIADO" && <Badge variant="motorista">Enviado</Badge>}
+                      {l.status === "FALHOU" && (
+                        // Badge nao tem variante destrutiva; o design system e
+                        // compartilhado com outras telas, entao a cor vem por
+                        // className em vez de virar uma variante nova.
+                        <div className="flex flex-col items-start gap-0.5">
+                          <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive">
+                            Falhou
+                          </Badge>
+                          {l.error && (
+                            <span className="text-[11px] text-muted-foreground">{l.error}</span>
+                          )}
+                        </div>
+                      )}
+                      {l.status === "IGNORADO" && (
+                        <div className="flex flex-col items-start gap-0.5">
+                          <Badge variant="secondary">Ignorado</Badge>
+                          {l.error && (
+                            <span className="text-[11px] text-muted-foreground">{l.error}</span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {erro && <p className="text-sm text-destructive">{erro}</p>}

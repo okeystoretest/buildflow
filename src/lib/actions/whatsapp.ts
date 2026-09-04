@@ -76,6 +76,72 @@ export async function setWhatsappEnabled(enabled: boolean): Promise<ActionResult
   }
 }
 
+export interface WhatsappLogRow {
+  id: string;
+  createdAt: string;
+  status: "ENVIADO" | "FALHOU" | "IGNORADO";
+  /** Nome do motorista, resolvido a partir do userId gravado no log. */
+  driverName: string;
+  /** 4 ultimos digitos. O numero completo NUNCA sai do servidor. */
+  phoneSuffix: string | null;
+  orderNumber: string | null;
+  error: string | null;
+}
+
+/** Quantas linhas o painel mostra por vez. */
+const LOG_PAGE_SIZE = 50;
+
+/**
+ * Historico de envios, mais recentes primeiro.
+ *
+ * WhatsappSendLog nao tem relacao Prisma com User nem Order de proposito (para
+ * nao impedir exclusoes), entao nome do motorista e numero do pedido sao
+ * resolvidos aqui, em duas consultas por lote. Registro cujo usuario ou pedido
+ * ja foi excluido continua aparecendo, com um rotulo generico — o historico
+ * nao pode sumir junto com o cadastro.
+ */
+export async function getWhatsappLogs(): Promise<ActionResult<WhatsappLogRow[]>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+
+    const logs = await prisma.whatsappSendLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: LOG_PAGE_SIZE,
+    });
+    if (logs.length === 0) return actionOk([]);
+
+    const userIds = [...new Set(logs.map((l) => l.userId))];
+    const orderIds = [...new Set(logs.map((l) => l.orderId).filter((v): v is string => v != null))];
+
+    const [users, orders] = await Promise.all([
+      prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
+      orderIds.length
+        ? prisma.order.findMany({
+            where: { id: { in: orderIds } },
+            select: { id: true, orderNumber: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const nomePorId = new Map(users.map((u) => [u.id, u.name]));
+    const pedidoPorId = new Map(orders.map((o) => [o.id, o.orderNumber]));
+
+    return actionOk(
+      logs.map((l) => ({
+        id: l.id,
+        createdAt: l.createdAt.toISOString(),
+        status: l.status,
+        driverName: nomePorId.get(l.userId) ?? "Usuário removido",
+        phoneSuffix: l.phoneSuffix,
+        orderNumber: l.orderId ? pedidoPorId.get(l.orderId) ?? "—" : null,
+        error: l.error,
+      })),
+    );
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao ler o histórico de envios.");
+  }
+}
+
 /** Desconecta e apaga a sessao, forcando novo pareamento por QR. */
 export async function resetWhatsappSession(): Promise<ActionResult<void>> {
   try {
