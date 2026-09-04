@@ -25,6 +25,7 @@ import { importUsersCsv, importOperationsCsv, importCustomersCsv } from "@/lib/a
 import { Pencil, Trash2, Check, X } from "lucide-react";
 import { formatBRL } from "@/lib/utils";
 import { formatPhone } from "@/lib/phone";
+import { WhatsappPanel } from "./whatsapp-panel";
 import { DASHBOARD_COLUMNS, STATUS_LABEL, STATUS_STYLE } from "@/lib/order-flow";
 import type { Role, SalesModel, OrderStatus } from "@prisma/client";
 
@@ -40,7 +41,7 @@ interface StageLimitRow { status: OrderStatus; limitMinutes: number; }
 
 type SimpleEntity = "store" | "orderType" | "shippingMethod";
 
-const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Etapas", "Lojas", "Lojas de Origem", "Tipos de Pedido", "Operações", "Formas de Envio"] as const;
+const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Etapas", "Lojas", "Lojas de Origem", "Tipos de Pedido", "Operações", "Formas de Envio", "WhatsApp"] as const;
 
 export function GestaoTabs(props: {
   users: UserRow[]; stores: Row[]; originStores: OriginStoreRow[]; orderTypes: Row[]; operations: OpRow[]; shippingMethods: Row[];
@@ -74,6 +75,7 @@ export function GestaoTabs(props: {
       {tab === "Tipos de Pedido" && <SimplePanel entity="orderType" rows={props.orderTypes} label="tipo de pedido" />}
       {tab === "Operações" && <OperationPanel rows={props.operations} />}
       {tab === "Formas de Envio" && <SimplePanel entity="shippingMethod" rows={props.shippingMethods} label="forma de envio" />}
+      {tab === "WhatsApp" && <WhatsappPanel />}
     </div>
   );
 }
