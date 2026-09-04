@@ -1,5 +1,6 @@
 import { publish, type RealtimeEvent } from "@/lib/realtime/bus";
 import { sendPushToRole } from "@/lib/push";
+import { sendWhatsappToDrivers } from "@/lib/whatsapp";
 
 /**
  * Fachada de emissao para as Server Actions. Concentra a regra de "quem recebe
@@ -71,6 +72,15 @@ export function emitOrderAvailableForDrivers(args: {
     url: "/motorista",
     tag: `delivery-${args.orderId}`,
   }).catch((err) => console.error("[push] envio p/ motorista falhou:", err));
+
+  // Segundo canal, no mesmo gatilho e no mesmo carater fire-and-forget: o
+  // WhatsApp nunca pode derrubar a acao de logistica que abriu o pedido.
+  // A mensagem nao leva numero de pedido nem nome de cliente — alem de ser o
+  // texto definido pelo produto, evita mandar dado de cliente por um canal
+  // nao-oficial.
+  void sendWhatsappToDrivers({ orderId: args.orderId }).catch((err) =>
+    console.error("[whatsapp] envio p/ motoristas falhou:", err),
+  );
 }
 
 /**
