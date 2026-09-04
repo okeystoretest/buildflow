@@ -14,6 +14,16 @@ export interface WhatsappPanelState {
   /** Numero conectado, mascarado para exibicao. */
   connectedNumber: string | null;
   enabled: boolean;
+  /** Diagnostico do boot — ver o bloco "Diagnóstico" do painel. */
+  diag: {
+    bootAt: string | null;
+    stage: string | null;
+    lastError: string | null;
+    /** Ha linha de concessao e ela esta viva? */
+    leaseAlive: boolean;
+    /** Ha quantos segundos foi o ultimo heartbeat. */
+    leaseAgeSec: number | null;
+  };
 }
 
 /** Mostra so os 4 ultimos digitos do numero conectado. */
@@ -22,10 +32,7 @@ function maskNumber(numero: string | null): string | null {
   return `•••• ${numero.slice(-4)}`;
 }
 
-async function readEnabled(): Promise<boolean> {
-  const cfg = await prisma.whatsappConfig.findUnique({ where: { id: "singleton" } });
-  return cfg?.enabled ?? false;
-}
+
 
 /**
  * Estado do canal para o painel.
@@ -40,7 +47,10 @@ export async function getWhatsappPanelState(): Promise<ActionResult<WhatsappPane
   try {
     await requireRoleAction(["GESTAO"]);
 
-    const lock = await prisma.whatsappLock.findUnique({ where: { id: "singleton" } });
+    const [lock, cfg] = await Promise.all([
+      prisma.whatsappLock.findUnique({ where: { id: "singleton" } }),
+      prisma.whatsappConfig.findUnique({ where: { id: "singleton" } }),
+    ]);
 
     // Sem linha, ou com heartbeat vencido, o dono anterior morreu: o que estiver
     // gravado ali e passado. Reportar "CONECTADO" de um processo morto seria
@@ -54,7 +64,16 @@ export async function getWhatsappPanelState(): Promise<ActionResult<WhatsappPane
       state: vivo ? (lock?.state ?? "DESCONECTADO") : "DESCONECTADO",
       qrDataUrl,
       connectedNumber: vivo ? maskNumber(lock?.connectedNumber ?? null) : null,
-      enabled: await readEnabled(),
+      enabled: cfg?.enabled ?? false,
+      diag: {
+        bootAt: cfg?.bootAt?.toISOString() ?? null,
+        stage: cfg?.stage ?? null,
+        lastError: cfg?.lastError ?? null,
+        leaseAlive: vivo,
+        leaseAgeSec: lock
+          ? Math.round((Date.now() - lock.heartbeatAt.getTime()) / 1000)
+          : null,
+      },
     });
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao ler status do WhatsApp.");

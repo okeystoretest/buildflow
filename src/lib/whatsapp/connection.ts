@@ -49,6 +49,41 @@ function publicarEstado(): void {
     .catch((err) => console.error("[whatsapp] falha ao publicar estado:", err));
 }
 
+/**
+ * Registra ONDE o boot chegou, numa linha que qualquer processo consegue
+ * gravar (upsert, sem filtro de lideranca).
+ *
+ * Existe porque "Desconectado" no painel era ambiguo: significava tanto "a
+ * conexao nunca iniciou" quanto "iniciou e falhou", que exigem correcoes
+ * diferentes. Nunca lanca — diagnostico nao pode derrubar a conexao.
+ */
+export async function registrarEtapa(stage: string, erro?: unknown): Promise<void> {
+  const rt = getRuntime();
+  const lastError =
+    erro === undefined ? undefined : erro instanceof Error ? erro.message : String(erro);
+  try {
+    await prisma.whatsappConfig.upsert({
+      where: { id: "singleton" },
+      update: {
+        stage,
+        holderInstanceId: rt.instanceId,
+        ...(lastError === undefined ? {} : { lastError }),
+        ...(stage === "boot" ? { bootAt: new Date() } : {}),
+      },
+      create: {
+        id: "singleton",
+        enabled: false,
+        stage,
+        holderInstanceId: rt.instanceId,
+        lastError: lastError ?? null,
+        bootAt: new Date(),
+      },
+    });
+  } catch (err) {
+    console.error("[whatsapp] falha ao registrar etapa:", err);
+  }
+}
+
 function setState(novo: WhatsappState): void {
   const rt = getRuntime();
   if (rt.state === novo) return;
@@ -89,15 +124,24 @@ export async function startWhatsapp(): Promise<void> {
   // nao encher o log do container quando outro processo detem a conexao.
   let jaAvisou = false;
 
+  await registrarEtapa("boot");
+
   try {
     await superviseLeadership({
       tryAcquire: () => acquireLease(rt.instanceId),
       onLeader: async () => {
+        await registrarEtapa("concessao-obtida");
         rt.stopHeartbeat ??= startHeartbeat(rt.instanceId);
-        await connect();
+        try {
+          await connect();
+        } catch (err) {
+          await registrarEtapa("falha-ao-conectar", err);
+          throw err;
+        }
       },
       onWaiting: () => {
         setState("SEM_LIDERANCA");
+        void registrarEtapa("sem-lideranca");
         if (!jaAvisou) {
           jaAvisou = true;
           console.log(
@@ -133,6 +177,7 @@ async function connect(): Promise<void> {
     syncFullHistory: false,
   });
   rt.socket = sock;
+  void registrarEtapa("socket-criado");
 
   sock.ev.on("creds.update", () => {
     void saveCreds().catch((err) =>
@@ -147,6 +192,7 @@ async function connect(): Promise<void> {
       // Publica sempre: o QR muda a cada poucos segundos e o painel depende
       // dessa gravacao para exibir o codigo corrente.
       publicarEstado();
+      void registrarEtapa("qr-recebido");
     }
 
     if (update.connection === "open") {
@@ -156,6 +202,7 @@ async function connect(): Promise<void> {
       rt.connectedNumber = sock.user?.id?.split(":")[0]?.split("@")[0] ?? null;
       rt.state = "CONECTADO";
       publicarEstado();
+      void registrarEtapa("conectado");
       console.log("[whatsapp] conectado.");
       return;
     }

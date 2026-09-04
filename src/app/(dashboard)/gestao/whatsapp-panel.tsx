@@ -104,6 +104,41 @@ export function WhatsappPanel() {
         </div>
       )}
 
+      {/* DIAGNOSTICO — mostra onde o boot parou. "Desconectado" sozinho e
+          ambiguo: significa tanto "nunca iniciou" quanto "iniciou e falhou". */}
+      <div className="rounded-lg border border-border p-4">
+        <p className="mb-2 font-medium">Diagnóstico</p>
+        {info.diag.bootAt == null ? (
+          <p className="text-sm text-destructive">
+            Nenhum boot registrado. A conexão não está sendo iniciada pelo servidor —
+            a instrumentação do Next não rodou neste container.
+          </p>
+        ) : (
+          <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-muted-foreground">Último boot</dt>
+            <dd className="font-data">
+              {new Date(info.diag.bootAt).toLocaleString("pt-BR")}
+            </dd>
+            <dt className="text-muted-foreground">Parou em</dt>
+            <dd className="font-data">{info.diag.stage ?? "—"}</dd>
+            <dt className="text-muted-foreground">Concessão</dt>
+            <dd className="font-data">
+              {info.diag.leaseAgeSec == null
+                ? "nenhuma"
+                : `${info.diag.leaseAlive ? "viva" : "vencida"} · ${info.diag.leaseAgeSec}s atrás`}
+            </dd>
+            {info.diag.lastError && (
+              <>
+                <dt className="text-muted-foreground">Último erro</dt>
+                <dd className="whitespace-pre-wrap break-all text-destructive">
+                  {info.diag.lastError}
+                </dd>
+              </>
+            )}
+          </dl>
+        )}
+      </div>
+
       <div className="rounded-lg border border-border p-4">
         <p className="font-medium">Envio de notificações</p>
         <p className="mb-3 text-sm text-muted-foreground">

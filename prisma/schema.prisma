@@ -821,6 +821,19 @@ model WhatsappConfig {
   // numero e ligar deliberadamente na tela de Gestao.
   enabled   Boolean  @default(false)
   updatedAt DateTime @updatedAt
+
+  // DIAGNOSTICO DO BOOT.
+  // Fica aqui, e nao em WhatsappLock, porque esta linha e sempre gravada por
+  // upsert e nao depende de lideranca: um processo que nao consegue a concessao
+  // (ou que falha antes dela) ainda consegue dizer ONDE parou. Sem isso, o
+  // painel mostra "Desconectado" tanto para "nunca iniciou" quanto para
+  // "iniciou e falhou", que sao problemas completamente diferentes.
+  bootAt           DateTime?
+  // Marcador grosseiro de progresso: boot, concessao-obtida, sem-lideranca,
+  // socket-criado, qr-recebido, conectado, encerrado.
+  stage            String?
+  lastError        String?
+  holderInstanceId String?
 }
 
 // Concessao de instancia unica. Duas conexoes com a mesma credencial se
