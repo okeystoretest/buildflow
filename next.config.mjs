@@ -20,6 +20,30 @@ const nextConfig = {
     // Arquivos sao servidos pela rota autenticada /api/uploads.
     unoptimized: true,
   },
+  webpack: (config, { isServer, nextRuntime }) => {
+    // A instrumentacao e compilada para TODOS os runtimes (nodejs, edge e
+    // client). O import de `./instrumentation.node` esta atras de um guard de
+    // runtime, mas o webpack percorre o grafo mesmo assim e tenta empacotar o
+    // baileys — que puxa o binario nativo do sharp e quebra o build com
+    // "Node.js binary module ... is not supported in the browser".
+    //
+    // serverComponentsExternalPackages nao cobre isso (vale so para a
+    // compilacao do servidor) e `externals` tambem nao resolveu: o webpack
+    // continua resolvendo o modulo antes de trata-lo como externo.
+    //
+    // alias = false faz o webpack resolver o pacote para um modulo vazio e
+    // PARAR a travessia ali. E seguro porque o guard de runtime garante que
+    // esse codigo so executa sob o runtime nodejs, onde o alias nao se aplica.
+    if (nextRuntime !== 'nodejs') {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@whiskeysockets/baileys': false,
+        sharp: false,
+        pino: false,
+      };
+    }
+    return config;
+  },
   async rewrites() {
     // Caminhos LEGADOS gravados no banco como "/uploads/..." passam a ser
     // atendidos pela rota autenticada, sem precisar reescrever o banco.
