@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction, hashPassword } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
+import { normalizePhone, isValidPhone } from "@/lib/phone";
 import type { Role, PaymentDisposition, SalesModel, OrderStatus } from "@prisma/client";
 
 // Entidades simples com apenas "name".
@@ -130,6 +131,26 @@ export async function createPaymentStatus(args: {
   }
 }
 
+/**
+ * Resolve o telefone que vai para o banco.
+ *
+ * Espelha a regra do pixKey: so o MOTORISTA tem telefone hoje, entao nos
+ * demais perfis grava null (inclusive limpando um valor antigo, caso o perfil
+ * do usuario tenha mudado). Vazio tambem vira null; preenchido e invalido
+ * derruba a operacao em vez de gravar um numero que ninguem conseguiria usar.
+ *
+ * Retorna { error } quando invalido — quem chama devolve como actionError.
+ */
+function resolvePhone(role: Role, raw: string | null | undefined): { value: string | null } | { error: string } {
+  if (role !== "MOTORISTA") return { value: null };
+  const digitos = normalizePhone(raw ?? "");
+  if (digitos === "") return { value: null };
+  if (!isValidPhone(digitos)) {
+    return { error: "Telefone inválido. Informe DDD + número (ex.: (11) 98888-7777)." };
+  }
+  return { value: digitos };
+}
+
 export async function createUser(args: {
   name: string;
   email: string;
@@ -139,6 +160,8 @@ export async function createUser(args: {
   originStoreIds?: string[];
   // Chave PIX — só para MOTORISTA (ignorada nos demais perfis).
   pixKey?: string | null;
+  // Telefone — só para MOTORISTA (ignorado nos demais perfis).
+  phone?: string | null;
 }): Promise<ActionResult<void>> {
   try {
     await requireRoleAction(["GESTAO"]);
@@ -161,6 +184,8 @@ export async function createUser(args: {
       where: { email: { equals: args.email.trim(), mode: "insensitive" } },
     });
     if (exists) return actionError("Já existe usuário com este login.");
+    const phone = resolvePhone(args.role, args.phone);
+    if ("error" in phone) return actionError(phone.error);
     await prisma.user.create({
       data: {
         name: args.name.trim(),
@@ -170,6 +195,8 @@ export async function createUser(args: {
         salesModel: args.role === "VENDAS" ? args.salesModel : null,
         // PIX apenas para MOTORISTA; nos demais perfis grava null.
         pixKey: args.role === "MOTORISTA" ? (args.pixKey?.trim() || null) : null,
+        // Telefone apenas para MOTORISTA, normalizado (so digitos).
+        phone: phone.value,
         originStores: originStoreIds.length
           ? { connect: originStoreIds.map((id) => ({ id })) }
           : undefined,
@@ -196,6 +223,8 @@ export async function updateUser(args: {
   originStoreIds?: string[];
   // Chave PIX — só para MOTORISTA (ignorada nos demais perfis).
   pixKey?: string | null;
+  // Telefone — só para MOTORISTA (ignorado nos demais perfis).
+  phone?: string | null;
 }): Promise<ActionResult<void>> {
   try {
     await requireRoleAction(["GESTAO"]);
@@ -238,6 +267,9 @@ export async function updateUser(args: {
     // expulsaria quem estivesse com o cookie. Mesma mecanica do toggleUser.
     const revogarSessoes = args.role !== user.role || Boolean(novaSenha);
 
+    const phone = resolvePhone(args.role, args.phone);
+    if ("error" in phone) return actionError(phone.error);
+
     await prisma.user.update({
       where: { id: args.id },
       data: {
@@ -247,6 +279,8 @@ export async function updateUser(args: {
         salesModel: args.role === "VENDAS" ? args.salesModel : null,
         // PIX apenas para MOTORISTA; nos demais perfis limpa (null).
         pixKey: args.role === "MOTORISTA" ? (args.pixKey?.trim() || null) : null,
+        // Telefone apenas para MOTORISTA, normalizado (so digitos).
+        phone: phone.value,
         // Substitui todas as Lojas de Origem atreladas (set).
         originStores: { set: originStoreIds.map((id) => ({ id })) },
         // Só regrava a senha quando uma nova foi informada.

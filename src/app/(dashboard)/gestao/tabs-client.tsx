@@ -24,12 +24,13 @@ import { ClientesManager, type ClienteRow } from "@/app/(dashboard)/vendas/clien
 import { importUsersCsv, importOperationsCsv, importCustomersCsv } from "@/lib/actions/import";
 import { Pencil, Trash2, Check, X } from "lucide-react";
 import { formatBRL } from "@/lib/utils";
+import { formatPhone } from "@/lib/phone";
 import { DASHBOARD_COLUMNS, STATUS_LABEL, STATUS_STYLE } from "@/lib/order-flow";
 import type { Role, SalesModel, OrderStatus } from "@prisma/client";
 
 interface Row { id: string; name: string; active: boolean; }
 interface OpRow { id: string; code: string; name: string; active: boolean; }
-interface UserRow { id: string; name: string; email: string; role: Role; active: boolean; salesModel: SalesModel | null; originStoreIds: string[]; pixKey: string | null; }
+interface UserRow { id: string; name: string; email: string; role: Role; active: boolean; salesModel: SalesModel | null; originStoreIds: string[]; pixKey: string | null; phone: string | null; }
 interface OriginStoreRow { id: string; name: string; active: boolean; simplifiedFlow: boolean; }
 interface SellerOpt { id: string; name: string; salesModel: SalesModel | null; }
 interface GoalRow { id: string; userName: string; amount: number; targetItems: number | null; month: number; year: number; scope: SalesModel; campaignName: string | null; }
@@ -207,7 +208,7 @@ function FieldHint({ children }: { children: React.ReactNode }) {
 function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: OriginStoreRow[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const EMPTY = { name: "", email: "", password: "", role: "VENDAS" as Role, salesModel: "VAREJO" as SalesModel, pixKey: "" };
+  const EMPTY = { name: "", email: "", password: "", role: "VENDAS" as Role, salesModel: "VAREJO" as SalesModel, pixKey: "", phone: "" };
   const [f, setF] = useState(EMPTY);
   // Lojas de Origem selecionadas (max 2). Separado de `f` por ser lista.
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
@@ -241,6 +242,8 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
       role: u.role as Role,
       salesModel: (u.salesModel ?? "VAREJO") as SalesModel,
       pixKey: u.pixKey ?? "",
+      // O banco guarda so digitos; o formulario trabalha com o valor mascarado.
+      phone: formatPhone(u.phone ?? ""),
     });
     setSelectedStores(u.originStoreIds ?? []);
     setError(null);
@@ -266,6 +269,9 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
       const originStoreIds = f.role === "VENDAS" ? selectedStores : [];
       // Chave PIX so vale para MOTORISTA.
       const pixKey = f.role === "MOTORISTA" ? (f.pixKey.trim() || null) : null;
+      // Telefone tambem so vale para MOTORISTA. Vai mascarado mesmo: quem
+      // normaliza e valida e a action (a checagem que vale).
+      const phone = f.role === "MOTORISTA" ? (f.phone.trim() || null) : null;
       const res = editId
         ? await updateUser({
             id: editId,
@@ -277,8 +283,9 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
             salesModel,
             originStoreIds,
             pixKey,
+            phone,
           })
-        : await createUser({ ...f, salesModel, originStoreIds, pixKey });
+        : await createUser({ ...f, salesModel, originStoreIds, pixKey, phone });
 
       if (res.ok) {
         setMsg(editId ? "Usuário atualizado." : "Usuário criado.");
@@ -370,6 +377,19 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
                 onChange={(e) => setF({ ...f, pixKey: e.target.value })}
               />
               <FieldHint>Usada pelo Financeiro no pagamento das entregas do motorista.</FieldHint>
+            </div>
+          )}
+          {f.role === "MOTORISTA" && (
+            <div className="space-y-1">
+              <Label>Telefone</Label>
+              <Input
+                type="tel"
+                inputMode="numeric"
+                placeholder="(11) 98888-7777"
+                value={f.phone}
+                onChange={(e) => setF({ ...f, phone: formatPhone(e.target.value) })}
+              />
+              <FieldHint>Celular ou fixo com DDD. Opcional.</FieldHint>
             </div>
           )}
         </div>

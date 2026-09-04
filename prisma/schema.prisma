@@ -55,6 +55,12 @@ model User {
   // Chave PIX do MOTORISTA (para o pagamento de entregas pelo Financeiro).
   // Opcional; so faz sentido para o perfil MOTORISTA (validado na action).
   pixKey    String?
+  // Telefone do MOTORISTA. Guardado SEMPRE como digitos com DDD e sem o
+  // codigo do pais (ex.: "11988887777") — a formatacao com mascara e so de
+  // exibicao. Normalizar na gravacao evita ter de limpar a base depois, quando
+  // o numero for consumido por um envio automatico.
+  // Opcional; so faz sentido para o perfil MOTORISTA (validado na action).
+  phone     String?
   active    Boolean  @default(true)
   // Versão da sessão. O JWT carrega este número; qualquer incremento invalida
   // TODOS os tokens já emitidos (logout server-side real, expulsão de usuário
