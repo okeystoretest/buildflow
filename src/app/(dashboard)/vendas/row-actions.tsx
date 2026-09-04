@@ -23,7 +23,7 @@ function mensagemRastreio(url: string, customerCode: string) {
  * - RASTREIO: copia a mensagem pronta de acompanhamento (link + Codigo de
  *   Cliente) para a vendedora colar direto na conversa com a cliente.
  * - EDITAR: disponivel para a Gestao e para a vendedora (nos proprios pedidos).
- * - EXCLUIR: exclusivo da GESTAO.
+ * - EXCLUIR: GESTAO e FINANCEIRO (a permissao real e checada em deleteOrder).
  * - PENDENCIA: se o Financeiro sinalizou um problema ativo, mostra o botao
  *   "Pendência" que abre o detalhe com o texto e o botao "Resolvido".
  */

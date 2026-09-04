@@ -98,6 +98,8 @@ export default async function FinanceiroPage() {
     // Observacoes: envio (discreta) + pagamento (destaque, so aqui).
     shippingNotes: o.notes,
     paymentNotes: o.paymentNotes,
+    // Comentario e exclusivo da coluna "Pagamento pendente".
+    paymentPendingNote: null,
     processedAt: null,
     outcome: null,
     // Pendencia ativa = tem texto e ainda nao foi resolvida por Vendas.
@@ -131,6 +133,7 @@ export default async function FinanceiroPage() {
       shippingNotes: o.notes,
       // paymentNotes NAO e exposto fora da coluna Pendente.
       paymentNotes: null,
+      paymentPendingNote: null,
       processedAt: h.createdAt.toISOString(),
       outcome: aprovado ? "APROVADO" : "INTERROMPIDO",
       hasActiveIssue: false,
@@ -156,6 +159,7 @@ export default async function FinanceiroPage() {
     paymentProofList: [],
     shippingNotes: o.notes,
     paymentNotes: null,
+    paymentPendingNote: o.paymentPendingNote,
     processedAt: null,
     outcome: null,
     hasActiveIssue: false,

@@ -20,3 +20,6 @@ service-account.json
 # Cache do compilador TypeScript ("incremental": true no tsconfig).
 # Artefato local: o tsc recria sozinho. Padrao do .gitignore do Next.js.
 *.tsbuildinfo
+# Configuracao local do Claude Code (agentes, permissoes, hooks). Nao faz
+# parte da aplicacao e varia por maquina/desenvolvedor.
+.claude/

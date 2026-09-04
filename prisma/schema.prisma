@@ -402,6 +402,12 @@ model Order {
   // NAO e exibido para motorista/logistica.
   paymentNotes String?
 
+  // Comentario do FINANCEIRO no card da coluna "Pagamento pendente".
+  // Campo proprio (e NAO o paymentNotes acima) porque tem outro dono e outro
+  // momento: e escrito/reescrito enquanto o recebimento nao e confirmado.
+  // Editavel a qualquer momento; null = sem comentario.
+  paymentPendingNote String?
+
   // Pendencia sinalizada pelo FINANCEIRO ("Qual o problema?").
   // - financeIssue: texto da inconsistencia (null = sem pendencia ativa).
   // - financeIssueAt: quando foi sinalizada.

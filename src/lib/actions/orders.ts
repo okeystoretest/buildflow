@@ -518,11 +518,17 @@ async function removeOrderRecord(id: string): Promise<ActionResult<void>> {
 }
 
 /**
- * Exclusão de pedido no fluxo ativo (Vendas / Kanban) — exclusiva da Gestão.
+ * Exclusão de pedido no fluxo ativo (Vendas / Kanban) — Gestão e Financeiro.
+ *
+ * O Financeiro entra aqui com o mesmo alcance da Gestão (qualquer pedido
+ * listado em Vendas, ou seja, tudo que não está CONCLUIDO). Como a remoção é
+ * FÍSICA e leva junto a entrega, isso inclui pedidos já em rota — foi a regra
+ * pedida pelo negócio. Para restringir, o lugar é aqui (a checagem que vale) E
+ * o `canDelete` da tela de Vendas.
  */
 export async function deleteOrder(id: string): Promise<ActionResult<void>> {
   try {
-    await requireRoleAction(["GESTAO"]);
+    await requireRoleAction(["GESTAO", "FINANCEIRO"]);
     return await removeOrderRecord(id);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao excluir pedido.");

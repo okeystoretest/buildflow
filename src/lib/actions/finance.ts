@@ -460,6 +460,51 @@ export async function confirmPayment(orderId: string): Promise<ActionResult<void
   }
 }
 
+/** Teto de caracteres do comentario do card "Pagamento pendente". */
+const PAYMENT_PENDING_NOTE_MAX = 1000;
+
+/**
+ * Salva (ou atualiza) o comentario do Financeiro num pedido da coluna
+ * "Pagamento pendente". Um comentario por pedido, reescrito a vontade —
+ * enviar texto vazio limpa o campo.
+ *
+ * Nao mexe no status do pedido nem no fluxo: e apenas uma anotacao de
+ * acompanhamento da cobranca, gravada em coluna propria para nao colidir com
+ * as "Observacoes de Pagamento" (paymentNotes) escritas na auditoria.
+ */
+export async function savePaymentPendingNote(args: {
+  orderId: string;
+  note: string;
+}): Promise<ActionResult<{ note: string | null }>> {
+  try {
+    await requireRoleAction(["FINANCEIRO", "GESTAO"]);
+
+    const texto = args.note.trim();
+    if (texto.length > PAYMENT_PENDING_NOTE_MAX) {
+      return actionError(`Comentário muito longo (máx. ${PAYMENT_PENDING_NOTE_MAX}).`);
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: args.orderId },
+      select: { id: true },
+    });
+    if (!order) return actionError("Pedido não encontrado.");
+
+    // String vazia grava null: assim "apagar o texto" e realmente apagar, e
+    // nao deixar um comentario em branco ocupando espaco no card.
+    const valor = texto === "" ? null : texto;
+    await prisma.order.update({
+      where: { id: args.orderId },
+      data: { paymentPendingNote: valor },
+    });
+
+    revalidatePath("/financeiro");
+    return actionOk({ note: valor });
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao salvar comentário.");
+  }
+}
+
 // ===========================================================================
 // Ferramentas do Financeiro: Formas de Pagamento, Bancos, Status de Pagamento
 // (acesso para FINANCEIRO e GESTAO)

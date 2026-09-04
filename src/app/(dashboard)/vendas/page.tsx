@@ -121,7 +121,7 @@ export default async function VendasPage({
                     <td className="border-r border-border py-2 pl-4 pr-4">{formatBRL(o.total.toString())}</td>
                     <td className="border-r border-border py-2 pl-4 pr-4"><StatusBadge status={o.status} /></td>
                     <td className="py-2 pl-4 pr-4">
-                      <VendaRowActions orderId={o.id} orderNumber={o.orderNumber} canDelete={session.role === "GESTAO"} issue={issueAtivo} />
+                      <VendaRowActions orderId={o.id} orderNumber={o.orderNumber} canDelete={session.role === "GESTAO" || session.role === "FINANCEIRO"} issue={issueAtivo} />
                     </td>
                   </tr>
                   );

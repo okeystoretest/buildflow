@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign, Wallet, Truck, Paperclip } from "lucide-react";
+import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign, Wallet, Truck, Paperclip, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CardScroller } from "@/components/shared/card-scroller";
-import { flagOrderIssue, confirmPayment, markOrderPaid, uploadSecondPaymentProof } from "@/lib/actions/finance";
+import { flagOrderIssue, confirmPayment, markOrderPaid, uploadSecondPaymentProof, savePaymentPendingNote } from "@/lib/actions/finance";
 import { prepareProofFile } from "@/lib/client-image";
 import { useRouter } from "next/navigation";
 import { AuditarPedido } from "./audit-client";
@@ -33,6 +33,9 @@ export interface FinanceCard {
   // Observacoes de Pagamento (EXCLUSIVO do Financeiro). So preenchida na
   // coluna Pendente — nas demais vem null e nao e exibida.
   paymentNotes: string | null;
+  // Comentario do Financeiro na coluna "Pagamento pendente". Editavel pelo
+  // botao "Comentar" do card; nas demais colunas vem null.
+  paymentPendingNote: string | null;
   processedAt: string | null;   // ISO — só na coluna Processado
   outcome: "APROVADO" | "INTERROMPIDO" | null;
   // Pendencia ja sinalizada e ainda ativa? (mostra estado no card)
@@ -78,6 +81,8 @@ export function AnaliseKanban({
   const [openId, setOpenId] = useState<string | null>(null);
   // Card cujo modal "Qual o problema?" esta aberto.
   const [issueId, setIssueId] = useState<string | null>(null);
+  // Card de "Pagamento pendente" cujo modal de comentario esta aberto.
+  const [noteId, setNoteId] = useState<string | null>(null);
   const router = useRouter();
 
   // "Relogio" interno: reavalia de 30 em 30s quais processados ja passaram
@@ -112,6 +117,7 @@ export function AnaliseKanban({
 
   const aberto = openId ? pendentes.find((c) => c.id === openId) ?? null : null;
   const cardIssue = issueId ? pendentes.find((c) => c.id === issueId) ?? null : null;
+  const cardNote = noteId ? pagPendentes.find((c) => c.id === noteId) ?? null : null;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -151,7 +157,12 @@ export function AnaliseKanban({
         hint="Aguardando confirmação"
       >
         {pagPendentes.map((c) => (
-          <PaidPendingCard key={c.id} card={c} podeAnexar={podeAnexarComprovante} />
+          <PaidPendingCard
+            key={c.id}
+            card={c}
+            podeAnexar={podeAnexarComprovante}
+            onComment={() => setNoteId(c.id)}
+          />
         ))}
         {pagPendentes.length === 0 && <Empty>Nenhum pagamento pendente.</Empty>}
       </Column>
@@ -227,6 +238,19 @@ export function AnaliseKanban({
       )}
 
       {/* MODAL "Qual o problema?" — sinalizacao de pendencia pelo Financeiro. */}
+      {/* MODAL de comentario da coluna "Pagamento pendente". Fica AQUI, e nao
+          dentro do card, pelo mesmo motivo do IssueModal: o card carrega uma
+          animacao com fill-mode "both", e o transform residual faz dele o
+          bloco de contencao de qualquer position:fixed que estiver dentro. */}
+      {cardNote && (
+        <PaymentNoteModal
+          orderId={cardNote.id}
+          orderNumber={cardNote.orderNumber}
+          initialNote={cardNote.paymentPendingNote}
+          onClose={() => setNoteId(null)}
+        />
+      )}
+
       {cardIssue && (
         <IssueModal
           orderNumber={cardIssue.orderNumber}
@@ -272,6 +296,60 @@ function IssueModal({ orderId, orderNumber, onClose }: {
         <Button variant="outline" onClick={onClose} disabled={busy}>Cancelar</Button>
         <Button variant="financeiro" onClick={submit} disabled={busy || !text.trim()}>
           {busy ? "Enviando..." : "Sinalizar pendência"}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Comentario do card "Pagamento pendente".
+ *
+ * Um texto por pedido, sempre editavel: o modal abre ja com o que estiver
+ * gravado e o Salvar sobrescreve. Salvar em branco limpa o comentario — e por
+ * isso o botao NAO exige texto (ao contrario do IssueModal, onde a descricao
+ * do problema e obrigatoria).
+ */
+function PaymentNoteModal({ orderId, orderNumber, initialNote, onClose }: {
+  orderId: string; orderNumber: string; initialNote: string | null; onClose: () => void;
+}) {
+  const router = useRouter();
+  const [text, setText] = useState(initialNote ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const limpando = initialNote != null && text.trim() === "";
+  const semMudanca = text.trim() === (initialNote ?? "").trim();
+
+  async function submit() {
+    setBusy(true); setErr(null);
+    const res = await savePaymentPendingNote({ orderId, note: text });
+    setBusy(false);
+    if (res.ok) { onClose(); router.refresh(); }
+    else setErr(res.error);
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <div className="mb-3 flex items-center gap-2">
+        <MessageSquare className="h-5 w-5 text-sky-500" />
+        <h2 className="text-lg font-bold">{initialNote ? "Editar comentário" : "Comentar"}</h2>
+      </div>
+      <p className="mb-2 text-sm text-muted-foreground">Pedido {orderNumber}</p>
+      <textarea
+        className="min-h-[110px] w-full rounded-lg border border-input bg-background p-3 text-sm"
+        placeholder="Observação sobre o pagamento deste pedido..."
+        maxLength={1000}
+        value={text} onChange={(e) => setText(e.target.value)} autoFocus
+      />
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        {limpando ? "Salvar em branco remove o comentário." : `${text.length}/1000`}
+      </p>
+      {err && <p className="mt-1 text-sm text-destructive">{err}</p>}
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose} disabled={busy}>Cancelar</Button>
+        <Button variant="financeiro" onClick={submit} disabled={busy || semMudanca}>
+          {busy ? "Salvando..." : limpando ? "Remover" : "Salvar"}
         </Button>
       </div>
     </Modal>
@@ -465,8 +543,17 @@ function SimplifiedPaidPanel({ orderId, proofs, onDone }: {
  * comprovante (uploadSecondPaymentProof) — mesmo teto de 5 arquivos, mesmo
  * pipeline do sharp (.webp no disco, so o caminho no banco) e PDF gravado
  * como esta.
+ *
+ * Traz ainda o "Comentar": uma observacao livre por pedido, para o Financeiro
+ * registrar o andamento da cobranca. O texto fica visivel no proprio card e
+ * pode ser reescrito quantas vezes for preciso (ver PaymentNoteModal).
  */
-function PaidPendingCard({ card, podeAnexar }: { card: FinanceCard; podeAnexar: boolean }) {
+function PaidPendingCard({ card, podeAnexar, onComment }: {
+  card: FinanceCard;
+  podeAnexar: boolean;
+  /** Abre o modal de comentario (renderizado no nivel do Kanban). */
+  onComment: () => void;
+}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -539,10 +626,35 @@ function PaidPendingCard({ card, podeAnexar }: { card: FinanceCard; podeAnexar: 
         </p>
       )}
 
+      {/* Comentario ja registrado: aparece no card para nao exigir abrir o
+          modal so para saber se ha alguma anotacao. */}
+      {card.paymentPendingNote?.trim() && (
+        <div className="mt-2 rounded-lg border border-sky-400/40 bg-sky-400/10 p-2">
+          <p className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+            <MessageSquare className="h-3 w-3" /> Observação
+          </p>
+          <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-foreground/90">
+            {card.paymentPendingNote}
+          </p>
+        </div>
+      )}
+
       {err && <p className="mt-2 text-[11px] text-destructive">{err}</p>}
       {okMsg && <p className="mt-2 text-[11px] text-motorista">{okMsg}</p>}
 
-      <div className="mt-3 flex items-center gap-2">
+      <Button
+        type="button"
+        onClick={onComment}
+        size="sm"
+        variant="outline"
+        className="mt-3 w-full"
+        title={card.paymentPendingNote ? "Editar observação do pedido" : "Adicionar observação ao pedido"}
+      >
+        <MessageSquare className="mr-1 h-4 w-4" />
+        {card.paymentPendingNote ? "Editar comentário" : "Comentar"}
+      </Button>
+
+      <div className="mt-2 flex items-center gap-2">
         {podeAnexar && (
           <>
             {/* Input escondido: o botao e quem dispara a selecao de arquivos. */}
