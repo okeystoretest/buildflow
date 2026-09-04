@@ -4,7 +4,8 @@ import QRCode from "qrcode";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
-import { getConnectionSnapshot, disconnectAndReset } from "@/lib/whatsapp/connection";
+import { disconnectAndReset } from "@/lib/whatsapp/connection";
+import { isLeaseExpired } from "@/lib/whatsapp/pure";
 
 export interface WhatsappPanelState {
   state: string;
@@ -26,15 +27,33 @@ async function readEnabled(): Promise<boolean> {
   return cfg?.enabled ?? false;
 }
 
+/**
+ * Estado do canal para o painel.
+ *
+ * Le do BANCO, e nao da memoria deste processo. O Next compila o modulo da
+ * conexao em bundles distintos (instrumentacao x Server Action), e com mais de
+ * uma replica o painel pode nem ser servido pelo processo que detem a conexao —
+ * nos dois casos a memoria local responderia "DESCONECTADO" para sempre. Foi
+ * essa a causa do "QR nao aparece".
+ */
 export async function getWhatsappPanelState(): Promise<ActionResult<WhatsappPanelState>> {
   try {
     await requireRoleAction(["GESTAO"]);
-    const snap = getConnectionSnapshot();
-    const qrDataUrl = snap.qr ? await QRCode.toDataURL(snap.qr, { margin: 1, width: 280 }) : null;
+
+    const lock = await prisma.whatsappLock.findUnique({ where: { id: "singleton" } });
+
+    // Sem linha, ou com heartbeat vencido, o dono anterior morreu: o que estiver
+    // gravado ali e passado. Reportar "CONECTADO" de um processo morto seria
+    // pior do que reportar desconectado.
+    const vivo = lock != null && !isLeaseExpired(lock.heartbeatAt, new Date());
+
+    const qrDataUrl =
+      vivo && lock?.qr ? await QRCode.toDataURL(lock.qr, { margin: 1, width: 280 }) : null;
+
     return actionOk({
-      state: snap.state,
+      state: vivo ? (lock?.state ?? "DESCONECTADO") : "DESCONECTADO",
       qrDataUrl,
-      connectedNumber: maskNumber(snap.connectedNumber),
+      connectedNumber: vivo ? maskNumber(lock?.connectedNumber ?? null) : null,
       enabled: await readEnabled(),
     });
   } catch (err) {

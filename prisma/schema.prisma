@@ -830,6 +830,17 @@ model WhatsappLock {
   id          String   @id @default("singleton")
   instanceId  String
   heartbeatAt DateTime
+
+  // Estado observavel publicado pelo processo que detem a conexao.
+  // Fica AQUI, e nao so em memoria, porque o Next compila o modulo da conexao
+  // em bundles diferentes (instrumentacao x Server Action) e, com varias
+  // replicas, o painel pode ser servido por um processo que nao e o dono da
+  // conexao. Mesmo motivo pelo qual o bus de tempo real vive no banco.
+  state           String   @default("DESCONECTADO")
+  // QR corrente. E publico por natureza (vira imagem na tela) e some assim que
+  // o pareamento conclui. NAO e credencial — estas ficam em WhatsappSession.
+  qr              String?
+  connectedNumber String?
 }
 
 enum WhatsappSendStatus {

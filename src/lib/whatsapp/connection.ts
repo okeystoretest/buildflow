@@ -1,8 +1,13 @@
 // Conexao unica com o WhatsApp via Baileys.
 //
 // Sobe no boot do servidor (instrumentation.node.ts) e vive enquanto o
-// processo viver. Guarda o QR corrente em memoria para a tela de Gestao ler —
-// o QR NUNCA vai para o log.
+// processo viver.
+//
+// O estado NAO fica em `let` de modulo: o Next compila este arquivo em mais de
+// um bundle, e cada um teria o seu proprio conjunto de variaveis. Ver
+// runtime-state.ts para a explicacao completa. Alem do globalThis, o estado
+// observavel e publicado no Postgres, para o painel de Gestao enxergar a
+// conexao mesmo quando servido por outro processo.
 
 import makeWASocket, {
   Browsers,
@@ -10,29 +15,15 @@ import makeWASocket, {
   type WASocket,
 } from "@whiskeysockets/baileys";
 import pino from "pino";
+import { prisma } from "@/lib/prisma";
 import { useDatabaseAuthState, clearWhatsappSession } from "./auth-store";
 import { acquireLease, startHeartbeat } from "./lease";
 import { nextBackoffDelay } from "./pure";
+import { getRuntime, type WhatsappState } from "./runtime-state";
 
-export type WhatsappState =
-  | "DESCONECTADO"
-  | "AGUARDANDO_QR"
-  | "CONECTANDO"
-  | "CONECTADO"
-  | "SEM_LIDERANCA"
-  | "BLOQUEADO";
+export type { WhatsappState } from "./runtime-state";
 
-// Instancia deste processo. Aleatoria e so em memoria: se o processo morre, a
-// concessao expira sozinha pelo heartbeat.
-const INSTANCE_ID = `${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
-
-let socket: WASocket | null = null;
-let state: WhatsappState = "DESCONECTADO";
-let qr: string | null = null;
-let connectedNumber: string | null = null;
-let attempt = 0;
-let starting = false;
-let stopHeartbeat: (() => void) | null = null;
+const LOCK_ID = "singleton";
 
 /**
  * Logger silencioso, passado explicitamente.
@@ -42,16 +33,45 @@ let stopHeartbeat: (() => void) | null = null;
  */
 const logger = pino({ level: "silent" });
 
+/**
+ * Grava o estado observavel na linha da concessao. Best-effort: uma falha aqui
+ * nao pode derrubar a conexao, no maximo deixa o painel desatualizado ate a
+ * proxima transicao.
+ */
+function publicarEstado(): void {
+  const rt = getRuntime();
+  void prisma.whatsappLock
+    .updateMany({
+      where: { id: LOCK_ID, instanceId: rt.instanceId },
+      data: { state: rt.state, qr: rt.qr, connectedNumber: rt.connectedNumber },
+    })
+    .catch((err) => console.error("[whatsapp] falha ao publicar estado:", err));
+}
+
+function setState(novo: WhatsappState): void {
+  const rt = getRuntime();
+  if (rt.state === novo) return;
+  rt.state = novo;
+  publicarEstado();
+}
+
+export function getSocket(): WASocket | null {
+  const rt = getRuntime();
+  return rt.state === "CONECTADO" ? (rt.socket as WASocket | null) : null;
+}
+
+/**
+ * Leitura local do estado. O painel NAO usa isto (le do banco, para funcionar
+ * a partir de qualquer processo); serve para diagnostico dentro do processo
+ * que detem a conexao.
+ */
 export function getConnectionSnapshot(): {
   state: WhatsappState;
   qr: string | null;
   connectedNumber: string | null;
 } {
-  return { state, qr, connectedNumber };
-}
-
-export function getSocket(): WASocket | null {
-  return state === "CONECTADO" ? socket : null;
+  const rt = getRuntime();
+  return { state: rt.state, qr: rt.qr, connectedNumber: rt.connectedNumber };
 }
 
 /**
@@ -59,26 +79,28 @@ export function getSocket(): WASocket | null {
  * um segundo socket.
  */
 export async function startWhatsapp(): Promise<void> {
-  if (starting || socket) return;
-  starting = true;
+  const rt = getRuntime();
+  if (rt.starting || rt.socket) return;
+  rt.starting = true;
   try {
-    const lider = await acquireLease(INSTANCE_ID);
+    const lider = await acquireLease(rt.instanceId);
     if (!lider) {
-      state = "SEM_LIDERANCA";
+      setState("SEM_LIDERANCA");
       // Uma linha so: outro processo ja conectou, e isso e o esperado.
       console.log("[whatsapp] outro processo detem a conexao; este nao vai conectar.");
       return;
     }
-    stopHeartbeat ??= startHeartbeat(INSTANCE_ID);
+    rt.stopHeartbeat ??= startHeartbeat(rt.instanceId);
     await connect();
   } finally {
-    starting = false;
+    rt.starting = false;
   }
 }
 
 async function connect(): Promise<void> {
+  const rt = getRuntime();
   const { state: authState, saveCreds } = await useDatabaseAuthState();
-  state = authState.creds.registered ? "CONECTANDO" : "AGUARDANDO_QR";
+  setState(authState.creds.registered ? "CONECTANDO" : "AGUARDANDO_QR");
 
   const sock = makeWASocket({
     auth: authState,
@@ -91,7 +113,7 @@ async function connect(): Promise<void> {
     markOnlineOnConnect: false,
     syncFullHistory: false,
   });
-  socket = sock;
+  rt.socket = sock;
 
   sock.ev.on("creds.update", () => {
     void saveCreds().catch((err) =>
@@ -101,16 +123,20 @@ async function connect(): Promise<void> {
 
   sock.ev.on("connection.update", (update) => {
     if (update.qr) {
-      qr = update.qr;
-      state = "AGUARDANDO_QR";
+      rt.qr = update.qr;
+      rt.state = "AGUARDANDO_QR";
+      // Publica sempre: o QR muda a cada poucos segundos e o painel depende
+      // dessa gravacao para exibir o codigo corrente.
+      publicarEstado();
     }
 
     if (update.connection === "open") {
-      qr = null;
-      attempt = 0;
-      state = "CONECTADO";
+      rt.qr = null;
+      rt.attempt = 0;
       // Guarda so a parte numerica do JID proprio, para exibir na tela.
-      connectedNumber = sock.user?.id?.split(":")[0]?.split("@")[0] ?? null;
+      rt.connectedNumber = sock.user?.id?.split(":")[0]?.split("@")[0] ?? null;
+      rt.state = "CONECTADO";
+      publicarEstado();
       console.log("[whatsapp] conectado.");
       return;
     }
@@ -122,14 +148,15 @@ async function connect(): Promise<void> {
 }
 
 async function handleClose(lastDisconnect: unknown): Promise<void> {
-  socket = null;
+  const rt = getRuntime();
+  rt.socket = null;
   const code = extractStatusCode(lastDisconnect);
 
   // 515 (restartRequired) NAO e erro: acontece logo apos parear o QR, e o
   // Baileys exige reabrir o socket. Reconecta na hora, sem backoff.
   if (code === DisconnectReason.restartRequired) {
     console.log("[whatsapp] reinicio solicitado apos pareamento; reconectando.");
-    attempt = 0;
+    rt.attempt = 0;
     await connect().catch((err) => console.error("[whatsapp] falha ao reconectar:", err));
     return;
   }
@@ -138,10 +165,10 @@ async function handleClose(lastDisconnect: unknown): Promise<void> {
   if (code === DisconnectReason.loggedOut) {
     console.log("[whatsapp] sessao encerrada no aparelho; aguardando novo QR.");
     await clearWhatsappSession().catch(() => undefined);
-    qr = null;
-    connectedNumber = null;
-    state = "AGUARDANDO_QR";
-    attempt = 0;
+    rt.qr = null;
+    rt.connectedNumber = null;
+    rt.attempt = 0;
+    setState("AGUARDANDO_QR");
     await connect().catch((err) => console.error("[whatsapp] falha ao reiniciar:", err));
     return;
   }
@@ -150,17 +177,17 @@ async function handleClose(lastDisconnect: unknown): Promise<void> {
   // intervencao humana. Reconectar aqui so piora.
   if (code === DisconnectReason.forbidden || code === DisconnectReason.connectionReplaced) {
     console.error(`[whatsapp] conexao encerrada em definitivo (codigo ${code}).`);
-    state = "BLOQUEADO";
-    connectedNumber = null;
+    rt.connectedNumber = null;
+    setState("BLOQUEADO");
     return;
   }
 
-  const espera = nextBackoffDelay(attempt);
-  attempt += 1;
-  state = "CONECTANDO";
+  const espera = nextBackoffDelay(rt.attempt);
+  rt.attempt += 1;
+  setState("CONECTANDO");
   console.log(`[whatsapp] queda (codigo ${code ?? "?"}); reconectando em ${espera}ms.`);
-  // Mesmo motivo do lease.ts: com a lib "dom" no tsconfig, setTimeout pode
-  // tipar como number, que nao tem unref().
+  // Com a lib "dom" no tsconfig, setTimeout pode tipar como number, que nao
+  // tem unref().
   const t = setTimeout(() => {
     void connect().catch((err) => console.error("[whatsapp] falha ao reconectar:", err));
   }, espera);
@@ -177,18 +204,22 @@ function extractStatusCode(lastDisconnect: unknown): number | undefined {
 /**
  * Desconecta e apaga a sessao, forcando novo pareamento. Usado pela tela de
  * Gestao quando alguem quer trocar o numero.
+ *
+ * So tem efeito no processo que detem a conexao. Chamada de um processo que
+ * nao e o dono, limpa a sessao no banco — o dono cai em loggedOut e reinicia.
  */
 export async function disconnectAndReset(): Promise<void> {
+  const rt = getRuntime();
   try {
-    socket?.end(undefined);
+    (rt.socket as WASocket | null)?.end(undefined);
   } catch {
     // Socket ja caido: nada a fazer.
   }
-  socket = null;
-  qr = null;
-  connectedNumber = null;
-  attempt = 0;
+  rt.socket = null;
+  rt.qr = null;
+  rt.connectedNumber = null;
+  rt.attempt = 0;
   await clearWhatsappSession();
-  state = "AGUARDANDO_QR";
+  setState("AGUARDANDO_QR");
   await connect().catch((err) => console.error("[whatsapp] falha ao reiniciar:", err));
 }

@@ -37,10 +37,16 @@ export function WhatsappPanel() {
 
   useEffect(() => { void carregar(); }, [carregar]);
 
-  // Enquanto espera o QR, atualiza de 3 em 3s: o codigo expira em torno de
-  // 60s e e substituido por um novo.
+  // Atualiza de 3 em 3s enquanto NAO estiver conectado.
+  //
+  // A condicao e "diferente de CONECTADO", e nao "igual a AGUARDANDO_QR": logo
+  // apos o deploy o estado passa por DESCONECTADO e CONECTANDO, e so parar de
+  // atualizar nesses casos deixava a tela congelada justamente no primeiro uso,
+  // obrigando a recarregar a mao para ver o QR.
+  //
+  // O intervalo de 3s importa porque o QR expira em torno de 60s e e trocado.
   useEffect(() => {
-    if (info?.state !== "AGUARDANDO_QR") return;
+    if (info?.state === "CONECTADO") return;
     const id = setInterval(() => { void carregar(); }, 3000);
     return () => clearInterval(id);
   }, [info?.state, carregar]);
