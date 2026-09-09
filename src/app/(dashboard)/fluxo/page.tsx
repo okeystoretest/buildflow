@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { columnsForFlow } from "@/lib/order-flow";
 import { KanbanBoard, type KanbanCard } from "@/components/shared/kanban-board";
 import { StorePicker } from "@/components/shared/store-picker";
-import { loadStageLimits, loadStatusSince } from "@/lib/stage-limits";
+import { loadStageLimits, loadStatusSince, loadDelayReasonFlags } from "@/lib/stage-limits";
 import { isAnexoDispensavel } from "@/lib/validations/order";
 import { formatBRL } from "@/lib/utils";
 
@@ -68,9 +68,10 @@ export default async function FluxoPage({
   }
 
   // Prazos por etapa (Gestão > Etapas) + momento de entrada no status atual.
-  const [stageLimits, statusSince] = await Promise.all([
+  const [stageLimits, statusSince, delayReasonFlags] = await Promise.all([
     loadStageLimits(),
     loadStatusSince(orders.map((o) => ({ id: o.id, status: o.status }))),
+    loadDelayReasonFlags(orders.map((o) => ({ id: o.id, status: o.status }))),
   ]);
 
   const cards: KanbanCard[] = orders.map((o) => ({
@@ -88,6 +89,7 @@ export default async function FluxoPage({
     isExchange: isAnexoDispensavel(o.orderType?.name),
     deliveredAt: deliveredAtById.get(o.id) ?? null,
     statusSince: statusSince.get(o.id) ?? null,
+    hasDelayReason: delayReasonFlags.has(o.id),
   }));
 
   return (

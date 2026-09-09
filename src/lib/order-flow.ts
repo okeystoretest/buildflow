@@ -154,6 +154,40 @@ export function stageAlertLevel(
   return "none";
 }
 
+// Minutos decorridos DESDE QUE o card entrou em atraso — ou seja, desde o
+// instante `statusSince + limite`, e nao desde a entrada no status. E esse o
+// numero exibido ao lado do selo "Atrasado" e o que dispara o pedido de
+// justificativa. Retorna 0 quando o pedido ainda nao esta atrasado (ou quando
+// a etapa nao tem limite configurado), de modo que o chamador nunca precisa
+// checar o nivel de alerta antes.
+export function overdueMinutes(
+  status: OrderStatus,
+  statusSinceIso: string | null | undefined,
+  limits: StageLimitMap,
+  nowMs: number = Date.now(),
+): number {
+  const limit = limits[status] ?? 0;
+  if (!limit || limit <= 0 || !statusSinceIso) return 0;
+  const since = new Date(statusSinceIso).getTime();
+  if (Number.isNaN(since)) return 0;
+  // Momento em que o prazo estourou.
+  const overdueSince = since + limit * 60000;
+  const late = Math.floor((nowMs - overdueSince) / 60000);
+  return late > 0 ? late : 0;
+}
+
+// Atraso a partir do qual o quadro exige a justificativa do setor dono da etapa.
+export const DELAY_REASON_THRESHOLD_MIN = 5;
+
+// Formato curto do tempo de atraso para caber ao lado do selo: ate 59 min sai
+// como "7min"; a partir de 1 hora vira "1h 20m" (e "2h" quando redondo).
+export function formatOverdue(minutes: number): string {
+  if (minutes < 60) return `${minutes}min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 
 // Classes Tailwind para texto/fundo/borda de badges e cards.
 // ---------------------------------------------------------------------------

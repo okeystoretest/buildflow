@@ -105,13 +105,38 @@
   .card-overdue .bg-motorista\/15 {
     background-color: rgba(255, 255, 255, 0.18) !important;
   }
-  /* Sinais de documento ANEXADO (Comprovante/NF) em card atrasado: chip amarelo
-     de alto contraste com texto/ícone escuros. Vence o `.card-overdue *` (que
-     força branco) para que o usuário veja de imediato o que já está no pedido. */
-  .card-overdue .signal-overdue-active,
-  .card-overdue .signal-overdue-active * {
-    color: #7f1d1d !important; /* red-900 sobre o amarelo */
-    background-color: #fcd34d !important; /* amber-300 */
+
+  /* ===== Card de pedido em ATENÇÃO (50% do tempo limite) =====
+     Fundo amarelo preenchido por inteiro, no mesmo padrão do atraso (antes era
+     apenas a borda). O texto aqui vai ESCURO, e não branco como no vermelho:
+     branco sobre amber-300 (~#fcd34d) não passa em nenhum critério de
+     contraste. O selo "Atenção" fica em chip branco com texto âmbar escuro. */
+  .card-warn,
+  .card-warn * {
+    color: #451a03 !important; /* amber-950 sobre o amarelo */
+    border-color: rgba(120, 53, 15, 0.25) !important;
+  }
+  .card-warn .order-overdue-badge,
+  .card-warn .order-overdue-badge * {
+    color: #92400e !important; /* amber-800 sobre chip branco */
+  }
+  /* Código do cliente e chips neutros: fundo translucido escuro para se
+     destacarem do amarelo sem perder o texto escuro. */
+  .card-warn .bg-secondary {
+    background-color: rgba(120, 53, 15, 0.12) !important;
+  }
+
+  /* Sinais de documento ANEXADO (Comprovante/NF) em card preenchido
+     (amarelo ou vermelho): chip VERDE sólido com texto branco. A cor do
+     documento anexado é verde em qualquer fundo — estas regras vencem o
+     `.card-overdue *` (que força branco) e o `.card-warn *` (que força
+     escuro), que de outro modo apagariam o verde. */
+  .card-overdue .signal-filled-active,
+  .card-overdue .signal-filled-active *,
+  .card-warn .signal-filled-active,
+  .card-warn .signal-filled-active * {
+    color: #fff !important;
+    background-color: #10b981 !important; /* emerald-500 */
     border-color: transparent !important;
   }
 }

@@ -27,6 +27,7 @@ export async function GET(
       paymentProofs: { orderBy: { createdAt: "asc" } },
       financeProofs: { orderBy: { createdAt: "asc" } },
       history: { orderBy: { createdAt: "asc" } },
+      delayReasons: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!order) return NextResponse.json({ error: "Nao encontrado" }, { status: 404 });
@@ -40,7 +41,14 @@ export async function GET(
   // Aqui traduzimos os IDs para NOMES em uma unica consulta, e devolvemos
   // cada entrada com changedByName para o modal exibir "por Fulano".
   const changerIds = Array.from(
-    new Set(order.history.map((h) => h.changedBy).filter((v): v is string => !!v)),
+    new Set(
+      [
+        ...order.history.map((h) => h.changedBy),
+        // Os motivos de atraso guardam so o ID de quem justificou; a traducao
+        // para nome sai da MESMA consulta do historico.
+        ...order.delayReasons.map((d) => d.createdById),
+      ].filter((v): v is string => !!v),
+    ),
   );
   const changers = changerIds.length
     ? await prisma.user.findMany({
@@ -49,6 +57,16 @@ export async function GET(
       })
     : [];
   const nameById = new Map(changers.map((u) => [u.id, u.name]));
+
+  // Motivos de atraso por etapa, com o nome de quem justificou.
+  const delayReasons = order.delayReasons.map((d) => ({
+    id: d.id,
+    status: d.status,
+    reason: d.reason,
+    minutesLate: d.minutesLate,
+    createdAt: d.createdAt,
+    createdByName: d.createdById ? nameById.get(d.createdById) ?? null : null,
+  }));
 
   const history = order.history.map((h) => ({
     id: h.id,
@@ -82,8 +100,8 @@ export async function GET(
       financeProofs,
       ...visivelAoMotorista
     } = order;
-    return NextResponse.json({ ...visivelAoMotorista, history });
+    return NextResponse.json({ ...visivelAoMotorista, history, delayReasons });
   }
 
-  return NextResponse.json({ ...order, history });
+  return NextResponse.json({ ...order, history, delayReasons });
 }

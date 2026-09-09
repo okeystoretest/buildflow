@@ -432,6 +432,7 @@ model Order {
   driverPayment DriverPayment?
   history       OrderStatusHistory[]
   pieceMovements PieceMovement[]
+  delayReasons  OrderDelayReason[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -879,4 +880,37 @@ model WhatsappSendLog {
   @@index([orderId])
   @@index([userId])
   @@index([createdAt])
+}
+
+// ===========================================================================
+// MOTIVO DE ATRASO DE ETAPA (Fluxo / Logística)
+// ===========================================================================
+//
+// Quando um card passa de 5 minutos ALÉM do prazo da etapa (Gestão > Etapas),
+// o quadro pede ao setor dono daquele status que justifique o atraso. O motivo
+// fica vinculado ao par (pedido, status) porque um mesmo pedido pode atrasar em
+// várias etapas e cada atraso tem a sua própria causa — um campo único no Order
+// perderia a justificativa anterior a cada novo atraso.
+//
+// `minutesLate` é o atraso NO MOMENTO da justificativa (snapshot). Guardar o
+// número evita ter que recalcular a régua de prazos históricos depois: o limite
+// da etapa pode mudar em Gestão > Etapas, e o que foi justificado não muda.
+model OrderDelayReason {
+  id      String      @id @default(cuid())
+  order   Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+  status  OrderStatus
+
+  reason      String
+  minutesLate Int
+
+  // Usuário que justificou (ID; o nome é resolvido na leitura, como no
+  // OrderStatusHistory).
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  // Um motivo por etapa: a segunda justificativa da mesma etapa ATUALIZA a
+  // primeira em vez de empilhar registros.
+  @@unique([orderId, status])
+  @@index([orderId])
 }

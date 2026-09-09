@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { STATUS_LABEL } from "@/lib/order-flow";
+import { STATUS_LABEL, formatOverdue } from "@/lib/order-flow";
 import { formatBRL } from "@/lib/utils";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { uploadInvoiceBase64, removeInvoice } from "@/lib/actions/sales";
@@ -55,6 +55,15 @@ interface OrderDetail {
     proofs: { id: string; filePath: string }[];
   } | null;
   history: { id: string; status: keyof typeof STATUS_LABEL; note: string | null; changedByName?: string | null; createdAt: string }[];
+  // Motivos de atraso justificados pelo setor dono de cada etapa (um por etapa).
+  delayReasons?: {
+    id: string;
+    status: keyof typeof STATUS_LABEL;
+    reason: string;
+    minutesLate: number;
+    createdByName?: string | null;
+    createdAt: string;
+  }[];
 }
 
 // Prazo padrao de entrega: 2 horas apos a confirmacao do pagamento.
@@ -499,6 +508,43 @@ export function OrderDetailModal({
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Motivos de atraso: o que o setor responsável respondeu quando o
+                pedido estourou o prazo de cada etapa. Fica fora do Histórico
+                porque é a leitura que a Gestão procura direto — e o histórico
+                de um pedido antigo tem dezenas de linhas. Oculto no modo
+                motorista, que só acompanha a fase logística. */}
+            {!driverMode && (order.delayReasons?.length ?? 0) > 0 && (
+              <div>
+                <h3 className="mb-1 font-semibold">Motivos de atraso</h3>
+                <ul className="space-y-2 text-sm">
+                  {order.delayReasons!.map((d) => (
+                    <li
+                      key={d.id}
+                      className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium">
+                          {STATUS_LABEL[d.status]}
+                          <span className="ml-2 rounded-full bg-destructive/15 px-2 py-0.5 text-[11px] font-semibold text-destructive">
+                            {formatOverdue(d.minutesLate)} de atraso
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {new Date(d.createdAt).toLocaleString("pt-BR")}
+                        </span>
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap">{d.reason}</p>
+                      {d.createdByName && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          por {d.createdByName}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

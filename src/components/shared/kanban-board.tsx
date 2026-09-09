@@ -4,10 +4,11 @@ import { useState, useTransition, useRef, useCallback, useEffect, useMemo } from
 import { useRouter } from "next/navigation";
 import { Maximize2, Minimize2, Search, ChevronRight } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
-import { STATUS_LABEL, STATUS_STYLE, nextStatus, nextSimplifiedStatus, stageAlertLevel, type StageLimitMap } from "@/lib/order-flow";
+import { STATUS_LABEL, STATUS_STYLE, STATUS_SETOR, DELAY_REASON_THRESHOLD_MIN, nextStatus, nextSimplifiedStatus, stageAlertLevel, overdueMinutes, type StageLimitMap } from "@/lib/order-flow";
 import { CardScroller } from "@/components/shared/card-scroller";
 import { OrderCard, type OrderCardData } from "@/components/shared/order-card";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
+import { DelayReasonModal } from "@/components/shared/delay-reason-modal";
 import { Button } from "@/components/ui/button";
 
 export interface KanbanCard extends OrderCardData {}
@@ -111,6 +112,38 @@ export function KanbanBoard({
       }
       return false;
     });
+
+  // ----- MOTIVO DO ATRASO (justificativa automatica) -----
+  // Cards ja justificados NESTA aba (a action grava no banco, mas o
+  // router.refresh e assincrono; sem isto o modal reabriria no intervalo) e
+  // cards adiados no "Agora nao" (valem ate o proximo carregamento da pagina).
+  const [justificados, setJustificados] = useState<Set<string>>(() => new Set());
+  const [adiados, setAdiados] = useState<Set<string>>(() => new Set());
+
+  // Minutos de atraso por card, recalculados a cada tick do relogio interno.
+  const atrasoPorCard = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of cards) {
+      m.set(c.id, overdueMinutes(c.status, c.statusSince, stageLimits, nowTick));
+    }
+    return m;
+  }, [cards, stageLimits, nowTick]);
+
+  // Card que deve receber o pedido de justificativa AGORA: o mais atrasado
+  // entre os que passaram do limiar, ainda nao tem motivo na etapa atual e
+  // pertencem ao setor do usuario (Gestao acompanha todas as etapas). Um de
+  // cada vez — uma fila de modais empilhados nao seria respondida.
+  const cardParaJustificar = useMemo(() => {
+    if (!userRole) return null;
+    const candidatos = visibleCards
+      .filter((c) => {
+        if (c.hasDelayReason || justificados.has(c.id) || adiados.has(c.id)) return false;
+        if (userRole !== "GESTAO" && STATUS_SETOR[c.status] !== userRole) return false;
+        return (atrasoPorCard.get(c.id) ?? 0) >= DELAY_REASON_THRESHOLD_MIN;
+      })
+      .sort((a, b) => (atrasoPorCard.get(b.id) ?? 0) - (atrasoPorCard.get(a.id) ?? 0));
+    return candidatos[0] ?? null;
+  }, [visibleCards, atrasoPorCard, justificados, adiados, userRole]);
 
   // Proximo status conforme o fluxo do board: no simplificado usa a cadeia
   // PAGO->EMBALADO->ENTREGUE; no padrao, o fluxo linear completo. Sem isto, a
@@ -369,6 +402,7 @@ export function KanbanBoard({
                 onClick={() => setOpenId(card.id)}
                 style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
                 stageAlert={stageAlertLevel(card.status, card.statusSince, stageLimits, nowTick)}
+                lateMinutes={atrasoPorCard.get(card.id) ?? 0}
                 action={
                   canAdvanceCard(card) ? (
                     <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />
@@ -455,6 +489,22 @@ export function KanbanBoard({
       )}
 
       {openId && <OrderDetailModal orderId={openId} onClose={() => setOpenId(null)} canManage={canManage} />}
+
+      {/* Justificativa de atraso: abre sozinho para o setor dono da etapa
+          quando um card passa do limiar de minutos alem do prazo. */}
+      {cardParaJustificar && (
+        <DelayReasonModal
+          card={cardParaJustificar}
+          lateMinutes={atrasoPorCard.get(cardParaJustificar.id) ?? 0}
+          onDone={() => {
+            setJustificados((prev) => new Set(prev).add(cardParaJustificar.id));
+            router.refresh();
+          }}
+          onDismiss={() =>
+            setAdiados((prev) => new Set(prev).add(cardParaJustificar.id))
+          }
+        />
+      )}
 
       {/* Pop-up de rastreio (antes de PROCESSADO) — EXCLUSAO MUTUA:
           - Com codigo de rastreio: envio EXTERNO (Correios/Transportadora),

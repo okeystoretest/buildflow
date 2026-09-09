@@ -2,7 +2,7 @@
 
 import type { OrderStatus } from "@prisma/client";
 import { FileText, Receipt, User, Tag, Clock } from "lucide-react";
-import { STATUS_STYLE, type StageAlert } from "@/lib/order-flow";
+import { STATUS_STYLE, formatOverdue, type StageAlert } from "@/lib/order-flow";
 import { cn } from "@/lib/utils";
 
 export interface OrderCardData {
@@ -26,6 +26,9 @@ export interface OrderCardData {
   deliveredAt?: string | null;
   // ISO de quando o pedido entrou no status atual (para alerta temporal).
   statusSince?: string | null;
+  // Já existe motivo de atraso registrado para a etapa ATUAL deste pedido.
+  // Quando true, o quadro não volta a pedir a justificativa.
+  hasDelayReason?: boolean;
 }
 
 export function OrderCard({
@@ -34,6 +37,7 @@ export function OrderCard({
   style,
   action,
   stageAlert = "none",
+  lateMinutes = 0,
 }: {
   data: OrderCardData;
   onClick?: () => void;
@@ -43,6 +47,9 @@ export function OrderCard({
   action?: React.ReactNode;
   // Nivel de alerta temporal calculado pelo board (aviso/alerta/nenhum).
   stageAlert?: StageAlert;
+  // Minutos decorridos desde que o prazo da etapa estourou (0 = no prazo).
+  // Exibido ao lado do selo "Atrasado" para dar o tamanho do atraso.
+  lateMinutes?: number;
 }) {
   const s = STATUS_STYLE[data.status];
   // Alerta visual: processando sem NF. Troca (4 - Troca) e isenta de NF, entao
@@ -54,29 +61,30 @@ export function OrderCard({
     ? { rotulo: "Comanda", valor: data.comandaNumber }
     : { rotulo: "Pedido", valor: data.orderNumber };
 
-  // Borda/realce por tempo de permanencia (Gestao > Etapas). O "Sem NF" tem
+  // Realce por tempo de permanencia (Gestao > Etapas). O "Sem NF" tem
   // prioridade visual (vermelho proprio); fora isso aplicamos warn/alert.
-  // Pedido ATRASADO (tempo limite excedido): fundo vermelho preenchido por
-  // inteiro (antes era só a borda). Forçamos texto claro nos descendentes para
-  // manter legibilidade sobre o vermelho. O aviso "warn" (50%) segue discreto,
-  // só na borda. O selo "Sem NF" (processando sem nota) mantém prioridade.
+  // Os DOIS niveis preenchem o card por inteiro:
+  //   - 50% do prazo  -> fundo AMARELO (antes era so a borda);
+  //   - prazo estourado -> fundo VERMELHO.
+  // O contraste do texto e tratado pelas classes `.card-overdue` (texto branco
+  // sobre o vermelho) e `.card-warn` (texto escuro sobre o amarelo) em
+  // globals.css — amarelo com texto branco fica ilegivel.
   const atrasado = !alerta && stageAlert === "alert";
-  // Fundo vermelho preenchido (antes só borda). O contraste do texto é tratado
-  // pela classe utilitária `.card-overdue` em globals.css, que força cores
-  // legíveis (branco) em todos os textos internos, exceto no selo "Atrasado".
-  const timeBorder =
-    atrasado
-      ? "card-overdue border-red-700 bg-red-600 shadow-md shadow-red-900/20"
-      : !alerta && stageAlert === "warn"
-        ? "border-amber-500/70 ring-1 ring-amber-500/25 hover:shadow-md hover:shadow-amber-500/10"
-        : null;
+  const atencao = !alerta && stageAlert === "warn";
+  // Card com fundo preenchido: muda o tratamento dos chips internos.
+  const preenchido = atrasado || atencao;
+  const timeBorder = atrasado
+    ? "card-overdue border-red-700 bg-red-600 shadow-md shadow-red-900/20"
+    : atencao
+      ? "card-warn border-amber-500 bg-amber-300 shadow-md shadow-amber-900/10"
+      : null;
 
   return (
     <div
       style={style}
       className={cn(
         "card-hover group w-full rounded-xl border p-3 text-left shadow-sm animate-fade-in-up",
-        atrasado ? null : "bg-card",
+        preenchido ? null : "bg-card",
         alerta
           ? "border-destructive/50 ring-1 ring-destructive/20 hover:shadow-md hover:shadow-destructive/10"
           : timeBorder ?? "border-border hover:border-primary/40 hover:shadow-md",
@@ -117,8 +125,8 @@ export function OrderCard({
 
       {/* rodape: sinais (NF, comprovante) + alerta + acao (seta de status) */}
       <div className="mt-2 flex items-center gap-2 border-t border-border/60 pt-2">
-        <Signal active={data.hasPaymentProof} overdue={atrasado} icon={<Receipt className="h-3 w-3" />} label="Comprov." />
-        <Signal active={data.hasInvoice} overdue={atrasado} icon={<FileText className="h-3 w-3" />} label="NF" />
+        <Signal active={data.hasPaymentProof} filled={preenchido} overdue={atrasado} icon={<Receipt className="h-3 w-3" />} label="Comprov." />
+        <Signal active={data.hasInvoice} filled={preenchido} overdue={atrasado} icon={<FileText className="h-3 w-3" />} label="NF" />
         {alerta && (
           <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-semibold text-destructive">
             Sem NF
@@ -128,16 +136,18 @@ export function OrderCard({
           <span
             className={cn(
               "order-overdue-badge inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-              atrasado
-                ? "bg-white text-red-700"
-                : stageAlert === "alert"
-                  ? "bg-red-500/15 text-red-600 dark:text-red-400"
-                  : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+              atrasado ? "bg-white text-red-700" : "bg-white text-amber-800",
             )}
-            title={stageAlert === "alert" ? "Tempo limite excedido" : "Atenção: 50% do tempo limite"}
+            title={
+              atrasado
+                ? `Tempo limite excedido há ${formatOverdue(lateMinutes)}`
+                : "Atenção: 50% do tempo limite"
+            }
           >
             <Clock className="h-3 w-3" />
-            {stageAlert === "alert" ? "Atrasado" : "Atenção"}
+            {/* No atraso, o selo carrega o TAMANHO do atraso ("Atrasado · 7min")
+                — saber que estourou o prazo diz pouco sem saber há quanto. */}
+            {atrasado ? `Atrasado · ${formatOverdue(lateMinutes)}` : "Atenção"}
           </span>
         )}
         {action && <span className="ml-auto shrink-0">{action}</span>}
@@ -148,27 +158,33 @@ export function OrderCard({
 
 function Signal({
   active,
+  filled,
   overdue,
   icon,
   label,
 }: {
   active?: boolean;
-  // Card ATRASADO (fundo vermelho preenchido). Nesse contexto o verde do chip
-  // "anexado" perde contraste; trocamos por amarelo de alto contraste para que
-  // o usuário identifique de imediato quais documentos já estão no pedido.
+  // Card com fundo preenchido (amarelo de atencao ou vermelho de atraso).
+  // Nesse contexto o verde translucido some, entao o chip "anexado" vira verde
+  // SOLIDO — a cor do documento anexado e verde em qualquer fundo.
+  filled?: boolean;
+  // Card atrasado (fundo vermelho): muda so o chip PENDENTE, que precisa de
+  // borda clara para nao sumir; no amarelo a borda e escura.
   overdue?: boolean;
   icon: React.ReactNode;
   label: string;
 }) {
-  // Em card atrasado: anexado = chip amarelo (alto contraste sobre o vermelho);
-  // pendente = chip translúcido claro discreto. A classe `signal-overdue-active`
-  // reforça o amarelo em globals.css, vencendo o `.card-overdue *` global.
-  const cls = overdue
-    ? active
-      ? "signal-overdue-active bg-amber-300 text-red-900"
-      : "border border-white/40 text-white/80"
-    : active
-      ? "bg-motorista/15 text-motorista"
+  // Documento anexado = SEMPRE verde, independente da cor de fundo do card.
+  // Em card preenchido usamos verde solido (`signal-filled-active` reforça a
+  // cor em globals.css, vencendo o `.card-overdue *` / `.card-warn *`).
+  const cls = active
+    ? filled
+      ? "signal-filled-active bg-emerald-500 text-white"
+      : "bg-motorista/15 text-motorista"
+    : filled
+      ? overdue
+        ? "border border-white/40 text-white/80"
+        : "border border-amber-900/30 text-amber-900/70"
       : "bg-secondary text-muted-foreground/60";
 
   return (

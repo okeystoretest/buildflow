@@ -48,3 +48,28 @@ export async function loadStatusSince(
   }
   return since;
 }
+
+/**
+ * Quais pedidos JÁ têm motivo de atraso registrado para o status em que estão
+ * agora. O quadro usa isso para não voltar a pedir a justificativa de uma etapa
+ * que alguém já explicou — e por isso a checagem é por (pedido, status), não só
+ * por pedido: ao avançar de etapa e atrasar de novo, o motivo é pedido outra vez.
+ *
+ * Retorna um Set<orderId>.
+ */
+export async function loadDelayReasonFlags(
+  orders: { id: string; status: OrderStatus }[],
+): Promise<Set<string>> {
+  const flags = new Set<string>();
+  if (orders.length === 0) return flags;
+
+  const rows = await prisma.orderDelayReason.findMany({
+    where: { orderId: { in: orders.map((o) => o.id) } },
+    select: { orderId: true, status: true },
+  });
+  const statusById = new Map(orders.map((o) => [o.id, o.status] as const));
+  for (const r of rows) {
+    if (statusById.get(r.orderId) === r.status) flags.add(r.orderId);
+  }
+  return flags;
+}
