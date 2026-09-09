@@ -190,6 +190,33 @@ export function isPdfDataUrl(dataUrl: string): boolean {
 }
 
 /**
+ * Converte o caminho publico gravado no banco (ex.:
+ * "/api/uploads/comprovantes-entrega/2026/09/x.webp") no caminho ABSOLUTO do
+ * arquivo dentro de UPLOAD_DIR.
+ *
+ * Devolve null quando o resultado escaparia da raiz de uploads — o caminho vem
+ * do banco, mas quem serve o arquivo nao deve depender disso para nao virar um
+ * path traversal caso um registro seja gravado torto.
+ *
+ * Existe para que outros handlers que servem arquivo (ex.: o comprovante de
+ * entrega no acompanhamento do cliente) reaproveitem a MESMA conversao de base
+ * publica -> disco, em vez de reimplementarem a lista de bases conhecidas.
+ */
+export function resolveUploadedFilePath(publicPath: string): string | null {
+  if (!publicPath) return null;
+  let rel = publicPath;
+  const base = KNOWN_PUBLIC_BASES.find((b) => rel.startsWith(b));
+  if (base) rel = rel.slice(base.length);
+  rel = rel.replace(/^\/+/, "");
+  if (!rel) return null;
+
+  const root = path.resolve(UPLOAD_DIR);
+  const absolute = path.resolve(root, rel);
+  if (absolute !== root && !absolute.startsWith(root + path.sep)) return null;
+  return absolute;
+}
+
+/**
  * Remove do DISCO um arquivo previamente salvo, a partir do caminho relativo
  * gravado no banco (ex.: "/uploads/comprovantes-pagamento/2026/07/x.webp").
  *
@@ -200,16 +227,10 @@ export function isPdfDataUrl(dataUrl: string): boolean {
 export async function deleteUploadedFile(publicPath: string): Promise<void> {
   try {
     if (!publicPath) return;
-    // Tira a base publica do inicio, sobra "<folder>/ano/mes/arquivo". Testa
-    // TODAS as bases conhecidas: sem isso, depois da troca do default, os
-    // registros gravados com "/uploads/..." nao seriam encontrados no disco e
-    // os arquivos ficariam orfaos na exclusao.
-    let rel = publicPath;
-    const base = KNOWN_PUBLIC_BASES.find((b) => rel.startsWith(b));
-    if (base) rel = rel.slice(base.length);
-    rel = rel.replace(/^\/+/, ""); // remove barras iniciais
-    if (!rel) return;
-    const absolutePath = path.join(UPLOAD_DIR, rel);
+    // A conversao caminho publico -> disco (incluindo a lista de bases antigas)
+    // vive em resolveUploadedFilePath: duas copias dessa regra divergiriam.
+    const absolutePath = resolveUploadedFilePath(publicPath);
+    if (!absolutePath) return;
     await unlink(absolutePath);
   } catch {
     // Arquivo ja pode nao existir; ignorar silenciosamente.

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { MapPin, Package, PackageCheck, Clock, History } from "lucide-react";
+import { MapPin, Package, PackageCheck, Clock, History, Camera } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hasTrackingAccess } from "@/lib/tracking-auth";
@@ -34,17 +34,29 @@ export const metadata: Metadata = {
 const ORDER_SELECT = {
   id: true,
   orderNumber: true,
+  // Numero da COMANDA: e o que o cliente tem em maos e reconhece. So existe
+  // depois da aprovacao do Financeiro, entao pode vir nulo.
+  comandaNumber: true,
   status: true,
   createdAt: true,
   pieceCount: true,
   items: { select: { quantity: true, product: { select: { name: true } } } },
   campaignItems: { select: { reference: true, quantity: true } },
+  // Fotos que o motorista anexou ao concluir a entrega. So os IDs: o arquivo e
+  // servido pela rota /acompanhar/<token>/comprovante/<id>, que confere se a
+  // foto pertence a um pedido deste mesmo cliente.
+  delivery: { select: { proofs: { select: { id: true } } } },
 } as const;
 
 interface ResumoFonte {
   pieceCount: number;
   items: { quantity: number; product: { name: string } }[];
   campaignItems: { reference: string; quantity: number }[];
+}
+
+/** Fotos da entrega de um pedido (vazio quando ainda nao houve entrega). */
+function comprovantes(o: { delivery: { proofs: { id: string }[] } | null }): string[] {
+  return o.delivery?.proofs.map((p) => p.id) ?? [];
 }
 
 /**
@@ -99,6 +111,10 @@ export default async function AcompanharPedidoPage({
 
   const view = customerStatusView(order.status);
   const itens = resumoItens(order);
+  // Comprovante de entrega: so aparece quando o pedido chegou a ULTIMA etapa da
+  // linha do tempo do cliente ("Entregue"). Antes disso a foto ou nao existe,
+  // ou e de uma tentativa que ainda nao fechou o fluxo.
+  const provasEntrega = view.step === CUSTOMER_STEPS.length - 1 ? comprovantes(order) : [];
 
   const enderecoLinha1 = [order.shipStreet, order.shipNumber].filter(Boolean).join(", ");
   const enderecoLinha2 = [order.shipDistrict, order.shipCity, order.shipState]
@@ -191,6 +207,39 @@ export default async function AcompanharPedidoPage({
           )}
         </section>
 
+        {/* Comprovante de entrega (só no fim do fluxo) */}
+        {provasEntrega.length > 0 && (
+          <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <Camera className="h-4 w-4 text-primary" /> Comprovante de entrega
+            </h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Registro feito pelo entregador no momento da entrega.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {provasEntrega.map((id) => (
+                <a
+                  key={id}
+                  href={`/acompanhar/${params.token}/comprovante/${id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block"
+                >
+                  {/* next/image exigiria um loader para servir uma rota dinâmica
+                      autenticada; a <img> simples entrega o mesmo com menos
+                      peça móvel. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/acompanhar/${params.token}/comprovante/${id}`}
+                    alt="Comprovante de entrega"
+                    className="h-32 w-32 rounded-xl border border-border object-cover transition-transform hover:scale-[1.03]"
+                  />
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Histórico de compras */}
         <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
@@ -199,7 +248,7 @@ export default async function AcompanharPedidoPage({
           {historico.length > 0 ? (
             <ul className="space-y-3">
               {historico.map((h) => (
-                <HistoricoItem key={h.id} order={h} />
+                <HistoricoItem key={h.id} order={h} token={params.token} />
               ))}
             </ul>
           ) : (
@@ -264,22 +313,38 @@ function Timeline({ current }: { current: number }) {
   );
 }
 
-/** Uma compra anterior: número, data, status e resumo rápido dos itens. */
+/** Uma compra anterior: comanda, data, status, resumo dos itens e comprovante. */
 function HistoricoItem({
   order,
+  token,
 }: {
-  order: ResumoFonte & { orderNumber: string; status: OrderStatus; createdAt: Date };
+  order: ResumoFonte & {
+    orderNumber: string;
+    comandaNumber: string | null;
+    status: OrderStatus;
+    createdAt: Date;
+    delivery: { proofs: { id: string }[] } | null;
+  };
+  // Token do link em uso — é por ele que a rota do comprovante autoriza a foto.
+  token: string;
 }) {
   const view = customerStatusView(order.status);
   const itens = resumoItens(order);
   // Resumo RÁPIDO: nomes na mesma linha, com reticências a partir do 4º item.
   const resumo = itens.slice(0, 3).map((i) => `${i.quantity}x ${i.label}`).join(" · ");
   const extras = itens.length - 3;
+  // Comprovante nas compras já entregues (nas demais ainda não existe foto).
+  const provas = view.step === CUSTOMER_STEPS.length - 1 ? comprovantes(order) : [];
 
   return (
     <li className="rounded-xl border border-border bg-background/40 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="font-data text-sm font-semibold">{order.orderNumber}</span>
+        {/* A COMANDA é a referência que o cliente reconhece — o número interno
+            do pedido não diz nada para ele. Sem comanda emitida, o traço deixa
+            claro que ela ainda não saiu, em vez de esconder a linha. */}
+        <span className="font-data text-sm font-semibold">
+          Comanda {order.comandaNumber ?? "—"}
+        </span>
         <span
           className={cn(
             "rounded-full px-2.5 py-0.5 text-xs font-medium",
@@ -297,6 +362,28 @@ function HistoricoItem({
           {resumo}
           {extras > 0 && <span className="text-muted-foreground"> · +{extras}</span>}
         </p>
+      )}
+      {provas.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Camera className="h-3.5 w-3.5" /> Entrega
+          </span>
+          {provas.map((id) => (
+            <a
+              key={id}
+              href={`/acompanhar/${token}/comprovante/${id}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/acompanhar/${token}/comprovante/${id}`}
+                alt="Comprovante de entrega"
+                className="h-14 w-14 rounded-lg border border-border object-cover transition-transform hover:scale-[1.05]"
+              />
+            </a>
+          ))}
+        </div>
       )}
     </li>
   );
