@@ -5,7 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSocket, getConnectionSnapshot } from "./connection";
-import { toWhatsappJid, phoneSuffix, sendSpacingMs } from "./pure";
+import { toWhatsappJid, phoneSuffix, sendSpacingMs, resolveSendJid } from "./pure";
 
 /** Texto exato definido pelo produto. */
 export const MENSAGEM_NOVO_PACOTE =
@@ -69,10 +69,35 @@ export async function sendWhatsappToDrivers(args: { orderId?: string }): Promise
 
       // try/catch POR DESTINATARIO: uma falha nunca interrompe as demais.
       try {
-        await sock.sendMessage(jid, { text: MENSAGEM_NOVO_PACOTE });
+        // CONFIRMA o JID antes de enviar. O JID construido (55 + DDD + numero)
+        // nao e necessariamente o que o WhatsApp reconhece — numero brasileiro
+        // registrado antes do nono digito tem JID canonico sem o 9. Enviar para
+        // a forma errada NAO da erro: o Baileys aceita e a mensagem se perde,
+        // que era exatamente o caso de "log diz ENVIADO e ninguem recebe".
+        const lookup = await sock.onWhatsApp(jid).catch(() => undefined);
+        const alvo = resolveSendJid(jid, lookup);
+
+        if (alvo.kind === "sem-whatsapp") {
+          ignorados++;
+          await registrar(
+            args.orderId,
+            m.id,
+            sufixo,
+            "IGNORADO",
+            "Numero nao possui WhatsApp.",
+          );
+          console.warn(
+            `[whatsapp] usuario ${m.id} (final ${sufixo ?? "?"}): numero sem WhatsApp; ignorado.`,
+          );
+          continue;
+        }
+
+        await sock.sendMessage(alvo.jid, { text: MENSAGEM_NOVO_PACOTE });
         enviados++;
         await registrar(args.orderId, m.id, sufixo, "ENVIADO", null);
-        console.log(`[whatsapp] enviado para usuario ${m.id} (final ${sufixo ?? "?"}).`);
+        console.log(
+          `[whatsapp] enviado para usuario ${m.id} (final ${sufixo ?? "?"}, jid ${alvo.kind}).`,
+        );
       } catch (err) {
         falhas++;
         const motivo = err instanceof Error ? err.message : "Erro desconhecido.";

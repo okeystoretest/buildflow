@@ -56,6 +56,43 @@ export function toWhatsappJid(phone: string | null): string | null {
 }
 
 /**
+ * Resultado da consulta do numero ao WhatsApp, ja traduzido para a decisao de
+ * envio. `jid` so existe quando ha para onde mandar.
+ */
+export type JidResolution =
+  | { kind: "verificado"; jid: string }
+  | { kind: "nao-verificado"; jid: string }
+  | { kind: "sem-whatsapp" };
+
+/**
+ * Decide para qual JID a mensagem vai, a partir do JID construido e da resposta
+ * de `sock.onWhatsApp`.
+ *
+ * POR QUE ISTO EXISTE: o JID montado por concatenacao (55 + DDD + numero) NAO e
+ * necessariamente o que o WhatsApp reconhece. Numero brasileiro registrado
+ * antes da chegada do nono digito tem JID canonico SEM o 9, e o mesmo numero
+ * pode ter as duas formas. Mandar para a forma errada nao devolve erro: o
+ * Baileys aceita, o envio e contabilizado como sucesso e a mensagem nao chega a
+ * ninguem. Era o motivo de o painel mostrar "ENVIADO" enquanto o motorista nao
+ * recebia nada.
+ *
+ * A resposta do Baileys ja distingue os dois casos que importam:
+ *  - lista devolvida (mesmo vazia) = a consulta funcionou. Numero fora da lista
+ *    simplesmente nao tem WhatsApp, e nao adianta enviar.
+ *  - undefined = a consulta falhou (rede/oscilacao). Ai vale mais tentar com o
+ *    JID construido do que deixar de avisar o motorista.
+ */
+export function resolveSendJid(
+  construido: string,
+  lookup: { jid: string; exists: unknown }[] | undefined,
+): JidResolution {
+  if (!lookup) return { kind: "nao-verificado", jid: construido };
+  const achado = lookup.find((r) => Boolean(r.exists) && Boolean(r.jid));
+  if (!achado) return { kind: "sem-whatsapp" };
+  return { kind: "verificado", jid: achado.jid };
+}
+
+/**
  * Ultimos 4 digitos, para log. Nunca devolve o numero inteiro: e o que permite
  * conferir "foi para o numero certo?" sem expor o telefone no log.
  */

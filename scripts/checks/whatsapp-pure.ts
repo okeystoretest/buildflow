@@ -6,6 +6,7 @@ import {
   nextBackoffDelay,
   isLeaseExpired,
   sendSpacingMs,
+  resolveSendJid,
   LEASE_TTL_MS,
 } from "../../src/lib/whatsapp/pure";
 
@@ -56,6 +57,46 @@ check("concessao futura", isLeaseExpired(new Date(agora.getTime() + 5000), agora
 // --- sendSpacingMs: 1s a 3s ---
 check("espacamento minimo", sendSpacingMs(() => 0), 1000);
 check("espacamento maximo", sendSpacingMs(() => 1), 3000);
+
+// --- resolveSendJid: qual JID usar de fato no envio ---
+//
+// O JID montado por concatenacao (55 + DDD + numero) NAO e necessariamente o
+// que o WhatsApp reconhece: numero brasileiro registrado antes do nono digito
+// tem JID canonico sem o 9. Mandar para o JID errado nao da erro — o Baileys
+// aceita, o log grava ENVIADO e a mensagem nao chega em lugar nenhum. Por isso
+// o envio passa a usar o JID que o servidor devolve.
+const CONSTRUIDO = "5511988887777@s.whatsapp.net";
+const CANONICO = "551188887777@s.whatsapp.net"; // mesmo numero, sem o nono digito
+
+check(
+  "jid canonico substitui o construido",
+  resolveSendJid(CONSTRUIDO, [{ jid: CANONICO, exists: true }]),
+  { kind: "verificado", jid: CANONICO },
+);
+check(
+  "jid confirmado igual ao construido",
+  resolveSendJid(CONSTRUIDO, [{ jid: CONSTRUIDO, exists: true }]),
+  { kind: "verificado", jid: CONSTRUIDO },
+);
+// Consulta RESPONDEU e o numero nao esta la: nao tem WhatsApp. Nao pode virar
+// "ENVIADO" no log — era exatamente isso que escondia o problema.
+check(
+  "numero sem whatsapp nao e enviado",
+  resolveSendJid(CONSTRUIDO, []),
+  { kind: "sem-whatsapp" },
+);
+check(
+  "entrada sem exists conta como ausente",
+  resolveSendJid(CONSTRUIDO, [{ jid: CANONICO, exists: false }]),
+  { kind: "sem-whatsapp" },
+);
+// Consulta FALHOU (undefined): cair fora deixaria de avisar por uma oscilacao
+// de rede. Segue com o construido, mas marcado como nao verificado.
+check(
+  "consulta falha cai no construido",
+  resolveSendJid(CONSTRUIDO, undefined),
+  { kind: "nao-verificado", jid: CONSTRUIDO },
+);
 
 console.log(falhas === 0 ? "OK: whatsapp-pure" : `${falhas} falha(s) em whatsapp-pure`);
 process.exit(falhas === 0 ? 0 : 1);
