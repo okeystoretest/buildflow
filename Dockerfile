@@ -46,6 +46,25 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 # cujo alvo ja foi copiado na linha acima.
 COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
+# CACHE DE RUNTIME DO NEXT
+#
+# Os COPY acima rodam como root, entao /app/.next nasce com dono root — e o
+# servidor roda como `nextjs`. Toda chamada de revalidatePath nas Server Actions
+# faz o Next gravar o manifest de tags em /app/.next/cache; sem permissao, cada
+# uma delas cospe no log:
+#
+#   Failed to update tags manifest.
+#   EACCES: permission denied, mkdir '/app/.next/cache'
+#
+# A renderizacao continua funcionando (as paginas do Build.Flow sao dinamicas,
+# nao ha nada de ISR sendo servido do disco), mas o log fica inutilizavel — e um
+# log ruidoso esconde o erro seguinte, que pode ser de verdade.
+#
+# So o CACHE muda de dono, de proposito. O restante de /app/.next continua root
+# e somente leitura para a aplicacao: um app comprometido nao reescreve o
+# proprio codigo compilado.
+RUN mkdir -p /app/.next/cache && chown -R nextjs:nodejs /app/.next/cache
+
 # Pasta de uploads (sera um VOLUME no EasyPanel para persistir).
 RUN mkdir -p /app/uploads && chown -R nextjs:nodejs /app/uploads
 
