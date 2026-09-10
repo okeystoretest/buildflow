@@ -6,11 +6,11 @@
 import { prisma } from "@/lib/prisma";
 import { getSocket, getConnectionSnapshot } from "./connection";
 import { toWhatsappJid, phoneSuffix, sendSpacingMs, resolveSendJid } from "./pure";
+import { getOutbox, MENSAGEM_NOVO_PACOTE } from "./outbox";
 
-/** Texto exato definido pelo produto. */
-export const MENSAGEM_NOVO_PACOTE =
-  "Novo pacote disponível para entrega!\n" +
-  "Acesse https://buildflowapp.com.br/login para mais informações.";
+// O texto mora no outbox porque o reenvio precisa dele sem passar por aqui.
+// Reexportado para nao mudar a superficie publica do modulo.
+export { MENSAGEM_NOVO_PACOTE };
 
 function espera(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -110,7 +110,15 @@ export async function sendWhatsappToDrivers(args: {
           continue;
         }
 
-        await sock.sendMessage(alvo.jid, { text: MENSAGEM_NOVO_PACOTE });
+        const enviado = await sock.sendMessage(alvo.jid, { text: MENSAGEM_NOVO_PACOTE });
+        // GUARDA O CONTEUDO ENVIADO. Se o aparelho do motorista nao
+        // conseguir descriptografar, ele exibe "Aguardando mensagem" e pede o
+        // reenvio; o Baileys busca o conteudo aqui (ver getMessage em
+        // connection.ts). Sem este registro nao ha o que reenviar, e o
+        // placeholder fica na tela do motorista para sempre.
+        if (enviado?.key.id && enviado.message) {
+          getOutbox().lembrar(enviado.key.id, enviado.message);
+        }
         enviados++;
         await registrar(args.orderId, m.id, sufixo, "ENVIADO", null);
         console.log(

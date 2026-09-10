@@ -18,6 +18,7 @@ import makeWASocket, {
 import pino from "pino";
 import { prisma } from "@/lib/prisma";
 import { useDatabaseAuthState, clearWhatsappSession } from "./auth-store";
+import { getOutbox, conteudoPadrao } from "./outbox";
 import { acquireLease, startHeartbeat, releaseLease } from "./lease";
 import { nextBackoffDelay, LEASE_RETRY_MS } from "./pure";
 import { superviseLeadership } from "./supervisor";
@@ -242,6 +243,22 @@ async function connect(): Promise<void> {
     // notificacoes a este cliente em vez de ao celular do dono do numero.
     markOnlineOnConnect: false,
     syncFullHistory: false,
+    // ATENDE O PEDIDO DE REENVIO. Quando o aparelho do destinatario nao
+    // consegue descriptografar o pacote, ele mostra "Aguardando mensagem" e
+    // pede a mensagem de novo; o Baileys so consegue reenviar se esta funcao
+    // devolver o conteudo. O padrao da lib devolve undefined — e o placeholder
+    // fica na tela do motorista para sempre.
+    getMessage: async (key) => {
+      const guardado = key.id ? getOutbox().recuperar(key.id) : undefined;
+      // Log do pedido, nao do envio: o logger do Baileys esta silenciado, e
+      // sem esta linha o reenvio e invisivel. Nao imprime JID nem numero.
+      console.log(
+        `[whatsapp] reenvio pedido pelo destinatario (conteudo ${guardado ? "guardado" : "reconstruido"}).`,
+      );
+      // Sem registro (pedido chegou depois de um redeploy), reconstroi: este
+      // sistema envia um texto unico, entao a reconstrucao e fiel.
+      return guardado ?? conteudoPadrao();
+    },
   });
   rt.socket = sock;
   void registrarEtapa("socket-criado");
