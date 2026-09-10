@@ -92,39 +92,49 @@ export function OrderCard({
     >
       {/* Area clicavel que abre o modal (todo o corpo do card). */}
       <button onClick={onClick} className="block w-full text-left">
-        {/* topo: indicador de status + numero principal */}
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+        {/* Linha 1: status + identificacao + valor. O rotulo ("Comanda"/
+            "Pedido") fica INLINE com o numero em vez de ocupar uma linha so
+            para si — com a coluna mais larga sobra espaco horizontal, e o que
+            faltava era espaco vertical. */}
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <span className={cn("h-2 w-2 shrink-0 rounded-full", s.dot)} />
-            <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{principal.rotulo}</p>
-              <p className="font-data text-sm font-semibold leading-none truncate">{principal.valor}</p>
-            </div>
+            <p className="min-w-0 truncate text-sm leading-tight">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {principal.rotulo}{" "}
+              </span>
+              <span className="font-data font-semibold">{principal.valor}</span>
+            </p>
           </div>
           {data.total && (
-            <span className="font-data text-sm font-semibold text-foreground/90 shrink-0">{data.total}</span>
+            <span className="font-data shrink-0 text-sm font-semibold text-foreground/90">
+              {data.total}
+            </span>
           )}
         </div>
 
-        {/* corpo: cliente (com codigo) + vendedora */}
-        <div className="space-y-1 text-xs text-muted-foreground">
-          <p className="flex items-center gap-1.5 truncate">
-            <User className="h-3 w-3 shrink-0" />
-            <span className="truncate">{data.customerName}</span>
-            {data.customerCode && (
-              <span className="font-data shrink-0 rounded bg-secondary px-1 text-[10px] text-foreground/70">
-                {data.customerCode}
-              </span>
-            )}
-          </p>
-          <p className="flex items-center gap-1.5 truncate">
-            <Tag className="h-3 w-3 shrink-0" /> {data.sellerName}
-          </p>
-        </div>
+        {/* Linha 2: cliente. E o dado que mais se procura de relance, entao
+            fica sozinho na linha e ganha a largura toda. */}
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <User className="h-3 w-3 shrink-0" />
+          <span className="min-w-0 truncate">{data.customerName}</span>
+          {data.customerCode && (
+            <span className="font-data shrink-0 rounded bg-secondary px-1 text-[10px] text-foreground/70">
+              {data.customerCode}
+            </span>
+          )}
+        </p>
       </button>
 
-      {/* rodape: sinais (NF, comprovante) + alerta + acao (seta de status) */}
-      <div className="mt-2 flex items-center gap-2 border-t border-border/60 pt-2">
+      {/* Linha 3: vendedora + sinais + alerta + acao, todos na MESMA faixa.
+          Eram duas linhas (vendedora numa, rodape noutra); juntar as duas e o
+          que tira uma linha inteira da altura do card. flex-wrap para o caso de
+          coluna estreita: em vez de estourar, quebra. */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/60 pt-1.5">
+        <span className="flex min-w-0 shrink items-center gap-1 text-xs text-muted-foreground">
+          <Tag className="h-3 w-3 shrink-0" />
+          <span className="min-w-0 truncate">{data.sellerName}</span>
+        </span>
         <Signal active={data.hasPaymentProof} filled={preenchido} overdue={atrasado} icon={<Receipt className="h-3 w-3" />} label="Comprov." />
         <Signal active={data.hasInvoice} filled={preenchido} overdue={atrasado} icon={<FileText className="h-3 w-3" />} label="NF" />
         {alerta && (

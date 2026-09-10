@@ -61,9 +61,15 @@ check("transicao simplificada valida", canTransitionSimplified("PAGO", "EMBALAND
 check("transicao simplificada invalida", canTransitionSimplified("PAGO", "ENTREGUE"), false);
 
 // --- O corte de estagios do quadro precisa existir ---
-// O Kanban divide as colunas em 1o/2o estagio por indexOf("PROCESSANDO"). Se
-// PROCESSANDO sair das colunas, o indexOf devolve -1 e TODAS as colunas caem no
+// O Kanban divide as colunas em 1o/2o estagio por indexOf("EMBALANDO"). Se
+// EMBALANDO sair das colunas, o indexOf devolve -1 e TODAS as colunas caem no
 // 1o estagio, sem ninguem perceber.
-check("corte de estagio existe", DASHBOARD_COLUMNS.indexOf("PROCESSANDO") > 0, true);
+check("corte de estagio existe", DASHBOARD_COLUMNS.indexOf("EMBALANDO") > 0, true);
+// A grade usa lg:grid-cols-5 nos dois estagios. Se o corte deixar de dar 5 e 5,
+// sobra vao vazio (ou falta coluna) na fileira — e ninguem percebe olhando o
+// codigo do card.
+const corte = DASHBOARD_COLUMNS.indexOf("EMBALANDO");
+check("estagio 1 com 5 colunas", DASHBOARD_COLUMNS.slice(0, corte).length, 5);
+check("estagio 2 com 5 colunas", DASHBOARD_COLUMNS.slice(corte).length, 5);
 
 console.log(falhas === 0 ? "OK: order-flow" : `${falhas} falha(s) em order-flow`);

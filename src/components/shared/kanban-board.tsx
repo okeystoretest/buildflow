@@ -343,12 +343,15 @@ export function KanbanBoard({
   const topBarClass =
     titleAccent === "distribuicao" ? "bg-distribuicao" : "bg-white";
 
-  // Divisão em dois estágios. O 1º vai até "Embalando" (fim da preparação);
-  // o 2º começa em "Processando" (expedição). O corte era "Embalado", que saiu
-  // do fluxo — sem trocar, indexOf devolveria -1 e TODAS as colunas cairiam no
-  // 1º estágio. Se "Processando" não estiver nas colunas (fluxo simplificado),
-  // tudo cai no estágio 1 (fallback seguro).
-  const splitIdx = columns.indexOf("PROCESSANDO");
+  // Divisão em dois estágios. O 1º vai até "Conferindo" (fim da conferência);
+  // o 2º começa em "Embalando" — embalar já é preparar a saída, então entra na
+  // expedição. Com o fluxo atual isso deixa 5 colunas de cada lado, e a grade
+  // abaixo usa exatamente 5 para não sobrar vão vazio na fileira.
+  //
+  // Se "Embalando" não estiver nas colunas, tudo cai no estágio 1 (fallback
+  // seguro) — é o que acontece se alguém mexer em DASHBOARD_COLUMNS sem
+  // atualizar este corte. O script scripts/checks/order-flow.ts trava isso.
+  const splitIdx = columns.indexOf("EMBALANDO");
   const stage1 = splitIdx >= 0 ? columns.slice(0, splitIdx) : columns;
   const stage2 = splitIdx >= 0 ? columns.slice(splitIdx) : [];
 
@@ -388,8 +391,10 @@ export function KanbanBoard({
             O CardScroller mede o 3o card em vez de usar altura fixa — os cards
             variam de altura (alerta de etapa, observacoes) e a altura fixa ora
             sobrava, ora cortava o ultimo card no meio. */}
+        {/* 4 cards visíveis (era 3): o card do Fluxo passou de 4 para 3 linhas,
+            então cabe mais um na MESMA altura de coluna de antes. */}
         <CardScroller
-          visibleItems={3}
+          visibleItems={4}
           className={`transition-colors ${
             canDrag && dragOverStatus === status ? "ring-2 ring-primary/60 bg-primary/5" : ""
           }`}
@@ -481,13 +486,17 @@ export function KanbanBoard({
           {/* Dois estágios do fluxo, cada um com barra full-width:
               Estágio 1: até "Embalando" (fim da preparação).
               Estágio 2: de "Embalado" em diante (expedição/entrega). */}
+          {/* 5 colunas por estágio: bate com o número real de colunas de cada
+              lado do corte. Com lg:grid-cols-6 sobrava um vão vazio à direita
+              em cada fileira e todas as colunas ficavam 20% mais estreitas do
+              que podiam. */}
           <StageBar label="1º Estágio · Preparação" />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {stage1.map((status) => renderColumn(status))}
           </div>
 
           <StageBar label="2º Estágio · Expedição" className="mt-4" />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {stage2.map((status) => renderColumn(status))}
           </div>
         </>
