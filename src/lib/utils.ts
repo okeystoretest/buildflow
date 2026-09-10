@@ -76,3 +76,21 @@ export function shortName(full: string): string {
   const segundo = partes.slice(1).find((p) => !PARTICULAS_NOME.has(p.toLowerCase()));
   return segundo ? `${primeiro} ${segundo}` : primeiro;
 }
+
+/**
+ * Proxima campanha do rodizio do Ranking de Vendas.
+ *
+ * Percorre a lista em ciclo: a ultima volta para a primeira. Quando o id atual
+ * NAO esta na lista, recomeca do inicio — isso importa porque o quadro
+ * recarrega os dados sozinho a cada 30 minutos e a lista pode mudar no meio do
+ * rodizio (uma campanha desativada some). Sem esse retorno ao inicio, o rodizio
+ * ficaria preso num id inexistente e o bloco pararia de trocar.
+ *
+ * Lista vazia devolve "" — nao ha campanha para exibir.
+ */
+export function nextCampaignId(ids: string[], currentId: string): string {
+  if (ids.length === 0) return "";
+  const i = ids.indexOf(currentId);
+  if (i === -1) return ids[0];
+  return ids[(i + 1) % ids.length];
+}

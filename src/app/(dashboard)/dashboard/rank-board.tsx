@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { RefreshCw, Target, TrendingUp, BarChart3, Flame, Trophy, Maximize2, Minimize2, CalendarClock, Pencil, Check, RotateCcw, Undo2 } from "lucide-react";
-import { formatBRL, tierColor, tierText } from "@/lib/utils";
+import { RefreshCw, Target, TrendingUp, BarChart3, Flame, Trophy, Maximize2, Minimize2, CalendarClock, Pencil, Check, RotateCcw, Undo2, Play, Pause } from "lucide-react";
+import { formatBRL, tierColor, tierText, nextCampaignId } from "@/lib/utils";
 import { setRankAdjustment, clearRankAdjustment, clearRankAdjustments } from "@/lib/actions/rank-adjustments";
 import type { RankData, RankRow, CampaignPerf } from "@/lib/rank-data";
 
@@ -31,6 +31,14 @@ export function parseValorBR(txt: string): number | null {
 
 const REFRESH_MS = 30 * 60 * 1000; // 30 minutos
 
+// RODIZIO DAS CAMPANHAS
+//
+// O bloco "Performance na" exibe UMA campanha por vez, e o quadro vive num
+// telao onde ninguem esta operando o seletor. Sem rodizio, as demais campanhas
+// ativas simplesmente nunca aparecem para quem olha a tela. A cada 5 minutos
+// ele avanca para a proxima, dando a volta na lista.
+const CAMPAIGN_ROTATE_MS = 5 * 60 * 1000; // 5 minutos
+
 const MESES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
@@ -41,6 +49,10 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<Date>(new Date());
   const [campSel, setCampSel] = useState<string>(initial.campaignPerf[0]?.id ?? "");
+  // Rodizio ligado? Escolher uma campanha a mao DESLIGA: quem mexeu no seletor
+  // quer ver aquela campanha, e ter a tela trocada sozinha 5 minutos depois
+  // desfaz a escolha sem aviso. O botao ao lado religa.
+  const [campRotating, setCampRotating] = useState(true);
   const [isFull, setIsFull] = useState(false);
   // Modo de edicao manual dos valores realizados. Exclusivo da GESTAO e
   // indisponivel em tela cheia (o telao e so exibicao).
@@ -83,6 +95,20 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
     const id = setInterval(() => fetchPeriod(selMonth, selYear), REFRESH_MS);
     return () => clearInterval(id);
   }, [data.isCurrent, fetchPeriod, selMonth, selYear]);
+
+  // Rodizio das campanhas. Com 0 ou 1 campanha nao ha o que alternar, e o
+  // intervalo nem chega a ser criado. A lista entra nas dependencias porque o
+  // auto-refresh troca `data` e a lista pode mudar no meio do rodizio.
+  const campIds = data.campaignPerf.map((c) => c.id).join(",");
+  useEffect(() => {
+    if (!campRotating) return;
+    const ids = campIds ? campIds.split(",") : [];
+    if (ids.length < 2) return;
+    const id = setInterval(() => {
+      setCampSel((atual) => nextCampaignId(ids, atual));
+    }, CAMPAIGN_ROTATE_MS);
+    return () => clearInterval(id);
+  }, [campRotating, campIds]);
 
   // Tela cheia nativa do navegador (oculta a barra superior do app).
   const toggleFull = useCallback(async () => {
@@ -303,9 +329,46 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
               <span className="text-base font-semibold">Performance na</span>
               {data.campaignPerf.length > 0 && (
                 <select className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
-                  value={campSel} onChange={(e) => setCampSel(e.target.value)}>
+                  value={campSel}
+                  onChange={(e) => {
+                    // Escolha manual desliga o rodizio: a pessoa quer ESTA
+                    // campanha, e trocar sozinho depois desfaria a escolha.
+                    setCampRotating(false);
+                    setCampSel(e.target.value);
+                  }}>
                   {data.campaignPerf.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+              )}
+              {/* Estado do rodizio + religar. So aparece havendo mais de uma
+                  campanha: com uma so nao ha alternancia possivel, e o controle
+                  seria um botao que nao faz nada. */}
+              {data.campaignPerf.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Ao religar, ja avanca: religar e ficar 5 minutos na mesma
+                    // campanha parece que o botao nao funcionou.
+                    if (!campRotating) {
+                      setCampSel((atual) => nextCampaignId(data.campaignPerf.map((c) => c.id), atual));
+                    }
+                    setCampRotating((v) => !v);
+                  }}
+                  title={
+                    campRotating
+                      ? "Trocando de campanha a cada 5 min. Clique para fixar esta."
+                      : "Rodízio pausado. Clique para voltar a alternar."
+                  }
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors ${
+                    campRotating
+                      ? "border-vendas/40 bg-vendas/10 text-vendas hover:bg-vendas/20"
+                      : "border-input text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {campRotating ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                  <span className="font-data">
+                    {Math.max(1, data.campaignPerf.findIndex((c) => c.id === campSel) + 1)}/{data.campaignPerf.length}
+                  </span>
+                </button>
               )}
             </div>
           </div>
