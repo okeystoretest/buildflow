@@ -4,12 +4,12 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OrderStatus } from "@prisma/client";
 import { startRoute, completeDelivery } from "@/lib/actions/deliveries";
-import { claimOpenOrder, unassignMyOrder } from "@/lib/actions/logistics";
+import { unassignMyOrder } from "@/lib/actions/logistics";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
 import { CompletePhotoModal } from "./complete-photo-modal";
-import { Truck, Camera, Eye, CheckCircle2, Hand, X } from "lucide-react";
+import { Truck, Camera, Eye, CheckCircle2, X, MapPin } from "lucide-react";
 
 export interface DriverOrderView {
   id: string;
@@ -19,12 +19,21 @@ export interface DriverOrderView {
   customer: string;
   customerCode: string | null;
   notes: string | null;
-  // true quando o card está na coluna "Aguardando Entregador" (sem dono).
+  /** Excursão vinculada ao pedido, quando a forma de envio é excursão. */
+  excursao: { name: string; address: string; notes: string | null } | null;
+  /** true quando a entrega ainda não tem dono (qualquer motorista pode pegar). */
   isOpen?: boolean;
 }
 
-// Card do fluxo restrito do motorista. Progressão:
-//   ENVIADO --(Iniciar rota)--> EM_ROTA --(foto obrigatória)--> ENTREGUE
+/**
+ * Card do fluxo restrito do motorista. Progressão:
+ *   Pronto --(Iniciar)--> Em Rota --(foto obrigatória)--> Entregue
+ *
+ * "Iniciar" num card SEM DONO assume a entrega e sai na mesma ação — não existe
+ * mais o passo separado de "Atribuir", nem a coluna "Aguardando Entregador" de
+ * onde ele vinha. A disputa entre dois motoristas é resolvida no banco (ver
+ * startRoute); aqui só exibimos a mensagem de quem perdeu a corrida.
+ */
 export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; index?: number }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -36,14 +45,6 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
     setError(null);
     start(async () => {
       const res = await startRoute(order.id);
-      if (res.ok) router.refresh(); else setError(res.error);
-    });
-  }
-
-  function atribuir() {
-    setError(null);
-    start(async () => {
-      const res = await claimOpenOrder({ orderId: order.id });
       if (res.ok) router.refresh(); else setError(res.error);
     });
   }
@@ -73,11 +74,12 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
     });
   }
 
-  // Card em aberto: só permite "Atribuir" (pegar para si). Sem iniciar/concluir.
-  const podeAtribuir = order.isOpen === true;
-  const podeIniciar = !podeAtribuir && order.status === "ENVIADO";
-  const podeConcluir = !podeAtribuir && order.status === "EM_ROTA";
+  const podeIniciar = order.status === "ENVIADO";
+  const podeConcluir = order.status === "EM_ROTA";
   const entregue = order.status === "ENTREGUE" || order.status === "CONCLUIDO";
+  // "Cancelar" devolve a atribuição. Não faz sentido em card sem dono: não há
+  // atribuição para devolver. Reaparece assim que o pedido é seu.
+  const podeCancelar = !order.isOpen && (podeIniciar || podeConcluir);
 
   return (
     <div
@@ -102,62 +104,82 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
         <StatusBadge status={order.status} />
       </div>
 
-      {/* Observação em DESTAQUE (leitura durante a entrega). */}
-      {order.notes?.trim() && (
-        <div className="mt-3 rounded-lg border-2 border-motorista/50 bg-motorista/10 p-3 text-sm font-medium leading-relaxed">
-          <p className="mb-0.5 text-xs font-bold uppercase tracking-wide text-motorista">Observação</p>
-          {order.notes}
+      {/* EXCURSÃO em destaque: é para onde o motorista vai. Quando existe, ela
+          ocupa o lugar da observação genérica — as instruções relevantes da
+          entrega são as da excursão. */}
+      {order.excursao ? (
+        <div className="mt-3 rounded-lg border-2 border-motorista/50 bg-motorista/10 p-3 text-sm leading-relaxed">
+          <p className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-motorista">
+            <MapPin className="h-3.5 w-3.5" /> Excursão
+          </p>
+          <p className="font-semibold">{order.excursao.name}</p>
+          <p className="mt-0.5 text-muted-foreground">{order.excursao.address}</p>
+          {order.excursao.notes?.trim() && (
+            <p className="mt-1.5 border-t border-motorista/25 pt-1.5">{order.excursao.notes}</p>
+          )}
         </div>
+      ) : (
+        // Sem excursão, a observação de envio continua: é a única instrução que
+        // o motorista tem para portão, horário ou ponto de referência.
+        order.notes?.trim() && (
+          <div className="mt-3 rounded-lg border-2 border-motorista/50 bg-motorista/10 p-3 text-sm font-medium leading-relaxed">
+            <p className="mb-0.5 text-xs font-bold uppercase tracking-wide text-motorista">Observação</p>
+            {order.notes}
+          </div>
+        )
       )}
 
-      {/* Ações do fluxo. Hierarquia visual: "Ver detalhes" no topo (primária),
-          ações do fluxo (Atribuir/Iniciar/Concluir) abaixo (secundárias). */}
-      <div className="mt-3 flex flex-col gap-2">
-        {/* Ver detalhes (somente leitura, sem histórico/valores) — posição primária. */}
-        <Button variant="outline" size="sm" className="w-full" onClick={() => setDetail(true)}>
-          <Eye className="mr-2 h-4 w-4" /> Ver detalhes
-        </Button>
-
-        {podeAtribuir && (
-          <Button variant="brand" size="lg" className="w-full" onClick={atribuir} disabled={pending}>
-            <Hand className="mr-2 h-5 w-5" />
-            {pending ? "..." : "Atribuir"}
+      {/* Ações em pílula, lado a lado, dividindo a largura igualmente. */}
+      <div className="mt-4 flex items-center gap-2">
+        {podeCancelar && (
+          <Button
+            variant="outline"
+            className="h-11 flex-1 px-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={cancelar}
+            disabled={pending}
+          >
+            <X className="h-4 w-4" />
+            <span className="truncate">{pending ? "..." : "Cancelar"}</span>
           </Button>
         )}
 
+        <Button
+          variant="outline"
+          className="h-11 flex-1 px-2"
+          onClick={() => setDetail(true)}
+        >
+          <Eye className="h-4 w-4" />
+          <span className="truncate">Ver</span>
+        </Button>
+
         {podeIniciar && (
-          <Button variant="brand" size="lg" className="w-full" onClick={iniciar} disabled={pending}>
-            <Truck className="mr-2 h-5 w-5" />
-            {pending ? "..." : "Iniciar rota"}
+          <Button
+            variant="brand"
+            className="h-11 flex-1 px-2"
+            onClick={iniciar}
+            disabled={pending}
+          >
+            <Truck className="h-4 w-4" />
+            <span className="truncate">{pending ? "..." : "Iniciar"}</span>
           </Button>
         )}
 
         {podeConcluir && (
-          <Button variant="motorista" size="lg" className="w-full" onClick={() => setPhotoModal(true)} disabled={pending}>
-            <Camera className="mr-2 h-5 w-5" />
-            {pending ? "Enviando..." : "Concluir com foto"}
+          <Button
+            variant="motorista"
+            className="h-11 flex-1 px-2"
+            onClick={() => setPhotoModal(true)}
+            disabled={pending}
+          >
+            <Camera className="h-4 w-4" />
+            <span className="truncate">{pending ? "..." : "Concluir"}</span>
           </Button>
         )}
 
         {entregue && (
-          <div className="flex items-center justify-center gap-2 rounded-lg bg-motorista/10 py-2 text-sm font-medium text-motorista">
-            <CheckCircle2 className="h-5 w-5" /> Entregue
+          <div className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-motorista/10 text-sm font-medium text-motorista">
+            <CheckCircle2 className="h-4 w-4" /> Entregue
           </div>
-        )}
-
-        {/* Cancelar atribuição: some do motorista e volta o pedido para a coluna
-            "Aguardando Entregador". Disponível enquanto não foi concluído. */}
-        {(podeIniciar || podeConcluir) && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={cancelar}
-            disabled={pending}
-          >
-            <X className="mr-2 h-4 w-4" />
-            {pending ? "..." : "Cancelar"}
-          </Button>
         )}
       </div>
 

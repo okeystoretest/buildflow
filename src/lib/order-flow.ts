@@ -1,5 +1,15 @@
 import type { OrderStatus } from "@prisma/client";
 
+// EMBALADO e PROCESSADO saIram do fluxo. Os valores CONTINUAM no enum do
+// Postgres de proposito: o OrderStatusHistory de todo pedido antigo aponta para
+// eles, e remover do enum exigiria reescrever historico — a auditoria pararia
+// de bater. "Fora do fluxo" aqui significa: nao e coluna, nao e destino de
+// transicao valida e nenhum pedido novo entra neles.
+//
+// O que cada um carregava foi realocado:
+//   - EMBALADO era o gatilho da NF  -> agora e EMBALANDO (ver logistics.ts).
+//   - EMBALADO era o passo do meio do fluxo simplificado -> agora e EMBALANDO.
+//   - PROCESSADO estacionava o envio externo -> agora vai direto para ENVIADO.
 export const ORDER_FLOW: OrderStatus[] = [
   "EM_ANALISE",
   "AGUARDANDO_IMPRESSAO",
@@ -7,9 +17,7 @@ export const ORDER_FLOW: OrderStatus[] = [
   "PENDENTE",
   "CONFERINDO",
   "EMBALANDO",
-  "EMBALADO",
   "PROCESSANDO",
-  "PROCESSADO",
   "ENVIADO",
   "EM_ROTA",
   "ENTREGUE",
@@ -54,13 +62,17 @@ export type Setor = "VENDAS" | "FINANCEIRO" | "LOGISTICA" | "MOTORISTA";
 
 // ---------------------------------------------------------------------------
 // FLUXO SIMPLIFICADO (Loja de Origem com simplifiedFlow = true)
-// Caminho curto: EM_ANALISE -> PAGO -> EMBALADO -> ENTREGUE.
+// Caminho curto: EM_ANALISE -> PAGO -> EMBALANDO -> ENTREGUE.
 // Sem NF; comprovante obrigatorio; o Financeiro so ve comprovante + "Pago".
+//
+// O passo do meio era EMBALADO. Com ele fora do fluxo, o lugar passa a ser
+// EMBALANDO: a loja simplificada mantem os mesmos tres passos e a mesma
+// operacao — muda so o rotulo da coluna do meio.
 // ---------------------------------------------------------------------------
-export const SIMPLIFIED_FLOW: OrderStatus[] = ["PAGO", "EMBALADO", "ENTREGUE"];
+export const SIMPLIFIED_FLOW: OrderStatus[] = ["PAGO", "EMBALANDO", "ENTREGUE"];
 
 // Colunas exibidas no fluxo simplificado (sem CONCLUIDO, que some da board).
-export const SIMPLIFIED_COLUMNS: OrderStatus[] = ["PAGO", "EMBALADO", "ENTREGUE"];
+export const SIMPLIFIED_COLUMNS: OrderStatus[] = ["PAGO", "EMBALANDO", "ENTREGUE"];
 
 // Proximo status DENTRO do fluxo simplificado. Retorna null no fim (ENTREGUE).
 export function nextSimplifiedStatus(current: OrderStatus): OrderStatus | null {

@@ -4,29 +4,26 @@ import Link from "next/link";
 import { History } from "lucide-react";
 import { EntregaCard, type DriverOrderView } from "./delivery-card";
 import { MOTORISTA_COLUMNS, STATUS_LABEL, STATUS_STYLE } from "@/lib/order-flow";
-import type { OrderStatus } from "@prisma/client";
+import { CardScroller } from "@/components/shared/card-scroller";
 
-// Coluna virtual (não é status do enum): pedidos ENVIADO ainda sem motorista,
-// disponíveis para qualquer motorista pegar.
-const OPEN_COLUMN = "AGUARDANDO_ENTREGADOR" as const;
+// Quantos cards ficam visíveis por coluna antes de rolar. Mesmo número do
+// Kanban do Financeiro — é de lá que vem a proporção deste quadro.
+const VISIVEIS_POR_COLUNA = 3;
 
+/**
+ * KANBAN DO MOTORISTA — Pronto → Em Rota → Entregue.
+ *
+ * A coluna "Aguardando Entregador" deixou de existir. Ela era uma coluna
+ * VIRTUAL (não era status do enum) só para separar os pedidos sem dono, e
+ * obrigava o motorista a um passo extra: primeiro "Atribuir", depois "Iniciar".
+ * Agora os pedidos sem dono aparecem na própria coluna "Pronto", misturados aos
+ * do motorista, e "Iniciar" faz as duas coisas de uma vez (ver startRoute).
+ *
+ * Com três colunas o quadro fica na mesma proporção do Kanban do Financeiro —
+ * colunas mais largas e mais altas, que era o objetivo do redesenho.
+ */
 export default async function MotoristaPage() {
   const session = await requireRole(["MOTORISTA", "GESTAO"]);
-
-  // 1) Pedidos EM ABERTO (ENVIADO, sem motorista e SEM código de rastreio):
-  //    visíveis a TODOS os motoristas, aguardando atribuição manual.
-  //    Regra de exclusão: pedido com "Código de Rastreio" preenchido segue por
-  //    transportadora — não é entrega de motorista — e sai deste Kanban.
-  const openOrders = await prisma.order.findMany({
-    where: {
-      status: "ENVIADO",
-      delivery: { driverId: null },
-      // Sem rastreio: cobre tanto NULL quanto string vazia por segurança.
-      OR: [{ trackingCode: null }, { trackingCode: "" }],
-    },
-    include: { customer: true },
-    orderBy: { updatedAt: "desc" },
-  });
 
   // Janela de visibilidade para pedidos ENTREGUE: some do Kanban do motorista
   // 15 min apos a entrega, mantendo a interface focada em entregas recentes.
@@ -34,21 +31,45 @@ export default async function MotoristaPage() {
   const DELIVERED_WINDOW_MIN = 15;
   const entregueDesde = new Date(Date.now() - DELIVERED_WINDOW_MIN * 60 * 1000);
 
-  // 2) Entregas do motorista (ou todas, se Gestão) já com dono.
-  //    ENTREGUE so aparece se a entrega ocorreu na janela recente.
-  const myOrders = await prisma.order.findMany({
+  // Escopo do que cada um enxerga:
+  //  - GESTÃO vê todas as entregas;
+  //  - MOTORISTA vê as SUAS + as que ainda não têm dono (disponíveis para
+  //    qualquer um pegar). Entrega de OUTRO motorista continua invisível.
+  //
+  // Regra de exclusão que permanece: pedido com "Código de Rastreio" preenchido
+  // segue por transportadora — não é entrega de motorista — e fica fora daqui.
+  const escopoEntrega =
+    session.role === "GESTAO"
+      ? { isNot: null }
+      : { OR: [{ driverId: session.userId }, { driverId: null }] };
+
+  const orders = await prisma.order.findMany({
     where: {
-      delivery: session.role === "GESTAO" ? { isNot: null } : { driverId: session.userId },
-      OR: [
-        { status: { in: MOTORISTA_COLUMNS.filter((s) => s !== "ENTREGUE") } },
-        { status: "ENTREGUE", delivery: { deliveredAt: { gte: entregueDesde } } },
+      delivery: escopoEntrega,
+      // Dois critérios independentes, cada um com o seu OR. Empilhados em AND
+      // porque duas chaves `OR` no mesmo nível se sobrescreveriam.
+      AND: [
+        {
+          OR: [
+            { status: { in: MOTORISTA_COLUMNS.filter((s) => s !== "ENTREGUE") } },
+            { status: "ENTREGUE", delivery: { deliveredAt: { gte: entregueDesde } } },
+          ],
+        },
+        // Sem rastreio: cobre tanto NULL quanto string vazia por segurança.
+        { OR: [{ trackingCode: null }, { trackingCode: "" }] },
       ],
     },
-    include: { customer: true },
+    include: {
+      customer: true,
+      delivery: { select: { driverId: true } },
+      // Dados da excursão para o motorista ler no card (nome, endereço e
+      // observações da excursão). Só existe quando a forma de envio é excursão.
+      excursao: { select: { name: true, address: true, notes: true } },
+    },
     orderBy: { updatedAt: "desc" },
   });
 
-  const toView = (o: (typeof myOrders)[number], open = false): DriverOrderView => ({
+  const views: DriverOrderView[] = orders.map((o) => ({
     id: o.id,
     status: o.status,
     orderNumber: o.orderNumber,
@@ -56,16 +77,15 @@ export default async function MotoristaPage() {
     customer: o.customer.name,
     customerCode: o.customer.code,
     notes: o.notes,
-    isOpen: open,
-  });
+    excursao: o.excursao
+      ? { name: o.excursao.name, address: o.excursao.address, notes: o.excursao.notes }
+      : null,
+    // Sem dono: qualquer motorista pode assumir clicando em "Iniciar".
+    isOpen: o.delivery?.driverId == null,
+  }));
 
-  const openViews = openOrders.map((o) => toView(o, true));
-  const myViews = myOrders.map((o) => toView(o));
-
-  const byStatus = (s: OrderStatus) => myViews.filter((v) => v.status === s);
-
-  // Colunas exibidas: [Aguardando Entregador] + fluxo normal do motorista.
-  const columns: Array<OrderStatus | typeof OPEN_COLUMN> = [OPEN_COLUMN, ...MOTORISTA_COLUMNS];
+  const byStatus = (s: (typeof MOTORISTA_COLUMNS)[number]) =>
+    views.filter((v) => v.status === s);
 
   return (
     <div className="mx-auto max-w-md space-y-6 pb-8 sm:max-w-6xl">
@@ -73,7 +93,7 @@ export default async function MotoristaPage() {
         <div>
           <h1 className="text-2xl font-bold text-motorista">Minhas entregas</h1>
           <p className="text-sm text-muted-foreground">
-            Pegue um pedido em aberto e siga: Pronto → Em Rota → Entregue.
+            Pronto → Em Rota → Entregue. Pedido sem dono é seu ao tocar em “Iniciar”.
           </p>
         </div>
         <Link
@@ -84,38 +104,34 @@ export default async function MotoristaPage() {
         </Link>
       </div>
 
-      {/* Colunas do fluxo. Em telas pequenas empilham; no desktop lado a lado. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {columns.map((col) => {
-          const isOpenCol = col === OPEN_COLUMN;
-          const list = isOpenCol ? openViews : byStatus(col as OrderStatus);
-          const header = isOpenCol
-            ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40"
-            : STATUS_STYLE[col as OrderStatus].header;
-          const dot = isOpenCol ? "bg-amber-500" : STATUS_STYLE[col as OrderStatus].dot;
-          const label = isOpenCol ? "Aguardando Entregador" : STATUS_LABEL[col as OrderStatus];
+      {/* Três colunas no desktop (mesma proporção do Kanban do Financeiro).
+          Em telas pequenas empilham. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {MOTORISTA_COLUMNS.map((col) => {
+          const list = byStatus(col);
+          const s = STATUS_STYLE[col];
           return (
-            <div key={col} className="space-y-3">
-              <div className={`flex items-center justify-between rounded-lg border px-3 py-2 ${header}`}>
+            <div key={col} className="flex flex-col">
+              <div className={`mb-2 flex items-center justify-between rounded-lg border px-3 py-2 ${s.header}`}>
                 <span className="flex items-center gap-2 text-sm font-semibold">
-                  <span className={`h-2 w-2 rounded-full ${dot}`} />
-                  {label}
+                  <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+                  {STATUS_LABEL[col]}
                 </span>
                 <span className="font-data rounded-full bg-background/60 px-2 text-xs">{list.length}</span>
               </div>
-              {/* Rolagem independente por coluna — SOMENTE no desktop
-                  (sm+). No mobile as colunas empilham e a lista cresce
-                  livremente (sem scroll interno), preservando o toque. */}
-              <div className="kanban-scroll space-y-3 sm:max-h-[calc(100vh-16rem)] sm:overflow-y-auto sm:pr-1">
+              {/* Altura medida pelo N-ésimo card, como no Financeiro: os cards
+                  variam de altura (excursão, observação) e uma altura fixa ora
+                  sobraria, ora cortaria o último card ao meio. */}
+              <CardScroller visibleItems={VISIVEIS_POR_COLUNA}>
                 {list.map((o, i) => (
                   <EntregaCard key={o.id} order={o} index={i} />
                 ))}
                 {list.length === 0 && (
                   <div className="rounded-xl border border-dashed border-border/60 py-6 text-center text-sm text-muted-foreground/60">
-                    {isOpenCol ? "Nenhum pedido em aberto." : "Nenhuma entrega."}
+                    Nenhuma entrega.
                   </div>
                 )}
-              </div>
+              </CardScroller>
             </div>
           );
         })}

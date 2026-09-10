@@ -8,14 +8,15 @@ import { nextStatus, canTransition, nextSimplifiedStatus, canTransitionSimplifie
 import { canInteractWithOrder } from "@/lib/permissions";
 import { isAnexoDispensavelPorContexto } from "@/lib/validations/order";
 import { ativarPecaAoEntregar } from "@/lib/piece-sync";
-import { emitOrderUpdated, emitOrderAvailableForDrivers } from "@/lib/realtime/emit";
+import { emitOrderUpdated, notifyOrderReady } from "@/lib/realtime/emit";
 import { sendPushToUser } from "@/lib/push";
 import type { OrderStatus } from "@prisma/client";
 
 /**
  * Logistica avanca o pedido para um status especifico (ou o proximo do fluxo).
- * - Ao chegar em EMBALADO: dispara notificacao de NF para a vendedora.
- * - PROCESSADO exige atribuicao de motorista (feito por assignDriverToOrder).
+ * - Ao chegar em EMBALANDO: dispara notificacao de NF para a vendedora.
+ * - A saida de PROCESSANDO exige escolher o envio: rastreio (transportadora)
+ *   ou motorista (proprio/em aberto). Ver assignDriverToOrder/openOrderForDrivers.
  */
 export async function advanceOrderStatus(args: {
   orderId: string;
@@ -142,8 +143,11 @@ export async function advanceOrderStatus(args: {
         },
       });
 
-      // Regra: ao chegar em EMBALADO, notifica a vendedora para anexar a NF.
-      if (target === "EMBALADO") {
+      // Regra: ao chegar em EMBALANDO, notifica a vendedora para anexar a NF.
+      // Era EMBALADO; com ele fora do fluxo, o aviso passa para o passo
+      // anterior. A janela para anexar a nota fica MAIOR, e o bloqueio de
+      // "Processando sem NF" continua valendo — nada avanca sem nota.
+      if (target === "EMBALANDO") {
         await tx.notification.create({
           data: {
             userId: order.sellerId,
@@ -186,6 +190,21 @@ export async function advanceOrderStatus(args: {
     revalidatePath("/logistica/pendencias");
     if (target === "ENTREGUE") revalidatePath("/logistica/controle-pecas");
     emitOrderUpdated({ orderId: args.orderId, status: target });
+    // Entrou em "Pronto" pela seta "Avancar": avisa o motorista. Antes so o
+    // pop-up "Deixar em aberto" avisava, e este caminho — o gesto mais comum da
+    // Logistica — passava batido.
+    if (target === "ENVIADO") {
+      const entrega = await prisma.delivery.findUnique({
+        where: { orderId: order.id },
+        select: { driverId: true },
+      });
+      notifyOrderReady({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        driverId: entrega?.driverId ?? null,
+        hasTracking: Boolean(order.trackingCode),
+      });
+    }
     // Web Push da pendência para a vendedora (após confirmar a transição).
     if (target === "PENDENTE") {
       void sendPushToUser(order.sellerId, {
@@ -207,7 +226,7 @@ export async function advanceOrderStatus(args: {
  * pedido nao usa motorista proprio. Move PROCESSANDO/PROCESSADO -> EM_ROTA,
  * grava o rastreio e marca a entrega como EM_ROTA SEM motorista (driverId null).
  * Assim o pedido sai da fila de logistica sem exigir escolha de motorista e nao
- * aparece na coluna "Aguardando Entregador" dos motoristas (que so pega ENVIADO).
+ * fica fora do Kanban de Motoristas (o quadro deles exclui pedido com rastreio).
  */
 export async function shipWithTracking(args: {
   orderId: string;
@@ -225,12 +244,16 @@ export async function shipWithTracking(args: {
         include: { delivery: true },
       });
       if (!order) throw new Error("Pedido nao encontrado.");
+      // PROCESSADO segue aceito como origem por causa de pedidos legados que
+      // ficaram parados nele antes da reestruturacao do fluxo.
       if (order.status !== "PROCESSANDO" && order.status !== "PROCESSADO") {
-        throw new Error("O pedido precisa estar em Processando/Processado para envio externo.");
+        throw new Error("O pedido precisa estar em Processando para envio externo.");
       }
 
       // Envio externo (Correios/Transportadora): sem motorista proprio. O pedido
-      // vai para PROCESSADO com o rastreio gravado. A Delivery pode nao existir
+      // vai para ENVIADO ("Pronto") com o rastreio gravado — antes parava em
+      // PROCESSADO, que saiu do fluxo. Nao aparece no Kanban de Motoristas: o
+      // quadro deles exclui pedido com rastreio. A Delivery pode nao existir
       // ainda (ex.: Troca, que pula a aprovacao do Financeiro) — usamos upsert.
       // Fica sem motorista (driverId null); o despacho e feito pela transportadora.
       await tx.delivery.upsert({
@@ -240,12 +263,12 @@ export async function shipWithTracking(args: {
       });
       await tx.order.update({
         where: { id: order.id },
-        data: { status: "PROCESSADO", trackingCode: tracking },
+        data: { status: "ENVIADO", trackingCode: tracking },
       });
       await tx.orderStatusHistory.create({
         data: {
           orderId: order.id,
-          status: "PROCESSADO",
+          status: "ENVIADO",
           changedBy: session.userId,
           note: `Envio externo (Correios/Transportadora) · Rastreio: ${tracking}`,
         },
@@ -331,12 +354,14 @@ export async function assignDriverToOrder(args: {
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
     emitOrderUpdated({ orderId: args.orderId });
-    // Web Push a nivel de SO para o motorista atribuido (fire-and-forget).
+    // Entrou em "Pronto" com dono definido: push + WhatsApp so para ele.
+    // pushInfo vem null quando ha rastreio (segue por transportadora).
     if (pushInfo) {
-      void sendPushToUser(args.driverId, {
-        title: "Nova entrega atribuída",
-        body: `Pedido ${pushInfo.orderNumber}${pushInfo.customerName ? ` · ${pushInfo.customerName}` : ""} foi atribuído a você.`,
-        url: "/motorista",
+      notifyOrderReady({
+        orderId: args.orderId,
+        orderNumber: pushInfo.orderNumber,
+        customerName: pushInfo.customerName,
+        driverId: args.driverId,
       });
     }
     return actionOk(undefined);
@@ -350,7 +375,7 @@ export async function assignDriverToOrder(args: {
  * "Em aberto": a Logística NÃO escolhe motorista. Deixa o pedido disponível
  * para qualquer motorista pegar. Move o pedido direto para ENVIADO e mantém a
  * entrega sem driver (status AGUARDANDO). O card aparece na coluna
- * "Aguardando Entregador" do Kanban de Motoristas.
+ * "Pronto" do Kanban de Motoristas, visivel a todos ate alguem iniciar a rota.
  *
  * Convive com assignDriverToOrder: a Logística escolhe UM ou deixa em aberto.
  */
@@ -374,8 +399,9 @@ export async function openOrderForDrivers(args: {
         include: { delivery: true, customer: true },
       });
       if (!order) throw new Error("Pedido nao encontrado.");
+      // PROCESSADO segue aceito por causa de pedidos legados parados nele.
       if (order.status !== "PROCESSANDO" && order.status !== "PROCESSADO") {
-        throw new Error("O pedido precisa estar em Processando/Processado para abrir aos motoristas.");
+        throw new Error("O pedido precisa estar em Processando para abrir aos motoristas.");
       }
 
       // Entrega fica SEM motorista, aguardando alguém pegar. Cria a Delivery se
@@ -416,9 +442,10 @@ export async function openOrderForDrivers(args: {
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
     emitOrderUpdated({ orderId: args.orderId });
-    // Web Push a nível de SO para todos os motoristas (fire-and-forget).
+    // Entrou em "Pronto" SEM dono: e uma corrida, avisa todos os motoristas.
+    // pushInfo vem null quando ha rastreio (segue por transportadora).
     if (pushInfo) {
-      emitOrderAvailableForDrivers({
+      notifyOrderReady({
         orderId: args.orderId,
         orderNumber: pushInfo.orderNumber,
         customerName: pushInfo.customerName,
@@ -432,8 +459,13 @@ export async function openOrderForDrivers(args: {
 }
 
 /**
+ * NAO E MAIS USADA PELA INTERFACE. O card do motorista assume o pedido dentro
+ * do proprio "Iniciar" (ver startRoute), num passo so. Mantida porque continua
+ * sendo uma operacao legitima — reservar a entrega sem sair na hora — caso o
+ * produto queira esse botao de volta.
+ *
  * "Atribuir": um MOTORISTA pega para si um pedido que está em aberto
- * (coluna "Aguardando Entregador"). Vincula a entrega ao usuário autenticado e
+ * (em "Pronto", sem dono). Vincula a entrega ao usuário autenticado e
  * mantém o pedido em ENVIADO — a partir daí o card sai da coluna aberta e
  * aparece em "Enviado" apenas para o motorista que pegou.
  *
@@ -523,7 +555,7 @@ export async function unassignMyOrder(args: {
         where: { id: order.delivery.id },
         data: { status: "AGUARDANDO", driverId: null, assignedAt: null },
       });
-      // Retorna o pedido para ENVIADO (coluna "Aguardando Entregador"). Se
+      // Retorna o pedido para ENVIADO ("Pronto", sem dono). Se
       // estava EM_ROTA, também volta — a rota é reiniciada por quem pegar.
       if (order.status !== "ENVIADO") {
         await tx.order.update({
@@ -713,6 +745,21 @@ export async function setOrderStatus(args: {
       revalidatePath("/logistica/controle-pecas");
     }
     emitOrderUpdated({ orderId: args.orderId });
+    // Entrou em "Pronto" arrastando o card: mesmo aviso dos demais caminhos.
+    // O early-return la em cima garante que so passa aqui quem MUDOU de status,
+    // entao nao ha risco de reavisar um pedido que ja estava em Pronto.
+    if (args.to === "ENVIADO") {
+      const atual = await prisma.order.findUnique({
+        where: { id: order.id },
+        select: { trackingCode: true, delivery: { select: { driverId: true } } },
+      });
+      notifyOrderReady({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        driverId: atual?.delivery?.driverId ?? null,
+        hasTracking: Boolean(atual?.trackingCode),
+      });
+    }
     if (args.to === "PENDENTE") {
       void sendPushToUser(order.sellerId, {
         title: "Pendência na logística",

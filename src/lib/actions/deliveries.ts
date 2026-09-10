@@ -7,16 +7,40 @@ import { processAndSaveImage, validateUpload, type ProcessedImage } from "@/lib/
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { ativarPecaAoEntregar } from "@/lib/piece-sync";
 
-/** Motorista inicia a rota (ENVIADO -> EM_ROTA). */
+/**
+ * Motorista inicia a rota (ENVIADO -> EM_ROTA), ASSUMINDO o pedido se ele
+ * ainda nao tiver dono.
+ *
+ * A coluna "Aguardando Entregador" deixou de existir: os pedidos sem dono
+ * aparecem na propria coluna "Pronto", junto com os do motorista. Com isso o
+ * botao "Iniciar" faz as duas coisas de uma vez — pegar e sair.
+ *
+ * A REIVINDICACAO PRECISA SER ATOMICA. Dois motoristas veem o mesmo card e
+ * podem clicar no mesmo instante; ler o driverId e depois gravar deixaria os
+ * dois "donos" do mesmo pedido. Por isso a tomada e um updateMany condicionado
+ * a driverId: null — o banco decide quem chegou primeiro, e o perdedor recebe
+ * uma mensagem clara em vez de um estado corrompido.
+ */
 export async function startRoute(orderId: string): Promise<ActionResult<void>> {
   try {
     const session = await requireRoleAction(["MOTORISTA", "GESTAO"]);
     await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId }, include: { delivery: true } });
       if (!order || !order.delivery) throw new Error("Entrega nao encontrada.");
-      if (order.delivery.driverId !== session.userId && session.role !== "GESTAO") {
+
+      if (order.delivery.driverId == null) {
+        // Sem dono: tenta assumir. So vence quem encontrar driverId ainda null.
+        const { count } = await tx.delivery.updateMany({
+          where: { id: order.delivery.id, driverId: null },
+          data: { driverId: session.userId, status: "ATRIBUIDA", assignedAt: new Date() },
+        });
+        if (count !== 1) {
+          throw new Error("Este pedido acabou de ser assumido por outro motorista.");
+        }
+      } else if (order.delivery.driverId !== session.userId && session.role !== "GESTAO") {
         throw new Error("Esta entrega nao e sua.");
       }
+
       await tx.delivery.update({
         where: { id: order.delivery.id },
         data: { status: "EM_ROTA", startedAt: new Date() },

@@ -98,16 +98,16 @@ export function KanbanBoard({
   const [isFull, setIsFull] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   // Agrupa os cards por coluna. No fluxo SIMPLIFICADO as colunas são apenas
-  // PAGO → EMBALADO → ENTREGUE, mas ao atribuir um motorista o pedido passa a
+  // PAGO → EMBALANDO → ENTREGUE, mas ao atribuir um motorista o pedido passa a
   // ENVIADO/EM_ROTA (status do fluxo padrão). Esses status não têm coluna
-  // própria aqui, então o card sumia do Fluxo entre EMBALADO e ENTREGUE. Para
-  // não perder o pedido de vista, dobramos ENVIADO/EM_ROTA na coluna EMBALADO
+  // própria aqui, então o card sumia do Fluxo entre EMBALANDO e ENTREGUE. Para
+  // não perder o pedido de vista, dobramos ENVIADO/EM_ROTA na coluna EMBALANDO
   // (etapa "saiu para entrega") enquanto não chega em ENTREGUE.
-  const IN_TRANSIT_INTO_EMBALADO: OrderStatus[] = ["ENVIADO", "EM_ROTA"];
+  const IN_TRANSIT_INTO_EMBALANDO: OrderStatus[] = ["ENVIADO", "EM_ROTA"];
   const byStatus = (status: OrderStatus) =>
     visibleCards.filter((c) => {
       if (c.status === status) return true;
-      if (simplified && status === "EMBALADO" && IN_TRANSIT_INTO_EMBALADO.includes(c.status)) {
+      if (simplified && status === "EMBALANDO" && IN_TRANSIT_INTO_EMBALANDO.includes(c.status)) {
         return true;
       }
       return false;
@@ -146,7 +146,7 @@ export function KanbanBoard({
   }, [visibleCards, atrasoPorCard, justificados, adiados, userRole]);
 
   // Proximo status conforme o fluxo do board: no simplificado usa a cadeia
-  // PAGO->EMBALADO->ENTREGUE; no padrao, o fluxo linear completo. Sem isto, a
+  // PAGO->EMBALANDO->ENTREGUE; no padrao, o fluxo linear completo. Sem isto, a
   // seta some no fluxo simplificado (PAGO nao existe no fluxo padrao).
   const nextInFlow = useCallback(
     (status: OrderStatus): OrderStatus | null =>
@@ -192,7 +192,7 @@ export function KanbanBoard({
   const [error, setError] = useState<string | null>(null);
   const [popupOrder, setPopupOrder] = useState<KanbanCard | null>(null);
   const [driverId, setDriverId] = useState("");
-  // Pop-up de rastreio (antes de PROCESSADO): pergunta se ha codigo.
+  // Pop-up de rastreio (saida de Processando p/ "Pronto"): pergunta se ha codigo.
   const [trackingOrder, setTrackingOrder] = useState<KanbanCard | null>(null);
   const [trackingCode, setTrackingCode] = useState("");
   const [pendencyOrder, setPendencyOrder] = useState<KanbanCard | null>(null);
@@ -228,7 +228,7 @@ export function KanbanBoard({
     const next = nextInFlow(card.status);
     if (!next) return;
 
-    // Fluxo simplificado (PAGO->EMBALADO->ENTREGUE): avanco direto, sem os
+    // Fluxo simplificado (PAGO->EMBALANDO->ENTREGUE): avanco direto, sem os
     // pop-ups do fluxo padrao (NF, rastreio, motorista, pendencia).
     if (simplified) {
       runAdvance({ orderId: card.id });
@@ -240,7 +240,10 @@ export function KanbanBoard({
       setError(`Pedido ${card.comandaNumber ?? card.orderNumber}: anexe a Nota Fiscal antes de avançar (Processando sem NF).`);
       return;
     }
-    if (next === "PROCESSADO") {
+    // A escolha do envio (rastreio OU motorista) acontece na saida de
+    // Processando para "Pronto". Antes era na entrada de PROCESSADO, que saiu
+    // do fluxo — o gatilho anda junto com ele.
+    if (next === "ENVIADO") {
       setTrackingOrder(card);
       setTrackingCode("");
       setError(null);
@@ -341,9 +344,11 @@ export function KanbanBoard({
     titleAccent === "distribuicao" ? "bg-distribuicao" : "bg-white";
 
   // Divisão em dois estágios. O 1º vai até "Embalando" (fim da preparação);
-  // o 2º começa em "Embalado". Se por algum motivo "Embalado" não estiver nas
-  // colunas, tudo cai no estágio 1 (fallback seguro).
-  const splitIdx = columns.indexOf("EMBALADO");
+  // o 2º começa em "Processando" (expedição). O corte era "Embalado", que saiu
+  // do fluxo — sem trocar, indexOf devolveria -1 e TODAS as colunas cairiam no
+  // 1º estágio. Se "Processando" não estiver nas colunas (fluxo simplificado),
+  // tudo cai no estágio 1 (fallback seguro).
+  const splitIdx = columns.indexOf("PROCESSANDO");
   const stage1 = splitIdx >= 0 ? columns.slice(0, splitIdx) : columns;
   const stage2 = splitIdx >= 0 ? columns.slice(splitIdx) : [];
 
@@ -506,7 +511,7 @@ export function KanbanBoard({
         />
       )}
 
-      {/* Pop-up de rastreio (antes de PROCESSADO) — EXCLUSAO MUTUA:
+      {/* Pop-up de rastreio (saida de Processando p/ "Pronto") — EXCLUSAO MUTUA:
           - Com codigo de rastreio: envio EXTERNO (Correios/Transportadora),
             NAO pede motorista (shipWithTracking).
           - Sem codigo: entrega PROPRIA/LOCAL, segue para escolha de motorista
@@ -542,7 +547,7 @@ export function KanbanBoard({
         </Modal>
       )}
 
-      {/* Pop-up de motorista (PROCESSADO) */}
+      {/* Pop-up de motorista (saida de Processando p/ "Pronto") */}
       {popupOrder && (
         <Modal onClose={() => setPopupOrder(null)}>
           <h2 className="mb-1 text-lg font-bold">Atribuir motorista</h2>

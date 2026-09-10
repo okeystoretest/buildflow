@@ -22,12 +22,21 @@ async function envioLigado(): Promise<boolean> {
 }
 
 /**
- * Avisa TODOS os motoristas de que ha pacote disponivel.
+ * Avisa os motoristas de que ha pacote disponivel.
+ *
+ * Sem `driverId`, avisa TODOS (pedido em aberto: e uma corrida). Com
+ * `driverId`, avisa so aquele motorista — o pedido ja tem dono e chamar a
+ * equipe inteira viraria ruido.
  *
  * O filtro por papel esta na consulta ao banco, e nao numa checagem posterior:
- * nao existe caminho neste codigo em que outro perfil receba mensagem.
+ * nao existe caminho neste codigo em que outro perfil receba mensagem. O
+ * `driverId` ESTREITA essa consulta, nunca a substitui — pedir a mensagem para
+ * um usuario que nao e motorista ativo simplesmente nao encontra ninguem.
  */
-export async function sendWhatsappToDrivers(args: { orderId?: string }): Promise<void> {
+export async function sendWhatsappToDrivers(args: {
+  orderId?: string;
+  driverId?: string | null;
+}): Promise<void> {
   try {
     if (!(await envioLigado())) {
       console.log("[whatsapp] envio desligado; nada enviado.");
@@ -42,12 +51,21 @@ export async function sendWhatsappToDrivers(args: { orderId?: string }): Promise
     }
 
     const motoristas = await prisma.user.findMany({
-      where: { role: "MOTORISTA", active: true, phone: { not: null } },
+      where: {
+        role: "MOTORISTA",
+        active: true,
+        phone: { not: null },
+        ...(args.driverId ? { id: args.driverId } : {}),
+      },
       select: { id: true, phone: true },
     });
 
     if (motoristas.length === 0) {
-      console.log("[whatsapp] nenhum motorista com telefone cadastrado.");
+      console.log(
+        args.driverId
+          ? "[whatsapp] motorista atribuido sem telefone cadastrado; nada enviado."
+          : "[whatsapp] nenhum motorista com telefone cadastrado.",
+      );
       return;
     }
 

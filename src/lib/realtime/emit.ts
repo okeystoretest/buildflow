@@ -1,5 +1,5 @@
 import { publish, type RealtimeEvent } from "@/lib/realtime/bus";
-import { sendPushToRole } from "@/lib/push";
+import { sendPushToRole, sendPushToUser } from "@/lib/push";
 import { sendWhatsappToDrivers } from "@/lib/whatsapp";
 
 /**
@@ -49,23 +49,53 @@ export function emitOrderCreated(args: {
 }
 
 /**
- * Pedido disponibilizado para os MOTORISTAS ("Aguardando Entregador"). Dispara
- * Web Push a nível de SO para todos os motoristas cadastrados, informando que
- * há entrega disponível para coleta. Como o board do motorista já reage pelo
- * polling, aqui só emitimos o push (fire-and-forget: nunca bloqueia nem quebra
- * a ação de logística que abriu o pedido).
+ * Pedido ENTROU em "Pronto" (status ENVIADO) — ponto unico de aviso ao
+ * motorista.
  *
- * Chamado apenas quando o pedido entra na coluna aberta de fato — isto é, sem
- * código de rastreio (pedidos com rastreio seguem por transportadora e não
- * aparecem no Kanban de Motoristas).
+ * POR QUE ISTO EXISTE: o aviso morava num unico ramo da interface (o pop-up
+ * "Deixar em aberto"). Um pedido chega em Pronto por varios caminhos — a seta
+ * "Avancar", o arrastar do card, o envio externo, a atribuicao direta — e em
+ * todos eles o motorista simplesmente nao era avisado. Amarrar o aviso ao FATO
+ * (entrou em Pronto), e nao ao gesto que causou o fato, e o que fecha esse
+ * buraco de uma vez.
+ *
+ * Quem recebe depende de como o pedido entrou:
+ *   - com codigo de rastreio -> ninguem. Segue por transportadora, nao ha
+ *     motorista envolvido;
+ *   - com motorista atribuido -> so ele. Chamar a equipe inteira para uma
+ *     entrega que ja tem dono vira ruido, e as pessoas param de ler;
+ *   - sem motorista -> todos. E uma corrida: quem pegar primeiro leva.
+ *
+ * Fire-and-forget em todos os casos: aviso nunca derruba a acao de logistica.
  */
-export function emitOrderAvailableForDrivers(args: {
+export function notifyOrderReady(args: {
   orderId: string;
   orderNumber?: string;
   customerName?: string;
+  /** Motorista ja atribuido, quando houver. */
+  driverId?: string | null;
+  /** Pedido com rastreio segue por transportadora. */
+  hasTracking?: boolean;
 }): void {
+  if (args.hasTracking) return;
+
   const numero = args.orderNumber ? `#${args.orderNumber}` : "novo";
   const cliente = args.customerName ? ` — ${args.customerName}` : "";
+
+  if (args.driverId) {
+    void sendPushToUser(args.driverId, {
+      title: "Nova entrega atribuída",
+      body: `Pedido ${numero}${cliente} foi atribuído a você.`,
+      url: "/motorista",
+      tag: `delivery-${args.orderId}`,
+    }).catch((err) => console.error("[push] envio p/ motorista falhou:", err));
+
+    void sendWhatsappToDrivers({ orderId: args.orderId, driverId: args.driverId }).catch(
+      (err) => console.error("[whatsapp] envio p/ motorista falhou:", err),
+    );
+    return;
+  }
+
   void sendPushToRole("MOTORISTA", {
     title: "Entrega disponível para coleta",
     body: `Pedido ${numero}${cliente} aguardando entregador.`,
@@ -73,11 +103,9 @@ export function emitOrderAvailableForDrivers(args: {
     tag: `delivery-${args.orderId}`,
   }).catch((err) => console.error("[push] envio p/ motorista falhou:", err));
 
-  // Segundo canal, no mesmo gatilho e no mesmo carater fire-and-forget: o
-  // WhatsApp nunca pode derrubar a acao de logistica que abriu o pedido.
-  // A mensagem nao leva numero de pedido nem nome de cliente — alem de ser o
-  // texto definido pelo produto, evita mandar dado de cliente por um canal
-  // nao-oficial.
+  // A mensagem de WhatsApp nao leva numero de pedido nem nome de cliente —
+  // alem de ser o texto definido pelo produto, evita mandar dado de cliente por
+  // um canal nao-oficial.
   void sendWhatsappToDrivers({ orderId: args.orderId }).catch((err) =>
     console.error("[whatsapp] envio p/ motoristas falhou:", err),
   );

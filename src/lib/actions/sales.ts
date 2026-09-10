@@ -190,7 +190,7 @@ export async function uploadPaymentProof(
 }
 
 /**
- * Upload da Nota Fiscal. So permitido apos o status EMBALADO (regra do doc).
+ * Upload da Nota Fiscal. So permitido a partir de EMBALANDO (regra do doc).
  */
 export async function uploadInvoice(
   formData: FormData,
@@ -210,8 +210,11 @@ export async function uploadInvoice(
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return actionError("Pedido nao encontrado.");
 
-  // EMBALADO em diante libera a NF.
-  const liberados = ["EMBALADO", "PROCESSANDO", "PROCESSADO", "ENVIADO", "EM_ROTA", "ENTREGUE", "CONCLUIDO"];
+  // EMBALANDO em diante libera a NF. Era EMBALADO; com ele fora do fluxo o
+  // marco passa para o passo anterior, o que so AMPLIA a janela da vendedora.
+  // EMBALADO e PROCESSADO seguem na lista de proposito: custam nada e evitam
+  // que um pedido legado parado neles fique sem poder anexar nota.
+  const liberados = ["EMBALANDO", "EMBALADO", "PROCESSANDO", "PROCESSADO", "ENVIADO", "EM_ROTA", "ENTREGUE", "CONCLUIDO"];
   if (!liberados.includes(order.status)) {
     return actionError("Nota Fiscal so pode ser anexada a partir do status Embalado.");
   }
