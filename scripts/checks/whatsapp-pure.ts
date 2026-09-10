@@ -54,9 +54,12 @@ check("concessao no limite", isLeaseExpired(new Date(agora.getTime() - LEASE_TTL
 check("concessao velha", isLeaseExpired(new Date(agora.getTime() - LEASE_TTL_MS - 1), agora), true);
 check("concessao futura", isLeaseExpired(new Date(agora.getTime() + 5000), agora), false);
 
-// --- sendSpacingMs: 1s a 3s ---
-check("espacamento minimo", sendSpacingMs(() => 0), 1000);
-check("espacamento maximo", sendSpacingMs(() => 1), 3000);
+// --- sendSpacingMs: 1min a 5min ---
+// Intervalo longo de proposito: rajada de mensagens identicas e o padrao que
+// mais provoca bloqueio do numero. O custo e o ultimo da lista receber tarde.
+check("espacamento minimo", sendSpacingMs(() => 0), 60_000);
+check("espacamento maximo", sendSpacingMs(() => 1), 300_000);
+check("espacamento meio", sendSpacingMs(() => 0.5), 180_000);
 
 // --- resolveSendJid: qual JID usar de fato no envio ---
 //

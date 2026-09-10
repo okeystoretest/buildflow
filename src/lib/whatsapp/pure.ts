@@ -38,8 +38,17 @@ const BACKOFF_BASE_MS = 2_000;
 const BACKOFF_MAX_MS = 60_000;
 const BACKOFF_JITTER = 0.2;
 
-const SPACING_MIN_MS = 1_000;
-const SPACING_MAX_MS = 3_000;
+// Espacamento entre um destinatario e o proximo: 1 a 5 MINUTOS.
+//
+// Era de 1 a 3 segundos. O intervalo longo imita o ritmo de uma pessoa
+// mandando mensagem, que e o oposto do padrao que faz o WhatsApp bloquear um
+// numero (varios envios identicos em rajada).
+//
+// O custo esta assumido: com N motoristas, o ultimo da lista recebe ate
+// (N-1) x 5 minutos depois do primeiro. O primeiro continua recebendo na hora
+// — o espacamento so vale ENTRE destinatarios.
+const SPACING_MIN_MS = 60_000;
+const SPACING_MAX_MS = 300_000;
 
 /**
  * Monta o JID do WhatsApp a partir do telefone guardado no banco.
@@ -123,8 +132,8 @@ export function isLeaseExpired(heartbeatAt: Date | null, now: Date): boolean {
 }
 
 /**
- * Intervalo entre um destinatario e o proximo (1s a 3s). Disparo em paralelo
- * para N numeros e o padrao que mais provoca bloqueio do numero.
+ * Intervalo entre um destinatario e o proximo (1min a 5min). Disparo em
+ * paralelo para N numeros e o padrao que mais provoca bloqueio do numero.
  */
 export function sendSpacingMs(rand: () => number = Math.random): number {
   return Math.round(SPACING_MIN_MS + (SPACING_MAX_MS - SPACING_MIN_MS) * rand());
