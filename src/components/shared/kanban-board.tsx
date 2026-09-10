@@ -32,6 +32,7 @@ export function KanbanBoard({
   titleAccent = "amber",
   stageLimits = {},
   simplified = false,
+  askDelayReason = false,
 }: {
   cards: KanbanCard[];
   columns: OrderStatus[];
@@ -53,6 +54,17 @@ export function KanbanBoard({
   // Fluxo simplificado (Loja de Origem): colunas lado a lado numa unica
   // fileira (estilo Financeiro), sem o split em 2 estagios do fluxo padrao.
   simplified?: boolean;
+  // Este quadro PEDE a justificativa de atraso (modal automático)?
+  //
+  // Só a LOGÍSTICA pede. O Fluxo de Pedidos geral é quadro de acompanhamento —
+  // quem o abre não é necessariamente quem pode destravar o pedido, e um pop-up
+  // que interrompe sem que a pessoa possa resolver nada vira algo que se fecha
+  // no reflexo. Fechado no reflexo uma vez, passa a ser fechado sempre, e aí a
+  // justificativa não é dada em quadro nenhum.
+  //
+  // Padrão false: um quadro novo não começa interrompendo ninguém sem decisão
+  // explícita de quem o montou.
+  askDelayReason?: boolean;
 }) {
   // Classe de cor do sufixo do breadcrumb (item 3: cor distinta do "branco").
   const titleAccentClass =
@@ -134,7 +146,7 @@ export function KanbanBoard({
   // pertencem ao setor do usuario (Gestao acompanha todas as etapas). Um de
   // cada vez — uma fila de modais empilhados nao seria respondida.
   const cardParaJustificar = useMemo(() => {
-    if (!userRole) return null;
+    if (!askDelayReason || !userRole) return null;
     const candidatos = visibleCards
       .filter((c) => {
         if (c.hasDelayReason || justificados.has(c.id) || adiados.has(c.id)) return false;
@@ -143,7 +155,7 @@ export function KanbanBoard({
       })
       .sort((a, b) => (atrasoPorCard.get(b.id) ?? 0) - (atrasoPorCard.get(a.id) ?? 0));
     return candidatos[0] ?? null;
-  }, [visibleCards, atrasoPorCard, justificados, adiados, userRole]);
+  }, [askDelayReason, visibleCards, atrasoPorCard, justificados, adiados, userRole]);
 
   // Proximo status conforme o fluxo do board: no simplificado usa a cadeia
   // PAGO->EMBALANDO->ENTREGUE; no padrao, o fluxo linear completo. Sem isto, a

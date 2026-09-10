@@ -190,6 +190,8 @@ export default async function LogisticaPage({
         titleAccent="distribuicao"
         stageLimits={stageLimits}
         simplified={simplified}
+        // Só aqui o atraso é cobrado: é o quadro de quem opera o pedido.
+        askDelayReason
       />
     </div>
   );

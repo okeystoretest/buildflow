@@ -3,7 +3,7 @@
 import type { OrderStatus } from "@prisma/client";
 import { FileText, Receipt, User, Tag, Clock } from "lucide-react";
 import { STATUS_STYLE, formatOverdue, type StageAlert } from "@/lib/order-flow";
-import { cn } from "@/lib/utils";
+import { cn, shortName } from "@/lib/utils";
 
 export interface OrderCardData {
   id: string;
@@ -133,7 +133,11 @@ export function OrderCard({
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/60 pt-1.5">
         <span className="flex min-w-0 shrink items-center gap-1 text-xs text-muted-foreground">
           <Tag className="h-3 w-3 shrink-0" />
-          <span className="min-w-0 truncate">{data.sellerName}</span>
+          {/* Só primeiro e segundo nome: a faixa divide espaço com os sinais e
+              o selo de atraso, e o nome completo empurrava tudo para a linha de
+              baixo. A BUSCA do quadro continua casando com o nome inteiro — o
+              encurtamento é de exibição, não do dado. */}
+          <span className="min-w-0 truncate">{shortName(data.sellerName)}</span>
         </span>
         <Signal active={data.hasPaymentProof} filled={preenchido} overdue={atrasado} icon={<Receipt className="h-3 w-3" />} label="Comprov." />
         <Signal active={data.hasInvoice} filled={preenchido} overdue={atrasado} icon={<FileText className="h-3 w-3" />} label="NF" />

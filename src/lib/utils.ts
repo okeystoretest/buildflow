@@ -53,3 +53,26 @@ export function sortOperationsByCode<T extends { code: string }>(ops: T[]): T[] 
     return a.code.localeCompare(b.code, undefined, { numeric: true });
   });
 }
+
+// Particulas de nome brasileiro. Nao contam como "segundo nome": pegar os dois
+// primeiros pedacos de "Maria da Silva" devolveria "Maria da", que le como nome
+// cortado no meio — exatamente o oposto de encurtar para caber.
+const PARTICULAS_NOME = new Set(["de", "da", "do", "das", "dos", "e", "di", "du", "del", "van", "von"]);
+
+/**
+ * Primeiro + segundo nome, para exibicao onde o espaco e curto (card do Fluxo).
+ *
+ * NAO deve ser usada para gravar nem para buscar: a busca do quadro casa com o
+ * nome COMPLETO, e encurtar na origem faria procurar por sobrenome parar de
+ * encontrar a vendedora. E transformacao de exibicao, e so.
+ *
+ * Devolve so o primeiro nome quando nao ha um segundo aproveitavel (nome unico,
+ * ou nome seguido apenas de particula).
+ */
+export function shortName(full: string): string {
+  const partes = full.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "";
+  const primeiro = partes[0];
+  const segundo = partes.slice(1).find((p) => !PARTICULAS_NOME.has(p.toLowerCase()));
+  return segundo ? `${primeiro} ${segundo}` : primeiro;
+}
