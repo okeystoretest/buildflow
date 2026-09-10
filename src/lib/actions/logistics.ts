@@ -522,12 +522,18 @@ export async function claimOpenOrder(args: {
 }
 
 /**
- * O MOTORISTA cancela a própria atribuição: o pedido volta para "Aguardando
- * Entregador" (status ENVIADO, sem motorista), disponível para qualquer um
- * pegar novamente. GESTAO também pode cancelar (supervisão).
+ * O MOTORISTA cancela a própria atribuição: o pedido volta para "Pronto" sem
+ * dono, disponível para qualquer um pegar novamente. GESTAO também pode
+ * cancelar (supervisão).
  *
  * Só é permitido enquanto a entrega ainda não foi concluída: pedidos em
  * ENVIADO ou EM_ROTA. Após ENTREGUE/CONCLUIDO não há o que cancelar.
+ *
+ * O cancelamento NOTIFICA os motoristas como se o pedido tivesse acabado de
+ * entrar em "Pronto" — porque, para quem entrega, foi isso que aconteceu: um
+ * pacote voltou a ficar disponível. Sem o aviso, o pedido ficaria parado à
+ * espera de alguém que por acaso olhasse o quadro, que é o mesmo tipo de
+ * silêncio que o notifyOrderReady existe para eliminar.
  */
 export async function unassignMyOrder(args: {
   orderId: string;
@@ -535,7 +541,12 @@ export async function unassignMyOrder(args: {
   try {
     const session = await requireRoleAction(["MOTORISTA", "GESTAO"]);
 
-    await prisma.$transaction(async (tx) => {
+    // Dados devolvidos da transação para o aviso pós-commit (só avisamos
+    // depois que a devolução do pedido está de fato gravada).
+    const aviso = await prisma.$transaction<{
+      orderNumber: string;
+      hasTracking: boolean;
+    }>(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: args.orderId },
         include: { delivery: true },
@@ -568,15 +579,28 @@ export async function unassignMyOrder(args: {
           orderId: order.id,
           status: "ENVIADO",
           changedBy: session.userId,
-          note: "Atribuição cancelada pelo motorista (voltou para aguardando entregador)",
+          note: "Atribuição cancelada pelo motorista (voltou para Pronto, sem dono)",
         },
       });
+
+      return {
+        orderNumber: order.orderNumber,
+        hasTracking: Boolean(order.trackingCode),
+      };
     });
 
     revalidatePath("/motorista");
     revalidatePath("/logistica");
     revalidatePath("/dashboard");
     emitOrderUpdated({ orderId: args.orderId });
+    // O pedido está de novo em "Pronto" e sem dono: avisa TODOS os motoristas,
+    // exatamente como numa entrada nova no status. driverId omitido de
+    // propósito — acabou de deixar de ter um.
+    notifyOrderReady({
+      orderId: args.orderId,
+      orderNumber: aviso.orderNumber,
+      hasTracking: aviso.hasTracking,
+    });
     return actionOk(undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao cancelar atribuição.";
