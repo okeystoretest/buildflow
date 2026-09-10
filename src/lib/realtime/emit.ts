@@ -1,6 +1,8 @@
 import { publish, type RealtimeEvent } from "@/lib/realtime/bus";
 import { sendPushToRole, sendPushToUser } from "@/lib/push";
 import { sendWhatsappToDrivers } from "@/lib/whatsapp";
+import { prisma } from "@/lib/prisma";
+import { isEntregaDeMotorista } from "@/lib/driver-delivery";
 
 /**
  * Fachada de emissao para as Server Actions. Concentra a regra de "quem recebe
@@ -60,6 +62,8 @@ export function emitOrderCreated(args: {
  * buraco de uma vez.
  *
  * Quem recebe depende de como o pedido entrou:
+ *   - forma de envio que nao e do motorista -> ninguem. So "1 - Excursao" e
+ *     "3 - Entrega Local" sao entregues pela equipe (ver driver-delivery.ts);
  *   - com codigo de rastreio -> ninguem. Segue por transportadora, nao ha
  *     motorista envolvido;
  *   - com motorista atribuido -> so ele. Chamar a equipe inteira para uma
@@ -79,6 +83,43 @@ export function notifyOrderReady(args: {
 }): void {
   if (args.hasTracking) return;
 
+  // FORMA DE ENVIO. Só "1 - Excursão" e "3 - Entrega Local" são entregues pela
+  // equipe de motoristas; as demais saem por outro canal, e avisar sobre elas
+  // convoca gente para um pacote que ninguém vai buscar. Mesmo motivo do
+  // rastreio logo acima — este é o segundo caso de "não é entrega de
+  // motorista".
+  //
+  // A consulta mora AQUI e não nos chamadores porque este é o ponto único de
+  // aviso: são cinco caminhos até "Pronto", e espalhar a regra por todos eles é
+  // exatamente o buraco que esta função foi criada para fechar. O custo é uma
+  // leitura por entrada em Pronto, já dentro de um fluxo fire-and-forget.
+  void (async () => {
+    const pedido = await prisma.order.findUnique({
+      where: { id: args.orderId },
+      select: { shippingMethod: { select: { name: true } } },
+    });
+    // Pedido sumiu entre a ação e este aviso: não há o que notificar.
+    if (!pedido) return;
+    if (!isEntregaDeMotorista(pedido.shippingMethod?.name)) {
+      console.log(
+        `[aviso] pedido ${args.orderId} nao e entrega de motorista; ninguem avisado.`,
+      );
+      return;
+    }
+    avisarMotorista(args);
+  })().catch((err) => console.error("[aviso] falha ao avaliar forma de envio:", err));
+}
+
+/**
+ * Dispara push e WhatsApp de entrega disponivel. Separada de notifyOrderReady
+ * para a REGRA (quem merece aviso) ficar visivel ali, e o ENVIO ficar aqui.
+ */
+function avisarMotorista(args: {
+  orderId: string;
+  orderNumber?: string;
+  customerName?: string;
+  driverId?: string | null;
+}): void {
   const numero = args.orderNumber ? `#${args.orderNumber}` : "novo";
   const cliente = args.customerName ? ` — ${args.customerName}` : "";
 

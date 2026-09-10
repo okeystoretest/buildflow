@@ -5,6 +5,7 @@ import { History } from "lucide-react";
 import { EntregaCard, type DriverOrderView } from "./delivery-card";
 import { MOTORISTA_COLUMNS, STATUS_LABEL, STATUS_STYLE } from "@/lib/order-flow";
 import { CardScroller } from "@/components/shared/card-scroller";
+import { isEntregaDeMotorista } from "@/lib/driver-delivery";
 
 // Quantos cards ficam visíveis por coluna antes de rolar. Mesmo número do
 // Kanban do Financeiro — é de lá que vem a proporção deste quadro.
@@ -61,6 +62,8 @@ export default async function MotoristaPage() {
     },
     include: {
       customer: true,
+      // Nome da Forma de Envio: decide se o pedido é entrega de motorista.
+      shippingMethod: { select: { name: true } },
       delivery: { select: { driverId: true } },
       // Dados da excursão para o motorista ler no card (nome, endereço e
       // observações da excursão). Só existe quando a forma de envio é excursão.
@@ -69,7 +72,24 @@ export default async function MotoristaPage() {
     orderBy: { updatedAt: "desc" },
   });
 
-  const views: DriverOrderView[] = orders.map((o) => ({
+  // COLUNA "PRONTO" SÓ COM ENTREGA DE MOTORISTA.
+  //
+  // Só "1 - Excursão" e "3 - Entrega Local" são entregues pela equipe; as
+  // demais formas saem por outro canal e não são corrida de ninguém aqui. É a
+  // mesma exclusão que o Código de Rastreio já fazia, agora pelo lado positivo.
+  //
+  // O corte vale APENAS para "Pronto". Pedido que já está EM_ROTA continua
+  // visível mesmo com outra forma de envio: o motorista está com a mercadoria
+  // na mão, e sumir com o card no meio do caminho o deixaria sem como concluir.
+  //
+  // Filtrado aqui e não no `where` porque a comparação ignora acento, e o
+  // Postgres não faz isso sem a extensão unaccent. A consulta do quadro já é
+  // pequena — limitada por status e pelo escopo de quem olha.
+  const doMotorista = orders.filter(
+    (o) => o.status !== "ENVIADO" || isEntregaDeMotorista(o.shippingMethod?.name),
+  );
+
+  const views: DriverOrderView[] = doMotorista.map((o) => ({
     id: o.id,
     status: o.status,
     orderNumber: o.orderNumber,
