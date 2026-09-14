@@ -79,6 +79,11 @@ export function toEntregaItem(o: any): EntregaItem {
     startedAt: o.delivery?.startedAt?.toISOString() ?? null,
     deliveredAt: o.delivery?.deliveredAt?.toISOString() ?? null,
     failReason: o.delivery?.failReason ?? null,
+    // Valor do servico informado pelo motorista ao concluir. Null nas entregas
+    // anteriores ao campo. `driverFeeRaw` vai sem formatacao para pre-preencher
+    // o campo de pagamento; `driverFee` e a versao para exibir.
+    driverFee: o.delivery?.driverFee != null ? formatBRL(o.delivery.driverFee.toString()) : null,
+    driverFeeRaw: o.delivery?.driverFee != null ? o.delivery.driverFee.toString() : null,
     // Pagamento da entrega ao motorista (se já registrado).
     paid: !!o.driverPayment,
     paymentAmount: o.driverPayment ? formatBRL((o.driverPayment.amount ?? 0).toString()) : null,

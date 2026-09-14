@@ -3,6 +3,9 @@
 import { useRef, useState } from "react";
 import { Camera, Image as ImageIcon, X, Trash2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { parseDriverFee } from "@/lib/driver-delivery";
 
 const MAX_PHOTOS = 3;
 const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
@@ -17,16 +20,20 @@ interface Photo {
 // - Botão "Câmera": captura instantânea, uma por vez (sequencial), até 3.
 // - Botão "Galeria": seleção múltipla do dispositivo, respeitando o teto de 3.
 // - O somatório (câmera + galeria) nunca passa de 3.
+// - "Valor da entrega": obrigatório. É o valor do serviço que o Financeiro vê
+//   em Pagamentos de Motoristas. Numa excursão com vários pedidos, o motorista
+//   informa o valor em cada pedido.
 export function CompletePhotoModal({
   pending,
   onSubmit,
   onClose,
 }: {
   pending: boolean;
-  onSubmit: (files: File[]) => void;
+  onSubmit: (files: File[], driverFee: number) => void;
   onClose: () => void;
 }) {
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [fee, setFee] = useState("");
   const [error, setError] = useState<string | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -79,12 +86,19 @@ export function CompletePhotoModal({
     onClose();
   }
 
+  const feeValida = parseDriverFee(fee) !== null;
+
   function concluir() {
     if (photos.length === 0) {
       setError("Anexe ao menos 1 foto para concluir.");
       return;
     }
-    onSubmit(photos.map((p) => p.file));
+    const driverFee = parseDriverFee(fee);
+    if (driverFee === null) {
+      setError("Informe o valor da entrega (maior que zero).");
+      return;
+    }
+    onSubmit(photos.map((p) => p.file), driverFee);
   }
 
   return (
@@ -169,6 +183,23 @@ export function CompletePhotoModal({
           </div>
         )}
 
+        {/* Valor da entrega — obrigatório. Vem depois das fotos para o
+            motorista fechar o pedido na ordem em que acontece: entregou,
+            fotografou, cobra. */}
+        <div className="mt-4 space-y-1.5">
+          <Label htmlFor="driverFee">Valor da entrega (R$) *</Label>
+          <Input
+            id="driverFee"
+            type="text"
+            inputMode="decimal"
+            placeholder="0,00"
+            value={fee}
+            onChange={(e) => { setFee(e.target.value); setError(null); }}
+            disabled={pending}
+            className="text-base"
+          />
+        </div>
+
         {error && <p className="mt-3 text-sm font-medium text-destructive">{error}</p>}
 
         {/* Concluir */}
@@ -180,7 +211,7 @@ export function CompletePhotoModal({
             variant="motorista"
             className="flex-1"
             onClick={concluir}
-            disabled={photos.length === 0 || pending}
+            disabled={photos.length === 0 || !feeValida || pending}
           >
             <CheckCircle2 className="mr-2 h-5 w-5" />
             {pending ? "Enviando..." : `Concluir (${photos.length})`}

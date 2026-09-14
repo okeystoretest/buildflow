@@ -57,10 +57,12 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
     });
   }
 
-  function concluirComFotos(files: File[]) {
+  function concluirComFotos(files: File[], driverFee: number) {
     setError(null);
     const fd = new FormData();
     fd.append("orderId", order.id);
+    // Valor da entrega informado pelo motorista (obrigatório na action).
+    fd.append("driverFee", String(driverFee));
     // Envia todas as fotos sob o mesmo campo "photos" (a action lê via getAll).
     for (const f of files) fd.append("photos", f);
     start(async () => {

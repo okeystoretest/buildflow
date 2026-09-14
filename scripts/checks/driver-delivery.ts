@@ -9,6 +9,8 @@ import {
   isEntregaDeMotorista,
   FORMA_EXCURSAO,
   FORMA_ENTREGA_LOCAL,
+  parseDriverFee,
+  MAX_DRIVER_FEE,
 } from "../../src/lib/driver-delivery";
 
 let falhas = 0;
@@ -44,6 +46,22 @@ check("vazio", isEntregaDeMotorista(""), false);
 check("nome que apenas contem", isEntregaDeMotorista("5 - Excursão Terceirizada"), false);
 check("so o numero", isEntregaDeMotorista("1"), false);
 check("so o texto", isEntregaDeMotorista("Excursão"), false);
+
+// --- valor da entrega informado pelo motorista ---
+// O teclado numerico do celular manda virgula ou ponto conforme o aparelho;
+// os dois precisam valer. Zero, negativo, vazio e texto sao recusados — o
+// campo e obrigatorio e nao existe entrega de graca.
+check("virgula decimal", parseDriverFee("12,50"), 12.5);
+check("ponto decimal", parseDriverFee("12.50"), 12.5);
+check("inteiro", parseDriverFee("30"), 30);
+check("espacos em volta", parseDriverFee(" 7,5 "), 7.5);
+check("arredonda a centavos", parseDriverFee("10.005"), 10.01);
+check("zero e invalido", parseDriverFee("0"), null);
+check("negativo e invalido", parseDriverFee("-5"), null);
+check("vazio e invalido", parseDriverFee(""), null);
+check("texto e invalido", parseDriverFee("abc"), null);
+check("null e invalido", parseDriverFee(null), null);
+check("acima do teto", parseDriverFee(String(MAX_DRIVER_FEE + 1)), null);
 
 console.log(falhas === 0 ? "OK: driver-delivery" : `${falhas} falha(s) em driver-delivery`);
 process.exit(falhas === 0 ? 0 : 1);

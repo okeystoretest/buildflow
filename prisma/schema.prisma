@@ -573,6 +573,13 @@ model Delivery {
   deliveredAt DateTime?
   failReason  String?
 
+  // Valor do servico de entrega, informado pelo PROPRIO MOTORISTA ao concluir
+  // (obrigatorio na tela de conclusao). E o valor que o Financeiro ve em
+  // "Pagamentos de Motoristas" e que pre-preenche o pagamento — o valor pago
+  // fica em DriverPayment.amount e pode diferir. Null nas entregas concluidas
+  // antes de o campo existir.
+  driverFee   Decimal?  @db.Decimal(10, 2)
+
   proofs Proof[]
 
   createdAt DateTime @default(now())

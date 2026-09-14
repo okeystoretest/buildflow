@@ -53,3 +53,25 @@ export function isEntregaDeMotorista(shippingMethodName?: string | null): boolea
   const alvo = normalize(shippingMethodName);
   return FORMAS_DO_MOTORISTA.some((f) => normalize(f) === alvo);
 }
+
+// ---------------------------------------------------------------------------
+// VALOR DA ENTREGA informado pelo motorista ao concluir.
+// ---------------------------------------------------------------------------
+
+/** Teto do valor de uma entrega. Barra digitacao com virgula/ponto trocados. */
+export const MAX_DRIVER_FEE = 100000;
+
+/**
+ * Le o valor da entrega vindo do formulario. Aceita "12,50" e "12.50" — o
+ * teclado numerico do celular varia conforme o aparelho — e recusa o que nao
+ * for um numero positivo dentro do teto. Devolve o valor arredondado a
+ * centavos, ou null quando invalido.
+ */
+export function parseDriverFee(raw: unknown): number | null {
+  if (typeof raw !== "string") return null;
+  const limpo = raw.trim().replace(",", ".");
+  if (!limpo) return null;
+  const n = Number(limpo);
+  if (!Number.isFinite(n) || n <= 0 || n > MAX_DRIVER_FEE) return null;
+  return Math.round(n * 100) / 100;
+}

@@ -6,6 +6,8 @@ import { requireRoleAction } from "@/lib/auth";
 import { processAndSaveImage, validateUpload, type ProcessedImage } from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { ativarPecaAoEntregar } from "@/lib/piece-sync";
+import { Prisma } from "@prisma/client";
+import { parseDriverFee } from "@/lib/driver-delivery";
 
 /**
  * Motorista inicia a rota (ENVIADO -> EM_ROTA), ASSUMINDO o pedido se ele
@@ -59,10 +61,14 @@ export async function startRoute(orderId: string): Promise<ActionResult<void>> {
 }
 
 /**
- * Motorista conclui a entrega com 1 a 3 fotos.
+ * Motorista conclui a entrega com 1 a 3 fotos e o VALOR DA ENTREGA.
  *  Cada foto: sharp -> redimensiona, reduz qualidade, converte p/ webp -> disco.
  *  Banco grava SO o caminho (uma linha Proof por foto). Apos salvar: pedido ->
  *  CONCLUIDO (sai do dashboard ativo, vai pro Historico de Vendas).
+ *
+ * O valor da entrega ("driverFee") e obrigatorio e vai para Delivery.driverFee.
+ * E o que o Financeiro ve em Pagamentos de Motoristas na hora de pagar. Numa
+ * excursao com varios pedidos, o motorista informa o valor em cada um.
  *
  * Compatibilidade: aceita tanto o campo novo "photos" (multiplas) quanto o
  * antigo "photo" (uma), para não quebrar clientes desatualizados.
@@ -86,6 +92,9 @@ export async function completeDelivery(
     if (files.length > MAX_PHOTOS) {
       return actionError(`Máximo de ${MAX_PHOTOS} fotos por pedido.`);
     }
+
+    const driverFee = parseDriverFee(formData.get("driverFee"));
+    if (driverFee === null) return actionError("Informe o valor da entrega (maior que zero).");
 
     // Valida cada arquivo antes de processar qualquer um.
     for (const f of files) {
@@ -126,7 +135,11 @@ export async function completeDelivery(
       }
       await tx.delivery.update({
         where: { id: deliveryId },
-        data: { status: "ENTREGUE", deliveredAt: new Date() },
+        data: {
+          status: "ENTREGUE",
+          deliveredAt: new Date(),
+          driverFee: new Prisma.Decimal(driverFee),
+        },
       });
       // doc: apos foto(s) salva(s) -> CONCLUIDO
       await tx.order.update({ where: { id: orderId }, data: { status: "CONCLUIDO" } });

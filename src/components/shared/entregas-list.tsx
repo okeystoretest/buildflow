@@ -55,6 +55,9 @@ export interface EntregaItem {
   startedAt: string | null;
   deliveredAt: string | null;
   failReason: string | null;
+  // Valor da entrega informado pelo motorista ao concluir (formatado e cru).
+  driverFee: string | null;
+  driverFeeRaw: string | null;
   // Pagamento ao motorista (Financeiro)
   paid: boolean;
   paymentAmount: string | null;
@@ -91,7 +94,9 @@ export function EntregasList({
 
   function openPay(o: EntregaItem) {
     setPayOrder(o);
-    setAmount("");
+    // Pre-preenche com o valor que o motorista informou ao concluir. O
+    // Financeiro pode alterar; o que fica em DriverPayment e o valor pago.
+    setAmount(o.driverFeeRaw ?? "");
     setConfirming(false);
     setError(null);
   }
@@ -189,6 +194,7 @@ export function EntregasList({
                   <Info label="Atribuída em" value={fmtDateTime(o.assignedAt)} />
                   <Info label="Iniciada em" value={fmtDateTime(o.startedAt)} />
                   <Info label="Entregue em" value={fmtDateTime(o.deliveredAt)} />
+                  <Info label="Valor informado pelo motorista" value={o.driverFee ?? "—"} />
                   {o.failReason && <Info label="Observação de falha" value={o.failReason} full />}
                 </Section>
 
@@ -262,6 +268,16 @@ export function EntregasList({
             <p className="text-xs text-muted-foreground">Chave PIX do motorista</p>
             <p className="break-words font-data text-sm font-medium">
               {payOrder.driverPixKey ?? "— (motorista sem chave PIX cadastrada)"}
+            </p>
+          </div>
+
+          {/* Valor que o motorista informou ao concluir. Fica visivel mesmo com
+              o campo abaixo editavel: se o Financeiro mudar, a diferenca esta
+              na tela. */}
+          <div className="mb-3 rounded-lg border border-border bg-secondary/40 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Valor informado pelo motorista</p>
+            <p className="font-data text-sm font-medium">
+              {payOrder.driverFee ?? "— (entrega concluída sem valor informado)"}
             </p>
           </div>
 
