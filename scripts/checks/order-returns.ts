@@ -9,6 +9,7 @@ import {
   validateReturnItems,
   returnHistoryNote,
   MAX_RETURN_ITEMS,
+  MAX_RETURN_QUANTITY,
 } from "../../src/lib/order-returns";
 
 let falhas = 0;
@@ -29,6 +30,8 @@ check("referencia vazia", validateReturnItems([{ reference: "  ", quantity: 1, v
 check("quantidade zero", validateReturnItems([{ reference: "A", quantity: 0, value: 0 }]), "Item 1: quantidade deve ser um inteiro maior que zero.");
 check("quantidade fracionada", validateReturnItems([{ reference: "A", quantity: 1.5, value: 0 }]), "Item 1: quantidade deve ser um inteiro maior que zero.");
 check("valor negativo", validateReturnItems([{ reference: "A", quantity: 1, value: -1 }]), "Item 1: valor inválido.");
+check("quantidade acima do teto", validateReturnItems([{ reference: "A", quantity: MAX_RETURN_QUANTITY + 1, value: 0 }]), `Item 1: quantidade acima do limite (${MAX_RETURN_QUANTITY}).`);
+check("quantidade no teto e valida", validateReturnItems([{ reference: "A", quantity: MAX_RETURN_QUANTITY, value: 0 }]), null);
 check("valor zero e valido", validateReturnItems([{ reference: "A", quantity: 1, value: 0 }]), null);
 check("aponta a linha certa", validateReturnItems([{ reference: "A", quantity: 1, value: 1 }, { reference: "", quantity: 1, value: 1 }]), "Item 2: informe a referência.");
 check(

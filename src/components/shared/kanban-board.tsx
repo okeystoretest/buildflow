@@ -171,9 +171,15 @@ export function KanbanBoard({
       if (card.status === "EM_ANALISE" && userRole !== "FINANCEIRO" && userRole !== "GESTAO") {
         return false;
       }
+      // Simplificado, Pronto "em aberto" (sem motorista, sem rastreio, sem
+      // retirada): e corrida dos motoristas — quem inicia a rota e o motorista.
+      // A seta some para a loja nao levar o pedido a Em Rota sem dono.
+      if (simplified && card.status === "ENVIADO" && !card.pickupAtStore && !card.hasTracking) {
+        return false;
+      }
       return true;
     },
-    [advance?.enabled, userRole, nextInFlow],
+    [advance?.enabled, userRole, nextInFlow, simplified],
   );
 
   // ---- Tela cheia (mesma lógica do Rank de Vendas) ----

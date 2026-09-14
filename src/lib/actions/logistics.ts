@@ -163,6 +163,21 @@ export async function advanceOrderStatus(args: {
           "Defina a saída do pedido: rastreio, motorista, em aberto ou retirada na loja.",
         );
       }
+      // Pedido "em aberto" (Pronto, com entrega sem dono, sem rastreio e sem
+      // retirada) e dos motoristas: quem inicia a rota e o motorista, pelo
+      // quadro dele. Se a loja avancasse daqui, a Delivery ficaria EM_ROTA sem
+      // dono — um card no quadro do motorista que ninguem consegue concluir.
+      const emAberto =
+        order.status === "ENVIADO" &&
+        !!order.delivery &&
+        order.delivery.driverId == null &&
+        !order.trackingCode &&
+        !order.pickupAtStore;
+      if (emAberto && target === "EM_ROTA") {
+        return actionError(
+          "Pedido em aberto para os motoristas: a rota é iniciada pelo motorista no quadro dele.",
+        );
+      }
       await prisma.$transaction(async (tx) => {
         await tx.order.update({ where: { id: order.id }, data: { status: target } });
         await tx.orderStatusHistory.create({

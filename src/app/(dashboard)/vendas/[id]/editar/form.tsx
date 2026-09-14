@@ -27,6 +27,8 @@ interface OrderData {
   paymentMethodId: string; shippingMethodId: string; bankId: string;
   pieceCount: number;
   orderValue: number; freight: number; notes: string; paymentNotes: string;
+  // Pedido com devolucao registrada: o valor pode estar (e ficar) em zero.
+  hasReturns: boolean;
   campaignId: string; itemCount: number;
   campaignItems: CampaignItemData[];
   shipCep: string; shipStreet: string; shipNumber: string;
@@ -203,8 +205,9 @@ export function EditarPedidoForm({
     });
   }
 
-  // Valor obrigatório (> 0), EXCETO Troca e Doação.
-  const valorOk = valorDispensavel || orderValue > 0;
+  // Valor obrigatório (> 0), EXCETO Troca e Doação — e exceto pedido com
+  // devolução integral, que zerou a mercadoria de propósito.
+  const valorOk = valorDispensavel || orderValue > 0 || (order.hasReturns && orderValue === 0);
   const podeSalvar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId
     && shippingMethodId && valorOk && campaignOk && anexoOk && addressOk;
 

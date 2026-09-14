@@ -296,7 +296,10 @@ export async function updateOrder(args: {
   try {
     // GESTAO edita qualquer pedido; VENDAS/FINANCEIRO seguem a trava de escopo.
     const session = await requireRoleAction(["GESTAO", "VENDAS", "FINANCEIRO"]);
-    const order = await prisma.order.findUnique({ where: { id: args.id } });
+    const order = await prisma.order.findUnique({
+      where: { id: args.id },
+      include: { _count: { select: { returns: true } } },
+    });
     if (!order) return actionError("Pedido não encontrado.");
 
     // Trava de escopo no SERVIDOR (nao confiar so na tela). Interacao liberada
@@ -309,7 +312,13 @@ export async function updateOrder(args: {
 
     const orderValue = args.orderValue ?? Number(order.orderValue);
     const freight = args.freight ?? Number(order.freight);
-    if (!(orderValue > 0)) return actionError("Valor do pedido inválido.");
+    // Valor zero e aceito quando o pedido tem devolucao: uma devolucao integral
+    // zera a mercadoria de proposito, e o pedido continua precisando de edicao
+    // (endereco, observacoes, forma de envio).
+    const temDevolucao = order._count.returns > 0;
+    if (!(orderValue > 0) && !(temDevolucao && orderValue === 0)) {
+      return actionError("Valor do pedido inválido.");
+    }
 
     // Campanha: se a lista de itens veio no payload, ela é a fonte de verdade.
     // Os campos legados (campaignId/itemCount) são derivados dela.

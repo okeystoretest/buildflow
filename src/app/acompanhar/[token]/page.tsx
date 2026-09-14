@@ -38,6 +38,8 @@ const ORDER_SELECT = {
   // depois da aprovacao do Financeiro, entao pode vir nulo.
   comandaNumber: true,
   status: true,
+  // Retirada na loja: muda o rotulo de "Em Transito" para "Pronto para retirada".
+  pickupAtStore: true,
   createdAt: true,
   pieceCount: true,
   items: { select: { quantity: true, product: { select: { name: true } } } },
@@ -109,7 +111,7 @@ export default async function AcompanharPedidoPage({
     take: 20,
   });
 
-  const view = customerStatusView(order.status);
+  const view = customerStatusView(order.status, { pickupAtStore: order.pickupAtStore });
   const itens = resumoItens(order);
   // Comprovante de entrega: so aparece quando o pedido chegou a ULTIMA etapa da
   // linha do tempo do cliente ("Entregue"). Antes disso a foto ou nao existe,
@@ -322,13 +324,14 @@ function HistoricoItem({
     orderNumber: string;
     comandaNumber: string | null;
     status: OrderStatus;
+    pickupAtStore: boolean;
     createdAt: Date;
     delivery: { proofs: { id: string }[] } | null;
   };
   // Token do link em uso — é por ele que a rota do comprovante autoriza a foto.
   token: string;
 }) {
-  const view = customerStatusView(order.status);
+  const view = customerStatusView(order.status, { pickupAtStore: order.pickupAtStore });
   const itens = resumoItens(order);
   // Resumo RÁPIDO: nomes na mesma linha, com reticências a partir do 4º item.
   const resumo = itens.slice(0, 3).map((i) => `${i.quantity}x ${i.label}`).join(" · ");

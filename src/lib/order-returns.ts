@@ -49,11 +49,13 @@ export interface ReturnComputation {
 
 export const MAX_RETURN_ITEMS = 50;
 export const MAX_REFERENCE_LENGTH = 120;
+/** Teto de peças por linha. Barra digitação errada antes do INTEGER do banco. */
+export const MAX_RETURN_QUANTITY = 10000;
 
 function normalize(s: string | null | undefined): string {
   return (s ?? "")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -82,6 +84,7 @@ export function validateReturnItems(items: ReturnItemInput[]): string | null {
     if (!ref) return `${linha}: informe a referência.`;
     if (ref.length > MAX_REFERENCE_LENGTH) return `${linha}: referência muito longa.`;
     if (!Number.isInteger(it.quantity) || it.quantity <= 0) return `${linha}: quantidade deve ser um inteiro maior que zero.`;
+    if (it.quantity > MAX_RETURN_QUANTITY) return `${linha}: quantidade acima do limite (${MAX_RETURN_QUANTITY}).`;
     if (!Number.isFinite(it.value) || it.value < 0) return `${linha}: valor inválido.`;
   }
   return null;

@@ -353,9 +353,10 @@ export async function auditOrder(args: {
 // ===========================================================================
 // FLUXO SIMPLIFICADO (Loja de Origem): botao "Pago" do Financeiro.
 // Move EM_ANALISE -> PAGO. So exige comprovante de pagamento (sem NF, CNPJ,
-// forma de pagamento, banco ou comanda). Nao cria Delivery (o fluxo
-// simplificado nao tem fase de motorista; Embalado/Entregue sao operados
-// por quem tem a loja atrelada).
+// forma de pagamento, banco ou comanda). Nao cria Delivery: a fase de
+// motorista do simplificado comeca na saida de Embalando, e as acoes de
+// saida (assignDriverToOrder/openOrderForDrivers/shipWithTracking) criam a
+// entrega por upsert quando ela ainda nao existe.
 // ===========================================================================
 export async function markOrderPaid(orderId: string): Promise<ActionResult<{ status: string }>> {
   try {

@@ -109,14 +109,24 @@ export async function registerOrderReturn(args: {
         select: { id: true },
       });
 
-      await tx.order.update({
-        where: { id: order.id },
+      // O CALCULO FOI FEITO SOBRE UM SNAPSHOT. Duas devolucoes ao mesmo tempo
+      // (vendedora e Financeiro, duas abas) passariam as duas na validacao e a
+      // segunda sobrescreveria a primeira — o valor final ficaria errado e o
+      // bruto (liquido + devolucoes) deixaria de bater. Por isso a gravacao e
+      // condicionada ao orderValue que foi lido: se mudou, nada e gravado (a
+      // transacao desfaz o OrderReturn acima) e a pessoa refaz com o valor novo.
+      // Mesmo padrao da reivindicacao atomica em startRoute.
+      const { count } = await tx.order.updateMany({
+        where: { id: order.id, orderValue: order.orderValue },
         data: {
           orderValue: new Prisma.Decimal(calc.orderValue),
           total: new Prisma.Decimal(calc.total),
           ...(calc.campaignUpdates.length ? { itemCount: calc.itemCount } : {}),
         },
       });
+      if (count !== 1) {
+        throw new Error("O pedido foi alterado por outra pessoa. Recarregue a tela e registre de novo.");
+      }
 
       for (const up of calc.campaignUpdates) {
         await tx.campaignItem.update({
@@ -148,54 +158,5 @@ export async function registerOrderReturn(args: {
     return actionOk({ returnId: created.id, orderValue: calc.orderValue, total: calc.total });
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao registrar a devolução.");
-  }
-}
-
-export interface OrderReturnView {
-  id: string;
-  createdAt: string; // ISO
-  note: string | null;
-  totalValue: string; // decimal em texto
-  registeredByName: string | null;
-  items: { id: string; reference: string; quantity: number; value: string }[];
-}
-
-/**
- * Devolucoes de um pedido, da mais recente para a mais antiga. Usada pelo
- * modal de detalhe e pelo Historico. Quem ve o pedido ve as devolucoes — a
- * restricao de escopo e a da tela que chama.
- */
-export async function listOrderReturns(orderId: string): Promise<ActionResult<OrderReturnView[]>> {
-  try {
-    await requireRoleAction();
-    const rows = await prisma.orderReturn.findMany({
-      where: { orderId },
-      orderBy: { createdAt: "desc" },
-      include: { items: { orderBy: { reference: "asc" } } },
-    });
-    // O nome de quem registrou vem numa segunda consulta: nao ha FK (usuario
-    // apagado nao leva a devolucao junto), entao o include nao serve.
-    const ids = [...new Set(rows.map((r) => r.registeredById).filter((v): v is string => !!v))];
-    const users = ids.length
-      ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
-      : [];
-    const nome = new Map(users.map((u) => [u.id, u.name]));
-    return actionOk(
-      rows.map((r) => ({
-        id: r.id,
-        createdAt: r.createdAt.toISOString(),
-        note: r.note,
-        totalValue: r.totalValue.toString(),
-        registeredByName: r.registeredById ? (nome.get(r.registeredById) ?? null) : null,
-        items: r.items.map((it) => ({
-          id: it.id,
-          reference: it.reference,
-          quantity: it.quantity,
-          value: it.value.toString(),
-        })),
-      })),
-    );
-  } catch (err) {
-    return actionError(err instanceof Error ? err.message : "Erro ao carregar devoluções.");
   }
 }

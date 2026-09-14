@@ -94,6 +94,7 @@ export default async function FluxoPage({
     deliveredAt: deliveredAtById.get(o.id) ?? null,
     statusSince: statusSince.get(o.id) ?? null,
     pickupAtStore: o.pickupAtStore,
+    hasTracking: !!o.trackingCode,
   }));
 
   return (

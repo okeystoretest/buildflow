@@ -67,7 +67,10 @@ export interface CustomerStatusView {
   exception: boolean;
 }
 
-export function customerStatusView(status: OrderStatus): CustomerStatusView {
+export function customerStatusView(
+  status: OrderStatus,
+  opts: { pickupAtStore?: boolean } = {},
+): CustomerStatusView {
   const step = STEP_BY_STATUS[status];
   if (step === null) {
     return {
@@ -75,6 +78,12 @@ export function customerStatusView(status: OrderStatus): CustomerStatusView {
       step: null,
       exception: true,
     };
+  }
+  // Retirada na loja: em "Pronto" o pedido nao esta a caminho de ninguem —
+  // esta esperando o cliente buscar. A etapa da linha do tempo e a mesma
+  // (3, "saiu do armazem"); so o rotulo muda para dizer o que fazer.
+  if (opts.pickupAtStore && status === "ENVIADO") {
+    return { label: "Pronto para retirada", step, exception: false };
   }
   return { label: CUSTOMER_STEPS[step], step, exception: false };
 }

@@ -20,6 +20,8 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
           customer: true,
           paymentProofs: { orderBy: { createdAt: "asc" } },
           campaignItems: { orderBy: { createdAt: "asc" } },
+          // Pedido com devolucao pode ter valor zero; o form precisa saber.
+          _count: { select: { returns: true } },
         },
       }),
       prisma.store.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
@@ -89,6 +91,7 @@ export default async function EditarPedidoPage({ params }: { params: { id: strin
               bankId: order.bankId ?? "",
               orderValue: Number(order.orderValue),
               freight: Number(order.freight),
+              hasReturns: order._count.returns > 0,
               notes: order.notes ?? "",
               paymentNotes: order.paymentNotes ?? "",
               shipCep: order.shipCep ?? "",

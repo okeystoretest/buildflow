@@ -31,6 +31,8 @@ export interface OrderCardData {
   hasDelayReason?: boolean;
   // Retirada na loja (fluxo simplificado): sem motorista, pula Em Rota.
   pickupAtStore?: boolean;
+  // Pedido com codigo de rastreio (segue por transportadora).
+  hasTracking?: boolean;
 }
 
 export function OrderCard({
