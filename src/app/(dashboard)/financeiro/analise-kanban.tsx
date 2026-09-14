@@ -56,6 +56,15 @@ const VISIVEIS_POR_COLUNA = 3;
 /** Teto de comprovantes por pedido — mesmo limite aplicado no servidor. */
 const MAX_COMPROVANTES = 5;
 
+/**
+ * Rotulo do card na coluna "Pagamento pendente": a comanda e o numero que o
+ * Financeiro cobra e confere, entao ela vem na frente. Sem comanda emitida,
+ * cai para o numero do pedido — mesmo fallback do card Pendente.
+ */
+function rotuloComanda(card: { comandaNumber: string | null; orderNumber: string }): string {
+  return card.comandaNumber ? `Comanda ${card.comandaNumber}` : `Pedido ${card.orderNumber}`;
+}
+
 export function AnaliseKanban({
   pendentes,
   processados,
@@ -245,7 +254,7 @@ export function AnaliseKanban({
       {cardNote && (
         <PaymentNoteModal
           orderId={cardNote.id}
-          orderNumber={cardNote.orderNumber}
+          rotulo={rotuloComanda(cardNote)}
           initialNote={cardNote.paymentPendingNote}
           onClose={() => setNoteId(null)}
         />
@@ -310,8 +319,8 @@ function IssueModal({ orderId, orderNumber, onClose }: {
  * isso o botao NAO exige texto (ao contrario do IssueModal, onde a descricao
  * do problema e obrigatoria).
  */
-function PaymentNoteModal({ orderId, orderNumber, initialNote, onClose }: {
-  orderId: string; orderNumber: string; initialNote: string | null; onClose: () => void;
+function PaymentNoteModal({ orderId, rotulo, initialNote, onClose }: {
+  orderId: string; rotulo: string; initialNote: string | null; onClose: () => void;
 }) {
   const router = useRouter();
   const [text, setText] = useState(initialNote ?? "");
@@ -335,7 +344,7 @@ function PaymentNoteModal({ orderId, orderNumber, initialNote, onClose }: {
         <MessageSquare className="h-5 w-5 text-sky-500" />
         <h2 className="text-lg font-bold">{initialNote ? "Editar comentário" : "Comentar"}</h2>
       </div>
-      <p className="mb-2 text-sm text-muted-foreground">Pedido {orderNumber}</p>
+      <p className="mb-2 text-sm text-muted-foreground">{rotulo}</p>
       <textarea
         className="min-h-[110px] w-full rounded-lg border border-input bg-background p-3 text-sm"
         placeholder="Observação sobre o pagamento deste pedido..."
@@ -607,7 +616,7 @@ function PaidPendingCard({ card, podeAnexar, onComment }: {
   return (
     <div className="animate-fade-in-up w-full rounded-xl border border-sky-400/40 bg-card p-3 shadow-sm">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="font-data text-sm font-semibold">Pedido {card.orderNumber}</span>
+        <span className="font-data text-sm font-semibold">{rotuloComanda(card)}</span>
         <span className="font-data text-sm font-semibold">{card.total}</span>
       </div>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
