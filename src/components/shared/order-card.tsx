@@ -1,7 +1,7 @@
 "use client";
 
 import type { OrderStatus } from "@prisma/client";
-import { FileText, Receipt, User, Tag, Clock } from "lucide-react";
+import { FileText, Receipt, User, Tag, Clock, Store } from "lucide-react";
 import { STATUS_STYLE, formatOverdue, type StageAlert } from "@/lib/order-flow";
 import { cn, shortName } from "@/lib/utils";
 
@@ -29,6 +29,8 @@ export interface OrderCardData {
   // Já existe motivo de atraso registrado para a etapa ATUAL deste pedido.
   // Quando true, o quadro não volta a pedir a justificativa.
   hasDelayReason?: boolean;
+  // Retirada na loja (fluxo simplificado): sem motorista, pula Em Rota.
+  pickupAtStore?: boolean;
 }
 
 export function OrderCard({
@@ -144,6 +146,19 @@ export function OrderCard({
         {alerta && (
           <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-semibold text-destructive">
             Sem NF
+          </span>
+        )}
+        {/* Retirada na loja: o cliente vem buscar. Sinaliza por que o card em
+            Pronto nao tem motorista e por que a seta pula Em Rota. */}
+        {data.pickupAtStore && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+              preenchido ? "bg-white/90 text-foreground" : "bg-sky-400/15 text-sky-700 dark:text-sky-300",
+            )}
+            title="Retirada na loja"
+          >
+            <Store className="h-3 w-3" /> Retirada
           </span>
         )}
         {!alerta && stageAlert !== "none" && (

@@ -13,6 +13,73 @@ import { sendPushToUser } from "@/lib/push";
 import type { OrderStatus } from "@prisma/client";
 
 /**
+ * Quem pode decidir a SAIDA do pedido — rastreio, motorista, em aberto ou
+ * retirada na loja — e de onde ela pode acontecer.
+ *
+ * Fluxo padrao: LOGISTICA e GESTAO, a partir de Processando (PROCESSADO segue
+ * aceito por causa de pedidos legados parados nele).
+ *
+ * Fluxo SIMPLIFICADO: a loja opera o proprio quadro, entao vale a mesma regra
+ * do "Avancar" (advanceOrderStatus) — LOGISTICA/GESTAO/FINANCEIRO sempre; os
+ * demais so quem pode interagir com o pedido, e VENDAS so nos proprios. A
+ * origem e Embalando: e a saida dela que abre o modal de logistica.
+ *
+ * Nao exportada de proposito: em arquivo "use server" todo export vira Server
+ * Action, e isto e helper interno. Lanca com a mensagem do usuario.
+ */
+async function autorizarSaida(orderId: string): Promise<{
+  userId: string;
+  simplified: boolean;
+  order: { id: string; status: OrderStatus; orderNumber: string };
+}> {
+  const session = await requireRoleAction();
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      status: true,
+      orderNumber: true,
+      sellerId: true,
+      originStoreId: true,
+      originStore: { select: { simplifiedFlow: true } },
+    },
+  });
+  if (!order) throw new Error("Pedido nao encontrado.");
+  const simplified = order.originStore?.simplifiedFlow === true;
+
+  if (simplified) {
+    const privileged =
+      session.role === "LOGISTICA" || session.role === "GESTAO" || session.role === "FINANCEIRO";
+    if (!privileged) {
+      const actor = await getActorContext();
+      const podeInteragir =
+        !!actor &&
+        canInteractWithOrder(actor, { sellerId: order.sellerId, originStoreId: order.originStoreId });
+      const bloqueadoPorOwnership = session.role === "VENDAS" && order.sellerId !== session.userId;
+      if (!podeInteragir || bloqueadoPorOwnership) {
+        throw new Error("Você não tem permissão para despachar este pedido.");
+      }
+    }
+    if (order.status !== "EMBALANDO") {
+      throw new Error("O pedido precisa estar em Embalando para definir a saída.");
+    }
+  } else {
+    if (session.role !== "LOGISTICA" && session.role !== "GESTAO") {
+      throw new Error("Sem permissao para esta acao.");
+    }
+    if (order.status !== "PROCESSANDO" && order.status !== "PROCESSADO") {
+      throw new Error("O pedido precisa estar em Processando para definir a saída.");
+    }
+  }
+
+  return {
+    userId: session.userId,
+    simplified,
+    order: { id: order.id, status: order.status, orderNumber: order.orderNumber },
+  };
+}
+
+/**
  * Logistica avanca o pedido para um status especifico (ou o proximo do fluxo).
  * - Ao chegar em EMBALANDO: dispara notificacao de NF para a vendedora.
  * - A saida de PROCESSANDO exige escolher o envio: rastreio (transportadora)
@@ -33,6 +100,7 @@ export async function advanceOrderStatus(args: {
         originStore: { select: { simplifiedFlow: true } },
         orderType: { select: { name: true } },
         operation: { select: { name: true } },
+        delivery: { select: { driverId: true } },
       },
     });
     if (!order) return actionError("Pedido nao encontrado.");
@@ -78,19 +146,36 @@ export async function advanceOrderStatus(args: {
       return actionError("Apenas o Financeiro pode avançar pedidos em Análise.");
     }
 
-    // ---- FLUXO SIMPLIFICADO (Loja de Origem): PAGO -> EMBALADO -> ENTREGUE ----
-    // Caminho curto e separado: sem NF, sem PENDENTE, sem fase de motorista.
+    // ---- FLUXO SIMPLIFICADO (Loja de Origem) ----
+    // PAGO -> EMBALANDO -> PRONTO -> EM_ROTA -> ENTREGUE. Sem NF, sem PENDENTE.
+    // A saida de EMBALANDO nao passa por aqui: e o modal de logistica que a
+    // decide (shipWithTracking / assignDriverToOrder / openOrderForDrivers /
+    // markPickupAtStore). Retirada na loja pula EM_ROTA.
     if (simplified) {
-      const target = args.to ?? nextSimplifiedStatus(order.status);
+      const opts = { pickupAtStore: order.pickupAtStore };
+      const target = args.to ?? nextSimplifiedStatus(order.status, opts);
       if (!target) return actionError("Pedido ja no ultimo status do fluxo.");
-      if (!canTransitionSimplified(order.status, target)) {
+      if (!canTransitionSimplified(order.status, target, opts)) {
         return actionError("Transicao de status invalida.");
+      }
+      if (order.status === "EMBALANDO" && target === "ENVIADO") {
+        return actionError(
+          "Defina a saída do pedido: rastreio, motorista, em aberto ou retirada na loja.",
+        );
       }
       await prisma.$transaction(async (tx) => {
         await tx.order.update({ where: { id: order.id }, data: { status: target } });
         await tx.orderStatusHistory.create({
           data: { orderId: order.id, status: target, changedBy: session.userId },
         });
+        // Mesma sincronizacao da entrega do fluxo padrao: ao sair para a rua,
+        // a Delivery acompanha (quando existe — retirada nao tem entrega).
+        if (target === "EM_ROTA") {
+          await tx.delivery.updateMany({
+            where: { orderId: order.id },
+            data: { status: "EM_ROTA", startedAt: new Date() },
+          });
+        }
         // Controle de Peças: a entrega registrada libera a peça para "Em Uso".
         if (target === "ENTREGUE") {
           await ativarPecaAoEntregar(tx, order.id, session.userId);
@@ -99,6 +184,7 @@ export async function advanceOrderStatus(args: {
       revalidatePath("/logistica");
       revalidatePath("/fluxo");
       revalidatePath("/dashboard");
+      revalidatePath("/motorista");
       if (target === "ENTREGUE") revalidatePath("/logistica/controle-pecas");
       emitOrderUpdated({ orderId: args.orderId, status: target });
       return actionOk({ status: target });
@@ -233,23 +319,14 @@ export async function shipWithTracking(args: {
   trackingCode: string;
 }): Promise<ActionResult<void>> {
   try {
-    const session = await requireRoleAction(["LOGISTICA", "GESTAO"]);
-
     const tracking = args.trackingCode?.trim();
     if (!tracking) return actionError("Informe o codigo de rastreio.");
 
-    await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id: args.orderId },
-        include: { delivery: true },
-      });
-      if (!order) throw new Error("Pedido nao encontrado.");
-      // PROCESSADO segue aceito como origem por causa de pedidos legados que
-      // ficaram parados nele antes da reestruturacao do fluxo.
-      if (order.status !== "PROCESSANDO" && order.status !== "PROCESSADO") {
-        throw new Error("O pedido precisa estar em Processando para envio externo.");
-      }
+    // Permissao e status de origem (padrao: Processando; simplificado:
+    // Embalando) ficam no helper — e o mesmo crivo das outras saidas.
+    const { userId, order } = await autorizarSaida(args.orderId);
 
+    await prisma.$transaction(async (tx) => {
       // Envio externo (Correios/Transportadora): sem motorista proprio. O pedido
       // vai para ENVIADO ("Pronto") com o rastreio gravado — antes parava em
       // PROCESSADO, que saiu do fluxo. Nao aparece no Kanban de Motoristas: o
@@ -263,19 +340,20 @@ export async function shipWithTracking(args: {
       });
       await tx.order.update({
         where: { id: order.id },
-        data: { status: "ENVIADO", trackingCode: tracking },
+        data: { status: "ENVIADO", trackingCode: tracking, pickupAtStore: false },
       });
       await tx.orderStatusHistory.create({
         data: {
           orderId: order.id,
           status: "ENVIADO",
-          changedBy: session.userId,
+          changedBy: userId,
           note: `Envio externo (Correios/Transportadora) · Rastreio: ${tracking}`,
         },
       });
     });
 
     revalidatePath("/logistica");
+    revalidatePath("/fluxo");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
     emitOrderUpdated({ orderId: args.orderId });
@@ -299,7 +377,8 @@ export async function assignDriverToOrder(args: {
   trackingCode?: string | null;
 }): Promise<ActionResult<void>> {
   try {
-    const session = await requireRoleAction(["LOGISTICA", "GESTAO"]);
+    if (!args.driverId) return actionError("Selecione o motorista.");
+    const { userId } = await autorizarSaida(args.orderId);
 
     const tracking = args.trackingCode?.trim() || null;
 
@@ -330,6 +409,7 @@ export async function assignDriverToOrder(args: {
         where: { id: order.id },
         data: {
           status: "ENVIADO",
+          pickupAtStore: false,
           // So sobrescreve o rastreio se um novo codigo foi informado.
           ...(tracking ? { trackingCode: tracking } : {}),
         },
@@ -338,7 +418,7 @@ export async function assignDriverToOrder(args: {
         data: {
           orderId: order.id,
           status: "ENVIADO",
-          changedBy: session.userId,
+          changedBy: userId,
           note: tracking ? `Motorista atribuido · Rastreio: ${tracking}` : "Motorista atribuido",
         },
       });
@@ -351,6 +431,7 @@ export async function assignDriverToOrder(args: {
     });
 
     revalidatePath("/logistica");
+    revalidatePath("/fluxo");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
     emitOrderUpdated({ orderId: args.orderId });
@@ -384,7 +465,7 @@ export async function openOrderForDrivers(args: {
   trackingCode?: string | null;
 }): Promise<ActionResult<void>> {
   try {
-    const session = await requireRoleAction(["LOGISTICA", "GESTAO"]);
+    const { userId } = await autorizarSaida(args.orderId);
 
     const tracking = args.trackingCode?.trim() || null;
 
@@ -399,10 +480,6 @@ export async function openOrderForDrivers(args: {
         include: { delivery: true, customer: true },
       });
       if (!order) throw new Error("Pedido nao encontrado.");
-      // PROCESSADO segue aceito por causa de pedidos legados parados nele.
-      if (order.status !== "PROCESSANDO" && order.status !== "PROCESSADO") {
-        throw new Error("O pedido precisa estar em Processando para abrir aos motoristas.");
-      }
 
       // Entrega fica SEM motorista, aguardando alguém pegar. Cria a Delivery se
       // ainda nao existir (ex.: Troca, que pula a aprovacao do Financeiro).
@@ -416,6 +493,7 @@ export async function openOrderForDrivers(args: {
         where: { id: order.id },
         data: {
           status: "ENVIADO",
+          pickupAtStore: false,
           ...(tracking ? { trackingCode: tracking } : {}),
         },
       });
@@ -423,7 +501,7 @@ export async function openOrderForDrivers(args: {
         data: {
           orderId: order.id,
           status: "ENVIADO",
-          changedBy: session.userId,
+          changedBy: userId,
           note: tracking
             ? `Em aberto para motoristas · Rastreio: ${tracking}`
             : "Em aberto para motoristas",
@@ -439,6 +517,7 @@ export async function openOrderForDrivers(args: {
     });
 
     revalidatePath("/logistica");
+    revalidatePath("/fluxo");
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
     emitOrderUpdated({ orderId: args.orderId });
@@ -455,6 +534,51 @@ export async function openOrderForDrivers(args: {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao abrir pedido aos motoristas.";
     return actionError(msg);
+  }
+}
+
+/**
+ * RETIRADA NA LOJA (fluxo simplificado): o cliente vem buscar. O pedido vai a
+ * Pronto sem motorista e sem rastreio, fica FORA do quadro do Motorista (o
+ * quadro exclui pickupAtStore) e pula Em Rota — a loja avanca de Pronto direto
+ * para Entregue quando o cliente retira (ver nextSimplifiedStatus).
+ *
+ * A Delivery, se existir, volta ao estado neutro: uma retirada nao e entrega
+ * de ninguem, e um driverId antigo faria o card aparecer para aquele motorista.
+ * Ninguem e avisado — nao ha corrida.
+ */
+export async function markPickupAtStore(args: { orderId: string }): Promise<ActionResult<void>> {
+  try {
+    const { userId, simplified, order } = await autorizarSaida(args.orderId);
+    if (!simplified) return actionError("Retirada na loja só existe no fluxo simplificado.");
+
+    await prisma.$transaction(async (tx) => {
+      await tx.delivery.updateMany({
+        where: { orderId: order.id },
+        data: { status: "AGUARDANDO", driverId: null, assignedAt: null, startedAt: null },
+      });
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: "ENVIADO", pickupAtStore: true, trackingCode: null },
+      });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          status: "ENVIADO",
+          changedBy: userId,
+          note: "Retirada na loja",
+        },
+      });
+    });
+
+    revalidatePath("/logistica");
+    revalidatePath("/fluxo");
+    revalidatePath("/dashboard");
+    revalidatePath("/motorista");
+    emitOrderUpdated({ orderId: order.id, status: "ENVIADO" });
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao marcar retirada na loja.");
   }
 }
 

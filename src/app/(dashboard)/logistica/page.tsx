@@ -140,6 +140,7 @@ export default async function LogisticaPage({
     deliveredAt: deliveredAtById.get(o.id) ?? null,
     statusSince: statusSince.get(o.id) ?? null,
     hasDelayReason: delayReasonFlags.has(o.id),
+    pickupAtStore: o.pickupAtStore,
   }));
 
   return (

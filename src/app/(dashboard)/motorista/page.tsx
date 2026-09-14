@@ -5,7 +5,7 @@ import { History } from "lucide-react";
 import { EntregaCard, type DriverOrderView } from "./delivery-card";
 import { MOTORISTA_COLUMNS, STATUS_LABEL, STATUS_STYLE } from "@/lib/order-flow";
 import { CardScroller } from "@/components/shared/card-scroller";
-import { isEntregaDeMotorista } from "@/lib/driver-delivery";
+import { entraNoQuadroDoMotorista } from "@/lib/driver-delivery";
 
 // Quantos cards ficam visíveis por coluna antes de rolar. Mesmo número do
 // Kanban do Financeiro — é de lá que vem a proporção deste quadro.
@@ -58,12 +58,18 @@ export default async function MotoristaPage() {
         },
         // Sem rastreio: cobre tanto NULL quanto string vazia por segurança.
         { OR: [{ trackingCode: null }, { trackingCode: "" }] },
+        // Retirada na loja (fluxo simplificado): o cliente vem buscar, não há
+        // entrega. Mesma natureza da exclusão por rastreio.
+        { pickupAtStore: false },
       ],
     },
     include: {
       customer: true,
       // Nome da Forma de Envio: decide se o pedido é entrega de motorista.
       shippingMethod: { select: { name: true } },
+      // Loja simplificada: a escolha do modal (motorista/em aberto) prevalece
+      // sobre a forma de envio — ver entraNoQuadroDoMotorista.
+      originStore: { select: { simplifiedFlow: true } },
       delivery: { select: { driverId: true } },
       // Dados da excursão para o motorista ler no card (nome, endereço e
       // observações da excursão). Só existe quando a forma de envio é excursão.
@@ -86,7 +92,12 @@ export default async function MotoristaPage() {
   // Postgres não faz isso sem a extensão unaccent. A consulta do quadro já é
   // pequena — limitada por status e pelo escopo de quem olha.
   const doMotorista = orders.filter(
-    (o) => o.status !== "ENVIADO" || isEntregaDeMotorista(o.shippingMethod?.name),
+    (o) =>
+      o.status !== "ENVIADO" ||
+      entraNoQuadroDoMotorista({
+        shippingMethodName: o.shippingMethod?.name,
+        simplifiedFlow: o.originStore?.simplifiedFlow,
+      }),
   );
 
   const views: DriverOrderView[] = doMotorista.map((o) => ({

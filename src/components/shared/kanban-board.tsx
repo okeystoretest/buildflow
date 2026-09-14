@@ -109,21 +109,10 @@ export function KanbanBoard({
   }, [query, cards, nowTick]);
   const [isFull, setIsFull] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  // Agrupa os cards por coluna. No fluxo SIMPLIFICADO as colunas são apenas
-  // PAGO → EMBALANDO → ENTREGUE, mas ao atribuir um motorista o pedido passa a
-  // ENVIADO/EM_ROTA (status do fluxo padrão). Esses status não têm coluna
-  // própria aqui, então o card sumia do Fluxo entre EMBALANDO e ENTREGUE. Para
-  // não perder o pedido de vista, dobramos ENVIADO/EM_ROTA na coluna EMBALANDO
-  // (etapa "saiu para entrega") enquanto não chega em ENTREGUE.
-  const IN_TRANSIT_INTO_EMBALANDO: OrderStatus[] = ["ENVIADO", "EM_ROTA"];
-  const byStatus = (status: OrderStatus) =>
-    visibleCards.filter((c) => {
-      if (c.status === status) return true;
-      if (simplified && status === "EMBALANDO" && IN_TRANSIT_INTO_EMBALANDO.includes(c.status)) {
-        return true;
-      }
-      return false;
-    });
+  // Agrupa os cards por coluna. O fluxo simplificado tem coluna própria para
+  // Pronto e Em Rota desde que entraram na esteira — não há mais "dobra" de
+  // status sem coluna.
+  const byStatus = (status: OrderStatus) => visibleCards.filter((c) => c.status === status);
 
   // ----- MOTIVO DO ATRASO (justificativa automatica) -----
   // Cards ja justificados NESTA aba (a action grava no banco, mas o
@@ -158,11 +147,14 @@ export function KanbanBoard({
   }, [askDelayReason, visibleCards, atrasoPorCard, justificados, adiados, userRole]);
 
   // Proximo status conforme o fluxo do board: no simplificado usa a cadeia
-  // PAGO->EMBALANDO->ENTREGUE; no padrao, o fluxo linear completo. Sem isto, a
-  // seta some no fluxo simplificado (PAGO nao existe no fluxo padrao).
+  // PAGO->EMBALANDO->PRONTO->EM_ROTA->ENTREGUE (retirada na loja pula EM_ROTA);
+  // no padrao, o fluxo linear completo. Sem isto, a seta some no fluxo
+  // simplificado (PAGO nao existe no fluxo padrao).
   const nextInFlow = useCallback(
-    (status: OrderStatus): OrderStatus | null =>
-      simplified ? nextSimplifiedStatus(status) : nextStatus(status),
+    (card: Pick<KanbanCard, "status" | "pickupAtStore">): OrderStatus | null =>
+      simplified
+        ? nextSimplifiedStatus(card.status, { pickupAtStore: card.pickupAtStore })
+        : nextStatus(card.status),
     [simplified],
   );
 
@@ -171,7 +163,7 @@ export function KanbanBoard({
   //  - Demais status seguem o advance normal da Logística.
   const canAdvanceCard = useCallback(
     (card: KanbanCard): boolean => {
-      if (!advance?.enabled || !nextInFlow(card.status)) return false;
+      if (!advance?.enabled || !nextInFlow(card)) return false;
       // Trava (doc 3.1): se o pedido já tem motorista atribuído, a Logística
       // não avança mais o status manualmente — a entrega está com o motorista.
       // Exceção: já ENTREGUE não tem seta de qualquer forma (sem próximo passo).
@@ -237,12 +229,18 @@ export function KanbanBoard({
 
   function handleAdvance(card: KanbanCard) {
     setError(null);
-    const next = nextInFlow(card.status);
+    const next = nextInFlow(card);
     if (!next) return;
 
-    // Fluxo simplificado (PAGO->EMBALANDO->ENTREGUE): avanco direto, sem os
-    // pop-ups do fluxo padrao (NF, rastreio, motorista, pendencia).
+    // Fluxo simplificado: sem NF e sem pendencia, mas a saida de Embalando para
+    // Pronto passa pelo mesmo pop-up de logistica do fluxo padrao (rastreio,
+    // motorista, em aberto) mais a retirada na loja. O resto avanca direto.
     if (simplified) {
+      if (next === "ENVIADO") {
+        setTrackingOrder(card);
+        setTrackingCode("");
+        return;
+      }
       runAdvance({ orderId: card.id });
       return;
     }
@@ -283,6 +281,22 @@ export function KanbanBoard({
     start(async () => {
       const mod = await import("@/lib/actions/logistics");
       const res = await mod.shipWithTracking({ orderId: trackingOrder.id, trackingCode: code });
+      if (res.ok) {
+        setTrackingOrder(null);
+        setTrackingCode("");
+        router.refresh();
+      } else setError(res.error);
+    });
+  }
+
+  // Cenario C (so no fluxo simplificado): RETIRADA NA LOJA. O cliente vem
+  // buscar — sem motorista, sem rastreio, e o pedido pula Em Rota.
+  function confirmPickupAtStore() {
+    if (!trackingOrder) return;
+    setError(null);
+    start(async () => {
+      const mod = await import("@/lib/actions/logistics");
+      const res = await mod.markPickupAtStore({ orderId: trackingOrder.id });
       if (res.ok) {
         setTrackingOrder(null);
         setTrackingCode("");
@@ -489,8 +503,9 @@ export function KanbanBoard({
 
       {simplified ? (
         /* Fluxo simplificado (Loja de Origem): colunas lado a lado numa unica
-           fileira, no estilo do Kanban do Financeiro. Sem split em estagios. */
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+           fileira, no estilo do Kanban do Financeiro. Sem split em estagios.
+           Cinco colunas desde que Pronto e Em Rota entraram na esteira. */
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {columns.map((status) => renderColumn(status))}
         </div>
       ) : (
@@ -532,16 +547,20 @@ export function KanbanBoard({
         />
       )}
 
-      {/* Pop-up de rastreio (saida de Processando p/ "Pronto") — EXCLUSAO MUTUA:
+      {/* Pop-up de rastreio (saida de Processando p/ "Pronto"; no fluxo
+          simplificado, saida de Embalando) — EXCLUSAO MUTUA:
           - Com codigo de rastreio: envio EXTERNO (Correios/Transportadora),
             NAO pede motorista (shipWithTracking).
           - Sem codigo: entrega PROPRIA/LOCAL, segue para escolha de motorista
-            (obrigatoria). */}
+            (obrigatoria) — ou, so no simplificado, RETIRADA NA LOJA. */}
       {trackingOrder && (
         <Modal onClose={() => { setTrackingOrder(null); setTrackingCode(""); setError(null); }}>
-          <h2 className="mb-1 text-lg font-bold">Código de rastreio</h2>
+          <h2 className="mb-1 text-lg font-bold">{simplified ? "Como o pedido sai?" : "Código de rastreio"}</h2>
           <p className="mb-4 text-sm text-muted-foreground">
-            Pedido {trackingOrder.orderNumber}. Se houver rastreio (transportadora externa), informe o código abaixo. Caso contrário, deixe em branco para entrega própria.
+            Pedido {trackingOrder.orderNumber}. Se houver rastreio (transportadora externa), informe o código abaixo.
+            {simplified
+              ? " Caso contrário, escolha o motorista, deixe em aberto ou marque retirada na loja."
+              : " Caso contrário, deixe em branco para entrega própria."}
           </p>
           <input
             className="mb-3 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
@@ -551,7 +570,7 @@ export function KanbanBoard({
             autoFocus
           />
           {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" onClick={() => { setTrackingOrder(null); setTrackingCode(""); setError(null); }}>
               Cancelar
             </Button>
@@ -560,9 +579,16 @@ export function KanbanBoard({
                 {pending ? "..." : "Enviar via transportadora"}
               </Button>
             ) : (
-              <Button variant="distribuicao" onClick={goToDriverStep} disabled={pending}>
-                Escolher motorista
-              </Button>
+              <>
+                {simplified && (
+                  <Button variant="outline" onClick={confirmPickupAtStore} disabled={pending}>
+                    {pending ? "..." : "Retirada na loja"}
+                  </Button>
+                )}
+                <Button variant="distribuicao" onClick={goToDriverStep} disabled={pending}>
+                  Escolher motorista
+                </Button>
+              </>
             )}
           </div>
         </Modal>

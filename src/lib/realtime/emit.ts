@@ -2,7 +2,7 @@ import { publish, type RealtimeEvent } from "@/lib/realtime/bus";
 import { sendPushToRole, sendPushToUser } from "@/lib/push";
 import { sendWhatsappToDrivers } from "@/lib/whatsapp";
 import { prisma } from "@/lib/prisma";
-import { isEntregaDeMotorista } from "@/lib/driver-delivery";
+import { entraNoQuadroDoMotorista } from "@/lib/driver-delivery";
 
 /**
  * Fachada de emissao para as Server Actions. Concentra a regra de "quem recebe
@@ -63,7 +63,9 @@ export function emitOrderCreated(args: {
  *
  * Quem recebe depende de como o pedido entrou:
  *   - forma de envio que nao e do motorista -> ninguem. So "1 - Excursao" e
- *     "3 - Entrega Local" sao entregues pela equipe (ver driver-delivery.ts);
+ *     "3 - Entrega Local" sao entregues pela equipe (ver driver-delivery.ts).
+ *     Excecao: loja de fluxo simplificado, onde a escolha "motorista"/"em
+ *     aberto" e explicita no modal e prevalece sobre a forma de envio;
  *   - com codigo de rastreio -> ninguem. Segue por transportadora, nao ha
  *     motorista envolvido;
  *   - com motorista atribuido -> so ele. Chamar a equipe inteira para uma
@@ -96,11 +98,19 @@ export function notifyOrderReady(args: {
   void (async () => {
     const pedido = await prisma.order.findUnique({
       where: { id: args.orderId },
-      select: { shippingMethod: { select: { name: true } } },
+      select: {
+        shippingMethod: { select: { name: true } },
+        originStore: { select: { simplifiedFlow: true } },
+      },
     });
     // Pedido sumiu entre a ação e este aviso: não há o que notificar.
     if (!pedido) return;
-    if (!isEntregaDeMotorista(pedido.shippingMethod?.name)) {
+    if (
+      !entraNoQuadroDoMotorista({
+        shippingMethodName: pedido.shippingMethod?.name,
+        simplifiedFlow: pedido.originStore?.simplifiedFlow,
+      })
+    ) {
       console.log(
         `[aviso] pedido ${args.orderId} nao e entrega de motorista; ninguem avisado.`,
       );

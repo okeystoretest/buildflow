@@ -51,13 +51,25 @@ check("nao se transita p/ processado", canTransition("PROCESSANDO", "PROCESSADO"
 // Excecoes continuam permitidas de qualquer status.
 check("excecao segue valida", canTransition("PROCESSANDO", "CANCELADO"), true);
 
-// --- Fluxo simplificado: o passo do meio virou EMBALANDO ---
-check("simplificado", SIMPLIFIED_FLOW, ["PAGO", "EMBALANDO", "ENTREGUE"]);
-check("colunas simplificadas", SIMPLIFIED_COLUMNS, ["PAGO", "EMBALANDO", "ENTREGUE"]);
+// --- Fluxo simplificado: PRONTO e EM_ROTA entraram na esteira ---
+check("simplificado", SIMPLIFIED_FLOW, ["PAGO", "EMBALANDO", "ENVIADO", "EM_ROTA", "ENTREGUE"]);
+check("colunas simplificadas", SIMPLIFIED_COLUMNS, ["PAGO", "EMBALANDO", "ENVIADO", "EM_ROTA", "ENTREGUE"]);
 check("pago avanca p/ embalando", nextSimplifiedStatus("PAGO"), "EMBALANDO");
-check("embalando avanca p/ entregue", nextSimplifiedStatus("EMBALANDO"), "ENTREGUE");
+// A saida de EMBALANDO e onde a escolha de logistica acontece (modal).
+check("embalando avanca p/ pronto", nextSimplifiedStatus("EMBALANDO"), "ENVIADO");
+check("pronto avanca p/ em rota", nextSimplifiedStatus("ENVIADO"), "EM_ROTA");
+check("em rota avanca p/ entregue", nextSimplifiedStatus("EM_ROTA"), "ENTREGUE");
 check("entregue e o fim do simplificado", nextSimplifiedStatus("ENTREGUE"), null);
 check("transicao simplificada valida", canTransitionSimplified("PAGO", "EMBALANDO"), true);
+check("nao pula pronto", canTransitionSimplified("EMBALANDO", "ENTREGUE"), false);
+check("nao pula em rota sem retirada", canTransitionSimplified("ENVIADO", "ENTREGUE"), false);
+// Retirada na loja: nao existe rota quando o cliente vem buscar. PRONTO vai
+// direto para ENTREGUE — e so nesse caso.
+check("retirada: pronto -> entregue", nextSimplifiedStatus("ENVIADO", { pickupAtStore: true }), "ENTREGUE");
+check("retirada: transicao valida", canTransitionSimplified("ENVIADO", "ENTREGUE", { pickupAtStore: true }), true);
+check("retirada: em rota deixa de ser o proximo", canTransitionSimplified("ENVIADO", "EM_ROTA", { pickupAtStore: true }), false);
+check("retirada nao muda os passos anteriores", nextSimplifiedStatus("EMBALANDO", { pickupAtStore: true }), "ENVIADO");
+check("excecao segue valida no simplificado", canTransitionSimplified("ENVIADO", "CANCELADO"), true);
 check("transicao simplificada invalida", canTransitionSimplified("PAGO", "ENTREGUE"), false);
 
 // --- O corte de estagios do quadro precisa existir ---

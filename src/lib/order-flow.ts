@@ -62,29 +62,48 @@ export type Setor = "VENDAS" | "FINANCEIRO" | "LOGISTICA" | "MOTORISTA";
 
 // ---------------------------------------------------------------------------
 // FLUXO SIMPLIFICADO (Loja de Origem com simplifiedFlow = true)
-// Caminho curto: EM_ANALISE -> PAGO -> EMBALANDO -> ENTREGUE.
+// Caminho curto: EM_ANALISE -> PAGO -> EMBALANDO -> PRONTO -> EM_ROTA -> ENTREGUE.
 // Sem NF; comprovante obrigatorio; o Financeiro so ve comprovante + "Pago".
 //
-// O passo do meio era EMBALADO. Com ele fora do fluxo, o lugar passa a ser
-// EMBALANDO: a loja simplificada mantem os mesmos tres passos e a mesma
-// operacao — muda so o rotulo da coluna do meio.
+// PRONTO (ENVIADO) e EM_ROTA entraram na esteira: antes o pedido pulava de
+// EMBALANDO para ENTREGUE, e quem tinha motorista ficava "dobrado" na coluna
+// Embalando enquanto rodava. Agora a saida de EMBALANDO passa pela mesma
+// escolha de logistica do fluxo padrao — rastreio, motorista, em aberto — mais
+// a RETIRADA NA LOJA, que e exclusiva daqui.
+//
+// Retirada na loja pula EM_ROTA: nao existe rota quando o cliente vem buscar.
+// O pedido para em PRONTO ate a loja avancar para ENTREGUE.
 // ---------------------------------------------------------------------------
-export const SIMPLIFIED_FLOW: OrderStatus[] = ["PAGO", "EMBALANDO", "ENTREGUE"];
+export const SIMPLIFIED_FLOW: OrderStatus[] = ["PAGO", "EMBALANDO", "ENVIADO", "EM_ROTA", "ENTREGUE"];
 
 // Colunas exibidas no fluxo simplificado (sem CONCLUIDO, que some da board).
-export const SIMPLIFIED_COLUMNS: OrderStatus[] = ["PAGO", "EMBALANDO", "ENTREGUE"];
+export const SIMPLIFIED_COLUMNS: OrderStatus[] = ["PAGO", "EMBALANDO", "ENVIADO", "EM_ROTA", "ENTREGUE"];
+
+export interface SimplifiedFlowOpts {
+  /** Pedido marcado para retirada na loja (Order.pickupAtStore). */
+  pickupAtStore?: boolean;
+}
 
 // Proximo status DENTRO do fluxo simplificado. Retorna null no fim (ENTREGUE).
-export function nextSimplifiedStatus(current: OrderStatus): OrderStatus | null {
+// Com `pickupAtStore`, PRONTO vai direto para ENTREGUE.
+export function nextSimplifiedStatus(
+  current: OrderStatus,
+  opts: SimplifiedFlowOpts = {},
+): OrderStatus | null {
+  if (opts.pickupAtStore && current === "ENVIADO") return "ENTREGUE";
   const idx = SIMPLIFIED_FLOW.indexOf(current);
   if (idx === -1 || idx === SIMPLIFIED_FLOW.length - 1) return null;
   return SIMPLIFIED_FLOW[idx + 1];
 }
 
 // Transicao valida no fluxo simplificado (avancar 1 passo ou excecao).
-export function canTransitionSimplified(from: OrderStatus, to: OrderStatus): boolean {
+export function canTransitionSimplified(
+  from: OrderStatus,
+  to: OrderStatus,
+  opts: SimplifiedFlowOpts = {},
+): boolean {
   if (EXCEPTION_STATUSES.includes(to)) return true;
-  return nextSimplifiedStatus(from) === to;
+  return nextSimplifiedStatus(from, opts) === to;
 }
 
 // Colunas do fluxo conforme o tipo da loja de origem.

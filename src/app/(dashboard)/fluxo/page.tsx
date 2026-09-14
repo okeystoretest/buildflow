@@ -93,6 +93,7 @@ export default async function FluxoPage({
     isExchange: isAnexoDispensavel(o.orderType?.name),
     deliveredAt: deliveredAtById.get(o.id) ?? null,
     statusSince: statusSince.get(o.id) ?? null,
+    pickupAtStore: o.pickupAtStore,
   }));
 
   return (

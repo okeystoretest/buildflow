@@ -54,6 +54,24 @@ export function isEntregaDeMotorista(shippingMethodName?: string | null): boolea
   return FORMAS_DO_MOTORISTA.some((f) => normalize(f) === alvo);
 }
 
+/**
+ * O pedido em "Pronto" e da equipe de motoristas?
+ *
+ * Fluxo padrao: decide a forma de envio (isEntregaDeMotorista). Fluxo
+ * SIMPLIFICADO: a saida de Embalando passa por um modal em que a loja escolhe
+ * rastreio, motorista, em aberto ou retirada — e so "motorista" e "em aberto"
+ * chegam a Pronto sem rastreio e sem retirada. Ali a escolha explicita
+ * prevalece sobre o nome da forma de envio: quem chama ja filtrou rastreio e
+ * retirada, entao pedido simplificado em Pronto e pedido para a equipe.
+ */
+export function entraNoQuadroDoMotorista(o: {
+  shippingMethodName?: string | null;
+  simplifiedFlow?: boolean | null;
+}): boolean {
+  if (o.simplifiedFlow === true) return true;
+  return isEntregaDeMotorista(o.shippingMethodName);
+}
+
 // ---------------------------------------------------------------------------
 // VALOR DA ENTREGA informado pelo motorista ao concluir.
 // ---------------------------------------------------------------------------

@@ -355,6 +355,12 @@ model Order {
   // Codigo de rastreio informado na transicao para PROCESSADO (opcional).
   trackingCode String?
 
+  // RETIRADA NA LOJA (fluxo simplificado). Marcado no modal de saida de
+  // Embalando quando o cliente vem buscar: o pedido vai a Pronto sem motorista
+  // e sem rastreio, nao aparece no quadro do Motorista e pula Em Rota — a loja
+  // avanca de Pronto direto para Entregue. Default false para todo o legado.
+  pickupAtStore Boolean @default(false)
+
   // Token do LINK DE ACOMPANHAMENTO enviado ao cliente final
   // (/acompanhar/<trackingToken>). E opaco e independente do `id` de propósito:
   // o id circula em rotas internas (ex.: /etiqueta/<id>), e vazar o link do
