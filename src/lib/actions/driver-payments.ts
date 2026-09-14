@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { Prisma } from "@prisma/client";
+import { sendWhatsappToDrivers, mensagemPagamentoEntrega } from "@/lib/whatsapp";
 
 /**
  * Registra o pagamento da ENTREGA ao motorista (Financeiro > "Pagamentos de
@@ -16,6 +17,9 @@ import { Prisma } from "@prisma/client";
  *  - A ENTREGA precisa estar concluída (Delivery.status = ENTREGUE; o pedido
  *    fica CONCLUIDO) e ter motorista (Delivery.driverId).
  *  - Um pagamento por pedido (idempotência via unique em orderId).
+ *  - Ao gravar, avisa o MOTORISTA por WhatsApp ("Pagamento da comanda N
+ *    efetuado com sucesso."). O envio corre fora da resposta e nunca lanca:
+ *    WhatsApp fora do ar nao pode impedir o registro do pagamento.
  */
 export async function payDriverDelivery(args: {
   orderId: string;
@@ -32,6 +36,8 @@ export async function payDriverDelivery(args: {
       select: {
         id: true,
         status: true,
+        orderNumber: true,
+        comandaNumber: true,
         delivery: { select: { status: true, driverId: true, driver: { select: { pixKey: true } } } },
         driverPayment: { select: { id: true } },
       },
@@ -69,6 +75,18 @@ export async function payDriverDelivery(args: {
     });
 
     revalidatePath("/financeiro/entregas");
+
+    // Aviso ao motorista. `void` de proposito: o Financeiro nao espera o
+    // WhatsApp para ver o "Pago" — e o envio ja tem a propria rede de seguranca.
+    void sendWhatsappToDrivers({
+      orderId: order.id,
+      driverId,
+      text: mensagemPagamentoEntrega({
+        comandaNumber: order.comandaNumber,
+        orderNumber: order.orderNumber,
+      }),
+    }).catch((err) => console.error("[whatsapp] aviso de pagamento falhou:", err));
+
     return actionOk(created);
   } catch (err) {
     // Corrida: se dois cliques criarem em paralelo, a unique em orderId barra o 2º.

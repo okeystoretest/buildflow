@@ -1,7 +1,8 @@
 // Envio de notificacao aos motoristas.
 //
 // Fronteira publica do modulo: nada fora de src/lib/whatsapp/ conhece Baileys.
-// Nunca lanca — falha de WhatsApp nao pode derrubar uma acao de logistica.
+// Nunca lanca — falha de WhatsApp nao pode derrubar uma acao de logistica nem
+// do Financeiro.
 
 import { prisma } from "@/lib/prisma";
 import { getSocket, getConnectionSnapshot } from "./connection";
@@ -22,7 +23,13 @@ async function envioLigado(): Promise<boolean> {
 }
 
 /**
- * Avisa os motoristas de que ha pacote disponivel.
+ * Envia uma mensagem a motoristas.
+ *
+ * Sem `text`, e o aviso de pacote disponivel. Com `text`, e outro aviso ao
+ * mesmo publico — hoje, a confirmacao de pagamento da entrega, que vai so ao
+ * motorista pago. O caminho (resolucao de JID, espacamento, outbox, log) e o
+ * mesmo para qualquer texto: e nele que mora o aprendizado sobre numeros sem o
+ * nono digito e sobre bloqueio por disparo em rajada.
  *
  * Sem `driverId`, avisa TODOS (pedido em aberto: e uma corrida). Com
  * `driverId`, avisa so aquele motorista — o pedido ja tem dono e chamar a
@@ -36,7 +43,9 @@ async function envioLigado(): Promise<boolean> {
 export async function sendWhatsappToDrivers(args: {
   orderId?: string;
   driverId?: string | null;
+  text?: string;
 }): Promise<void> {
+  const texto = args.text ?? MENSAGEM_NOVO_PACOTE;
   try {
     if (!(await envioLigado())) {
       console.log("[whatsapp] envio desligado; nada enviado.");
@@ -110,7 +119,7 @@ export async function sendWhatsappToDrivers(args: {
           continue;
         }
 
-        const enviado = await sock.sendMessage(alvo.jid, { text: MENSAGEM_NOVO_PACOTE });
+        const enviado = await sock.sendMessage(alvo.jid, { text: texto });
         // GUARDA O CONTEUDO ENVIADO. Se o aparelho do motorista nao
         // conseguir descriptografar, ele exibe "Aguardando mensagem" e pede o
         // reenvio; o Baileys busca o conteudo aqui (ver getMessage em

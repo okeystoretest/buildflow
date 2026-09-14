@@ -8,6 +8,7 @@ import {
   sendSpacingMs,
   resolveSendJid,
   LEASE_TTL_MS,
+  mensagemPagamentoEntrega,
 } from "../../src/lib/whatsapp/pure";
 
 let falhas = 0;
@@ -99,6 +100,25 @@ check(
   "consulta falha cai no construido",
   resolveSendJid(CONSTRUIDO, undefined),
   { kind: "nao-verificado", jid: CONSTRUIDO },
+);
+
+// --- aviso de pagamento da entrega ---
+// Texto exato do produto. A comanda vem na frente; sem comanda, o numero do
+// pedido — a mensagem nunca sai com um buraco.
+check(
+  "pagamento com comanda",
+  mensagemPagamentoEntrega({ comandaNumber: "4521", orderNumber: "P-99" }),
+  "Pagamento da comanda 4521 efetuado com sucesso.",
+);
+check(
+  "pagamento sem comanda usa o pedido",
+  mensagemPagamentoEntrega({ comandaNumber: null, orderNumber: "P-99" }),
+  "Pagamento da comanda P-99 efetuado com sucesso.",
+);
+check(
+  "comanda em branco conta como ausente",
+  mensagemPagamentoEntrega({ comandaNumber: "  ", orderNumber: "P-99" }),
+  "Pagamento da comanda P-99 efetuado com sucesso.",
 );
 
 console.log(falhas === 0 ? "OK: whatsapp-pure" : `${falhas} falha(s) em whatsapp-pure`);

@@ -31,9 +31,12 @@ export const MENSAGEM_NOVO_PACOTE =
  * { text }`), verificado na versao 6.17.16.
  *
  * Serve de ultimo recurso: o pedido de reenvio pode chegar depois de um
- * redeploy, quando a memoria do processo anterior ja se foi. Como este sistema
- * envia UMA mensagem so, sempre com o mesmo texto, reconstrui-la e correto —
- * e muito melhor que deixar o motorista com o placeholder na tela.
+ * redeploy, quando a memoria do processo anterior ja se foi. O aviso de pacote
+ * e a mensagem em volume (todos os motoristas, a cada pedido pronto), entao e
+ * ele que se reconstroi. O aviso de pagamento da entrega tambem passa pelo
+ * outbox, mas so pela memoria: se o retry receipt dele cair exatamente numa
+ * janela de redeploy, o motorista recebe o texto de pacote no lugar — janela de
+ * segundos, e muito melhor que o placeholder eterno.
  */
 export function conteudoPadrao(): ConteudoMensagem {
   return { extendedTextMessage: { text: MENSAGEM_NOVO_PACOTE } };

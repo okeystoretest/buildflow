@@ -144,3 +144,16 @@ export function isLeaseExpired(heartbeatAt: Date | null, now: Date): boolean {
 export function sendSpacingMs(rand: () => number = Math.random): number {
   return Math.round(SPACING_MIN_MS + (SPACING_MAX_MS - SPACING_MIN_MS) * rand());
 }
+
+/**
+ * Texto do aviso ao motorista quando o Financeiro registra o pagamento da
+ * entrega. Formato definido pelo produto. A comanda e o numero que o motorista
+ * reconhece; sem comanda emitida, vai o numero do pedido — nunca um vazio.
+ */
+export function mensagemPagamentoEntrega(args: {
+  comandaNumber: string | null | undefined;
+  orderNumber: string;
+}): string {
+  const numero = args.comandaNumber?.trim() || args.orderNumber;
+  return `Pagamento da comanda ${numero} efetuado com sucesso.`;
+}
