@@ -64,6 +64,15 @@ interface OrderDetail {
     createdByName?: string | null;
     createdAt: string;
   }[];
+  // Devolucoes registradas (Vendas > Devolucoes). Ausente no modo motorista.
+  returns?: {
+    id: string;
+    createdAt: string;
+    note: string | null;
+    totalValue: string;
+    registeredByName?: string | null;
+    items: { id: string; reference: string; quantity: number; value: string }[];
+  }[];
 }
 
 // Prazo padrao de entrega: 2 horas apos a confirmacao do pagamento.
@@ -508,6 +517,37 @@ export function OrderDetailModal({
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Devoluções: peças que voltaram e o valor abatido do pedido. Os
+                valores exibidos acima já são os líquidos; esta lista é o que
+                explica a diferença para quem conhecia o valor original. */}
+            {!driverMode && (order.returns?.length ?? 0) > 0 && (
+              <div>
+                <h3 className="mb-1 font-semibold">Devoluções</h3>
+                <ul className="space-y-2 text-sm">
+                  {order.returns!.map((r) => (
+                    <li key={r.id} className="rounded-lg border border-border bg-secondary/40 px-3 py-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(r.createdAt).toLocaleString("pt-BR")}
+                          {r.registeredByName ? ` · por ${r.registeredByName}` : ""}
+                        </span>
+                        <span className="font-data font-medium">- {formatBRL(r.totalValue)}</span>
+                      </div>
+                      <ul className="mt-1 space-y-0.5 text-xs">
+                        {r.items.map((it) => (
+                          <li key={it.id} className="flex justify-between gap-2">
+                            <span className="truncate">{it.reference} x {it.quantity}</span>
+                            <span className="font-data shrink-0">{formatBRL(it.value)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {r.note && <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{r.note}</p>}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

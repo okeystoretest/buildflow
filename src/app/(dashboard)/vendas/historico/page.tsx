@@ -55,6 +55,7 @@ export default async function HistoricoPage({
       include: {
         customer: true,
         delivery: { include: { proofs: true, driver: true } },
+        returns: { orderBy: { createdAt: "desc" }, include: { items: { orderBy: { reference: "asc" } } } },
       },
       orderBy: { updatedAt: "desc" },
       skip: (page - 1) * PER_PAGE,
@@ -77,6 +78,19 @@ export default async function HistoricoPage({
     invoicePath: o.invoicePath,
     trackingCode: o.trackingCode,
     proofs: (o.delivery?.proofs ?? []).map((p) => ({ id: p.id, filePath: p.filePath })),
+    orderValue: Number(o.orderValue ?? 0),
+    returns: (o.returns ?? []).map((r) => ({
+      id: r.id,
+      createdAt: r.createdAt.toISOString(),
+      note: r.note,
+      totalValue: formatBRL(r.totalValue.toString()),
+      items: r.items.map((it) => ({
+        id: it.id,
+        reference: it.reference,
+        quantity: it.quantity,
+        value: formatBRL(it.value.toString()),
+      })),
+    })),
   }));
 
   const resumoPeriodo = temPeriodo
@@ -100,10 +114,13 @@ export default async function HistoricoPage({
         <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido no período/filtro.</CardContent></Card>
       )}
 
-      {/* Exclusão definitiva do pedido: perfis Gestão e Financeiro. */}
+      {/* Exclusão definitiva do pedido: perfis Gestão e Financeiro.
+          Devoluções: todos os perfis desta tela (a lista já é restrita ao que
+          cada um pode ver). */}
       <HistoricoList
         orders={items}
         canDelete={session.role === "GESTAO" || session.role === "FINANCEIRO"}
+        canReturn
       />
 
       <Pagination page={page} perPage={PER_PAGE} total={total} label="pedidos" />

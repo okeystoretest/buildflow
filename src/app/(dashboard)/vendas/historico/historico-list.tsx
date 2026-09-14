@@ -2,14 +2,23 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Trash2, PackageMinus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { EditProofsModal } from "@/app/(dashboard)/motorista/historico/edit-proofs-modal";
+import { ReturnModal } from "@/components/shared/return-modal";
 import { deleteHistoryOrder } from "@/lib/actions/orders";
 
 export interface HistoricoProof { id: string; filePath: string; }
+// Devolucao ja registrada no pedido (lista da secao "Devolucoes").
+export interface HistoricoReturn {
+  id: string;
+  createdAt: string; // ISO
+  note: string | null;
+  totalValue: string; // formatado
+  items: { id: string; reference: string; quantity: number; value: string }[]; // value formatado
+}
 export interface HistoricoItem {
   id: string;
   orderNumber: string;
@@ -24,6 +33,11 @@ export interface HistoricoItem {
   // Id da entrega (Delivery). Necessário para editar as fotos no histórico do
   // motorista. Opcional: telas que não editam (Vendas) não precisam informar.
   deliveryId?: string | null;
+  // Valor atual da mercadoria (sem frete), em reais — base da devolução.
+  // Opcional: só a tela de Vendas (que registra devoluções) precisa informar.
+  orderValue?: number;
+  // Devoluções já registradas. Opcional pelo mesmo motivo.
+  returns?: HistoricoReturn[];
 }
 
 // Lista de comandas concluídas. Cada item começa recolhido e expande ao clicar,
@@ -35,14 +49,19 @@ export interface HistoricoItem {
 // `canDelete`: quando true, exibe a ação "Excluir" (remoção DEFINITIVA do pedido
 // no banco). Restrito aos perfis GESTAO e FINANCEIRO — quem chama decide pela
 // sessão, e a action `deleteHistoryOrder` reconfere o papel no servidor.
+// `canReturn`: quando true, exibe "Devoluções" — o mesmo formulário da tela de
+// Vendas, para peças devolvidas depois de o pedido ter sido concluído. A
+// listagem já é restrita ao que a pessoa pode ver; a action reconfere o dono.
 export function HistoricoList({
   orders,
   editableProofs = false,
   canDelete = false,
+  canReturn = false,
 }: {
   orders: HistoricoItem[];
   editableProofs?: boolean;
   canDelete?: boolean;
+  canReturn?: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -56,6 +75,7 @@ export function HistoricoList({
           onToggle={() => setOpenId(openId === o.id ? null : o.id)}
           editableProofs={editableProofs}
           canDelete={canDelete}
+          canReturn={canReturn}
         />
       ))}
     </div>
@@ -68,17 +88,20 @@ function HistoricoRow({
   onToggle,
   editableProofs,
   canDelete,
+  canReturn,
 }: {
   item: HistoricoItem;
   open: boolean;
   onToggle: () => void;
   editableProofs: boolean;
   canDelete: boolean;
+  canReturn: boolean;
 }) {
   const router = useRouter();
   // Estado local das fotos, para refletir edições em tempo real sem recarregar.
   const [proofs, setProofs] = useState<HistoricoProof[]>(o.proofs);
   const [editing, setEditing] = useState(false);
+  const [returning, setReturning] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -101,6 +124,9 @@ function HistoricoRow({
 
   // Só dá para editar quando a tela permite E o pedido tem entrega (Delivery).
   const podeEditar = editableProofs && !!o.deliveryId;
+  // Devolução precisa do valor atual da mercadoria (a tela de Vendas informa).
+  const podeDevolver = canReturn && typeof o.orderValue === "number";
+  const devolucoes = o.returns ?? [];
 
   return (
     <Card className="overflow-hidden animate-fade-in-up">
@@ -172,6 +198,46 @@ function HistoricoRow({
             )}
           </div>
 
+          {/* Devoluções já registradas. Aparece em qualquer tela que traga a
+              lista; o botão de registrar, só onde a tela permite. */}
+          {(devolucoes.length > 0 || podeDevolver) && (
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="font-medium">Devoluções:</p>
+                {podeDevolver && (
+                  <Button variant="outline" size="sm" onClick={() => setReturning(true)}>
+                    <PackageMinus className="h-3.5 w-3.5" /> Devoluções
+                  </Button>
+                )}
+              </div>
+              {devolucoes.length > 0 ? (
+                <ul className="space-y-2">
+                  {devolucoes.map((d) => (
+                    <li key={d.id} className="rounded-lg border border-border bg-secondary/40 p-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">
+                          {new Date(d.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                        </span>
+                        <span className="font-data font-medium">- {d.totalValue}</span>
+                      </div>
+                      <ul className="mt-1 space-y-0.5">
+                        {d.items.map((it) => (
+                          <li key={it.id} className="flex justify-between gap-2">
+                            <span className="truncate">{it.reference} x {it.quantity}</span>
+                            <span className="font-data shrink-0">{it.value}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {d.note && <p className="mt-1 text-muted-foreground">{d.note}</p>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">Nenhuma devolução registrada.</p>
+              )}
+            </div>
+          )}
+
           {/* Exclusão definitiva — Gestão e Financeiro. */}
           {canDelete && (
             <div className="flex justify-end border-t border-border pt-3">
@@ -200,6 +266,16 @@ function HistoricoRow({
             </Button>
           </div>
         </ConfirmModal>
+      )}
+
+      {returning && podeDevolver && (
+        <ReturnModal
+          orderId={o.id}
+          orderLabel={o.comandaNumber ? `Pedido ${o.orderNumber} · Comanda ${o.comandaNumber}` : `Pedido ${o.orderNumber}`}
+          currentValue={o.orderValue as number}
+          onClose={() => setReturning(false)}
+          onSaved={() => router.refresh()}
+        />
       )}
 
       {editing && o.deliveryId && (

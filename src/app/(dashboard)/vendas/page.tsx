@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBRL } from "@/lib/utils";
+import { EXCEPTION_STATUSES } from "@/lib/order-flow";
 import { VendaRowActions } from "./row-actions";
 import { VendasBusca } from "./busca-client";
 import type { Prisma } from "@prisma/client";
@@ -121,7 +122,15 @@ export default async function VendasPage({
                     <td className="border-r border-border py-2 pl-4 pr-4">{formatBRL(o.total.toString())}</td>
                     <td className="border-r border-border py-2 pl-4 pr-4"><StatusBadge status={o.status} /></td>
                     <td className="py-2 pl-4 pr-4">
-                      <VendaRowActions orderId={o.id} orderNumber={o.orderNumber} canDelete={session.role === "GESTAO" || session.role === "FINANCEIRO"} issue={issueAtivo} />
+                      <VendaRowActions
+                        orderId={o.id}
+                        orderNumber={o.orderNumber}
+                        comandaNumber={o.comandaNumber}
+                        orderValue={Number(o.orderValue)}
+                        canReturn={!EXCEPTION_STATUSES.includes(o.status)}
+                        canDelete={session.role === "GESTAO" || session.role === "FINANCEIRO"}
+                        issue={issueAtivo}
+                      />
                     </td>
                   </tr>
                   );

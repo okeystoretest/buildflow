@@ -28,6 +28,7 @@ export async function GET(
       financeProofs: { orderBy: { createdAt: "asc" } },
       history: { orderBy: { createdAt: "asc" } },
       delayReasons: { orderBy: { createdAt: "asc" } },
+      returns: { orderBy: { createdAt: "desc" }, include: { items: { orderBy: { reference: "asc" } } } },
     },
   });
   if (!order) return NextResponse.json({ error: "Nao encontrado" }, { status: 404 });
@@ -47,6 +48,8 @@ export async function GET(
         // Os motivos de atraso guardam so o ID de quem justificou; a traducao
         // para nome sai da MESMA consulta do historico.
         ...order.delayReasons.map((d) => d.createdById),
+        // Idem para quem registrou cada devolucao.
+        ...order.returns.map((r) => r.registeredById),
       ].filter((v): v is string => !!v),
     ),
   );
@@ -66,6 +69,21 @@ export async function GET(
     minutesLate: d.minutesLate,
     createdAt: d.createdAt,
     createdByName: d.createdById ? nameById.get(d.createdById) ?? null : null,
+  }));
+
+  // Devolucoes, da mais recente para a mais antiga, com o nome de quem registrou.
+  const returns = order.returns.map((r) => ({
+    id: r.id,
+    createdAt: r.createdAt,
+    note: r.note,
+    totalValue: r.totalValue.toString(),
+    registeredByName: r.registeredById ? nameById.get(r.registeredById) ?? null : null,
+    items: r.items.map((it) => ({
+      id: it.id,
+      reference: it.reference,
+      quantity: it.quantity,
+      value: it.value.toString(),
+    })),
   }));
 
   const history = order.history.map((h) => ({
@@ -98,10 +116,12 @@ export async function GET(
       invoicePath,
       paymentProofs,
       financeProofs,
+      // Devolucoes sao valores: o motorista nao as recebe.
+      returns: _returns,
       ...visivelAoMotorista
     } = order;
     return NextResponse.json({ ...visivelAoMotorista, history, delayReasons });
   }
 
-  return NextResponse.json({ ...order, history, delayReasons });
+  return NextResponse.json({ ...order, history, delayReasons, returns });
 }

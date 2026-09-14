@@ -433,6 +433,7 @@ model Order {
   history       OrderStatusHistory[]
   pieceMovements PieceMovement[]
   delayReasons  OrderDelayReason[]
+  returns       OrderReturn[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -920,4 +921,48 @@ model OrderDelayReason {
   // primeira em vez de empilhar registros.
   @@unique([orderId, status])
   @@index([orderId])
+}
+
+// ---------------------------------------------------------------------------
+// DEVOLUCOES (Vendas > Devolucoes / Historico de Vendas > Devolucoes)
+// ---------------------------------------------------------------------------
+// Uma devolucao e uma lista de pecas (referencia, quantidade, valor) registrada
+// pela vendedora (ou Gestao/Financeiro) sobre um pedido. Ao gravar, a soma dos
+// valores e ABATIDA de Order.orderValue (e total recalculado); o pedido
+// continua no fluxo com o status que tinha. O valor bruto original nao se
+// perde: orderValue passa a ser o liquido e a soma das devolucoes reconstroi o
+// bruto. Varias devolucoes por pedido sao permitidas — cada uma e um registro.
+//
+// A referencia e texto livre: o pedido nao tem itens cadastrados, so os itens
+// de campanha tem referencia. Quando a referencia digitada casa com a de um
+// CampaignItem do pedido, a quantidade e o valor daquele item tambem caem
+// (ver src/lib/order-returns.ts).
+model OrderReturn {
+  id      String @id @default(cuid())
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+
+  // Quem registrou. Sem FK: usuario apagado nao pode levar a devolucao junto.
+  registeredById String?
+  // Observacao livre (motivo, estado da peca...). Opcional.
+  note String?
+  // Soma dos valores dos itens, gravada para leitura rapida do historico.
+  totalValue Decimal @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
+
+  items OrderReturnItem[]
+
+  @@index([orderId])
+}
+
+model OrderReturnItem {
+  id       String      @id @default(cuid())
+  return   OrderReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  returnId String
+
+  reference String
+  quantity  Int
+  value     Decimal @db.Decimal(10, 2)
+
+  @@index([returnId])
 }

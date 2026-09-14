@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, AlertTriangle, CheckCircle2, Link2, Check } from "lucide-react";
+import { Pencil, Trash2, AlertTriangle, CheckCircle2, Link2, Check, PackageMinus } from "lucide-react";
 import { deleteOrder, resolveFinanceIssue } from "@/lib/actions/orders";
 import { getTrackingLink } from "@/lib/actions/tracking";
 import { Button } from "@/components/ui/button";
+import { ReturnModal } from "@/components/shared/return-modal";
 
 /**
  * Mensagem pronta de rastreio. Vai inteira para a area de transferencia — a
@@ -26,15 +27,26 @@ function mensagemRastreio(url: string, customerCode: string) {
  * - EXCLUIR: GESTAO e FINANCEIRO (a permissao real e checada em deleteOrder).
  * - PENDENCIA: se o Financeiro sinalizou um problema ativo, mostra o botao
  *   "Pendência" que abre o detalhe com o texto e o botao "Resolvido".
+ * - DEVOLUCOES: abre o formulario de pecas devolvidas (referencia, quantidade,
+ *   valor). A soma sai do valor do pedido; a lista e restrita aos pedidos que
+ *   a pessoa pode ver, e a action reconfere o dono no servidor. Some em pedido
+ *   cancelado/estornado, onde a conta ja foi acertada pelo Financeiro.
  */
 export function VendaRowActions({
   orderId,
   orderNumber,
+  comandaNumber = null,
+  orderValue,
+  canReturn = true,
   canDelete = false,
   issue = null,
 }: {
   orderId: string;
   orderNumber: string;
+  comandaNumber?: string | null;
+  // Valor atual da mercadoria (sem frete), em reais — base da devolucao.
+  orderValue: number;
+  canReturn?: boolean;
   canDelete?: boolean;
   // Texto da pendencia ATIVA (null = sem pendencia).
   issue?: string | null;
@@ -43,6 +55,7 @@ export function VendaRowActions({
   const [pending, start] = useTransition();
   const [confirming, setConfirming] = useState(false);
   const [showIssue, setShowIssue] = useState(false);
+  const [returning, setReturning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Confirmacao visual efemera do "copiado" (o icone vira um check por 2s).
   const [copied, setCopied] = useState(false);
@@ -128,6 +141,18 @@ export function VendaRowActions({
           )}
           Copiar link
         </Button>
+        {canReturn && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            title="Registrar devolução de peças"
+            onClick={() => setReturning(true)}
+            disabled={pending}
+          >
+            <PackageMinus className="mr-1 h-4 w-4" /> Devoluções
+          </Button>
+        )}
         <Button asChild variant="outline" size="icon" className="h-8 w-8" title="Editar pedido">
           <Link href={`/vendas/${orderId}/editar`}>
             <Pencil className="h-4 w-4" />
@@ -145,6 +170,16 @@ export function VendaRowActions({
           </Button>
         )}
       </div>
+
+      {returning && (
+        <ReturnModal
+          orderId={orderId}
+          orderLabel={comandaNumber ? `Pedido ${orderNumber} · Comanda ${comandaNumber}` : `Pedido ${orderNumber}`}
+          currentValue={orderValue}
+          onClose={() => setReturning(false)}
+          onSaved={() => router.refresh()}
+        />
+      )}
 
       {/* Mensagem de rastreio: so aparece se a copia automatica nao rolou. */}
       {linkModal && (
