@@ -26,6 +26,9 @@ commit próprio, na ordem do mais isolado ao mais acoplado: 3 → 4/5 → 6 → 
 | 17 | Conclusão pelo motorista em pedido simplificado | Vai a CONCLUIDO, como no padrão (sai do quadro, vai ao Histórico) (respondido pelo usuário) |
 | 18 | Rastreio no simplificado | A própria loja avança Pronto → Em Rota → Entregue pelo quadro |
 | 19 | Aviso WhatsApp ao motorista | Vale para o simplificado, via `notifyOrderReady` |
+| 20 | Acompanhamento do cliente na retirada | Em Pronto com retirada, o rótulo é "Pronto para retirada" (mesma etapa da linha do tempo) |
+| 21 | Pronto "em aberto" no simplificado | É dos motoristas: a loja não avança para Em Rota (seta some; servidor recusa). Só rastreio e retirada são avançados pela loja |
+| 22 | Pedido com devolução integral | Fica com valor zero e continua editável (endereço, observações, envio) |
 
 ## 1 e 2 — Devoluções
 
