@@ -8,7 +8,9 @@ import { getAuthSecret } from "@/lib/auth-secret";
 // /acompanhar e a area PUBLICA do cliente final (link enviado pela vendedora).
 // Nao usa a sessao do sistema: a propria pagina exige o Codigo de Cliente e
 // grava um cookie proprio (bf_track), restrito a este path.
-const PUBLIC_PATHS = ["/login", "/api/health", "/acompanhar"];
+// /api/integracao e maquina-a-maquina (Build.Connect): autentica por token de
+// servico dentro de cada rota, nao por cookie de sessao.
+const PUBLIC_PATHS = ["/login", "/api/health", "/acompanhar", "/api/integracao"];
 
 // Arquivos publicos servidos de /public que NAO exigem sessao. Sem esta
 // liberacao o middleware redirecionava manifest/icones/service worker para
