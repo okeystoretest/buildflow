@@ -81,6 +81,7 @@ model User {
   originStores   OriginStore[]  @relation("UserOriginStores")
   pushSubscriptions PushSubscription[]
   driverPayments   DriverPayment[] @relation("DriverPaymentDriver")
+  transportRequests TransportRequest[] @relation("TransportDriver")
 
   @@index([role])
 }
@@ -631,6 +632,119 @@ model DriverPayment {
   createdAt DateTime @default(now())
 
   @@index([driverId])
+}
+
+// ===========================================================================
+// CHAMADOS DE MOTORISTAS (vindos do Build.Connect)
+// ===========================================================================
+
+// Chamado de transporte aberto no Build.Connect e gerido aqui. NAO e pedido:
+// nao passa por Order/Delivery nem pelo pagamento de motoristas. O Connect
+// e quem abre e acompanha; o Flow e o dono do registro a partir da chegada.
+enum TransportStatus {
+  ABERTO
+  ATRIBUIDO
+  EM_ROTA
+  CONCLUIDO
+  CANCELADO
+}
+
+model TransportRequest {
+  id        String          @id @default(cuid())
+  // Id do Ticket no Connect. Unico: reenviar o mesmo chamado nao duplica.
+  connectId String          @unique
+  // Codigo que a operacao fala em voz alta ("o MOT-014 ja foi?"). Vem do Connect.
+  code      String
+  status    TransportStatus @default(ABERTO)
+
+  // Solicitante e SNAPSHOT do Connect — nao existe como usuario do Flow.
+  requesterConnectId String
+  requesterName      String
+  requesterSector    String?
+  contact            String?
+
+  serviceType String
+  description String
+
+  // Origem: unidade (rotulo) OU endereco manual. Destino: endereco.
+  originUnit     String?
+  originStreet   String?
+  originNumber   String?
+  originDistrict String?
+  destStreet     String
+  destNumber     String?
+  destDistrict   String?
+
+  // Coordenadas geocodificadas UMA vez em "Iniciar rota" (nulas se falhar:
+  // o mapa do Connect degrada para "so GPS ao vivo").
+  originLat Float?
+  originLng Float?
+  destLat   Float?
+  destLng   Float?
+
+  driver   User?   @relation("TransportDriver", fields: [driverId], references: [id])
+  driverId String?
+  // Quem atribuiu (Logistica/Gestao) — null quando o proprio motorista assumiu.
+  assignedById String?
+
+  assignedAt   DateTime?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  distanceKm   Float?
+  // Comprovante (.webp). So o caminho, como todo arquivo do sistema.
+  proofPath    String?
+  cancelReason String?
+
+  images    TransportImage[]
+  positions TransportPosition[]
+  history   TransportHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([driverId])
+  @@index([createdAt])
+}
+
+// Fotos anexadas na abertura (copia das do Connect).
+model TransportImage {
+  id        String           @id @default(cuid())
+  request   TransportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId String
+  filePath  String
+  order     Int              @default(0)
+
+  @@index([requestId, order])
+}
+
+// Rastro GPS da corrida.
+model TransportPosition {
+  id         String           @id @default(cuid())
+  request    TransportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId  String
+  lat        Float
+  lng        Float
+  heading    Float?
+  speed      Float?
+  recordedAt DateTime         @default(now())
+
+  @@index([requestId, recordedAt])
+}
+
+// Linha do tempo mostrada nos dois sistemas.
+model TransportHistory {
+  id        String           @id @default(cuid())
+  request   TransportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId String
+  // "criado" | "atribuido" | "assumido" | "desatribuido" | "em_rota" | "concluido" | "cancelado"
+  event     String
+  // Nome de quem fez (motorista/gestao) ou "Build.Connect".
+  actorName String?
+  note      String?
+  createdAt DateTime         @default(now())
+
+  @@index([requestId, createdAt])
 }
 
 // ===========================================================================

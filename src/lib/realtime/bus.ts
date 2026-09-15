@@ -15,7 +15,13 @@ import type { Role } from "@prisma/client";
  * action nem quebra o pedido se a gravacao do evento falhar).
  */
 
-export type RealtimeEventType = "order.created" | "order.updated";
+// `transport.*`: chamado de motorista (vindo do Connect). `orderId` guarda o
+// id do TransportRequest — o bus e generico por id, so o tipo diferencia.
+export type RealtimeEventType =
+  | "order.created"
+  | "order.updated"
+  | "transport.created"
+  | "transport.updated";
 
 export interface RealtimeEvent {
   type: RealtimeEventType;
