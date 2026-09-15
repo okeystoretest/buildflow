@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { History } from "lucide-react";
 import { EntregaCard, type DriverOrderView } from "./delivery-card";
 import { MOTORISTA_COLUMNS, STATUS_LABEL, STATUS_STYLE } from "@/lib/order-flow";
@@ -24,7 +25,9 @@ const VISIVEIS_POR_COLUNA = 3;
  * colunas mais largas e mais altas, que era o objetivo do redesenho.
  */
 export default async function MotoristaPage() {
-  const session = await requireRole(["MOTORISTA", "GESTAO"]);
+  const session = await requireRole(["MOTORISTA", "GESTAO", "LOGISTICA"]);
+  // LOGISTICA nao entrega: a ferramenta dela e Chamados.
+  if (session.role === "LOGISTICA") redirect("/motorista/chamados");
 
   // Janela de visibilidade para pedidos ENTREGUE: some do Kanban do motorista
   // 15 min apos a entrega, mantendo a interface focada em entregas recentes.

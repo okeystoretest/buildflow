@@ -19,7 +19,8 @@ const NAV: NavItem[] = [
   { href: "/vendas", label: "Vendas", roles: ["GESTAO", "VENDAS", "FINANCEIRO"] },
   { href: "/financeiro", label: "Financeiro", roles: ["GESTAO", "FINANCEIRO"] },
   { href: "/logistica", label: "Logística", roles: ["GESTAO", "LOGISTICA"] },
-  { href: "/motorista", label: "Motorista", roles: ["GESTAO", "MOTORISTA"] },
+  // LOGISTICA entra para as ferramentas Chamados e Dashboard (nao ve Entregas).
+  { href: "/motorista", label: "Motorista", roles: ["GESTAO", "MOTORISTA", "LOGISTICA"] },
   { href: "/gestao", label: "Gestão", roles: ["GESTAO"] },
 ];
 
