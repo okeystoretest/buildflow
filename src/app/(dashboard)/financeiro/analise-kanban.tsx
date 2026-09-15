@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign, Wallet, Truck, Paperclip, MessageSquare } from "lucide-react";
+import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign, Wallet, Truck, Paperclip, MessageSquare, FileText, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CardScroller } from "@/components/shared/card-scroller";
 import { flagOrderIssue, confirmPayment, markOrderPaid, uploadSecondPaymentProof, savePaymentPendingNote } from "@/lib/actions/finance";
@@ -92,6 +92,8 @@ export function AnaliseKanban({
   const [issueId, setIssueId] = useState<string | null>(null);
   // Card de "Pagamento pendente" cujo modal de comentario esta aberto.
   const [noteId, setNoteId] = useState<string | null>(null);
+  // Card de "Pagamento pendente" cujo modal de comprovantes esta aberto.
+  const [proofsId, setProofsId] = useState<string | null>(null);
   const router = useRouter();
 
   // "Relogio" interno: reavalia de 30 em 30s quais processados ja passaram
@@ -127,6 +129,7 @@ export function AnaliseKanban({
   const aberto = openId ? pendentes.find((c) => c.id === openId) ?? null : null;
   const cardIssue = issueId ? pendentes.find((c) => c.id === issueId) ?? null : null;
   const cardNote = noteId ? pagPendentes.find((c) => c.id === noteId) ?? null : null;
+  const cardProofs = proofsId ? pagPendentes.find((c) => c.id === proofsId) ?? null : null;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -171,6 +174,7 @@ export function AnaliseKanban({
             card={c}
             podeAnexar={podeAnexarComprovante}
             onComment={() => setNoteId(c.id)}
+            onViewProofs={() => setProofsId(c.id)}
           />
         ))}
         {pagPendentes.length === 0 && <Empty>Nenhum pagamento pendente.</Empty>}
@@ -257,6 +261,16 @@ export function AnaliseKanban({
           rotulo={rotuloComanda(cardNote)}
           initialNote={cardNote.paymentPendingNote}
           onClose={() => setNoteId(null)}
+        />
+      )}
+
+      {/* MODAL de comprovantes da coluna "Pagamento pendente" (mesmo motivo de
+          morar aqui: o card e bloco de contencao de position:fixed). */}
+      {cardProofs && (
+        <ProofsModal
+          rotulo={rotuloComanda(cardProofs)}
+          proofs={cardProofs.proof2List}
+          onClose={() => setProofsId(null)}
         />
       )}
 
@@ -489,6 +503,68 @@ function ProcessedCard({ card }: { card: FinanceCard }) {
   );
 }
 
+/**
+ * Comprovantes anexados pelo Financeiro num pedido de "Pagamento pendente".
+ *
+ * Lista o que ja foi inserido pelo botao "Inserir Comprovante" (financeProofs):
+ * imagem vira miniatura clicavel, PDF vira link — os dois abrem em nova aba.
+ * So leitura: remover continua sendo feito pela Analise (AuditarPedido).
+ */
+function ProofsModal({ rotulo, proofs, onClose }: {
+  rotulo: string;
+  proofs: { id: string; filePath: string }[];
+  onClose: () => void;
+}) {
+  return (
+    <Modal onClose={onClose}>
+      <div className="mb-1 flex items-center gap-2">
+        <Paperclip className="h-5 w-5 text-sky-500" />
+        <h2 className="text-lg font-bold">Comprovantes de pagamento</h2>
+      </div>
+      <p className="mb-3 text-sm text-muted-foreground">{rotulo} · {proofs.length}/{MAX_COMPROVANTES} anexado(s)</p>
+
+      {proofs.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border/60 py-6 text-center text-sm text-muted-foreground">
+          Nenhum comprovante inserido pelo Financeiro neste pedido.
+        </p>
+      ) : (
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {proofs.map((p, i) => {
+            const ehPdf = p.filePath.toLowerCase().endsWith(".pdf");
+            return (
+              <li key={p.id}>
+                <a
+                  href={p.filePath}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`Abrir comprovante ${i + 1} em nova aba`}
+                  className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-secondary/30 p-2 text-xs transition-colors hover:bg-secondary/60"
+                >
+                  {ehPdf ? (
+                    <span className="flex h-24 w-full items-center justify-center rounded bg-background">
+                      <FileText className="h-8 w-8 text-muted-foreground" />
+                    </span>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.filePath} alt={`Comprovante ${i + 1}`} className="h-24 w-full rounded object-cover" />
+                  )}
+                  <span className="font-medium text-financeiro underline">
+                    Comprovante {i + 1}{ehPdf && " (PDF)"}
+                  </span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="mt-4 flex justify-end">
+        <Button variant="outline" onClick={onClose}>Fechar</Button>
+      </div>
+    </Modal>
+  );
+}
+
 // Painel do Financeiro para pedidos de fluxo simplificado (Loja de Origem).
 // Mostra APENAS o(s) comprovante(s) de pagamento e o botao "Pago", que move
 // o pedido para o status PAGO. Sem CNPJ, forma de pagamento, banco ou NF.
@@ -556,12 +632,17 @@ function SimplifiedPaidPanel({ orderId, proofs, onDone }: {
  * Traz ainda o "Comentar": uma observacao livre por pedido, para o Financeiro
  * registrar o andamento da cobranca. O texto fica visivel no proprio card e
  * pode ser reescrito quantas vezes for preciso (ver PaymentNoteModal).
+ *
+ * E o "Ver comprovantes": abre o que o Financeiro ja inseriu, sem precisar
+ * voltar pela Analise so para conferir o arquivo antes de dar o "Pago".
  */
-function PaidPendingCard({ card, podeAnexar, onComment }: {
+function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
   card: FinanceCard;
   podeAnexar: boolean;
   /** Abre o modal de comentario (renderizado no nivel do Kanban). */
   onComment: () => void;
+  /** Abre o modal de comprovantes (renderizado no nivel do Kanban). */
+  onViewProofs: () => void;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -635,6 +716,23 @@ function PaidPendingCard({ card, podeAnexar, onComment }: {
         </p>
       )}
 
+      {/* O botao existe sempre, mas so abre quando ha o que ver: um clique
+          num modal vazio nao diz nada que o rotulo "Sem comprovantes" ja
+          nao diga. A lista vem do servidor; apos anexar por este card o
+          router.refresh atualiza o card e o botao libera. */}
+      <Button
+        type="button"
+        onClick={onViewProofs}
+        size="sm"
+        variant="outline"
+        className="mt-3 w-full"
+        disabled={card.proof2List.length === 0}
+        title={card.proof2List.length === 0 ? "Nenhum comprovante inserido" : "Ver comprovantes inseridos"}
+      >
+        <Eye className="mr-1 h-4 w-4" />
+        {card.proof2List.length === 0 ? "Sem comprovantes" : `Ver comprovantes (${card.proof2List.length})`}
+      </Button>
+
       {/* Comentario ja registrado: aparece no card para nao exigir abrir o
           modal so para saber se ha alguma anotacao. */}
       {card.paymentPendingNote?.trim() && (
@@ -656,7 +754,7 @@ function PaidPendingCard({ card, podeAnexar, onComment }: {
         onClick={onComment}
         size="sm"
         variant="outline"
-        className="mt-3 w-full"
+        className="mt-2 w-full"
         title={card.paymentPendingNote ? "Editar observação do pedido" : "Adicionar observação ao pedido"}
       >
         <MessageSquare className="mr-1 h-4 w-4" />
