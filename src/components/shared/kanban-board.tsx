@@ -4,7 +4,7 @@ import { useState, useTransition, useRef, useCallback, useEffect, useMemo } from
 import { useRouter } from "next/navigation";
 import { Maximize2, Minimize2, Search, ChevronRight } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
-import { STATUS_LABEL, STATUS_STYLE, STATUS_SETOR, DELAY_REASON_THRESHOLD_MIN, nextStatus, nextSimplifiedStatus, stageAlertLevel, overdueMinutes, type StageLimitMap } from "@/lib/order-flow";
+import { STATUS_LABEL, STATUS_STYLE, STATUS_SETOR, DELAY_REASON_THRESHOLD_MIN, nextStatus, nextSimplifiedStatus, isStrayInSimplified, stageAlertLevel, overdueMinutes, type StageLimitMap } from "@/lib/order-flow";
 import { CardScroller } from "@/components/shared/card-scroller";
 import { OrderCard, type OrderCardData } from "@/components/shared/order-card";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
@@ -109,10 +109,22 @@ export function KanbanBoard({
   }, [query, cards, nowTick]);
   const [isFull, setIsFull] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Pedido de loja simplificada parado num status do fluxo padrao (ex.:
+  // Processando). Nao tem coluna aqui e sumia do quadro — presente no banco,
+  // ausente da operacao. So faz sentido no quadro simplificado.
+  const foraDoFluxo = useCallback(
+    (card: Pick<KanbanCard, "status">): boolean => simplified && isStrayInSimplified(card.status),
+    [simplified],
+  );
+
   // Agrupa os cards por coluna. O fluxo simplificado tem coluna própria para
   // Pronto e Em Rota desde que entraram na esteira — não há mais "dobra" de
-  // status sem coluna.
-  const byStatus = (status: OrderStatus) => visibleCards.filter((c) => c.status === status);
+  // status sem coluna. A unica excecao e o pedido FORA DO FLUXO: ele entra em
+  // Embalando, com selo, para a loja o trazer de volta a esteira pela seta.
+  const byStatus = (status: OrderStatus) =>
+    visibleCards.filter(
+      (c) => c.status === status || (status === "EMBALANDO" && foraDoFluxo(c)),
+    );
 
   // ----- MOTIVO DO ATRASO (justificativa automatica) -----
   // Cards ja justificados NESTA aba (a action grava no banco, mas o
@@ -164,6 +176,10 @@ export function KanbanBoard({
   const canAdvanceCard = useCallback(
     (card: KanbanCard): boolean => {
       if (!advance?.enabled || !nextInFlow(card)) return false;
+      // Fora do fluxo: a seta e o caminho de volta a esteira (Embalando) e
+      // precisa existir sempre — as travas abaixo sao de pedidos que estao
+      // onde deveriam estar.
+      if (foraDoFluxo(card)) return true;
       // Trava (doc 3.1): se o pedido já tem motorista atribuído, a Logística
       // não avança mais o status manualmente — a entrega está com o motorista.
       // Exceção: já ENTREGUE não tem seta de qualquer forma (sem próximo passo).
@@ -179,7 +195,7 @@ export function KanbanBoard({
       }
       return true;
     },
-    [advance?.enabled, userRole, nextInFlow, simplified],
+    [advance?.enabled, userRole, nextInFlow, simplified, foraDoFluxo],
   );
 
   // ---- Tela cheia (mesma lógica do Rank de Vendas) ----
@@ -240,7 +256,8 @@ export function KanbanBoard({
 
     // Fluxo simplificado: sem NF e sem pendencia, mas a saida de Embalando para
     // Pronto passa pelo mesmo pop-up de logistica do fluxo padrao (rastreio,
-    // motorista, em aberto) mais a retirada na loja. O resto avanca direto.
+    // motorista, em aberto) mais a retirada na loja. O resto avanca direto —
+    // inclusive a volta a Embalando de um pedido fora do fluxo.
     if (simplified) {
       if (next === "ENVIADO") {
         setTrackingOrder(card);
@@ -269,10 +286,13 @@ export function KanbanBoard({
     runAdvance({ orderId: card.id });
   }
 
+  // `simplifiedBoard` diz ao servidor de que tipo de quadro veio o clique. Se
+  // a loja mudou de tipo depois que a pagina carregou, a action recusa em vez
+  // de mover o pedido pelo fluxo errado.
   function runAdvance(payload: { orderId: string; pendencyNote?: string; skipPendente?: boolean }) {
     start(async () => {
       const mod = await import("@/lib/actions/logistics");
-      const res = await mod.advanceOrderStatus(payload);
+      const res = await mod.advanceOrderStatus({ ...payload, simplifiedBoard: simplified });
       if (res.ok) { setPendencyOrder(null); router.refresh(); } else setError(res.error);
     });
   }
@@ -445,6 +465,7 @@ export function KanbanBoard({
                 style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}
                 stageAlert={stageAlertLevel(card.status, card.statusSince, stageLimits, nowTick)}
                 lateMinutes={atrasoPorCard.get(card.id) ?? 0}
+                outOfFlow={foraDoFluxo(card)}
                 action={
                   canAdvanceCard(card) ? (
                     <StatusArrow onClick={() => handleAdvance(card)} disabled={pending} />

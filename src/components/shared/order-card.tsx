@@ -1,8 +1,8 @@
 "use client";
 
 import type { OrderStatus } from "@prisma/client";
-import { FileText, Receipt, User, Tag, Clock, Store } from "lucide-react";
-import { STATUS_STYLE, formatOverdue, type StageAlert } from "@/lib/order-flow";
+import { FileText, Receipt, User, Tag, Clock, Store, Undo2 } from "lucide-react";
+import { STATUS_LABEL, STATUS_STYLE, formatOverdue, type StageAlert } from "@/lib/order-flow";
 import { cn, shortName } from "@/lib/utils";
 
 export interface OrderCardData {
@@ -42,6 +42,7 @@ export function OrderCard({
   action,
   stageAlert = "none",
   lateMinutes = 0,
+  outOfFlow = false,
 }: {
   data: OrderCardData;
   onClick?: () => void;
@@ -54,11 +55,17 @@ export function OrderCard({
   // Minutos decorridos desde que o prazo da etapa estourou (0 = no prazo).
   // Exibido ao lado do selo "Atrasado" para dar o tamanho do atraso.
   lateMinutes?: number;
+  // Pedido de loja simplificada parado num status do fluxo padrao. O quadro o
+  // mostra em Embalando; o selo diz onde ele esta de fato e que a seta o traz
+  // de volta.
+  outOfFlow?: boolean;
 }) {
   const s = STATUS_STYLE[data.status];
   // Alerta visual: processando sem NF. Troca (4 - Troca) e isenta de NF, entao
-  // nao dispara o alerta nem o selo vermelho "Sem NF".
-  const alerta = data.status === "PROCESSANDO" && !data.hasInvoice && !data.isExchange;
+  // nao dispara o alerta nem o selo vermelho "Sem NF". Fora do fluxo tambem
+  // nao: o fluxo simplificado nao tem NF, e o pedido so esta em Processando
+  // por engano.
+  const alerta = data.status === "PROCESSANDO" && !data.hasInvoice && !data.isExchange && !outOfFlow;
 
   // Regra de exibicao: se ja existe comanda, ela tem prioridade; senao, pedido.
   const principal = data.comandaNumber
@@ -161,6 +168,17 @@ export function OrderCard({
             title="Retirada na loja"
           >
             <Store className="h-3 w-3" /> Retirada
+          </span>
+        )}
+        {outOfFlow && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+              preenchido ? "bg-white/90 text-foreground" : "bg-destructive/15 text-destructive",
+            )}
+            title={`Pedido em ${STATUS_LABEL[data.status]}, fora do fluxo simplificado. A seta o traz de volta para Embalando.`}
+          >
+            <Undo2 className="h-3 w-3" /> Fora do fluxo · {STATUS_LABEL[data.status]}
           </span>
         )}
         {!alerta && stageAlert !== "none" && (

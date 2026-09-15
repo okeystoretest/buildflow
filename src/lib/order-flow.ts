@@ -79,6 +79,32 @@ export const SIMPLIFIED_FLOW: OrderStatus[] = ["PAGO", "EMBALANDO", "ENVIADO", "
 // Colunas exibidas no fluxo simplificado (sem CONCLUIDO, que some da board).
 export const SIMPLIFIED_COLUMNS: OrderStatus[] = ["PAGO", "EMBALANDO", "ENVIADO", "EM_ROTA", "ENTREGUE"];
 
+// Todo status que um pedido de loja simplificada pode ocupar ao longo da vida:
+// nasce em EM_ANALISE (Financeiro), percorre a esteira, termina em CONCLUIDO
+// (o motorista conclui como no padrao) ou numa excecao do Financeiro. Fora
+// disto e um pedido PERDIDO — status do fluxo padrao, sem coluna no quadro da
+// loja. E o que acontecia quando um pedido simplificado ia de Embalando para
+// Processando: sumia dos dois quadros.
+export const SIMPLIFIED_LIFECYCLE: OrderStatus[] = [
+  "EM_ANALISE",
+  ...SIMPLIFIED_FLOW,
+  "CONCLUIDO",
+  ...EXCEPTION_STATUSES,
+];
+
+// O status pode ser ESCRITO num pedido de loja simplificada? Vale para toda
+// escrita direta (arrastar da Gestao inclusive): Processando e os demais
+// passos do padrao nunca entram num pedido simplificado.
+export function canHoldSimplified(status: OrderStatus): boolean {
+  return SIMPLIFIED_LIFECYCLE.includes(status);
+}
+
+// Pedido de loja simplificada parado num status que nao e dele ("fora do
+// fluxo"). O quadro o exibe em Embalando com o selo, e a seta o traz de volta.
+export function isStrayInSimplified(status: OrderStatus): boolean {
+  return !canHoldSimplified(status);
+}
+
 export interface SimplifiedFlowOpts {
   /** Pedido marcado para retirada na loja (Order.pickupAtStore). */
   pickupAtStore?: boolean;
@@ -86,10 +112,15 @@ export interface SimplifiedFlowOpts {
 
 // Proximo status DENTRO do fluxo simplificado. Retorna null no fim (ENTREGUE).
 // Com `pickupAtStore`, PRONTO vai direto para ENTREGUE.
+//
+// Fora do fluxo (ver isStrayInSimplified), o proximo passo e VOLTAR a
+// EMBALANDO: e de la que sai a escolha de logistica, e nenhum status do
+// padrao equivale com seguranca a um passo posterior da esteira.
 export function nextSimplifiedStatus(
   current: OrderStatus,
   opts: SimplifiedFlowOpts = {},
 ): OrderStatus | null {
+  if (isStrayInSimplified(current)) return "EMBALANDO";
   if (opts.pickupAtStore && current === "ENVIADO") return "ENTREGUE";
   const idx = SIMPLIFIED_FLOW.indexOf(current);
   if (idx === -1 || idx === SIMPLIFIED_FLOW.length - 1) return null;

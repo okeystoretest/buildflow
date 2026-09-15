@@ -11,6 +11,8 @@ import {
   canTransition,
   nextSimplifiedStatus,
   canTransitionSimplified,
+  isStrayInSimplified,
+  canHoldSimplified,
 } from "../../src/lib/order-flow";
 
 let falhas = 0;
@@ -71,6 +73,32 @@ check("retirada: em rota deixa de ser o proximo", canTransitionSimplified("ENVIA
 check("retirada nao muda os passos anteriores", nextSimplifiedStatus("EMBALANDO", { pickupAtStore: true }), "ENVIADO");
 check("excecao segue valida no simplificado", canTransitionSimplified("ENVIADO", "CANCELADO"), true);
 check("transicao simplificada invalida", canTransitionSimplified("PAGO", "ENTREGUE"), false);
+
+// --- Pedido de loja simplificada FORA da esteira ---
+// Um pedido simplificado que foi parar em Processando (ou em qualquer status
+// do fluxo padrao) nao tem coluna no quadro da loja: sumia. Agora e "fora do
+// fluxo": o quadro o mostra em Embalando e a seta o traz de volta a esteira.
+check("processando e fora do fluxo simplificado", isStrayInSimplified("PROCESSANDO"), true);
+check("processado (legado) e fora do fluxo", isStrayInSimplified("PROCESSADO"), true);
+check("aguardando impressao e fora do fluxo", isStrayInSimplified("AGUARDANDO_IMPRESSAO"), true);
+check("embalando esta na esteira", isStrayInSimplified("EMBALANDO"), false);
+// Em Analise, Concluido e as excecoes fazem parte da vida do pedido
+// simplificado mesmo sem coluna no quadro: nao sao "fora do fluxo".
+check("em analise nao e fora do fluxo", isStrayInSimplified("EM_ANALISE"), false);
+check("concluido nao e fora do fluxo", isStrayInSimplified("CONCLUIDO"), false);
+check("cancelado nao e fora do fluxo", isStrayInSimplified("CANCELADO"), false);
+// A volta a esteira e sempre por Embalando: e de la que sai a escolha de
+// logistica, e nenhum status do padrao equivale a um passo posterior seguro.
+check("fora do fluxo volta a embalando", nextSimplifiedStatus("PROCESSANDO"), "EMBALANDO");
+check("fora do fluxo: transicao valida", canTransitionSimplified("PROCESSANDO", "EMBALANDO"), true);
+check("fora do fluxo nao pula p/ pronto", canTransitionSimplified("PROCESSANDO", "ENVIADO"), false);
+// O que a Gestao pode ESCREVER num pedido simplificado (arrastar): so a
+// esteira, o inicio, o fim e as excecoes. Processando nunca.
+check("simplificado nao aceita processando", canHoldSimplified("PROCESSANDO"), false);
+check("simplificado aceita pronto", canHoldSimplified("ENVIADO"), true);
+check("simplificado aceita em analise", canHoldSimplified("EM_ANALISE"), true);
+check("simplificado aceita concluido", canHoldSimplified("CONCLUIDO"), true);
+check("simplificado aceita estorno", canHoldSimplified("ESTORNO"), true);
 
 // --- O corte de estagios do quadro precisa existir ---
 // O Kanban divide as colunas em 1o/2o estagio por indexOf("EMBALANDO"). Se

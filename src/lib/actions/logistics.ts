@@ -4,7 +4,15 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
-import { nextStatus, canTransition, nextSimplifiedStatus, canTransitionSimplified } from "@/lib/order-flow";
+import {
+  nextStatus,
+  canTransition,
+  nextSimplifiedStatus,
+  canTransitionSimplified,
+  canHoldSimplified,
+  isStrayInSimplified,
+  STATUS_LABEL,
+} from "@/lib/order-flow";
 import { canInteractWithOrder } from "@/lib/permissions";
 import { isAnexoDispensavelPorContexto } from "@/lib/validations/order";
 import { ativarPecaAoEntregar } from "@/lib/piece-sync";
@@ -90,6 +98,12 @@ export async function advanceOrderStatus(args: {
   to?: OrderStatus; // se omitido, usa o proximo do fluxo
   pendencyNote?: string; // descricao da pendencia (quando target = PENDENTE)
   skipPendente?: boolean; // pula a etapa PENDENTE indo direto p/ a seguinte
+  // Tipo de quadro de onde veio o clique (true = simplificado). Quando
+  // informado e diferente do que a loja e HOJE no banco, a acao recusa em vez
+  // de mover: um quadro carregado antes de a loja mudar de tipo (ou um bundle
+  // antigo no navegador) mandaria o pedido pelo fluxo errado — foi assim que
+  // pedidos simplificados foram parar em Processando.
+  simplifiedBoard?: boolean;
 }): Promise<ActionResult<{ status: OrderStatus }>> {
   try {
     const session = await requireRoleAction();
@@ -106,6 +120,11 @@ export async function advanceOrderStatus(args: {
     if (!order) return actionError("Pedido nao encontrado.");
 
     const simplified = order.originStore?.simplifiedFlow === true;
+    if (args.simplifiedBoard !== undefined && args.simplifiedBoard !== simplified) {
+      return actionError(
+        "O quadro está desatualizado em relação ao tipo de fluxo da loja. Recarregue a página.",
+      );
+    }
 
     // Permissao para avancar:
     // - LOGISTICA/GESTAO/FINANCEIRO: sempre.
@@ -163,6 +182,10 @@ export async function advanceOrderStatus(args: {
           "Defina a saída do pedido: rastreio, motorista, em aberto ou retirada na loja.",
         );
       }
+      // Pedido que estava fora do fluxo (ex.: Processando) voltando a esteira.
+      // Fica registrado de onde ele voltou — o historico e o unico lugar em
+      // que da para ver que o pedido passou por um status que nao era dele.
+      const retornoAEsteira = isStrayInSimplified(order.status);
       // Pedido "em aberto" (Pronto, com entrega sem dono, sem rastreio e sem
       // retirada) e dos motoristas: quem inicia a rota e o motorista, pelo
       // quadro dele. Se a loja avancasse daqui, a Delivery ficaria EM_ROTA sem
@@ -181,7 +204,14 @@ export async function advanceOrderStatus(args: {
       await prisma.$transaction(async (tx) => {
         await tx.order.update({ where: { id: order.id }, data: { status: target } });
         await tx.orderStatusHistory.create({
-          data: { orderId: order.id, status: target, changedBy: session.userId },
+          data: {
+            orderId: order.id,
+            status: target,
+            changedBy: session.userId,
+            note: retornoAEsteira
+              ? `Retorno ao fluxo simplificado (estava em ${STATUS_LABEL[order.status]}).`
+              : undefined,
+          },
         });
         // Mesma sincronizacao da entrega do fluxo padrao: ao sair para a rua,
         // a Delivery acompanha (quando existe — retirada nao tem entrega).
@@ -837,12 +867,23 @@ export async function setOrderStatus(args: {
       select: {
         id: true, status: true, orderNumber: true, sellerId: true,
         delivery: { select: { id: true, driverId: true } },
+        originStore: { select: { simplifiedFlow: true } },
       },
     });
     if (!order) return actionError("Pedido nao encontrado.");
 
     // Sem no-op: se ja esta no status alvo, nada a fazer.
     if (order.status === args.to) return actionOk({ status: order.status });
+
+    // Pedido de loja simplificada so aceita os status da vida dele. Processando
+    // e os demais passos do padrao nao tem coluna no quadro da loja: o pedido
+    // sumiria. O quadro simplificado nem oferece essas colunas, mas a regra
+    // mora aqui para valer tambem para um quadro desatualizado.
+    if (order.originStore?.simplifiedFlow === true && !canHoldSimplified(args.to)) {
+      return actionError(
+        `Pedido de loja com fluxo simplificado não pode ir para ${STATUS_LABEL[args.to]}.`,
+      );
+    }
 
     // Regra 1 (Gestão): retrocesso para PROCESSANDO desatribui o motorista e
     // restaura a entrega ao estado padrão. Vale quando o pedido saía de um
