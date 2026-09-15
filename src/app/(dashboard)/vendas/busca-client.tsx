@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { useFilterQuery } from "@/hooks/use-filter-query";
 
 /**
- * Barra de busca da listagem de Vendas. Filtra por Número do Pedido ou Comanda.
+ * Barra de busca da listagem de Vendas. Filtra por Número do Pedido, Comanda
+ * ou nome da cliente.
  *
  * Busca em TEMPO REAL: aplica automaticamente ao digitar (debounce), sem os
  * botões "Buscar"/"Limpar". Ícone "X" à direita para limpar o campo.
@@ -22,7 +23,7 @@ export function VendasBusca({ defaultBusca }: { defaultBusca: string }) {
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           className="pl-8 pr-9"
-          placeholder="Buscar por nº do pedido ou comanda..."
+          placeholder="Buscar por nº do pedido, comanda ou cliente..."
           value={f.text.busca}
           onChange={(e) => f.setText("busca", e.target.value)}
         />

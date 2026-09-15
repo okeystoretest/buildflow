@@ -24,12 +24,15 @@ export default async function VendasPage({
 
   const busca = searchParams?.busca?.trim() || "";
   const page = Math.max(1, Number(searchParams?.page) || 1);
-  // Busca por Numero do Pedido OU Comanda (case-insensitive, parcial).
+  // Busca por Numero do Pedido, Comanda OU nome da cliente (case-insensitive,
+  // parcial). O nome entra porque e o que a vendedora tem na cabeca quando a
+  // cliente liga — numero e comanda ela precisa procurar.
   const buscaFilter: Prisma.OrderWhereInput = busca
     ? {
         OR: [
           { orderNumber: { contains: busca, mode: "insensitive" } },
           { comandaNumber: { contains: busca, mode: "insensitive" } },
+          { customer: { name: { contains: busca, mode: "insensitive" } } },
         ],
       }
     : {};
