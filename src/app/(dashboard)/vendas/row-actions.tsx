@@ -31,6 +31,10 @@ function mensagemRastreio(url: string, customerCode: string) {
  *   valor). A soma sai do valor do pedido; a lista e restrita aos pedidos que
  *   a pessoa pode ver, e a action reconfere o dono no servidor. Some em pedido
  *   cancelado/estornado, onde a conta ja foi acertada pelo Financeiro.
+ *
+ * Divisores verticais separam os grupos (link | devolucoes | editar/excluir),
+ * no mesmo tom das barras entre as colunas da tabela — sem eles a fileira de
+ * botoes lia como um bloco so, diferente do resto da linha.
  */
 export function VendaRowActions({
   orderId,
@@ -141,17 +145,21 @@ export function VendaRowActions({
           )}
           Copiar link
         </Button>
+        <Divisor />
         {canReturn && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            title="Registrar devolução de peças"
-            onClick={() => setReturning(true)}
-            disabled={pending}
-          >
-            <PackageMinus className="mr-1 h-4 w-4" /> Devoluções
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              title="Registrar devolução de peças"
+              onClick={() => setReturning(true)}
+              disabled={pending}
+            >
+              <PackageMinus className="mr-1 h-4 w-4" /> Devoluções
+            </Button>
+            <Divisor />
+          </>
         )}
         <Button asChild variant="outline" size="icon" className="h-8 w-8" title="Editar pedido">
           <Link href={`/vendas/${orderId}/editar`}>
@@ -249,6 +257,12 @@ export function VendaRowActions({
       )}
     </>
   );
+}
+
+// Barra de separacao entre os grupos de acoes da linha (mesma cor das bordas
+// da tabela). aria-hidden: e so visual, o leitor de tela nao precisa dela.
+function Divisor() {
+  return <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-border" />;
 }
 
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
