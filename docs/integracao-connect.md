@@ -17,7 +17,7 @@ webhook só registra no log.
 
 ## Rotas (todas com `Authorization: Bearer <token>`)
 
-- `GET  /api/integracao/connect/motoristas`
+- `GET  /api/integracao/connect/motoristas` — mantida no contrato; o Connect deixou de usá-la (o formulário não escolhe mais motorista: todo chamado nasce `ABERTO`).
 - `POST /api/integracao/connect/chamados` — multipart: `payload` (JSON) + `images` (0..5)
 - `GET  /api/integracao/connect/chamados/:connectId`
 - `GET  /api/integracao/connect/chamados/:connectId/rastreamento`
