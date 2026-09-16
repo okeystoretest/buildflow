@@ -42,33 +42,41 @@ export function TransportCard(p: TransportCardProps) {
   const status = item.status;
   const podeDirigir = isMine || p.canActAsDriver;
 
+  // Sem `card-hover`: este card nao se move ao passar o mouse.
   return (
-    <article className="card-hover rounded-2xl border border-border bg-card p-4 shadow-sm">
+    <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <span className="font-data text-xs text-muted-foreground">{item.code}</span>
+        <span className="flex items-center gap-1.5 font-data text-xs text-muted-foreground">
+          {item.code}
+          {item.images.length > 0 && (
+            <span className="flex items-center gap-0.5">
+              <Paperclip className="h-3 w-3" />
+              {item.images.length}
+            </span>
+          )}
+        </span>
         <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[11px]">{item.serviceType}</span>
       </div>
-      <h3 className="mt-2 text-sm font-semibold leading-snug">{item.destLabel}</h3>
-      <p className="mt-0.5 text-xs text-muted-foreground">De: {item.originLabel}</p>
+
+      {/* Partida imediatamente acima do destino: le-se como o trajeto. */}
+      <p className="mt-2 text-xs text-muted-foreground">
+        <span className="text-[10px] uppercase tracking-wide">Partida</span> · {item.originLabel}
+      </p>
+      <h3 className="mt-1 text-sm font-semibold leading-snug">
+        <span className="text-[10px] font-normal uppercase tracking-wide text-muted-foreground">Destino</span> · {item.destLabel}
+      </h3>
+
       <p className="mt-2 truncate text-xs">
         <span className="text-muted-foreground">Solicitante:</span> {item.requesterName}
         {item.requesterSector ? ` · ${item.requesterSector}` : ""}
       </p>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">Solicitado em {dataHora(item.createdAt)}</p>
       {item.driverName && (
         <p className="mt-1 text-xs">
           <span className="text-muted-foreground">Responsável:</span> {item.driverName}
           {isMine && <span className="text-motorista"> (você)</span>}
         </p>
       )}
-      <div className="mt-3 flex items-center gap-1.5 border-t border-border pt-2 text-[11px] text-muted-foreground">
-        {dataHora(item.createdAt)}
-        {item.images.length > 0 && (
-          <span className="flex items-center gap-0.5">
-            <Paperclip className="h-3 w-3" />
-            {item.images.length}
-          </span>
-        )}
-      </div>
 
       {/* GPS em rota fica acima das acoes: e um estado, nao um botao. */}
       {status === "EM_ROTA" && podeDirigir && (
