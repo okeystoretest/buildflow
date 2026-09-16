@@ -135,21 +135,21 @@ export function OrderCard({
             </span>
           )}
         </p>
+
+        {/* Linha 3: vendedora, logo abaixo da cliente. Fica junto dos dados
+            de identificacao em vez de dividir a faixa de rodape com os sinais
+            e selos — e a leitura "quem comprou / quem vendeu" fica em par. */}
+        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Tag className="h-3 w-3 shrink-0" />
+          {/* Só primeiro e segundo nome. A BUSCA do quadro continua casando com
+              o nome inteiro — o encurtamento é de exibição, não do dado. */}
+          <span className="min-w-0 truncate">{shortName(data.sellerName)}</span>
+        </p>
       </button>
 
-      {/* Linha 3: vendedora + sinais + alerta + acao, todos na MESMA faixa.
-          Eram duas linhas (vendedora numa, rodape noutra); juntar as duas e o
-          que tira uma linha inteira da altura do card. flex-wrap para o caso de
-          coluna estreita: em vez de estourar, quebra. */}
+      {/* Rodape: sinais + alerta + acao na mesma faixa. flex-wrap para o caso
+          de coluna estreita: em vez de estourar, quebra. */}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/60 pt-1.5">
-        <span className="flex min-w-0 shrink items-center gap-1 text-xs text-muted-foreground">
-          <Tag className="h-3 w-3 shrink-0" />
-          {/* Só primeiro e segundo nome: a faixa divide espaço com os sinais e
-              o selo de atraso, e o nome completo empurrava tudo para a linha de
-              baixo. A BUSCA do quadro continua casando com o nome inteiro — o
-              encurtamento é de exibição, não do dado. */}
-          <span className="min-w-0 truncate">{shortName(data.sellerName)}</span>
-        </span>
         <Signal active={data.hasPaymentProof} filled={preenchido} overdue={atrasado} icon={<Receipt className="h-3 w-3" />} label="Comprov." />
         <Signal active={data.hasInvoice} filled={preenchido} overdue={atrasado} icon={<FileText className="h-3 w-3" />} label="NF" />
         {alerta && (
