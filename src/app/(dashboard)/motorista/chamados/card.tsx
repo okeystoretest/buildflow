@@ -28,8 +28,9 @@ function dataHora(iso: string): string {
 
 /**
  * Card do quadro de chamados. Sem arrastar: cada coluna expoe botoes conforme
- * status e papel (mesma regra do Build.Connect):
- *   ABERTO      "Atribuir para mim" (motorista) · "Atribuir para…" (gestao)
+ * status e papel (mesma regra do Build.Connect), numa linha de pilulas com
+ * "Ver" sempre presente (padrao do card de Entregas):
+ *   ABERTO      "Atribuir" (motorista, para si) · "Atribuir…" (gestao, para outro)
  *   ATRIBUIDO   "Iniciar rota" (dono) · "Desatribuir" (dono ou gestao)
  *   EM_ROTA     GPS ativo · "Concluir" (dono)
  *   CONCLUIDO   somente leitura
@@ -59,75 +60,104 @@ export function TransportCard(p: TransportCardProps) {
           {isMine && <span className="text-motorista"> (você)</span>}
         </p>
       )}
-      <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          {dataHora(item.createdAt)}
-          {item.images.length > 0 && (
-            <span className="flex items-center gap-0.5">
-              <Paperclip className="h-3 w-3" />
-              {item.images.length}
-            </span>
-          )}
-        </span>
-        <button
-          type="button"
-          onClick={() => p.onOpen(item)}
-          className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-secondary hover:text-foreground"
-        >
-          <Eye className="h-3 w-3" /> Detalhes
-        </button>
+      <div className="mt-3 flex items-center gap-1.5 border-t border-border pt-2 text-[11px] text-muted-foreground">
+        {dataHora(item.createdAt)}
+        {item.images.length > 0 && (
+          <span className="flex items-center gap-0.5">
+            <Paperclip className="h-3 w-3" />
+            {item.images.length}
+          </span>
+        )}
       </div>
 
-      <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
-        {status === "ABERTO" && (
-          <>
-            {p.canClaim && (
-              <Button size="sm" className="w-full bg-motorista text-white hover:bg-motorista/90" onClick={() => p.onClaim(item)}>
-                <UserPlus className="h-3.5 w-3.5" /> Atribuir para mim
-              </Button>
-            )}
-            {p.isManager && (
-              <Button size="sm" variant="outline" className="w-full" onClick={() => p.onAssignOther(item)}>
-                <UserCog className="h-3.5 w-3.5" /> Atribuir para…
-              </Button>
-            )}
-          </>
-        )}
-        {status === "ATRIBUIDO" && (
-          <>
-            {podeDirigir && <RouteController requestId={item.id} started={false} />}
-            {(isMine || p.isManager) && (
-              <Button size="sm" variant="ghost" className="w-full" onClick={() => p.onUnassign(item)}>
-                <UserMinus className="h-3.5 w-3.5" /> Desatribuir
-              </Button>
-            )}
-            {!isMine && !p.isManager && !p.canActAsDriver && (
-              <p className="text-center text-[11px] text-muted-foreground">Atribuído a outra pessoa.</p>
-            )}
-          </>
-        )}
-        {status === "EM_ROTA" && (
-          <>
-            {podeDirigir && <RouteController requestId={item.id} started />}
-            {podeDirigir && (
-              <Button size="sm" className="w-full bg-motorista text-white hover:bg-motorista/90" onClick={() => p.onComplete(item)}>
-                <CheckCircle2 className="h-3.5 w-3.5" /> Concluir com comprovante
-              </Button>
-            )}
-            {!podeDirigir && <p className="text-center text-[11px] text-muted-foreground">Corrida em andamento.</p>}
-          </>
-        )}
-        {status === "CONCLUIDO" && (
-          <p className="text-center text-[11px] text-muted-foreground">
-            Concluído{item.distanceKm ? ` · ${item.distanceKm} km` : ""}. Sai do quadro em 15 min.
-          </p>
-        )}
-        {p.isManager && status !== "CONCLUIDO" && status !== "CANCELADO" && (
-          <Button size="sm" variant="ghost" className="w-full text-destructive hover:text-destructive" onClick={() => p.onCancel(item)}>
-            <Ban className="h-3.5 w-3.5" /> Cancelar chamado
+      {/* GPS em rota fica acima das acoes: e um estado, nao um botao. */}
+      {status === "EM_ROTA" && podeDirigir && (
+        <div className="mt-3">
+          <RouteController requestId={item.id} started />
+        </div>
+      )}
+
+      {/* Acoes em pilula, lado a lado, dividindo a largura — mesmo padrao do
+          card de Entregas. "Ver" abre o detalhe (descricao completa, fotos,
+          historico) e esta em toda coluna. */}
+      <div className="mt-3 flex items-center gap-2">
+        <Button variant="outline" className="h-11 flex-1 px-2" onClick={() => p.onOpen(item)}>
+          <Eye className="h-4 w-4" />
+          <span className="truncate">Ver</span>
+        </Button>
+
+        {status === "ABERTO" && p.canClaim && (
+          <Button
+            variant="motorista"
+            className="h-11 flex-1 px-2"
+            onClick={() => p.onClaim(item)}
+            title="Atribuir para mim"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span className="truncate">Atribuir</span>
           </Button>
         )}
+        {status === "ABERTO" && p.isManager && (
+          <Button
+            variant="outline"
+            className="h-11 flex-1 px-2"
+            onClick={() => p.onAssignOther(item)}
+            title="Atribuir para outro motorista"
+          >
+            <UserCog className="h-4 w-4" />
+            <span className="truncate">{p.canClaim ? "Atribuir…" : "Atribuir"}</span>
+          </Button>
+        )}
+
+        {status === "ATRIBUIDO" && podeDirigir && (
+          <RouteController requestId={item.id} started={false} className="min-w-0 flex-1" />
+        )}
+        {status === "ATRIBUIDO" && (isMine || p.isManager) && (
+          <Button
+            variant="outline"
+            className="h-11 flex-1 px-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => p.onUnassign(item)}
+          >
+            <UserMinus className="h-4 w-4" />
+            <span className="truncate">Desatribuir</span>
+          </Button>
+        )}
+
+        {status === "EM_ROTA" && podeDirigir && (
+          <Button variant="motorista" className="h-11 flex-1 px-2" onClick={() => p.onComplete(item)}>
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="truncate">Concluir</span>
+          </Button>
+        )}
+
+        {status === "CONCLUIDO" && (
+          <div className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-motorista/10 text-sm font-medium text-motorista">
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="truncate">Concluído{item.distanceKm ? ` · ${item.distanceKm} km` : ""}</span>
+          </div>
+        )}
       </div>
+
+      {status === "ATRIBUIDO" && !isMine && !p.isManager && !p.canActAsDriver && (
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">Atribuído a outra pessoa.</p>
+      )}
+      {status === "EM_ROTA" && !podeDirigir && (
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">Corrida em andamento.</p>
+      )}
+      {status === "CONCLUIDO" && (
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">Sai do quadro em 15 min.</p>
+      )}
+
+      {p.isManager && status !== "CONCLUIDO" && status !== "CANCELADO" && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="mt-2 w-full text-destructive hover:text-destructive"
+          onClick={() => p.onCancel(item)}
+        >
+          <Ban className="h-3.5 w-3.5" /> Cancelar chamado
+        </Button>
+      )}
     </article>
   );
 }

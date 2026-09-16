@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Navigation, Loader2, AlertTriangle, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { startTransportRoute } from "@/lib/transport/actions";
 import { usePositionBroadcast } from "@/lib/transport/use-position-broadcast";
 
@@ -15,10 +16,13 @@ export function RouteController({
   requestId,
   started,
   finished = false,
+  className,
 }: {
   requestId: string;
   started: boolean;
   finished?: boolean;
+  /** Aplicado ao invólucro do botão "Iniciar rota" (ex.: `flex-1` na linha de pílulas do card). */
+  className?: string;
 }) {
   const router = useRouter();
   const [isStarted, setIsStarted] = useState(started);
@@ -47,10 +51,10 @@ export function RouteController({
 
   if (!isStarted) {
     return (
-      <div className="space-y-1.5">
-        <Button className="h-11 w-full bg-motorista text-white hover:bg-motorista/90" onClick={iniciar} disabled={pending}>
+      <div className={cn("space-y-1.5", className)}>
+        <Button variant="motorista" className="h-11 w-full px-2" onClick={iniciar} disabled={pending}>
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
-          Iniciar rota
+          <span className="truncate">Iniciar rota</span>
         </Button>
         {startError && <p className="text-xs text-destructive">{startError}</p>}
       </div>
