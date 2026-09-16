@@ -2,7 +2,7 @@
 // Rodar com: npx tsx scripts/checks/driver-delivery.ts
 //
 // O que esta em jogo: a regra decide o que entra na coluna "Pronto" do quadro
-// do Motorista e quem recebe push/WhatsApp de entrega disponivel. Errar para
+// do Motorista e quem recebe push de entrega disponivel. Errar para
 // menos deixa o motorista sem saber do pacote; errar para mais chama a equipe
 // de entrega para pedido que vai pelos Correios.
 import {

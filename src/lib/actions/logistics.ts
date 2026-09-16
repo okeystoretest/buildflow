@@ -480,7 +480,7 @@ export async function assignDriverToOrder(args: {
     revalidatePath("/dashboard");
     revalidatePath("/motorista");
     emitOrderUpdated({ orderId: args.orderId });
-    // Entrou em "Pronto" com dono definido: push + WhatsApp so para ele.
+    // Entrou em "Pronto" com dono definido: push so para ele.
     // pushInfo vem null quando ha rastreio (segue por transportadora).
     if (pushInfo) {
       notifyOrderReady({

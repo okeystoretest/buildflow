@@ -1,6 +1,5 @@
 import { publish, type RealtimeEvent } from "@/lib/realtime/bus";
 import { sendPushToRole, sendPushToUser } from "@/lib/push";
-import { sendWhatsappToDrivers } from "@/lib/whatsapp";
 import { prisma } from "@/lib/prisma";
 import { entraNoQuadroDoMotorista } from "@/lib/driver-delivery";
 
@@ -121,7 +120,7 @@ export function notifyOrderReady(args: {
 }
 
 /**
- * Dispara push e WhatsApp de entrega disponivel. Separada de notifyOrderReady
+ * Dispara o push de entrega disponivel. Separada de notifyOrderReady
  * para a REGRA (quem merece aviso) ficar visivel ali, e o ENVIO ficar aqui.
  */
 function avisarMotorista(args: {
@@ -140,10 +139,6 @@ function avisarMotorista(args: {
       url: "/motorista",
       tag: `delivery-${args.orderId}`,
     }).catch((err) => console.error("[push] envio p/ motorista falhou:", err));
-
-    void sendWhatsappToDrivers({ orderId: args.orderId, driverId: args.driverId }).catch(
-      (err) => console.error("[whatsapp] envio p/ motorista falhou:", err),
-    );
     return;
   }
 
@@ -153,13 +148,6 @@ function avisarMotorista(args: {
     url: "/motorista",
     tag: `delivery-${args.orderId}`,
   }).catch((err) => console.error("[push] envio p/ motorista falhou:", err));
-
-  // A mensagem de WhatsApp nao leva numero de pedido nem nome de cliente —
-  // alem de ser o texto definido pelo produto, evita mandar dado de cliente por
-  // um canal nao-oficial.
-  void sendWhatsappToDrivers({ orderId: args.orderId }).catch((err) =>
-    console.error("[whatsapp] envio p/ motoristas falhou:", err),
-  );
 }
 
 /**

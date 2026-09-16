@@ -5,12 +5,9 @@ const nextConfig = {
   poweredByHeader: false,
   eslint: { ignoreDuringBuilds: false },
   experimental: {
-    instrumentationHook: true,
     // sharp e binario nativo: nao deve ser empacotado pelo webpack, e sim
     // resolvido em runtime pelo Node.
-    // baileys/pino/qrcode entram pelo mesmo motivo: o baileys carrega
-    // protobuf e libsignal, que o empacotamento quebra.
-    serverComponentsExternalPackages: ['sharp', '@whiskeysockets/baileys', 'pino', 'qrcode'],
+    serverComponentsExternalPackages: ['sharp'],
     serverActions: {
       // Uploads de imagem passam por Server Action; video usa Route Handler.
       bodySizeLimit: '12mb',
@@ -20,27 +17,11 @@ const nextConfig = {
     // Arquivos sao servidos pela rota autenticada /api/uploads.
     unoptimized: true,
   },
-  webpack: (config, { isServer, nextRuntime }) => {
-    // A instrumentacao e compilada para TODOS os runtimes (nodejs, edge e
-    // client). O import de `./instrumentation.node` esta atras de um guard de
-    // runtime, mas o webpack percorre o grafo mesmo assim e tenta empacotar o
-    // baileys — que puxa o binario nativo do sharp e quebra o build com
-    // "Node.js binary module ... is not supported in the browser".
-    //
-    // serverComponentsExternalPackages nao cobre isso (vale so para a
-    // compilacao do servidor) e `externals` tambem nao resolveu: o webpack
-    // continua resolvendo o modulo antes de trata-lo como externo.
-    //
-    // alias = false faz o webpack resolver o pacote para um modulo vazio e
-    // PARAR a travessia ali. E seguro porque o guard de runtime garante que
-    // esse codigo so executa sob o runtime nodejs, onde o alias nao se aplica.
+  webpack: (config, { nextRuntime }) => {
+    // sharp e binario nativo: fora do runtime nodejs (edge e client) o webpack
+    // nao pode tentar resolve-lo. alias = false o troca por um modulo vazio.
     if (nextRuntime !== 'nodejs') {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        '@whiskeysockets/baileys': false,
-        sharp: false,
-        pino: false,
-      };
+      config.resolve.alias = { ...config.resolve.alias, sharp: false };
     }
     return config;
   },

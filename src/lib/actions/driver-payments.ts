@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { Prisma } from "@prisma/client";
-import { sendWhatsappToDrivers, mensagemPagamentoEntrega } from "@/lib/whatsapp";
+import { sendPushToUser } from "@/lib/push";
+import { mensagemPagamentoEntrega } from "@/lib/notifications/messages";
 
 /**
  * Registra o pagamento da ENTREGA ao motorista (Financeiro > "Pagamentos de
@@ -17,9 +18,10 @@ import { sendWhatsappToDrivers, mensagemPagamentoEntrega } from "@/lib/whatsapp"
  *  - A ENTREGA precisa estar concluída (Delivery.status = ENTREGUE; o pedido
  *    fica CONCLUIDO) e ter motorista (Delivery.driverId).
  *  - Um pagamento por pedido (idempotência via unique em orderId).
- *  - Ao gravar, avisa o MOTORISTA por WhatsApp ("Pagamento da comanda N
- *    efetuado com sucesso."). O envio corre fora da resposta e nunca lanca:
- *    WhatsApp fora do ar nao pode impedir o registro do pagamento.
+ *  - Ao gravar, avisa o MOTORISTA por push no celular ("Pagamento da comanda
+ *    N efetuado com sucesso." — o mesmo texto que ia por WhatsApp). O envio
+ *    corre fora da resposta e nunca lanca: push fora do ar nao pode impedir o
+ *    registro do pagamento.
  */
 export async function payDriverDelivery(args: {
   orderId: string;
@@ -77,15 +79,16 @@ export async function payDriverDelivery(args: {
     revalidatePath("/financeiro/entregas");
 
     // Aviso ao motorista. `void` de proposito: o Financeiro nao espera o
-    // WhatsApp para ver o "Pago" — e o envio ja tem a propria rede de seguranca.
-    void sendWhatsappToDrivers({
-      orderId: order.id,
-      driverId,
-      text: mensagemPagamentoEntrega({
+    // push para ver o "Pago" — e sendPushToUser ja nunca lanca.
+    void sendPushToUser(driverId, {
+      title: "Pagamento de entrega",
+      body: mensagemPagamentoEntrega({
         comandaNumber: order.comandaNumber,
         orderNumber: order.orderNumber,
       }),
-    }).catch((err) => console.error("[whatsapp] aviso de pagamento falhou:", err));
+      url: "/motorista/historico",
+      tag: `driver-payment-${order.id}`,
+    }).catch((err) => console.error("[push] aviso de pagamento falhou:", err));
 
     return actionOk(created);
   } catch (err) {

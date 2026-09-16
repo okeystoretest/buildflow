@@ -1,13 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { publish } from "@/lib/realtime/bus";
 import { sendPushToRole, sendPushToUser } from "@/lib/push";
-import { sendWhatsappToDrivers } from "@/lib/whatsapp";
 import { sendConnectWebhook } from "@/lib/integration/webhook";
 import { toConnectStatus } from "./status";
 
 /**
- * Efeitos de uma mudanca no chamado: tempo real (quadro), aviso ativo
- * (push/WhatsApp) e webhook ao Connect. Fire-and-forget em tudo — aviso nunca
+ * Efeitos de uma mudanca no chamado: tempo real (quadro), aviso ativo (push)
+ * e webhook ao Connect. Fire-and-forget em tudo — aviso nunca
  * derruba a acao que o causou.
  */
 
@@ -19,11 +18,6 @@ export type TransportEventKind =
   | "em_rota"
   | "concluido"
   | "cancelado";
-
-const MSG_CHAMADO_ATRIBUIDO =
-  "Um chamado de transporte foi atribuído a você no Build.Flow. Abra o módulo Motorista para ver os detalhes.";
-const MSG_CHAMADO_ABERTO =
-  "Há um novo chamado de transporte em aberto no Build.Flow. Quem assumir primeiro leva.";
 
 export function afterTransportChange(requestId: string, kind: TransportEventKind): void {
   void (async () => {
@@ -63,9 +57,6 @@ export function afterTransportChange(requestId: string, kind: TransportEventKind
         url: "/motorista/chamados",
         tag: `transport-${r.id}`,
       }).catch((err) => console.error("[push] chamado p/ motorista falhou:", err));
-      void sendWhatsappToDrivers({ driverId: r.driverId, text: MSG_CHAMADO_ATRIBUIDO }).catch(
-        (err) => console.error("[whatsapp] chamado p/ motorista falhou:", err),
-      );
     } else if (kind === "criado" && !r.driverId) {
       void sendPushToRole("MOTORISTA", {
         title: "Chamado de transporte em aberto",
@@ -73,9 +64,6 @@ export function afterTransportChange(requestId: string, kind: TransportEventKind
         url: "/motorista/chamados",
         tag: `transport-${r.id}`,
       }).catch((err) => console.error("[push] chamado aberto falhou:", err));
-      void sendWhatsappToDrivers({ text: MSG_CHAMADO_ABERTO }).catch((err) =>
-        console.error("[whatsapp] chamado aberto falhou:", err),
-      );
     }
 
     // 3) Connect. "criado" nao avisa: quem criou foi o proprio Connect.
