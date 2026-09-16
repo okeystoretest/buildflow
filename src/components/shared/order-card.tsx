@@ -125,10 +125,12 @@ export function OrderCard({
         </div>
 
         {/* Linha 2: cliente. E o dado que mais se procura de relance, entao
-            fica sozinho na linha e ganha a largura toda. */}
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            fica sozinho na linha e ganha a largura toda. Só primeiro e segundo
+            nome, como a vendedora — a BUSCA continua casando com o nome
+            inteiro; o encurtamento é de exibição, não do dado. */}
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground" title={data.customerName}>
           <User className="h-3 w-3 shrink-0" />
-          <span className="min-w-0 truncate">{data.customerName}</span>
+          <span className="min-w-0 truncate">{shortName(data.customerName)}</span>
           {data.customerCode && (
             <span className="font-data shrink-0 rounded bg-secondary px-1 text-[10px] text-foreground/70">
               {data.customerCode}
