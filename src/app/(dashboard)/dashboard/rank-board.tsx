@@ -323,7 +323,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
 
         {/* Tabela de performance por campanha — ocupa apenas as colunas de
             Varejo/Atacado, na linha de baixo. Rola internamente. */}
-        <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3 lg:col-span-2">
+        <div className="flex min-h-0 flex-col rounded-2xl border border-border bg-card p-3 lg:col-span-2">
           <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="text-base font-semibold">Performance na</span>
@@ -382,7 +382,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
 // KPI especial da Meta Geral: mostra meta, realizado do mês e barra de progresso.
 function MetaGeralKpi({ meta, realizado, pct }: { meta: number; realizado: number; pct: number }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card p-3">
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-3">
       <div className="flex items-start justify-between">
         <div className="min-w-0">
           <p className="truncate text-sm text-muted-foreground">Meta Geral</p>
@@ -406,7 +406,7 @@ function Kpi({ icon, iconClass, label, value, sub, subClass }: {
   icon: React.ReactNode; iconClass?: string; label: string; value: string; sub: string; subClass?: string;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card p-3">
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-3">
       <div className="flex items-start justify-between">
         <div className="min-w-0">
           <p className="truncate text-sm text-muted-foreground">{label}</p>
@@ -434,7 +434,7 @@ function RankPanel({ title, rows, showTrophy, compact, hideValue, maxRows = 10, 
   maxRows?: number; className?: string; edicao?: EdicaoCtx;
 }) {
   return (
-    <div className={`flex min-h-0 flex-col rounded-xl border border-border bg-card p-3 ${className ?? ""}`}>
+    <div className={`flex min-h-0 flex-col rounded-2xl border border-border bg-card p-3 ${className ?? ""}`}>
       <p className="mb-1.5 shrink-0 text-base font-semibold lg:text-lg">{title}</p>
       <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${compact ? "justify-start gap-2" : "justify-around gap-0.5"}`}>
         {rows.slice(0, maxRows).map((r, i) => (

@@ -405,7 +405,7 @@ function Column({
 
 function PendingCard({ card, onOpen, onFlag }: { card: FinanceCard; onOpen: () => void; onFlag: () => void }) {
   return (
-    <div className={`card-hover animate-fade-in-up w-full rounded-xl border bg-card p-3 shadow-sm ${
+    <div className={`card-hover animate-fade-in-up w-full rounded-2xl border bg-card p-4 shadow-sm ${
       card.hasActiveIssue ? "border-destructive/50 ring-1 ring-destructive/20" : "border-border hover:border-primary/40 hover:shadow-md"
     }`}>
       {/* Corpo clicavel: abre o modal de auditoria. */}
@@ -473,7 +473,7 @@ function PendingCard({ card, onOpen, onFlag }: { card: FinanceCard; onOpen: () =
 function ProcessedCard({ card }: { card: FinanceCard }) {
   const aprovado = card.outcome === "APROVADO";
   return (
-    <div className="animate-fade-in-up w-full rounded-xl border border-border bg-card p-3 shadow-sm">
+    <div className="card-hover animate-fade-in-up w-full rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="font-data text-sm font-semibold">
           {card.comandaNumber ? `Comanda ${card.comandaNumber}` : `Pedido ${card.orderNumber}`}
@@ -695,7 +695,7 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
   }
 
   return (
-    <div className="animate-fade-in-up w-full rounded-xl border border-sky-400/40 bg-card p-3 shadow-sm">
+    <div className="card-hover animate-fade-in-up w-full rounded-2xl border border-sky-400/40 bg-card p-4 shadow-sm">
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="font-data text-sm font-semibold">{rotuloComanda(card)}</span>
         <span className="font-data text-sm font-semibold">{card.total}</span>

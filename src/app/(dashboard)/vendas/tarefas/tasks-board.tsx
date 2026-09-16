@@ -235,7 +235,7 @@ function TaskItem({
     : null;
 
   return (
-    <div className="card-hover rounded-xl border border-border bg-card p-3 shadow-sm animate-fade-in-up">
+    <div className="card-hover rounded-2xl border border-border bg-card p-4 shadow-sm animate-fade-in-up">
       <div className="mb-1 flex items-start justify-between gap-2">
         <p className="text-sm font-semibold leading-snug">{card.title}</p>
         {canManage && (
