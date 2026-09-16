@@ -15,6 +15,24 @@ RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# VARIAVEIS NEXT_PUBLIC_* SAO DE BUILD, NAO DE RUNTIME
+#
+# O Next inlina `process.env.NEXT_PUBLIC_*` no bundle do navegador durante o
+# `next build`. Configurar a variavel so no painel de runtime do EasyPanel nao
+# chega ao cliente: o `.env` esta no .dockerignore e este estagio nao recebia
+# nada, entao o bundle saia com `undefined`.
+#
+# Consequencia concreta: sem a chave VAPID publica, `registerPush()` no client
+# desistia em silencio, nenhum dispositivo era inscrito e o Web Push nunca
+# chegava ao celular (o PWA em segundo plano nao faz polling; so o push o
+# acorda). O EasyPanel repassa as variaveis do servico como build-args, mas o
+# Dockerfile precisa DECLARA-LAS com ARG para recebe-las. (Se a variavel nao
+# vier, o ENV fica vazio e o client trata como "push desativado" — mesmo
+# comportamento de antes, so que agora por escolha e nao por acidente.)
+ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY
+ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
+
 # Gera o Prisma Client e faz o build (next.config tem output: standalone)
 RUN npx prisma generate
 RUN npm run build

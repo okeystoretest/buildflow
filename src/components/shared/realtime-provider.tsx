@@ -50,10 +50,16 @@ export function RealtimeProvider({ role }: { role: Role }) {
     setMounted(true);
   }, []);
 
-  // Papéis que recebem alerta ativo de novos itens:
+  // Papéis que recebem alerta ativo (pop-up em foco, vindo do polling):
   //  - FINANCEIRO: novo pedido para análise (→ /financeiro)
   //  - MOTORISTA: entrega disponível para coleta (→ /motorista)
   const wantsNotifications = role === "FINANCEIRO" || role === "MOTORISTA";
+
+  // Papéis que recebem Web Push a nível de SO e, portanto, precisam do opt-in
+  // (permissão + inscrição). Inclui VENDAS: o servidor envia push à vendedora
+  // do pedido (sendPushToUser em finance/logistics), mas sem o botão ela nunca
+  // se inscrevia — o push era disparado para uma lista vazia.
+  const receivesPush = wantsNotifications || role === "VENDAS";
 
   // Conteúdo da Web Notification em foco, por papel. O Web Push a nível de SO
   // (via Service Worker) monta o próprio payload no servidor; isto aqui é só o
@@ -84,15 +90,12 @@ export function RealtimeProvider({ role }: { role: Role }) {
       }
       const numero = evt.orderNumber ? `#${evt.orderNumber}` : "novo";
       const cliente = evt.customerName ? ` — ${evt.customerName}` : "";
-      const n = new Notification(notifConfig.title, {
+      void showLocalNotification(notifConfig.title, {
         body: `Pedido ${numero}${cliente} ${notifConfig.verbo}.`,
         tag: `order-${evt.orderId}`,
-        icon: "/icon.svg",
+        icon: "/icon-192.png",
+        data: { url: notifConfig.url },
       });
-      n.onclick = () => {
-        window.focus();
-        window.location.href = notifConfig.url;
-      };
     },
     [wantsNotifications, notifConfig],
   );
@@ -164,8 +167,38 @@ export function RealtimeProvider({ role }: { role: Role }) {
     };
   }, [scheduleRefresh, maybeNotify]);
 
-  if (!mounted || !wantsNotifications) return null;
+  if (!mounted || !receivesPush) return null;
   return <NotificationOptIn />;
+}
+
+/**
+ * Exibe a notificação em foco. Prefere `registration.showNotification` do
+ * Service Worker: o construtor `new Notification()` em contexto de página lança
+ * "Illegal constructor" no Chrome Android (e não existe no PWA do iOS), então
+ * no celular a notificação simplesmente não aparecia. Com SW registrado, o
+ * clique é tratado pelo `notificationclick` do sw.js (lê `data.url`). Sem SW
+ * (desktop sem push configurado), cai no construtor clássico.
+ */
+async function showLocalNotification(
+  title: string,
+  options: NotificationOptions & { data: { url: string } },
+): Promise<void> {
+  try {
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.showNotification(title, options);
+        return;
+      }
+    }
+    const n = new Notification(title, options);
+    n.onclick = () => {
+      window.focus();
+      window.location.href = options.data.url;
+    };
+  } catch (err) {
+    console.warn("[notificação] não foi possível exibir:", err);
+  }
 }
 
 /**
@@ -192,18 +225,19 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
  * Silencioso se indisponível (cai na Web Notification em foco).
  */
 async function registerPush(): Promise<void> {
-  const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  if (
-    typeof window === "undefined" ||
-    !("serviceWorker" in navigator) ||
-    !("PushManager" in window) ||
-    !vapid
-  ) {
-    return;
-  }
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
   try {
+    // O SW e registrado mesmo sem chave VAPID: e ele quem exibe a notificacao
+    // em foco no celular (ver showLocalNotification). So a INSCRICAO de push
+    // depende da chave.
     const reg = await navigator.serviceWorker.register("/sw.js");
     await navigator.serviceWorker.ready;
+
+    const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!("PushManager" in window) || !vapid) {
+      if (!vapid) console.warn("[push] NEXT_PUBLIC_VAPID_PUBLIC_KEY ausente no build — Web Push desativado.");
+      return;
+    }
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       sub = await reg.pushManager.subscribe({
@@ -222,15 +256,73 @@ async function registerPush(): Promise<void> {
   }
 }
 
+/**
+ * iPhone/iPad no Safari "solto" (nao instalado): a API de notificacao nem
+ * existe. O iOS (16.4+) so libera Web Push para app adicionado a Tela de
+ * Inicio — entao, em vez de esconder o botao e deixar o usuario sem saber por
+ * que nao recebe nada, mostramos a instrucao.
+ */
+function isIosBrowserNotInstalled(): boolean {
+  const ua = navigator.userAgent;
+  const ios = /iPhone|iPad|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in document);
+  if (!ios) return false;
+  const standalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return !standalone;
+}
+
+const IOS_HINT_KEY = "bf-ios-push-hint-dismissed";
+
 function NotificationOptIn() {
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">(() =>
     typeof Notification === "undefined" ? "unsupported" : Notification.permission,
   );
+  const [iosHint, setIosHint] = useState(false);
 
   // Permissao ja concedida antes: garante SW + inscricao (idempotente).
   useEffect(() => {
     if (perm === "granted") void registerPush();
   }, [perm]);
+
+  useEffect(() => {
+    if (perm !== "unsupported" || !isIosBrowserNotInstalled()) return;
+    try {
+      if (localStorage.getItem(IOS_HINT_KEY) === "1") return;
+    } catch {
+      /* sem storage: mostra mesmo assim */
+    }
+    setIosHint(true);
+  }, [perm]);
+
+  if (iosHint) {
+    const dismiss = () => {
+      setIosHint(false);
+      try {
+        localStorage.setItem(IOS_HINT_KEY, "1");
+      } catch {
+        /* ignore */
+      }
+    };
+    return (
+      <div
+        role="status"
+        className="fixed bottom-4 left-4 right-4 z-50 flex items-start gap-3 rounded-2xl border border-border bg-card p-4 text-sm shadow-lg sm:left-auto sm:max-w-sm"
+      >
+        <Bell className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">Alertas no iPhone</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Para receber alertas, toque em Compartilhar e em &ldquo;Adicionar à Tela de Início&rdquo;, depois
+            abra o Build.Flow por lá e ative os alertas.
+          </p>
+        </div>
+        <button type="button" onClick={dismiss} className="text-xs text-muted-foreground hover:text-foreground" aria-label="Fechar">
+          ✕
+        </button>
+      </div>
+    );
+  }
 
   if (perm === "unsupported" || perm === "granted" || perm === "denied") {
     return null;
@@ -250,10 +342,10 @@ function NotificationOptIn() {
     <button
       onClick={ask}
       className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg transition hover:opacity-90"
-      aria-label="Ativar notificações de novos pedidos"
+      aria-label="Ativar alertas do Build.Flow"
     >
       <Bell className="h-4 w-4" />
-      Ativar alertas de novos pedidos
+      Ativar alertas
     </button>
   );
 }
