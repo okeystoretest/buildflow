@@ -52,7 +52,7 @@ export function StorePicker({
             <button
               key={s.id}
               onClick={() => go(s.id)}
-              className="card-hover flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-primary hover:bg-primary/5"
+              className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary hover:bg-primary/5"
             >
               <StoreIcon className="h-5 w-5 shrink-0 text-primary" />
               <span>

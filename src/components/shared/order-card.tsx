@@ -94,7 +94,7 @@ export function OrderCard({
     <div
       style={style}
       className={cn(
-        "card-hover group w-full rounded-2xl border p-4 text-left shadow-sm animate-fade-in-up",
+        "card-hover group w-full rounded-xl border p-3 text-left shadow-sm animate-fade-in-up",
         preenchido ? null : "bg-card",
         alerta
           ? "border-destructive/50 ring-1 ring-destructive/20 hover:shadow-md hover:shadow-destructive/10"
