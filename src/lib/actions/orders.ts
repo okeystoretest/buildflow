@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { canInteractWithOrder, INTERACTION_DENIED_MSG } from "@/lib/permissions";
-import { createOrderSchema, isTroca, comprovanteExigido, trocaPulaFinanceiro } from "@/lib/validations/order";
+import {
+  createOrderSchema,
+  isTroca,
+  comprovanteExigido,
+  trocaPulaFinanceiro,
+  trocaValorTravado,
+  TROCA_VALOR_TRAVADO_MSG,
+} from "@/lib/validations/order";
 import { processAndSaveImage, saveDocument, isPdfDataUrl } from "@/lib/image";
 import { newTrackingToken } from "@/lib/tracking-auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
@@ -311,7 +318,11 @@ export async function updateOrder(args: {
     const session = await requireRoleAction(["GESTAO", "VENDAS", "FINANCEIRO"]);
     const order = await prisma.order.findUnique({
       where: { id: args.id },
-      include: { _count: { select: { returns: true } } },
+      include: {
+        _count: { select: { returns: true, paymentProofs: true } },
+        orderType: { select: { name: true } },
+        operation: { select: { name: true } },
+      },
     });
     if (!order) return actionError("Pedido não encontrado.");
 
@@ -331,6 +342,48 @@ export async function updateOrder(args: {
     const temDevolucao = order._count.returns > 0;
     if (!(orderValue > 0) && !(temDevolucao && orderValue === 0)) {
       return actionError("Valor do pedido inválido.");
+    }
+
+    // Troca aprovada sem valor: nao aceita valor pela edicao (ver
+    // trocaValorTravado). Avalia o pedido como esta no banco — trocar o TIPO
+    // no mesmo envio nao escapa da trava.
+    if (
+      orderValue > 0 &&
+      trocaValorTravado({
+        orderTypeName: order.orderType?.name,
+        status: order.status,
+        orderValue: Number(order.orderValue),
+        hasReturns: temDevolucao,
+      })
+    ) {
+      return actionError(TROCA_VALOR_TRAVADO_MSG);
+    }
+
+    // Comprovante apos a edicao: mesma regra da criacao (comprovanteExigido),
+    // avaliada sobre o estado FINAL — tipo/operacao/valor/observacoes que vao
+    // ficar gravados e a quantidade de comprovantes depois de remover/anexar.
+    const finalTypeName = args.orderTypeId && args.orderTypeId !== order.orderTypeId
+      ? (await prisma.orderType.findUnique({ where: { id: args.orderTypeId }, select: { name: true } }))?.name
+      : order.orderType?.name;
+    const finalOperationName = args.operationId && args.operationId !== order.operationId
+      ? (await prisma.operation.findUnique({ where: { id: args.operationId }, select: { name: true } }))?.name
+      : order.operation?.name;
+    const finalPaymentNotes = args.paymentNotes === undefined ? order.paymentNotes : args.paymentNotes;
+    const removidos = args.removeProofIds?.length
+      ? await prisma.orderPaymentProof.count({ where: { id: { in: args.removeProofIds }, orderId: order.id } })
+      : 0;
+    const novosValidos = (args.paymentProofsBase64 ?? []).filter(Boolean).length;
+    const comprovantesFinais = order._count.paymentProofs - removidos + novosValidos;
+    if (
+      comprovanteExigido({
+        orderTypeName: finalTypeName,
+        operationName: finalOperationName,
+        orderValue,
+        paymentNotes: finalPaymentNotes,
+      }) &&
+      comprovantesFinais <= 0
+    ) {
+      return actionError("Anexe o comprovante de pagamento ou preencha as Observações de Pagamento.");
     }
 
     // Campanha: se a lista de itens veio no payload, ela é a fonte de verdade.

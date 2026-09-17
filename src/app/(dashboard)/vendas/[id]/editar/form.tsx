@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CustomerCombobox, type CustomerOpt } from "@/components/shared/customer-combobox";
 import { prepareProofFile } from "@/lib/client-image";
-import { isAnexoDispensavel, isAnexoDispensavelPorContexto } from "@/lib/validations/order";
+import { isAnexoDispensavel, isTroca, comprovanteExigido, trocaValorTravado, TROCA_VALOR_TRAVADO_MSG } from "@/lib/validations/order";
 import { formatBRL } from "@/lib/utils";
 import { CampaignItemRow, type CampaignItemData } from "@/components/shared/campaign-item-row";
 
@@ -24,6 +24,8 @@ interface OrderData {
   id: string;
   orderNumber: string;
   customerId: string; storeId: string; originStoreId: string; orderTypeId: string; operationId: string;
+  // Status atual: a trava de valor da Troca so vale fora de EM_ANALISE.
+  status: string;
   paymentMethodId: string; shippingMethodId: string; bankId: string;
   pieceCount: number;
   orderValue: number; freight: number; notes: string; paymentNotes: string;
@@ -163,10 +165,22 @@ export function EditarPedidoForm({
   const total = (orderValue || 0) + (freight || 0);
   const orderTypeName = orderTypes.find((t) => t.id === orderTypeId)?.name ?? "";
   const operationName = operations.find((o) => o.id === operationId)?.name ?? "";
-  // Anexo opcional por TIPO (Troca/Doação/Transferência) OU OPERAÇÃO
-  // (Funcionário Interno). Valor segue só o TIPO.
-  const anexoDispensavel = isAnexoDispensavelPorContexto({ orderTypeName, operationName });
+  // Comprovante: mesma regra do servidor (comprovanteExigido) — dispensado
+  // por tipo/operacao; Troca COM valor exige, salvo com "Observacoes de
+  // Pagamento" preenchida. Valor opcional segue so o TIPO.
+  const exigeComprovante = comprovanteExigido({ orderTypeName, operationName, orderValue, paymentNotes });
+  const anexoDispensavel = !exigeComprovante;
   const valorDispensavel = isAnexoDispensavel(orderTypeName);
+  // Troca que nasceu aprovada sem valor: o campo de valor fica travado (a
+  // regra e avaliada sobre o pedido COMO ESTA gravado, por isso usa o tipo
+  // original e nao o selecionado na tela).
+  const tipoOriginalName = orderTypes.find((t) => t.id === order.orderTypeId)?.name ?? "";
+  const valorTravado = trocaValorTravado({
+    orderTypeName: tipoOriginalName,
+    status: order.status,
+    orderValue: order.orderValue,
+    hasReturns: order.hasReturns,
+  });
   const campaignOk =
     !inCampaign ||
     (campItems.length > 0 &&
@@ -207,7 +221,8 @@ export function EditarPedidoForm({
 
   // Valor obrigatório (> 0), EXCETO Troca e Doação — e exceto pedido com
   // devolução integral, que zerou a mercadoria de propósito.
-  const valorOk = valorDispensavel || orderValue > 0 || (order.hasReturns && orderValue === 0);
+  const valorOk = (valorDispensavel || orderValue > 0 || (order.hasReturns && orderValue === 0))
+    && !(valorTravado && orderValue > 0);
   const podeSalvar = orderNumber && storeId && originStoreId && orderTypeId && operationId && customerId
     && shippingMethodId && valorOk && campaignOk && anexoOk && addressOk;
 
@@ -288,7 +303,17 @@ export function EditarPedidoForm({
         <CustomerCombobox label="Cliente" value={customerId} onChange={setCustomerId} onSelect={onCustomerSelect} initialSelected={selectedCustomer} />
         <div className="space-y-1.5">
           <Label>Valor Total do Pedido {valorDispensavel ? "(opcional)" : "*"}</Label>
-          <Input type="number" min={0} step="0.01" value={orderValue || ""} onChange={(e) => setOrderValue(Number(e.target.value))} placeholder="0,00" />
+          <Input
+            type="number" min={0} step="0.01"
+            value={orderValue || ""}
+            onChange={(e) => setOrderValue(Number(e.target.value))}
+            placeholder="0,00"
+            disabled={valorTravado}
+            title={valorTravado ? TROCA_VALOR_TRAVADO_MSG : undefined}
+          />
+          {valorTravado && (
+            <p className="text-xs text-muted-foreground">{TROCA_VALOR_TRAVADO_MSG}</p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label>Valor do Frete</Label>
@@ -410,7 +435,11 @@ export function EditarPedidoForm({
         )}
 
         <p className="text-xs text-muted-foreground">
-          {anexoDispensavel ? "Anexo não é exigido para este tipo de pedido." : "Ao menos 1 comprovante obrigatório."}{" "}
+          {anexoDispensavel
+            ? "Anexo não é exigido para este tipo de pedido."
+            : isTroca(orderTypeName)
+              ? "Troca com valor: anexe ao menos 1 comprovante ou preencha as Observações de Pagamento."
+              : "Ao menos 1 comprovante obrigatório."}{" "}
           <span className="text-foreground">{totalProofs}/{MAX_PROOFS} anexados.</span>
           {proofBusy && " Processando..."}
         </p>

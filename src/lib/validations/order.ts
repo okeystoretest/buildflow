@@ -118,6 +118,30 @@ export function trocaPulaFinanceiro(args: {
   return isTroca(args.orderTypeName) && !(args.orderValue > 0);
 }
 
+// Trava de EDICAO. Uma Troca criada SEM valor nasce aprovada (pulou o
+// Financeiro) e ja pode estar na Logistica com entrega e comanda. Se a edicao
+// pudesse colocar valor depois, a regra "Troca com valor passa pelo
+// Financeiro" seria contornada. Entao: Troca fora de EM_ANALISE, com valor
+// zero e sem devolucao registrada, nao aceita valor — cria-se um novo pedido.
+// (Valor zero POR devolucao integral nao conta: ali o pedido ja passou pelo
+// fluxo com valor.) Os argumentos descrevem o pedido COMO ESTA NO BANCO.
+export function trocaValorTravado(args: {
+  orderTypeName?: string | null;
+  status: string;
+  orderValue: number;
+  hasReturns: boolean;
+}): boolean {
+  return (
+    isTroca(args.orderTypeName) &&
+    args.status !== "EM_ANALISE" &&
+    !(args.orderValue > 0) &&
+    !args.hasReturns
+  );
+}
+
+export const TROCA_VALOR_TRAVADO_MSG =
+  "Esta Troca foi aprovada sem valor. Para registrar uma Troca com valor, crie um novo pedido.";
+
 // "Doação" PASSA pelo Financeiro normalmente, mas dispensa comprovante e Nota
 // Fiscal (e, na aprovação, também CNPJ/forma/banco). O tipo cadastrado é
 // exatamente "9 - Doação"; comparação tolerante a acentos/caixa/espaços.
