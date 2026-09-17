@@ -72,8 +72,9 @@ export interface RankData {
  *  - Fluxo PADRAO: o Financeiro aprova, gera a comanda e manda para
  *    AGUARDANDO_IMPRESSAO.
  *  - Fluxo SIMPLIFICADO: o Financeiro marca "Pago" -> PAGO.
- *  - TROCA ("4 - Troca"): dispensa o Financeiro e NASCE aprovada — ja entra em
- *    AGUARDANDO_IMPRESSAO (loja padrao) ou PAGO (loja simplificada).
+ *  - TROCA ("4 - Troca") SEM valor: dispensa o Financeiro e NASCE aprovada — ja
+ *    entra em AGUARDANDO_IMPRESSAO (loja padrao) ou PAGO (loja simplificada).
+ *    Troca COM valor passa pelo Financeiro como os demais.
  *
  * POR QUE MUDOU: o criterio anterior dependia da loja — "comandaNumber != null"
  * para as lojas de fluxo padrao, "status PAGO/EMBALADO/ENTREGUE/CONCLUIDO" para

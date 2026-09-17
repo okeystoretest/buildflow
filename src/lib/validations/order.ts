@@ -103,6 +103,16 @@ export function isTroca(orderTypeName?: string | null): boolean {
   return (orderTypeName ?? "").trim().toLowerCase() === "4 - troca";
 }
 
+// Troca SEM valor pula o Financeiro (nasce aprovada). Troca COM "Valor Total
+// do Pedido" preenchido (> 0) e uma venda de fato e passa pela Analise de
+// Pedidos como qualquer outro tipo. Qualquer outro tipo nunca pula.
+export function trocaPulaFinanceiro(args: {
+  orderTypeName?: string | null;
+  orderValue: number;
+}): boolean {
+  return isTroca(args.orderTypeName) && !(args.orderValue > 0);
+}
+
 // "Doação" PASSA pelo Financeiro normalmente, mas dispensa comprovante e Nota
 // Fiscal (e, na aprovação, também CNPJ/forma/banco). O tipo cadastrado é
 // exatamente "9 - Doação"; comparação tolerante a acentos/caixa/espaços.

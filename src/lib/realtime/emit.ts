@@ -11,8 +11,8 @@ import { entraNoQuadroDoMotorista } from "@/lib/driver-delivery";
 /**
  * Pedido criado. `notifyFinance` = true dispara a Web Notification para o
  * setor FINANCEIRO. Regra de negocio (decidida no produto): so notificamos o
- * Financeiro quando o pedido entra em EM_ANALISE (aprovacao financeira). Trocas,
- * que pulam o Financeiro, entram com notifyFinance=false.
+ * Financeiro quando o pedido entra em EM_ANALISE (aprovacao financeira). Trocas
+ * sem valor, que pulam o Financeiro, entram com notifyFinance=false.
  */
 export function emitOrderCreated(args: {
   orderId: string;

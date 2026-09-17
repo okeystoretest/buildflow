@@ -11,7 +11,7 @@ import { getEventsSince } from "@/lib/realtime/bus";
  * proxy, sem conexao longa.
  *
  * `notify` por evento: true so quando o papel da sessao esta em notifyRoles
- * (ex.: FINANCEIRO em pedido novo nao-Troca). Reatividade (refresh) vale sempre.
+ * (ex.: FINANCEIRO em pedido novo que entra em EM_ANALISE). Reatividade (refresh) vale sempre.
  */
 
 export const runtime = "nodejs";

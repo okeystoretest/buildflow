@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { canInteractWithOrder, INTERACTION_DENIED_MSG } from "@/lib/permissions";
-import { createOrderSchema, isTroca, isAnexoDispensavelPorContexto } from "@/lib/validations/order";
+import { createOrderSchema, isTroca, isAnexoDispensavelPorContexto, trocaPulaFinanceiro } from "@/lib/validations/order";
 import { processAndSaveImage, saveDocument, isPdfDataUrl } from "@/lib/image";
 import { newTrackingToken } from "@/lib/tracking-auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
@@ -33,16 +33,22 @@ export async function createOrder(
     const total = orderValue.add(freight);
 
     // Tipo do pedido (fonte confiavel = banco, nao o payload da tela).
-    // "Troca" ignora a Aprovacao Financeira. Status inicial:
+    // "Troca" SEM valor ignora a Aprovacao Financeira. Status inicial:
     //  - Loja de fluxo PADRAO: entra ja em AGUARDANDO_IMPRESSAO.
     //  - Loja de fluxo SIMPLIFICADO (PAGO->EMBALADO->ENTREGUE): entra em PAGO,
     //    o 1o status do fluxo curto (AGUARDANDO_IMPRESSAO nao existe la).
+    // "Troca" COM valor informado passa pelo Financeiro (EM_ANALISE) como os
+    // demais tipos — a isencao de anexo continua valendo, so o desvio do
+    // Financeiro cai.
     const orderType = await prisma.orderType.findUnique({
       where: { id: input.orderTypeId },
       select: { name: true },
     });
     if (!orderType) return actionError("Tipo de pedido invalido.");
-    const troca = isTroca(orderType.name);
+    const pulaFinanceiro = trocaPulaFinanceiro({
+      orderTypeName: orderType.name,
+      orderValue: input.orderValue,
+    });
 
     // Nome da operação (fonte confiável = banco) para a regra de anexo por
     // operação ("20 - Venda para Funcionário Interno").
@@ -71,7 +77,7 @@ export async function createOrder(
       simplifiedStore = os?.simplifiedFlow === true;
     }
 
-    const initialStatus = troca
+    const initialStatus = pulaFinanceiro
       ? simplifiedStore
         ? "PAGO"
         : "AGUARDANDO_IMPRESSAO"
@@ -177,7 +183,11 @@ export async function createOrder(
           create: {
             status: initialStatus,
             changedBy: session.userId,
-            note: troca ? "Pedido de Troca criado (sem aprovacao financeira)" : "Pedido criado",
+            note: pulaFinanceiro
+              ? "Pedido de Troca criado (sem aprovacao financeira)"
+              : isTroca(orderType.name)
+                ? "Pedido de Troca com valor criado (aguardando Financeiro)"
+                : "Pedido criado",
           },
         },
       },
@@ -230,8 +240,8 @@ export async function createOrder(
 
     // Tempo real: publica a criacao. Notifica o FINANCEIRO com alerta ativo
     // SOMENTE quando o pedido entra em EM_ANALISE (aprovacao financeira).
-    // Trocas pulam o Financeiro (AGUARDANDO_IMPRESSAO/PAGO) => sem alerta ativo,
-    // mas o board de quem visualiza ainda reage.
+    // Trocas SEM valor pulam o Financeiro (AGUARDANDO_IMPRESSAO/PAGO) => sem
+    // alerta ativo, mas o board de quem visualiza ainda reage.
     const customer = await prisma.customer.findUnique({
       where: { id: input.customerId },
       select: { name: true },
