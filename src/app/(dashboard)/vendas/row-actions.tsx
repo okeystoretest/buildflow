@@ -35,6 +35,11 @@ function mensagemRastreio(url: string, customerCode: string) {
  * Um divisor vertical separa os grupos (link + devolucao | editar/excluir),
  * no mesmo tom das barras entre as colunas da tabela — sem ele a fileira de
  * botoes lia como um bloco so, diferente do resto da linha.
+ *
+ * Cores por natureza da acao: "Copiar link" em azul (brand, tom de link/
+ * compartilhamento); "Fazer devolucao" em ambar (atencao — a acao abate valor
+ * do pedido), a mesma familia dos alertas do kanban. Ambos ficam em outline
+ * tingido para nao competir com Pendencia/Excluir (destructive solido).
  */
 export function VendaRowActions({
   orderId,
@@ -133,13 +138,13 @@ export function VendaRowActions({
         <Button
           variant="outline"
           size="sm"
-          className="h-8"
+          className="h-8 border-brand/40 text-brand hover:bg-brand-soft hover:text-brand dark:hover:bg-brand/15"
           title="Copiar link"
           onClick={copyLink}
           disabled={pending}
         >
           {copied ? (
-            <Check className="mr-1 h-4 w-4 text-vendas" />
+            <Check className="mr-1 h-4 w-4 text-brand" />
           ) : (
             <Link2 className="mr-1 h-4 w-4" />
           )}
@@ -149,7 +154,7 @@ export function VendaRowActions({
           <Button
             variant="outline"
             size="sm"
-            className="h-8"
+            className="h-8 border-amber-500/50 text-amber-700 hover:bg-amber-500/15 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
             title="Registrar devolução de peças"
             onClick={() => setReturning(true)}
             disabled={pending}
