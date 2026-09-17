@@ -32,9 +32,9 @@ function mensagemRastreio(url: string, customerCode: string) {
  *   a pessoa pode ver, e a action reconfere o dono no servidor. Some em pedido
  *   cancelado/estornado, onde a conta ja foi acertada pelo Financeiro.
  *
- * Um divisor vertical separa os grupos (link + devolucao | editar/excluir),
- * no mesmo tom das barras entre as colunas da tabela — sem ele a fileira de
- * botoes lia como um bloco so, diferente do resto da linha.
+ * Barras verticais separam CADA acao (pendencia | link | devolucao | editar |
+ * excluir), na altura toda da fileira e no mesmo tom das barras entre as
+ * colunas da tabela — a coluna de acoes segue a mesma grade do resto da linha.
  *
  * Cores por natureza da acao: "Copiar link" em azul (brand, tom de link/
  * compartilhamento); "Fazer devolucao" em ambar (atencao — a acao abate valor
@@ -133,6 +133,7 @@ export function VendaRowActions({
             <AlertTriangle className="mr-1 h-4 w-4" /> Pendência
           </Button>
         )}
+        {issue && <Divisor />}
         {/* Rotulo visivel (nao so o icone): a acao mais usada da linha nao
             depende de o usuario passar o mouse para descobrir o que faz. */}
         <Button
@@ -151,19 +152,20 @@ export function VendaRowActions({
           Copiar link
         </Button>
         {canReturn && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 border-amber-500/50 text-amber-700 hover:bg-amber-500/15 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
-            title="Registrar devolução de peças"
-            onClick={() => setReturning(true)}
-            disabled={pending}
-          >
-            <PackageMinus className="mr-1 h-4 w-4" /> Fazer devolução
-          </Button>
+          <>
+            <Divisor />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 border-amber-500/50 text-amber-700 hover:bg-amber-500/15 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+              title="Registrar devolução de peças"
+              onClick={() => setReturning(true)}
+              disabled={pending}
+            >
+              <PackageMinus className="mr-1 h-4 w-4" /> Fazer devolução
+            </Button>
+          </>
         )}
-        {/* Um unico divisor: as acoes "de contato/estoque" (link, devolucao)
-            ficam de um lado; edicao/exclusao do pedido, do outro. */}
         <Divisor />
         <Button asChild variant="outline" size="icon" className="h-8 w-8" title="Editar pedido">
           <Link href={`/vendas/${orderId}/editar`}>
@@ -171,15 +173,18 @@ export function VendaRowActions({
           </Link>
         </Button>
         {canDelete && (
-          <Button
-            variant="destructive"
-            size="icon"
-            className="h-8 w-8"
-            title="Excluir pedido"
-            onClick={() => setConfirming(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <>
+            <Divisor />
+            <Button
+              variant="destructive"
+              size="icon"
+              className="h-8 w-8"
+              title="Excluir pedido"
+              onClick={() => setConfirming(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </>
         )}
       </div>
 
@@ -263,10 +268,11 @@ export function VendaRowActions({
   );
 }
 
-// Barra de separacao entre os grupos de acoes da linha (mesma cor das bordas
-// da tabela). aria-hidden: e so visual, o leitor de tela nao precisa dela.
+// Barra de separacao entre as acoes da linha (mesma cor das bordas da tabela).
+// self-stretch: ocupa a altura toda da fileira, como as barras entre colunas.
+// aria-hidden: e so visual, o leitor de tela nao precisa dela.
 function Divisor() {
-  return <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-border" />;
+  return <span aria-hidden className="mx-0.5 w-px shrink-0 self-stretch bg-border" />;
 }
 
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
