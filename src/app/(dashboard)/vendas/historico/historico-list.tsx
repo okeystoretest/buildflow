@@ -49,7 +49,7 @@ export interface HistoricoItem {
 // `canDelete`: quando true, exibe a ação "Excluir" (remoção DEFINITIVA do pedido
 // no banco). Restrito aos perfis GESTAO e FINANCEIRO — quem chama decide pela
 // sessão, e a action `deleteHistoryOrder` reconfere o papel no servidor.
-// `canReturn`: quando true, exibe "Devoluções" — o mesmo formulário da tela de
+// `canReturn`: quando true, exibe "Fazer devolução" — o mesmo formulário da tela de
 // Vendas, para peças devolvidas depois de o pedido ter sido concluído. A
 // listagem já é restrita ao que a pessoa pode ver; a action reconfere o dono.
 export function HistoricoList({
@@ -206,7 +206,7 @@ function HistoricoRow({
                 <p className="font-medium">Devoluções:</p>
                 {podeDevolver && (
                   <Button variant="outline" size="sm" onClick={() => setReturning(true)}>
-                    <PackageMinus className="h-3.5 w-3.5" /> Devoluções
+                    <PackageMinus className="h-3.5 w-3.5" /> Fazer devolução
                   </Button>
                 )}
               </div>

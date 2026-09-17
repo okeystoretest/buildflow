@@ -27,13 +27,13 @@ function mensagemRastreio(url: string, customerCode: string) {
  * - EXCLUIR: GESTAO e FINANCEIRO (a permissao real e checada em deleteOrder).
  * - PENDENCIA: se o Financeiro sinalizou um problema ativo, mostra o botao
  *   "Pendência" que abre o detalhe com o texto e o botao "Resolvido".
- * - DEVOLUCOES: abre o formulario de pecas devolvidas (referencia, quantidade,
+ * - FAZER DEVOLUCAO: abre o formulario de pecas devolvidas (referencia, quantidade,
  *   valor). A soma sai do valor do pedido; a lista e restrita aos pedidos que
  *   a pessoa pode ver, e a action reconfere o dono no servidor. Some em pedido
  *   cancelado/estornado, onde a conta ja foi acertada pelo Financeiro.
  *
- * Divisores verticais separam os grupos (link | devolucoes | editar/excluir),
- * no mesmo tom das barras entre as colunas da tabela — sem eles a fileira de
+ * Um divisor vertical separa os grupos (link + devolucao | editar/excluir),
+ * no mesmo tom das barras entre as colunas da tabela — sem ele a fileira de
  * botoes lia como um bloco so, diferente do resto da linha.
  */
 export function VendaRowActions({
@@ -145,22 +145,21 @@ export function VendaRowActions({
           )}
           Copiar link
         </Button>
-        <Divisor />
         {canReturn && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8"
-              title="Registrar devolução de peças"
-              onClick={() => setReturning(true)}
-              disabled={pending}
-            >
-              <PackageMinus className="mr-1 h-4 w-4" /> Devoluções
-            </Button>
-            <Divisor />
-          </>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            title="Registrar devolução de peças"
+            onClick={() => setReturning(true)}
+            disabled={pending}
+          >
+            <PackageMinus className="mr-1 h-4 w-4" /> Fazer devolução
+          </Button>
         )}
+        {/* Um unico divisor: as acoes "de contato/estoque" (link, devolucao)
+            ficam de um lado; edicao/exclusao do pedido, do outro. */}
+        <Divisor />
         <Button asChild variant="outline" size="icon" className="h-8 w-8" title="Editar pedido">
           <Link href={`/vendas/${orderId}/editar`}>
             <Pencil className="h-4 w-4" />
