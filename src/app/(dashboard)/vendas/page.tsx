@@ -71,7 +71,7 @@ export default async function VendasPage({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-vendas">Vendas</h1>
         <div className="flex gap-2">
-          <Button asChild variant="outline"><Link href="/vendas/clientes"><Users className="h-4 w-4" /> Cadastro de Clientes</Link></Button>
+          <Button asChild variant="outline"><Link href="/vendas/clientes"><Users className="h-4 w-4" /> Cadastrar Cliente</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/excursoes"><MapPin className="h-4 w-4" /> Cadastrar Excursão</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/tarefas"><ListTodo className="h-4 w-4" /> Tarefas Diárias</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/relatorio-campanha"><BarChart3 className="h-4 w-4" /> Relatório de Campanha</Link></Button>
