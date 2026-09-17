@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { CustomerCombobox } from "@/components/shared/customer-combobox";
 import { formatBRL } from "@/lib/utils";
 import { prepareProofFile } from "@/lib/client-image";
-import { isAnexoDispensavel, isAnexoDispensavelPorContexto, isTroca, trocaPulaFinanceiro } from "@/lib/validations/order";
+import { isAnexoDispensavel, comprovanteExigido, isTroca, trocaPulaFinanceiro } from "@/lib/validations/order";
 import { CampaignItemRow } from "@/components/shared/campaign-item-row";
 
 interface Opt { id: string; name: string; }
@@ -165,9 +165,12 @@ export function NovoPedidoForm({
   // Anexo (comprovante) e valor dispensados na Troca e na Doação.
   const orderTypeName = orderTypes.find((t) => t.id === orderTypeId)?.name ?? "";
   const operationName = operations.find((o) => o.id === operationId)?.name ?? "";
-  // Anexo (comprovante/NF) opcional por TIPO (Troca/Doação/Transferência) ou
-  // por OPERAÇÃO ("20 - Venda para Funcionário Interno").
-  const anexoDispensavel = isAnexoDispensavelPorContexto({ orderTypeName, operationName });
+  // Comprovante: dispensado por TIPO (Troca/Doação/Transferência) ou por
+  // OPERAÇÃO ("20 - Venda para Funcionário Interno"). Troca COM valor volta a
+  // exigir, salvo se "Observações de Pagamento" estiver preenchida — a regra
+  // e a mesma do servidor (comprovanteExigido).
+  const exigeComprovante = comprovanteExigido({ orderTypeName, operationName, orderValue, paymentNotes });
+  const anexoDispensavel = !exigeComprovante;
   // Valor obrigatório segue só o TIPO (Troca/Doação); Funcionário Interno é
   // venda real e mantém o valor exigido.
   const valorDispensavel = isAnexoDispensavel(orderTypeName);
@@ -213,7 +216,7 @@ export function NovoPedidoForm({
     !inCampaign ||
     (campItems.length > 0 &&
       campItems.every((it) => it.campaignId && it.reference.trim() && it.quantity > 0));
-  // Anexo obrigatório (ao menos 1), EXCETO Troca e Doação.
+  // Anexo obrigatório (ao menos 1) conforme comprovanteExigido().
   const temAnexo = proofs.length > 0;
   const anexoOk = anexoDispensavel || temAnexo;
   // Valor obrigatório (> 0), EXCETO Troca e Doação.
@@ -414,7 +417,9 @@ export function NovoPedidoForm({
         <p className="text-xs text-muted-foreground">
           {anexoDispensavel
             ? "Anexo não é exigido para este tipo de pedido."
-            : "Envio de ao menos 1 comprovante obrigatório."}{" "}
+            : isTroca(orderTypeName)
+              ? "Troca com valor: anexe ao menos 1 comprovante ou preencha as Observações de Pagamento."
+              : "Envio de ao menos 1 comprovante obrigatório."}{" "}
           <span className="text-foreground">{proofs.length}/{MAX_PROOFS} anexados.</span>
           {proofBusy && " Processando..."}
         </p>

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction, getActorContext } from "@/lib/auth";
 import { canInteractWithOrder, INTERACTION_DENIED_MSG } from "@/lib/permissions";
-import { createOrderSchema, isTroca, isAnexoDispensavelPorContexto, trocaPulaFinanceiro } from "@/lib/validations/order";
+import { createOrderSchema, isTroca, comprovanteExigido, trocaPulaFinanceiro } from "@/lib/validations/order";
 import { processAndSaveImage, saveDocument, isPdfDataUrl } from "@/lib/image";
 import { newTrackingToken } from "@/lib/tracking-auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
@@ -57,14 +57,17 @@ export async function createOrder(
       select: { name: true },
     });
 
-    // Anexo (comprovante) opcional por TIPO (Troca/Doação/Transferência) OU por
-    // OPERAÇÃO (Funcionário Interno). Fora desses casos, ao menos 1 comprovante.
-    const anexoDispensavel = isAnexoDispensavelPorContexto({
+    // Comprovante: dispensado por TIPO (Troca/Doação/Transferência) ou por
+    // OPERAÇÃO (Funcionário Interno). Troca COM valor exige comprovante, salvo
+    // se a vendedora preencheu "Observações de Pagamento". Nomes vêm do banco.
+    const exigeComprovante = comprovanteExigido({
       orderTypeName: orderType.name,
       operationName: operation?.name,
+      orderValue: input.orderValue,
+      paymentNotes: input.paymentNotes,
     });
-    if (!anexoDispensavel && (input.paymentProofsBase64 ?? []).length === 0) {
-      return actionError("Anexe o comprovante de pagamento.");
+    if (exigeComprovante && (input.paymentProofsBase64 ?? []).length === 0) {
+      return actionError("Anexe o comprovante de pagamento ou preencha as Observações de Pagamento.");
     }
 
     // Descobre se a Loja de Origem escolhida usa fluxo simplificado.

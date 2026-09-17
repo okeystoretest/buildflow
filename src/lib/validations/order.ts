@@ -75,13 +75,18 @@ export const createOrderSchema = z.object({
   // dispensada na Troca.
   paymentProofsBase64: z.array(z.string()).max(5, "Máximo de 5 comprovantes.").optional(),
 })
-  // Comprovante de pagamento dispensado quando o tipo isenta anexo
-  // (Troca ou Doação).
+  // Comprovante de pagamento: obrigatorio conforme comprovanteExigido()
+  // (dispensado por tipo/operacao; Troca com valor exige, salvo com
+  // "Observacoes de Pagamento" preenchida).
   .refine(
     (d) =>
-      isAnexoDispensavelPorContexto({ orderTypeName: d.orderTypeName, operationName: d.operationName }) ||
-      !!(d.paymentProofsBase64 && d.paymentProofsBase64.length > 0),
-    { message: "Anexe o comprovante de pagamento.", path: ["paymentProofsBase64"] },
+      !comprovanteExigido({
+        orderTypeName: d.orderTypeName,
+        operationName: d.operationName,
+        orderValue: d.orderValue,
+        paymentNotes: d.paymentNotes,
+      }) || !!(d.paymentProofsBase64 && d.paymentProofsBase64.length > 0),
+    { message: "Anexe o comprovante de pagamento ou preencha as Observações de Pagamento.", path: ["paymentProofsBase64"] },
   )
   // "Valor Total do Pedido" obrigatorio (> 0), EXCETO Troca e Doação.
   .refine(
@@ -148,6 +153,27 @@ export function isAnexoDispensavelPorContexto(args: {
   operationName?: string | null;
 }): boolean {
   return isAnexoDispensavel(args.orderTypeName) || isVendaFuncionarioInterno(args.operationName);
+}
+
+// Comprovante de pagamento obrigatorio na CRIACAO do pedido.
+//  - Tipos/operacoes que dispensam anexo (Troca, Doacao, Transferencia,
+//    Funcionario Interno): nao exigem... EXCETO Troca COM valor, que passa
+//    pelo Financeiro e precisa de comprovante — salvo se a vendedora
+//    preencheu "Observacoes de Pagamento", que explica ao Financeiro o
+//    porque de nao haver comprovante e libera o envio.
+//  - Demais tipos: sempre exigem.
+export function comprovanteExigido(args: {
+  orderTypeName?: string | null;
+  operationName?: string | null;
+  orderValue: number;
+  paymentNotes?: string | null;
+}): boolean {
+  const trocaComValor = isTroca(args.orderTypeName) && args.orderValue > 0;
+  if (trocaComValor) return !(args.paymentNotes ?? "").trim();
+  return !isAnexoDispensavelPorContexto({
+    orderTypeName: args.orderTypeName,
+    operationName: args.operationName,
+  });
 }
 
 // Normaliza para comparação tolerante a acentos, caixa e espaços.
