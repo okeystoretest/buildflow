@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { CustomerCombobox } from "@/components/shared/customer-combobox";
 import { formatBRL } from "@/lib/utils";
 import { prepareProofFile } from "@/lib/client-image";
-import { isAnexoDispensavel, isAnexoDispensavelPorContexto } from "@/lib/validations/order";
+import { isAnexoDispensavel, isAnexoDispensavelPorContexto, isTroca, trocaPulaFinanceiro } from "@/lib/validations/order";
 import { CampaignItemRow } from "@/components/shared/campaign-item-row";
 
 interface Opt { id: string; name: string; }
@@ -171,6 +171,10 @@ export function NovoPedidoForm({
   // Valor obrigatório segue só o TIPO (Troca/Doação); Funcionário Interno é
   // venda real e mantém o valor exigido.
   const valorDispensavel = isAnexoDispensavel(orderTypeName);
+  // Troca com valor informado deixa de pular o Financeiro. O aviso aparece
+  // assim que a vendedora digita um valor, para nao surpreender depois.
+  const trocaVaiParaFinanceiro =
+    isTroca(orderTypeName) && !trocaPulaFinanceiro({ orderTypeName, orderValue });
 
   function onSubmit() {
     setError(null);
@@ -300,6 +304,11 @@ export function NovoPedidoForm({
         <div className="space-y-1.5">
           <Label>Valor Total do Pedido {valorDispensavel ? "(opcional)" : "*"}</Label>
           <Input type="number" min={0} step="0.01" value={orderValue || ""} onChange={(e) => setOrderValue(Number(e.target.value))} placeholder="0,00" />
+          {trocaVaiParaFinanceiro && (
+            <p className="text-xs text-financeiro">
+              Troca com valor passa pela aprovação do Financeiro antes de seguir.
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label>Valor do Frete</Label>
