@@ -11,6 +11,8 @@ import {
   trocaPulaFinanceiro,
   trocaValorTravado,
   TROCA_VALOR_TRAVADO_MSG,
+  normalizeOrderNumber,
+  mensagemPedidoDuplicado,
 } from "@/lib/validations/order";
 import { processAndSaveImage, saveDocument, isPdfDataUrl } from "@/lib/image";
 import { newTrackingToken } from "@/lib/tracking-auth";
@@ -140,9 +142,23 @@ export async function createOrder(
     });
     const requiresAddress = shipMethod?.requiresAddress === true;
 
+    // NUMERO DE PEDIDO DUPLICADO. O mesmo numero lancado duas vezes na mesma
+    // Loja de Origem e o mesmo pedido contado em dobro no Ranking e na meta.
+    // Comparacao sem diferenciar caixa; escopo por Loja de Origem (cada loja
+    // tem a propria numeracao). Ver src/lib/validations/order.ts.
+    const orderNumber = normalizeOrderNumber(input.orderNumber);
+    const jaExiste = await prisma.order.findFirst({
+      where: {
+        orderNumber: { equals: orderNumber, mode: "insensitive" },
+        originStoreId: input.originStoreId || null,
+      },
+      select: { id: true },
+    });
+    if (jaExiste) return actionError(mensagemPedidoDuplicado(orderNumber));
+
     const order = await prisma.order.create({
       data: {
-        orderNumber: input.orderNumber,
+        orderNumber,
         // "N° de Peças no Pedido" (campo declarado ao lado do numero do pedido).
         pieceCount: input.pieceCount ?? 0,
         storeId: input.storeId,
@@ -422,6 +438,30 @@ export async function updateOrder(args: {
       return incoming?.trim() ? incoming.trim() : null;
     };
 
+    // NUMERO DE PEDIDO DUPLICADO na edicao. A mesma trava da criacao: o par
+    // (numero, Loja de Origem) resultante da edicao nao pode colidir com OUTRO
+    // pedido. Tanto o numero quanto a loja podem mudar aqui, entao a checagem
+    // usa os valores finais e exclui o proprio pedido.
+    const finalOrderNumber = normalizeOrderNumber(args.orderNumber) || order.orderNumber;
+    const finalOriginStoreId =
+      args.originStoreId === undefined
+        ? order.originStoreId
+        : args.originStoreId || null;
+    if (
+      finalOrderNumber !== order.orderNumber ||
+      finalOriginStoreId !== order.originStoreId
+    ) {
+      const colide = await prisma.order.findFirst({
+        where: {
+          id: { not: order.id },
+          orderNumber: { equals: finalOrderNumber, mode: "insensitive" },
+          originStoreId: finalOriginStoreId,
+        },
+        select: { id: true },
+      });
+      if (colide) return actionError(mensagemPedidoDuplicado(finalOrderNumber));
+    }
+
     await prisma.order.update({
       where: { id: args.id },
       data: {
@@ -468,7 +508,7 @@ export async function updateOrder(args: {
               ? order.excursaoId
               : (args.excursaoId ? args.excursaoId : null)),
         // Numero do pedido (editavel como no cadastro).
-        orderNumber: args.orderNumber?.trim() ? args.orderNumber.trim() : order.orderNumber,
+        orderNumber: finalOrderNumber,
         // "N° de Peças no Pedido": so altera quando enviado e valido (>= 0).
         pieceCount:
           args.pieceCount === undefined || !Number.isFinite(args.pieceCount) || args.pieceCount < 0

@@ -254,3 +254,32 @@ export const updateExcursaoSchema = createExcursaoSchema.extend({
   id: z.string().min(1),
 });
 export type UpdateExcursaoInput = z.infer<typeof updateExcursaoSchema>;
+
+// ===========================================================================
+// NUMERO DE PEDIDO DUPLICADO
+// ===========================================================================
+//
+// `Order.orderNumber` nao tem restricao de unicidade no banco — e nao deve
+// ganhar uma as cegas, porque a base atual pode ja conter repeticoes legitimas
+// (ou nao) e uma migration com UNIQUE falharia no deploy. A checagem vive na
+// aplicacao, onde pode ser explicada a quem esta cadastrando.
+//
+// ESCOPO DA UNICIDADE: por LOJA DE ORIGEM. Cada loja mantem a propria
+// numeracao, entao o mesmo numero em lojas diferentes e valido; repetido na
+// mesma loja e o mesmo pedido lancado duas vezes — que somaria em dobro no
+// Ranking e na meta.
+
+/**
+ * Forma canonica do numero do pedido: sem espaco nas pontas.
+ *
+ * A caixa e PRESERVADA (o numero e exibido como a pessoa digitou); quem ignora
+ * caixa e a comparacao de duplicidade, feita no banco com `mode: "insensitive"`.
+ */
+export function normalizeOrderNumber(orderNumber?: string | null): string {
+  return (orderNumber ?? "").trim();
+}
+
+/** Erro devolvido quando o numero ja existe na mesma Loja de Origem. */
+export function mensagemPedidoDuplicado(orderNumber: string): string {
+  return `Já existe um pedido com o número "${normalizeOrderNumber(orderNumber)}" nesta Loja de Origem.`;
+}

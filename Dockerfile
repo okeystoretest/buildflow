@@ -44,6 +44,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# FUSO DO NEGOCIO. Sem isto o contentor roda em UTC e todo codigo que usa hora
+# local (new Date(ano, mes, dia), setHours, toLocaleString sem timeZone) erra em
+# tres horas — no Ranking de Vendas isso jogava a venda feita depois das 21:00
+# do ultimo dia do mes para o mes seguinte.
+# O calculo das janelas do Ranking NAO depende desta variavel: src/lib/
+# rank-window.ts fixa o fuso explicitamente, para nao voltar a errar caso a
+# aplicacao rode fora deste contentor. Aqui e a segunda linha de defesa.
+ENV TZ=America/Sao_Paulo
 
 # Usuario sem privilegios
 RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -m nextjs

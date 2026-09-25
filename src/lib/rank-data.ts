@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { premiacaoDoItem } from "@/lib/campaign-commission";
+import { janelaDoMes, janelaDaSemana, corteLegado, instanteNoFuso } from "@/lib/rank-window";
+import { computeRealizado, vendidoDoVendedor } from "@/lib/rank-math";
 
 export interface RankRow {
   /** Necessário para o ajuste manual (a linha precisa saber a quem pertence). */
@@ -97,9 +99,14 @@ const FATURADO_WHERE = {
  * CORTE PADRAO dos ajustes gravados ANTES da regra incremental (baselineAt
  * nulo). Combinado com o negocio: o valor digitado nesses ajustes responde
  * pelos pedidos criados ate 27/08/2026 as 10:00; tudo criado a partir dai soma.
- * Data em horario LOCAL do servidor, igual as demais janelas deste arquivo.
+ *
+ * Ancorado no fuso do NEGOCIO, nao no do servidor: em UTC este instante caia
+ * as 07:00 de Brasilia e o corte pegava tres horas de pedidos a menos.
+ *
+ * Esta constante so descreve o mes em que foi cravada. Para qualquer outro mes,
+ * `corteLegado` (rank-window.ts) a substitui pelo fim do mes.
  */
-export const AJUSTE_CORTE_PADRAO = new Date(2026, 7, 27, 10, 0, 0, 0);
+export const AJUSTE_CORTE_PADRAO = instanteNoFuso(2026, 8, 27, 10);
 
 // Parametro opcional de periodo. Sem ele, usa o mes/ano corrente.
 export interface RankPeriod {
@@ -127,22 +134,32 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   const isCurrent = month === curMonth && year === curYear;
 
   // Janela do mes alvo: [inicioMes, fimMes).
-  const inicioMes = new Date(year, month - 1, 1);
-  const fimMes = new Date(year, month, 1); // primeiro dia do mes seguinte
+  //
+  // FUSO: ancorada no horario do NEGOCIO (America/Sao_Paulo), nunca no do
+  // servidor. Construir a janela com `new Date(year, month-1, 1)` fazia o mes
+  // virar as 21:00 do ultimo dia quando o processo roda em UTC — e toda venda
+  // feita depois disso era contabilizada no mes seguinte. Ver rank-window.ts.
+  const { inicio: inicioMes, fim: fimMes } = janelaDoMes(year, month);
 
   // "Semana" so faz sentido no mes corrente. Em meses passados, a janela de
   // semana vira o mes inteiro (maiorSemana passa a refletir o mes fechado).
-  const inicioSemana = new Date(now);
-  inicioSemana.setDate(now.getDate() - now.getDay());
-  inicioSemana.setHours(0, 0, 0, 0);
+  // O recorte nunca ultrapassa as bordas do mes exibido: a semana que comeca
+  // no domingo do mes anterior nao pode trazer uma venda daquele mes para o
+  // KPI "Maior Venda Semanal" do mes atual.
+  const semana = janelaDaSemana(now, year, month);
 
   // Base de calculo: TODOS os pedidos faturados de TODAS as lojas (ver
   // FATURADO_WHERE). Nao ha filtro por campanha aqui de proposito:
   // REGRA DE NEGOCIO -> vendas de itens de CAMPANHA tambem contam no valor
   // total da Meta Geral (e no rank por vendedor). Nao adicionar filtro de
   // campaignId nesta query, senao a meta geral passa a ignorar essas vendas.
+  //
+  // A janela de data entra na QUERY: antes a tabela inteira de pedidos vinha
+  // para a memoria a cada carga do painel (que tem auto-refresh) e o recorte
+  // mensal era feito em JavaScript. Como a semana ja e recortada pelo mes,
+  // a janela do mes cobre tudo o que o calculo precisa.
   const faturados = await prisma.order.findMany({
-    where: FATURADO_WHERE,
+    where: { ...FATURADO_WHERE, createdAt: { gte: inicioMes, lt: fimMes } },
     include: { seller: true },
   });
 
@@ -157,13 +174,21 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   //
   // Ajustes gravados antes desta regra nao tem corte; para eles vale o corte
   // padrao (AJUSTE_CORTE_PADRAO). Ver src/lib/actions/rank-adjustments.ts.
+  //
+  // O corte padrao so descreve o mes em que foi cravado. Aplicado a um mes
+  // inteiramente posterior, TODO pedido virava "pos-corte", o consolidado ate
+  // o corte zerava e o valor digitado passava a SOMAR sobre o mes inteiro em
+  // vez de substitui-lo — realizado dobrado. `corteLegado` devolve, fora da
+  // janela, a semantica original do ajuste legado. Ver rank-window.ts.
   const ajustes = await prisma.rankAdjustment.findMany({ where: { month, year } });
   const ajustePorUser = new Map(
     ajustes.map((a) => [
       a.userId,
       {
         amount: Number(a.amount),
-        corte: a.baselineAt ? new Date(a.baselineAt) : AJUSTE_CORTE_PADRAO,
+        corte: a.baselineAt
+          ? new Date(a.baselineAt)
+          : corteLegado(AJUSTE_CORTE_PADRAO, { inicio: inicioMes, fim: fimMes }),
       },
     ]),
   );
@@ -176,14 +201,14 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   const goalsGerais = goals.filter((g) => !g.campaignId);
   const metaGeral = goalsGerais.reduce((a, g) => a + Number(g.amount), 0);
 
-  // Pedidos do mes alvo: entre inicio e fim do mes selecionado.
-  const doMes = faturados.filter((o) => {
-    const d = new Date(o.createdAt);
-    return d >= inicioMes && d < fimMes;
-  });
-  // "daSemana": no mes corrente = ultima semana; em mes passado = mes inteiro.
+  // Pedidos do mes alvo. A query ja devolveu apenas a janela do mes.
+  const doMes = faturados;
+  // "daSemana": no mes corrente = semana corrente; em mes passado = mes inteiro.
   const daSemana = isCurrent
-    ? faturados.filter((o) => new Date(o.createdAt) >= inicioSemana)
+    ? faturados.filter((o) => {
+        const d = new Date(o.createdAt);
+        return d >= semana.inicio && d < semana.fim;
+      })
     : doMes;
 
   // Progresso da Meta Geral: realizado é o faturado no MÊS selecionado (mesma
@@ -196,40 +221,28 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   // frete). Helper único para manter a regra consistente em todo o rank.
   const receita = (o: { orderValue: unknown }) => Number(o.orderValue);
 
-  const realizadoSistema = doMes.reduce((a, o) => a + receita(o), 0);
   const maior = (arr: typeof faturados) =>
     arr.reduce<{ total: number; nome: string } | null>((acc, o) => {
       const t = receita(o);
       return !acc || t > acc.total ? { total: t, nome: o.seller.name } : acc;
     }, null);
 
-  // Acumula por vendedor SOMENTE o faturado no mês selecionado, para casar com
-  // a meta mensal e o progresso ficar correto.
-  // `posCorte` acumula, em paralelo, so o que entrou a partir do corte do
-  // ajuste daquele vendedor — a parcela que soma sobre o valor digitado.
-  const porVendedor = new Map<string, { nome: string; scope: string | null; total: number; posCorte: number }>();
-  for (const o of doMes) {
-    const cur = porVendedor.get(o.sellerId) ?? { nome: o.seller.name, scope: o.seller.salesModel, total: 0, posCorte: 0 };
-    cur.total += receita(o);
-    const corte = ajustePorUser.get(o.sellerId)?.corte;
-    if (corte && new Date(o.createdAt) >= corte) cur.posCorte += receita(o);
-    porVendedor.set(o.sellerId, cur);
-  }
-  // Vendedor COM meta e SEM pedido registrado no periodo entra na lista com 0.
+  // POPULACAO DO QUADRO: vendedores com meta geral cadastrada no periodo.
   //
-  // Antes ele simplesmente nao aparecia (a lista nascia dos pedidos), e isso
-  // inviabilizaria justamente o caso de uso do ajuste manual: quem vendeu fora
-  // da plataforma tem zero pedidos e nao teria linha para ser editada. Como
-  // efeito colateral, o ranking passa a mostrar tambem quem esta em 0% — o que
-  // e a leitura correta de um quadro que mede progresso contra meta.
+  // O KPI "Meta Geral" e a tabela tem de contar a MESMA gente, senao o painel
+  // se contradiz. O numerador somava os pedidos de TODOS os vendedores, o
+  // denominador so as metas cadastradas, e a tabela descartava quem nao tem
+  // meta — entao a soma das linhas nunca fechava com o KPI e o percentual saia
+  // inflado. Como `sellerId` e sempre quem CRIOU o pedido, todo pedido lancado
+  // por GESTAO/FINANCEIRO caia nessa fenda. Ver rank-math.ts.
+  const comMeta = new Set(goalsGerais.map((g) => g.userId));
+
+  // Nome e escopo para exibicao. Vem da meta (e nao do pedido) porque todo
+  // vendedor do quadro tem meta por definicao — inclusive quem nao vendeu
+  // nada no periodo, que precisa de linha para receber ajuste manual.
+  const identidade = new Map<string, { nome: string; scope: string | null }>();
   for (const g of goalsGerais) {
-    if (porVendedor.has(g.userId)) continue;
-    porVendedor.set(g.userId, {
-      nome: g.user.name,
-      scope: g.user.salesModel ?? g.scope,
-      total: 0,
-      posCorte: 0,
-    });
+    identidade.set(g.userId, { nome: g.user.name, scope: g.user.salesModel ?? g.scope });
   }
 
   // Meta por vendedor: usa as metas Gerais (escopo do vendedor).
@@ -238,24 +251,21 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
 
   // O ajuste manual tambem corrige o REALIZADO GERAL: se a venda existiu mas
   // nao foi registrada, ela falta tanto na linha do vendedor quanto no total.
-  //
-  // Como o ajuste e incremental, ele so substitui o consolidado ATE o corte —
-  // a diferenca somada e (manual - consolidado ANTES do corte). O que entrou
-  // depois ja esta em `realizadoSistema` e continua valendo.
-  //
-  // Um ajuste para vendedor SEM pedido no periodo tambem conta: o consolidado
-  // ate o corte cai para 0 e a diferenca vira o valor digitado inteiro.
+  // Ajuste de quem nao tem meta e ignorado — nao pode mover um KPI em que a
+  // pessoa nao aparece.
   //
   // maiorSemana / maiorMes NAO sao ajustados de proposito: sao recordes de UM
   // pedido especifico, e um ajuste agregado nao diz qual pedido teria mudado.
-  let ajusteManualTotal = 0;
-  for (const [userId, aj] of ajustePorUser.entries()) {
-    const v = porVendedor.get(userId);
-    const consolidadoAteCorte = (v?.total ?? 0) - (v?.posCorte ?? 0);
-    ajusteManualTotal += aj.amount - consolidadoAteCorte;
-  }
+  const { ajusteManualTotal, realizadoGeral, porVendedor } = computeRealizado({
+    pedidos: doMes.map((o) => ({
+      sellerId: o.sellerId,
+      orderValue: receita(o),
+      createdAt: new Date(o.createdAt),
+    })),
+    comMeta,
+    ajustes: ajustePorUser,
+  });
 
-  const realizadoGeral = realizadoSistema + ajusteManualTotal;
   const metaGeralPct = metaGeral > 0 ? Math.round((realizadoGeral / metaGeral) * 100) : 0;
 
   // REGRA DE NEGOCIO: usuarios SEM meta definida no periodo NAO aparecem no
@@ -263,18 +273,19 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   // linha nao tem leitura possivel ("s/ meta") e apenas polui o telao.
   const buildRank = (scope: "VAREJO" | "ATACADO" | null): RankRow[] =>
     [...porVendedor.entries()]
-      .filter(([, v]) => (scope ? v.scope === scope : true))
+      .filter(([id]) => (scope ? identidade.get(id)?.scope === scope : true))
       .map(([id, v]) => {
+        const quem = identidade.get(id);
         // No painel Geral (scope null), usa a meta do vendedor pelo escopo dele.
-        const escopoMeta = scope ?? v.scope;
+        const escopoMeta = scope ?? quem?.scope ?? null;
         const meta = escopoMeta ? (metaPorVendedor.get(id + escopoMeta) ?? 0) : 0;
         // Ajuste manual INCREMENTAL: o valor digitado responde pelo periodo
         // ate o corte e o faturado posterior soma sobre ele.
         const aj = ajustePorUser.get(id);
-        const vendido = aj ? aj.amount + v.posCorte : v.total;
+        const vendido = vendidoDoVendedor(v, aj);
         return {
           userId: id,
-          nome: v.nome,
+          nome: quem?.nome ?? "—",
           vendido,
           meta,
           pct: meta > 0 ? Math.round((vendido / meta) * 100) : 0,
@@ -305,7 +316,9 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     where: { active: true },
     include: {
       orders: {
-        where: FATURADO_WHERE,
+        // Mesma janela do rank geral, aplicada na query e nao so no `noMes`
+        // abaixo: sem isso a consulta traz o historico inteiro da campanha.
+        where: { ...FATURADO_WHERE, createdAt: { gte: inicioMes, lt: fimMes } },
         include: { seller: true, campaignItems: true },
       },
       goals: { where: { month, year }, include: { user: true } },
@@ -372,7 +385,11 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   return {
     month, year, isCurrent,
     metaGeral, realizadoGeral, metaGeralPct, goalsCount: goalsGerais.length,
-    ajusteManualTotal, ajustesCount: ajustePorUser.size,
+    ajusteManualTotal,
+    // Conta so os ajustes que de fato entraram na conta: um ajuste de vendedor
+    // sem meta e ignorado, e nao pode acender o aviso de "valores informados
+    // manualmente" para um periodo em que nada foi alterado.
+    ajustesCount: [...ajustePorUser.keys()].filter((id) => porVendedor.has(id)).length,
     maiorSemana: maior(daSemana), maiorMes: maior(doMes),
     rankGeral: buildRank(null), rankVarejo: buildRank("VAREJO"), rankAtacado: buildRank("ATACADO"),
     campaigns, campaignPerf, updatedAt: new Date().toISOString(),
