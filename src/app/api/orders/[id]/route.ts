@@ -14,8 +14,14 @@ export async function GET(
     where: { id: params.id },
     include: {
       customer: true,
-      seller: true,
+      // SO o nome. `seller: true` trazia a linha inteira do User — hash da
+      // senha, e-mail, telefone, chave PIX e tokenVersion — para qualquer
+      // sessao autenticada que abrisse a ficha. A ficha usa o nome.
+      seller: { select: { id: true, name: true } },
       store: true,
+      // Loja de Origem: fica na ficha ao lado da Loja. O Historico de Entregas
+      // da Logistica ja exibia este campo antes de passar a usar a ficha unica.
+      originStore: { select: { name: true } },
       orderType: true,
       operation: true,
       paymentMethod: true,
@@ -23,12 +29,20 @@ export async function GET(
       shippingMethod: true,
       paymentStatus: true,
       cnpj: true,
-      delivery: { include: { driver: true, proofs: true } },
+      // Mesmo cuidado do vendedor: do motorista a ficha precisa do nome.
+      delivery: { include: { driver: { select: { id: true, name: true } }, proofs: true } },
       paymentProofs: { orderBy: { createdAt: "asc" } },
       financeProofs: { orderBy: { createdAt: "asc" } },
       history: { orderBy: { createdAt: "asc" } },
       delayReasons: { orderBy: { createdAt: "asc" } },
       returns: { orderBy: { createdAt: "desc" }, include: { items: { orderBy: { reference: "asc" } } } },
+      // Pecas de campanha lancadas no pedido, na ordem canonica (createdAt asc)
+      // — a mesma que deriva campaignId/itemCount. O Historico de Vendas faz o
+      // CRUD delas sobre esta lista.
+      campaignItems: {
+        orderBy: { createdAt: "asc" },
+        include: { campaign: { select: { name: true } } },
+      },
     },
   });
   if (!order) return NextResponse.json({ error: "Nao encontrado" }, { status: 404 });
@@ -86,6 +100,17 @@ export async function GET(
     })),
   }));
 
+  // Pecas de campanha achatadas para a ficha: nome da campanha ao lado do id, e
+  // o valor como string (Decimal do Prisma nao atravessa JSON como numero).
+  const campaignItems = order.campaignItems.map((it) => ({
+    id: it.id,
+    campaignId: it.campaignId,
+    campaignName: it.campaign?.name ?? "—",
+    reference: it.reference,
+    quantity: it.quantity,
+    value: it.value.toString(),
+  }));
+
   const history = order.history.map((h) => ({
     id: h.id,
     status: h.status,
@@ -118,10 +143,12 @@ export async function GET(
       financeProofs,
       // Devolucoes sao valores: o motorista nao as recebe.
       returns: _returns,
+      // Itens de campanha carregam valor por peca: mesma regra das devolucoes.
+      campaignItems: _campaignItems,
       ...visivelAoMotorista
     } = order;
     return NextResponse.json({ ...visivelAoMotorista, history, delayReasons });
   }
 
-  return NextResponse.json({ ...order, history, delayReasons, returns });
+  return NextResponse.json({ ...order, history, delayReasons, returns, campaignItems });
 }

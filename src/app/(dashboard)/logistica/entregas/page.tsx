@@ -3,9 +3,10 @@ import { requireRole } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
-import { EntregasList } from "@/components/shared/entregas-list";
-import { entregaInclude, toEntregaItem } from "@/components/shared/entrega-map";
+import { ComandaList, type ComandaListItem } from "@/components/shared/comanda-list";
 import { EntregasLogFiltros } from "./filtros-client";
+import { formatBRL } from "@/lib/utils";
+import { isAnexoDispensavel } from "@/lib/validations/order";
 import type { Prisma } from "@prisma/client";
 
 // Histórico só cresce → paginado no banco.
@@ -57,7 +58,20 @@ export default async function LogisticaEntregasPage({
   const [orders, total] = await Promise.all([
     prisma.order.findMany({
       where,
-      include: entregaInclude,
+      // So o que o card fechado mostra. A ficha completa da comanda (venda,
+      // financeiro, endereco, entrega com os marcos de tempo, anexos, campanha,
+      // devolucoes, atrasos e historico) vem de /api/orders/[id] ao abrir o
+      // bloco — a mesma ficha do Fluxo de Pedidos.
+      //
+      // Saiu daqui a consulta que datava a conclusao pelo historico: a ficha
+      // traz `delivery.deliveredAt` e, no fluxo simplificado (sem Delivery), a
+      // entrada "Entregue" aparece datada no bloco Historico da propria ficha.
+      include: {
+        customer: { select: { name: true, code: true } },
+        seller: { select: { name: true } },
+        orderType: { select: { name: true } },
+        _count: { select: { paymentProofs: true } },
+      },
       orderBy: { updatedAt: "desc" },
       skip: (page - 1) * PER_PAGE,
       take: PER_PAGE,
@@ -65,28 +79,22 @@ export default async function LogisticaEntregasPage({
     prisma.order.count({ where }),
   ]);
 
-  // Data de conclusão (alteração para ENTREGUE) por pedido, a partir do
-  // histórico — cobre também o fluxo simplificado, que não tem Delivery.
-  const ids = orders.map((o) => o.id);
-  const entregueHist = ids.length
-    ? await prisma.orderStatusHistory.findMany({
-        where: { orderId: { in: ids }, status: "ENTREGUE" },
-        orderBy: { createdAt: "desc" },
-        select: { orderId: true, createdAt: true },
-      })
-    : [];
-  const entregueAtById = new Map<string, string>();
-  for (const h of entregueHist) {
-    if (!entregueAtById.has(h.orderId)) entregueAtById.set(h.orderId, h.createdAt.toISOString());
-  }
-
-  const items = orders.map((o) => {
-    const item = toEntregaItem(o);
-    // Se a entrega não trouxe deliveredAt (fluxo simplificado), usa a data do
-    // histórico de mudança para ENTREGUE.
-    if (!item.deliveredAt) item.deliveredAt = entregueAtById.get(o.id) ?? null;
-    return item;
-  });
+  const items: ComandaListItem[] = orders.map((o) => ({
+    id: o.id,
+    status: o.status,
+    orderNumber: o.orderNumber ?? "—",
+    comandaNumber: o.comandaNumber,
+    customerName: o.customer?.name ?? "Cliente não informado",
+    customerCode: o.customer?.code ?? null,
+    sellerName: o.seller?.name ?? "—",
+    total: formatBRL((o.total ?? 0).toString()),
+    approvedByFinance: o.comandaNumber != null,
+    hasInvoice: o.invoicePath != null,
+    hasPaymentProof: o.paymentProofPath != null || o._count.paymentProofs > 0,
+    isExchange: isAnexoDispensavel(o.orderType?.name),
+    pickupAtStore: o.pickupAtStore,
+    hasTracking: !!o.trackingCode,
+  }));
 
   const resumoPeriodo = temPeriodo
     ? ` entre ${de ? new Date(de).toLocaleDateString("pt-BR") : "início"} e ${
@@ -99,7 +107,7 @@ export default async function LogisticaEntregasPage({
       <BackButton href="/logistica" />
       <h1 className="text-2xl font-bold text-distribuicao">Histórico de Entregas</h1>
       <p className="text-sm text-muted-foreground">
-        Pedidos concluídos (entregues). Clique em um para ver a ficha completa da venda e da entrega.
+        Pedidos concluídos (entregues). Clique em uma comanda para abrir a ficha completa da venda e da entrega.
       </p>
 
       <EntregasLogFiltros defaultBusca={busca} defaultDe={de} defaultAte={ate} />
@@ -112,7 +120,7 @@ export default async function LogisticaEntregasPage({
         <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhuma entrega encontrada.</CardContent></Card>
       )}
 
-      <EntregasList orders={items} />
+      <ComandaList orders={items} />
 
       <Pagination page={page} perPage={PER_PAGE} total={total} label="entregas" />
     </div>

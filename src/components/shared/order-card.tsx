@@ -43,6 +43,8 @@ export function OrderCard({
   stageAlert = "none",
   lateMinutes = 0,
   outOfFlow = false,
+  className,
+  hoverLift = true,
 }: {
   data: OrderCardData;
   onClick?: () => void;
@@ -59,6 +61,12 @@ export function OrderCard({
   // mostra em Embalando; o selo diz onde ele esta de fato e que a seta o traz
   // de volta.
   outOfFlow?: boolean;
+  // Classes extras no card. Os historicos usam para "colar" o card no bloco
+  // expandido logo abaixo (cantos de baixo retos).
+  className?: string;
+  // Levantar 2px no hover. Desligado quando o card esta aberto num historico:
+  // o card subiria e o painel expandido ficaria para tras, abrindo uma fenda.
+  hoverLift?: boolean;
 }) {
   const s = STATUS_STYLE[data.status];
   // Alerta visual: processando sem NF. Troca (4 - Troca) e isenta de NF, entao
@@ -94,11 +102,13 @@ export function OrderCard({
     <div
       style={style}
       className={cn(
-        "card-hover group w-full rounded-xl border p-3 text-left shadow-sm animate-fade-in-up",
+        "group w-full rounded-xl border p-3 text-left shadow-sm animate-fade-in-up",
+        hoverLift && "card-hover",
         preenchido ? null : "bg-card",
         alerta
           ? "border-destructive/50 ring-1 ring-destructive/20 hover:shadow-md hover:shadow-destructive/10"
           : timeBorder ?? "border-border hover:border-primary/40 hover:shadow-md",
+        className,
       )}
     >
       {/* Area clicavel que abre o modal (todo o corpo do card). */}

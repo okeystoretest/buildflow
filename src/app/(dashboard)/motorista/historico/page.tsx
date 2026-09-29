@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatBRL } from "@/lib/utils";
 import { BackButton } from "@/components/shared/back-button";
 import { HistoricoFiltros } from "./filtros-client";
-import { HistoricoList, type HistoricoItem } from "@/app/(dashboard)/vendas/historico/historico-list";
+import { ComandaList, type ComandaListItem } from "@/components/shared/comanda-list";
+import { isAnexoDispensavel } from "@/lib/validations/order";
 import { Pagination } from "@/components/shared/pagination";
 import type { Prisma } from "@prisma/client";
 
@@ -54,9 +55,16 @@ export default async function MotoristaHistoricoPage({
   const [orders, total] = await Promise.all([
     prisma.order.findMany({
       where,
+      // So o que o card fechado mostra; a ficha da comanda vem de
+      // /api/orders/[id] ao abrir o bloco — e e la que o recorte por papel e
+      // aplicado (o motorista nao recebe valores, comprovantes, NF, devolucoes
+      // nem itens de campanha).
       include: {
-        customer: true,
-        delivery: { include: { proofs: true, driver: true } },
+        customer: { select: { name: true, code: true } },
+        seller: { select: { name: true } },
+        orderType: { select: { name: true } },
+        delivery: { select: { id: true } },
+        _count: { select: { paymentProofs: true } },
       },
       orderBy: { updatedAt: "desc" },
       skip: (page - 1) * PER_PAGE,
@@ -65,17 +73,24 @@ export default async function MotoristaHistoricoPage({
     prisma.order.count({ where }),
   ]);
 
-  const items: HistoricoItem[] = orders.map((o) => ({
+  const items: ComandaListItem[] = orders.map((o) => ({
     id: o.id,
+    status: o.status,
     orderNumber: o.orderNumber,
     comandaNumber: o.comandaNumber,
     customerName: o.customer.name,
-    total: formatBRL(o.total.toString()),
-    driverName: o.delivery?.driver?.name ?? null,
-    paymentProofPath: o.paymentProofPath,
-    invoicePath: o.invoicePath,
-    trackingCode: o.trackingCode,
-    proofs: (o.delivery?.proofs ?? []).map((p) => ({ id: p.id, filePath: p.filePath })),
+    customerCode: o.customer.code,
+    sellerName: o.seller?.name ?? "—",
+    // O VALOR do pedido nao vai ao card do motorista: o recorte por papel vale
+    // tambem para o que a listagem manda ao navegador, nao so para a ficha.
+    // Gestao, na mesma tela, ve o valor.
+    total: session.role === "MOTORISTA" ? undefined : formatBRL(o.total.toString()),
+    approvedByFinance: o.comandaNumber != null,
+    hasInvoice: o.invoicePath != null,
+    hasPaymentProof: o.paymentProofPath != null || o._count.paymentProofs > 0,
+    isExchange: isAnexoDispensavel(o.orderType?.name),
+    pickupAtStore: o.pickupAtStore,
+    hasTracking: !!o.trackingCode,
     deliveryId: o.delivery?.id ?? null,
   }));
 
@@ -94,7 +109,14 @@ export default async function MotoristaHistoricoPage({
         <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhuma entrega no período/filtro.</CardContent></Card>
       )}
 
-      <HistoricoList orders={items} editableProofs />
+      {/* driverMode segue o PAPEL, não a tela: o motorista vê a comanda integral
+          menos o pacote financeiro (valores, comprovantes, NF) — o mesmo corte
+          do Fluxo. Gestão, que também abre esta tela, vê tudo. */}
+      <ComandaList
+        orders={items}
+        editableProofs
+        driverMode={session.role === "MOTORISTA"}
+      />
 
       <Pagination page={page} perPage={PER_PAGE} total={total} label="entregas" />
     </div>
