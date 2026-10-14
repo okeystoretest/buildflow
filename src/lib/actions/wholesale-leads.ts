@@ -87,7 +87,7 @@ export async function decideLead(input: {
 
   const lead = await prisma.wholesaleLead.findUnique({
     where: { id: leadId },
-    select: { id: true, sellerId: true, status: true },
+    select: { id: true, sellerId: true },
   });
   // Mesma resposta para "não existe" e "não é seu": a existência do cadastro
   // de um negócio real não é informação pública dentro do sistema.
@@ -106,7 +106,22 @@ export async function decideLead(input: {
   // Só chega aqui um status que `resolveDecision` reconheceu.
   const toStatus = toStatusRaw as WholesaleLeadStatus;
 
-  await prisma.$transaction(async (tx) => {
+  const gravou = await prisma.$transaction(async (tx) => {
+    // O fromStatus do diário tem de ser o status que REALMENTE precedeu esta
+    // mudança. Lido fora da transação, ele pode já ter sido superado por uma
+    // decisão concorrente (a vendedora dona e a Gestão têm acesso ao mesmo
+    // cadastro), e o par fromStatus->toStatus é justamente o que a Gestão
+    // analisa depois. Ler aqui dentro mantém o par verdadeiro. O isolamento
+    // padrão é read-committed: isto estreita a janela à duração da própria
+    // transação, não a elimina; o que fica garantido é que update e evento
+    // concordam entre si e com uma única leitura. (Sem FOR UPDATE de
+    // propósito: duas pessoas internas não justificam travas.)
+    const atual = await tx.wholesaleLead.findUnique({
+      where: { id: lead.id },
+      select: { status: true },
+    });
+    // A linha sumiu entre a checagem de permissão e a transação: não grava nada.
+    if (!atual) return false;
     await tx.wholesaleLead.update({
       where: { id: lead.id },
       data: {
@@ -122,14 +137,17 @@ export async function decideLead(input: {
     await tx.wholesaleLeadEvent.create({
       data: {
         leadId: lead.id,
-        fromStatus: lead.status,
+        fromStatus: atual.status,
         toStatus,
         rejectionCode: decisao.rejectionCode,
         note: limitText(asText(input.note), MAX_NOTE),
         actorId: actor.userId,
       },
     });
+    return true;
   });
+  // Mesma resposta de "não existe" da checagem inicial.
+  if (!gravou) return actionError(WHOLESALE_DENIED_MSG);
 
   revalidatePath("/vendas/analise-clientes");
   return actionOk({ status: toStatus });
