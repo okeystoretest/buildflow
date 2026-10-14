@@ -4,9 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCnpj } from "@/lib/wholesale-identity";
+import type { Prisma } from "@prisma/client";
+import { formatCnpj, normalizeCnpj, phoneMatchKeys } from "@/lib/wholesale-identity";
 import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permissions";
-import { findDuplicateAlerts, listLeadsFor } from "@/lib/wholesale-queries";
+import { classifyDuplicateMatch, listLeadsFor } from "@/lib/wholesale-queries";
 import { LeadStatusChip } from "./lead-status-chip";
 import { DistribuirLeadSelect, LeadRowActions } from "./lead-row-actions";
 import type { DuplicateAlertView, LeadAnswers } from "./decision-modal";
@@ -111,29 +112,96 @@ export default async function AnaliseClientesPage({
       })
     : [];
 
-  // Aviso de cadastro repetido: uma consulta por candidatura da página (no
-  // máximo 20, pelos índices de `cnpj` e `phone`). O custo é aceito de
-  // propósito: o aviso tem de estar PRONTO quando o modal abrir, porque é a
-  // primeira coisa que a analista lê, e buscá-lo ao abrir faria o aviso
-  // aparecer depois de a pessoa já ter começado a decidir.
+  // Aviso de cadastro repetido: UMA consulta para a página inteira, não uma por
+  // candidatura. Há dois motivos, e o segundo pesa mais que o primeiro:
+  //  1. Contagem de consultas: uma por linha eram até 20 idas ao banco (PAGE_SIZE)
+  //     só para isto; agora é no máximo 1, constante, qualquer que seja o número
+  //     de linhas.
+  //  2. Tamanho do payload: cada linha carregava até 10 alertas de OUTRAS
+  //     vendedoras (nome da candidata e texto de cautela) para dentro do payload
+  //     do Server Component de TODA carga da página, abrindo modal ou não —
+  //     até 200 registros para desenhar 20 linhas. Agora o candidato só entra no
+  //     payload da linha que ele de fato casa, e continua limitado a 10 por
+  //     linha.
+  // O aviso segue PRONTO quando o modal abre (é a primeira coisa que a analista
+  // lê), só que sai de uma consulta só. `findDuplicateAlerts` continua sendo a
+  // entrada correta para UM lead e não foi alterada; aqui reaproveitamos os
+  // mesmos helpers puros (`normalizeCnpj`, `phoneMatchKeys`,
+  // `classifyDuplicateMatch`) para que a regra de casamento seja a mesma.
+  const chaves = completos.map((l) => ({
+    id: l.id,
+    cnpjDigits: normalizeCnpj(l.cnpj),
+    phoneKeys: phoneMatchKeys(l.phone),
+  }));
+  const cnpjs = chaves.map((c) => c.cnpjDigits).filter((c) => c.length === 14);
+  const phones = chaves.flatMap((c) => c.phoneKeys);
+
+  // Sem nenhuma chave utilizável NÃO consultamos: esta feature recusa depender
+  // do que `OR: []` significa no Prisma (ver `buildDuplicateWhere`). Também só
+  // montamos as alternativas que têm valor, pelo mesmo motivo.
+  const alternativas: Prisma.WholesaleLeadWhereInput[] = [];
+  if (cnpjs.length > 0) alternativas.push({ cnpj: { in: cnpjs } });
+  if (phones.length > 0) alternativas.push({ phone: { in: phones } });
+
+  // Só CUIDADO e REPROVADO alertam (aprovado repetido é cliente voltando). O
+  // filtro atravessa o escopo de propósito: alerta que só o dono vê não protege
+  // ninguém.
+  const candidatos =
+    alternativas.length > 0
+      ? await prisma.wholesaleLead.findMany({
+          where: { status: { in: ["CUIDADO", "REPROVADO"] }, OR: alternativas },
+          select: {
+            id: true,
+            status: true,
+            cnpj: true,
+            phone: true,
+            contactName: true,
+            rejectionCode: true,
+            cautionReason: true,
+            decidedAt: true,
+          },
+        })
+      : [];
+
+  // Mais recente primeiro, SEM data por último. O `orderBy desc` do Postgres
+  // põe nulos primeiro; em memória podemos pôr os sem data no fim, que é a
+  // resposta melhor: uma decisão sem data é a menos informativa.
+  const candidatosOrdenados = [...candidatos].sort((a, b) => {
+    if (a.decidedAt && b.decidedAt) return b.decidedAt.getTime() - a.decidedAt.getTime();
+    if (a.decidedAt) return -1;
+    if (b.decidedAt) return 1;
+    return 0;
+  });
+
   const alertasPorLead = new Map<string, DuplicateAlertView[]>();
-  await Promise.all(
-    completos.map(async (l) => {
-      const achados = await findDuplicateAlerts({ id: l.id, cnpj: l.cnpj, phone: l.phone });
-      alertasPorLead.set(
-        l.id,
-        achados.map((a) => ({
-          id: a.id,
-          status: a.status,
-          contactName: a.contactName,
-          rejectionCode: a.rejectionCode,
-          cautionReason: a.cautionReason,
-          matchedBy: a.matchedBy,
-          decidedAtLabel: a.decidedAt ? dataCurta(a.decidedAt) : null,
-        })),
-      );
-    }),
-  );
+  for (const { id, cnpjDigits, phoneKeys } of chaves) {
+    const achados = candidatosOrdenados
+      .filter(
+        (c) =>
+          c.id !== id &&
+          ((cnpjDigits.length === 14 && c.cnpj === cnpjDigits) || phoneKeys.includes(c.phone)),
+      )
+      .slice(0, 10);
+    alertasPorLead.set(
+      id,
+      achados.map((a) => ({
+        id: a.id,
+        status: a.status,
+        contactName: a.contactName,
+        rejectionCode: a.rejectionCode,
+        cautionReason: a.cautionReason,
+        // Os MESMOS valores normalizados usados no filtro acima, nunca as
+        // colunas cruas: rotular com o valor cru já fez um casamento só por
+        // telefone aparecer como CNPJ.
+        matchedBy: classifyDuplicateMatch({
+          cnpjDigits,
+          phoneKeys,
+          candidate: { cnpj: a.cnpj, phone: a.phone },
+        }),
+        decidedAtLabel: a.decidedAt ? dataCurta(a.decidedAt) : null,
+      })),
+    );
+  }
 
   const respostasPorLead = new Map<string, LeadAnswers>(
     completos.map((l) => [

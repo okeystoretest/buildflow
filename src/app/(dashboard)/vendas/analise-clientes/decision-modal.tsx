@@ -531,9 +531,9 @@ export function DecisionModal({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="lead-status">Status</Label>
+                  <Label htmlFor={`lead-status-${lead.id}`}>Status</Label>
                   <select
-                    id="lead-status"
+                    id={`lead-status-${lead.id}`}
                     value={status}
                     onChange={(e) => trocarStatus(e.target.value)}
                     disabled={pending}
@@ -552,9 +552,9 @@ export function DecisionModal({
                       (decisão 34). Exibida e gravada em MAIÚSCULAS (decisão
                       19) — a action normaliza de novo no servidor; aqui é só
                       para a tela mostrar o que vai ser gravado. */}
-                  <Label htmlFor="lead-auxiliar">Auxiliar Responsável</Label>
+                  <Label htmlFor={`lead-auxiliar-${lead.id}`}>Auxiliar Responsável</Label>
                   <Input
-                    id="lead-auxiliar"
+                    id={`lead-auxiliar-${lead.id}`}
                     value={auxiliar}
                     maxLength={MAX_ASSISTANT}
                     disabled={pending}
@@ -570,9 +570,9 @@ export function DecisionModal({
                   própria faria a analista procurar. */}
               {status === "REPROVADO" && (
                 <div className="space-y-2">
-                  <Label htmlFor="lead-motivo">Motivo de reprovação *</Label>
+                  <Label htmlFor={`lead-motivo-${lead.id}`}>Motivo de reprovação *</Label>
                   <select
-                    id="lead-motivo"
+                    id={`lead-motivo-${lead.id}`}
                     value={codigo}
                     onChange={(e) => setCodigo(e.target.value)}
                     disabled={pending}
@@ -600,9 +600,9 @@ export function DecisionModal({
                   aviso assim se aprende a ignorar. */}
               {status === "CUIDADO" && (
                 <div className="space-y-2">
-                  <Label htmlFor="lead-justificativa">Justificativa do alerta *</Label>
+                  <Label htmlFor={`lead-justificativa-${lead.id}`}>Justificativa do alerta *</Label>
                   <textarea
-                    id="lead-justificativa"
+                    id={`lead-justificativa-${lead.id}`}
                     required
                     rows={3}
                     value={justificativa}
