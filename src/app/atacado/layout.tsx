@@ -1,4 +1,22 @@
+import type { Metadata, Viewport } from "next";
 import "./atacado.css";
+
+// O que pertence ao MUNDO mora aqui, não na página da marca: uma página nova
+// deste mundo não consegue esquecer de se manter fora do Google nem de trocar a
+// cor da barra do celular. A página da marca declara só o `title`, e o
+// `metadata` dela se funde com este.
+//
+// noindex na Fase 1 (decisão 28): o funil é por indicação, e tráfego orgânico
+// só produziria leads sem dono.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
+
+// themeColor próprio sobrescreve o azul do Build.Flow declarado no root layout
+// (decisão 30). No Next 14 ele pertence ao `viewport`, não ao `metadata`.
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
+};
 
 /**
  * Layout das LPs públicas de atacado.

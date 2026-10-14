@@ -83,6 +83,31 @@ const CAMPOS_TEXTO = [
  */
 type CampoTexto = (typeof CAMPOS_TEXTO)[number]["campo"];
 
+/**
+ * Campos de valor fechado e os dois textos de "Outro": lidos por `texto()` mais
+ * abaixo, fora da tabela de textos livres.
+ */
+type CampoFechado =
+  | "state"
+  | "serviceModel"
+  | "serviceModelOther"
+  | "foundUs"
+  | "foundUsOther"
+  | "investmentBand"
+  | "wantsVisit"
+  | "cnpj";
+
+/**
+ * TODO nome de campo que `validateApplyPayload` lê, como união de literais.
+ *
+ * O formulário público tipa o seu payload com `Record<CampoEsperado, string>`.
+ * O envio é a única parte desta feature que nenhum script de checagem alcança
+ * (é componente de cliente), e uma chave com nome trocado só aparece quando a
+ * lojista já preencheu 18 campos e o servidor recusa — sem pista no relatório
+ * dela. Assim, chave errada ou faltando deixa de compilar.
+ */
+export type CampoEsperado = CampoTexto | CampoFechado;
+
 const MAX_OUTRO = 200;
 
 /** Leitura defensiva: o que não for string é tratado como vazio, não quebra. */
