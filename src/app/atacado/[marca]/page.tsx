@@ -5,9 +5,11 @@ import { ApplyForm } from "./apply-form";
 
 // robots e themeColor vêm do layout do mundo (decisões 28 e 30); aqui só o que
 // varia por marca.
-export function generateStaticParams() {
-  return [{ marca: "okey" }, { marca: "lov-club" }];
-}
+//
+// Rota DINÂMICA de propósito: lê `?r=` para atribuir o cadastro à vendedora que
+// compartilhou o link. Por isso não há `generateStaticParams` (não prerenderiza
+// nada aqui; não o recoloque esperando isso). Slug inválido vira 404 por
+// `getBrandContent` + `notFound()`.
 
 export function generateMetadata({ params }: { params: { marca: string } }): Metadata {
   const marca = getBrandContent(params.marca);
