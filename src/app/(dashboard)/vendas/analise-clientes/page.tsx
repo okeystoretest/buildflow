@@ -245,9 +245,16 @@ export default async function AnaliseClientesPage({
   // estão sem dono (decisão 14). Não aparecem para a vendedora — `canSeeLead`
   // é explícito sobre isso — e ficam aqui, fora da paginação da tabela, porque
   // é uma fila de trabalho: a mais antiga primeiro.
+  //
+  // Só entram as que ainda AGUARDAM decisão (`EM_ANALISE`): isto é fila de
+  // trabalho, não arquivo. A Gestão pode decidir uma candidatura direto, sem
+  // nunca atribuí-la a ninguém — e ela continuaria sem dona, ficando aqui para
+  // sempre. Com os meses a lista acumularia toda sem-dona já julgada, e uma
+  // lista que nunca esvazia deixa de ser lida. As já decididas não somem: a
+  // tabela abaixo, que a Gestão vê sem filtro, continua mostrando todas.
   const semDono = ehGestao
     ? await prisma.wholesaleLead.findMany({
-        where: { sellerId: null },
+        where: { sellerId: null, status: "EM_ANALISE" },
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
@@ -295,14 +302,16 @@ export default async function AnaliseClientesPage({
         <Card>
           <CardHeader>
             <CardTitle>
-              Sem vendedora responsável · {semDono.length}
+              Aguardando decisão, sem vendedora · {semDono.length}
               {semDono.length === TETO_FILA ? "+" : ""}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-sm text-muted-foreground">
-              Chegaram sem código de indicação válido. Enquanto não têm dona, só a
-              Gestão vê — distribua para a candidatura entrar na fila de alguém.
+              Chegaram sem código de indicação válido e ainda não foram decididas.
+              Enquanto não têm dona, só a Gestão vê — distribua para a candidatura
+              entrar na fila de alguém, ou decida direto. As já decididas ficam na
+              tabela abaixo.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
