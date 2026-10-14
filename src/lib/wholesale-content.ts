@@ -119,6 +119,9 @@ export interface BrandContent {
   faq: { group: string; items: { q: string; a: string }[] }[];
 }
 
+// Os itens são compartilhados por referência entre as marcas, de propósito: a
+// planilha não diferencia a copy por marca, só o nome exibido muda. A cópia rasa
+// não promete independência; nada pode mutar o conteúdo de uma marca em runtime.
 export const WHOLESALE_CONTENT: Record<"OKEY" | "LOV_CLUB", BrandContent> = {
   OKEY: {
     brandName: "OKEY",

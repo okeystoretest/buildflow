@@ -4,6 +4,7 @@
 // O que está em jogo: este texto é copy aprovada pela marca, transcrita da
 // planilha. Contagem errada significa bloco perdido na montagem; texto
 // reescrito significa promessa comercial inventada numa página pública.
+import { createHash } from "node:crypto";
 import { WHOLESALE_CONTENT, getBrandContent } from "../../src/lib/wholesale-content";
 
 let falhas = 0;
@@ -44,13 +45,21 @@ check("nenhuma vantagem sem corpo", okey.advantages.filter((a) => !a.body).lengt
 check("slug okey resolve", getBrandContent("okey")?.brand, "OKEY");
 check("slug lov-club resolve", getBrandContent("lov-club")?.brand, "LOV_CLUB");
 check("slug desconhecido devolve null", getBrandContent("nike"), null);
+// O hash existe porque a autoridade sobre esta copy é a planilha, não quem
+// edita o código: qualquer mudança de texto precisa falhar alto. Se a copy mudou
+// de propósito e a planilha respalda, o novo hash entra no mesmo commit da copy,
+// onde a revisão vê as duas linhas. Digest falhando com as contagens passando
+// quer dizer que o texto se mexeu, não a estrutura.
+const DIGEST_ESPERADO = "3ced04f351e9cd75e8d842afe79dbb36587aeda821e5b836bacfd59d4f6746fe";
+function digestDaCopy(c: { reasons: unknown; advantages: unknown; faq: unknown }) {
+  return createHash("sha256")
+    .update(JSON.stringify([c.reasons, c.advantages, c.faq]))
+    .digest("hex");
+}
+check("digest da copy OKEY", digestDaCopy(WHOLESALE_CONTENT.OKEY), DIGEST_ESPERADO);
 // O conteúdo é compartilhado entre as marcas: a planilha diz "(marca)" e
 // "nossa marca", nunca OKEY. Só o nome exibido difere.
-check(
-  "Lov Club tem os mesmos 6 blocos de vantagem",
-  WHOLESALE_CONTENT.LOV_CLUB.advantages.length,
-  6,
-);
+check("digest da copy Lov Club igual ao da OKEY", digestDaCopy(WHOLESALE_CONTENT.LOV_CLUB), DIGEST_ESPERADO);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);
