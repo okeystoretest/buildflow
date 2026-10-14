@@ -293,7 +293,14 @@ Transcrito porque a planilha vive fora do repositório.
    coleções ao lado dos grandes nomes da moda europeia, proporcionando uma
    experiência de compra que encanta e fideliza suas clientes.
 
-### A.4 FAQ (4 grupos, 8 perguntas)
+### A.4 FAQ (4 grupos, 7 perguntas)
+
+Correção de 14/10/2026: este cabeçalho dizia "8 perguntas" por erro de contagem
+meu ao escrever a spec. A planilha tem **sete**: os grupos 1, 2 e 3 têm duas
+perguntas cada, e o grupo 4 ("Qualidade e Trocas") tem **uma só**. Conferido na
+aba "Sugestões de FAQ" do arquivo original, que termina no par da linha 20–21
+sem oitava entrada. A Tarefa 13 parou ao bater nessa divergência em vez de
+inventar uma pergunta para uma página pública, o que foi a decisão certa.
 
 **1. Pedido e Condições de Compra**
 
