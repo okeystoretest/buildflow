@@ -1,3 +1,5 @@
+import { normalizePhone } from "@/lib/phone";
+
 /**
  * Identidade da candidata: as duas chaves pelas quais um cadastro repetido é
  * reconhecido (decisão 9).
@@ -58,9 +60,14 @@ export function formatCnpj(digits: string): string {
  *
  * A variante só é gerada para celular (8 dígitos após o DDD começando por
  * 6–9, ou 9 dígitos começando por 9). Fixo não ganha chave inventada.
+ *
+ * A entrada passa por `normalizePhone` de `@/lib/phone`, para que o código do
+ * país e a armadilha do DDD 55 sejam tratados em um único lugar. Duplicar essa
+ * lógica aqui foi exatamente o que produziu o bug de lista vazia: "5511988887777"
+ * virava 13 dígitos, nenhuma chave, e o aviso sumia sem erro.
  */
 export function phoneMatchKeys(digits: string): string[] {
-  const d = (digits || "").replace(/\D/g, "");
+  const d = normalizePhone(digits || "");
   if (d.length < 10 || d.length > 11) return [];
   const ddd = d.slice(0, 2);
   const resto = d.slice(2);

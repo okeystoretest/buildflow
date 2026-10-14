@@ -60,6 +60,25 @@ check(
   phoneMatchKeys("11988887777").includes("1188887777"),
   true,
 );
+// --- codigo do pais: a grafia que a versao anterior devolvia vazia ---
+check(
+  "telefone com 55 na frente gera as duas chaves",
+  phoneMatchKeys("5511988887777"),
+  ["11988887777", "1188887777"],
+);
+check(
+  "telefone colado com +55 e mascara",
+  phoneMatchKeys("+55 (11) 98888-7777"),
+  ["11988887777", "1188887777"],
+);
+// A ARMADILHA: 11 digitos comecando com 55 e DDD 55 (Santa Maria/RS), NAO
+// codigo de pais. Um slice(2) ingenuo quebraria aqui — e so passa porque a
+// normalizacao vem de @/lib/phone, que so corta o 55 em 12 ou 13 digitos.
+check(
+  "DDD 55 nao e confundido com codigo de pais",
+  phoneMatchKeys("55988887777"),
+  ["55988887777", "5588887777"],
+);
 // Fixo de 8 dígitos cujo primeiro não é 9 não ganha variante inventada.
 check("fixo não vira celular", phoneMatchKeys("1133334444"), ["1133334444"]);
 check("lixo devolve lista vazia", phoneMatchKeys(""), []);
