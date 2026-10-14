@@ -38,6 +38,13 @@ const valido = {
 };
 
 check("27 UFs", UF_LIST.length, 27);
+// Contagem nao e assercao: 27 copias de "AC" passariam no teste acima.
+check("27 UFs DISTINTAS", new Set(UF_LIST).size, 27);
+check(
+  "UF_LIST tem as siglas certas (amostra)",
+  ["CE", "SP", "DF", "TO", "RS"].filter((uf) => !(UF_LIST as readonly string[]).includes(uf)),
+  [],
+);
 
 const ok = validateApplyPayload(valido);
 check("payload completo passa", "ok" in ok, true);
@@ -48,7 +55,25 @@ if ("ok" in ok) {
   check("wantsVisit vira booleano", ok.clean.wantsVisit, true);
   // Loja física pede foto do espaço (decisão 21).
   check("tipo de imagem pedido", ok.clean.storeImageKind, "ESPACO_FISICO");
+  // A metade `null` dos dois campos `string | null`: fora de "Outro" o texto
+  // nao e so ignorado, ele e gravado como null.
+  check("serviceModelOther fora de OUTRO vira null", ok.clean.serviceModelOther, null);
+  check("foundUsOther fora de OUTRO vira null", ok.clean.foundUsOther, null);
 }
+
+// "Outro" escolhido: o texto e MANTIDO nos dois campos.
+const comOutro = validateApplyPayload({
+  ...valido,
+  serviceModel: "OUTRO",
+  serviceModelOther: "Showroom",
+  foundUs: "OUTRO",
+  foundUsOther: "Amiga indicou",
+});
+check("serviceModelOther em OUTRO e mantido", "ok" in comOutro && comOutro.clean.serviceModelOther, "Showroom");
+check("foundUsOther em OUTRO e mantido", "ok" in comOutro && comOutro.clean.foundUsOther, "Amiga indicou");
+
+const semVisita = validateApplyPayload({ ...valido, wantsVisit: "nao" });
+check("wantsVisit nao vira false", "ok" in semVisita && semVisita.clean.wantsVisit, false);
 
 // --- tudo obrigatório (decisão 20) ---
 for (const campo of ["contactName", "email", "phone", "story", "city", "marketTime", "teamSize", "brandsCarried", "followTime"]) {
@@ -95,6 +120,21 @@ check("telefone curto: recusa", "error" in validateApplyPayload({ ...valido, pho
 
 // --- tetos de texto: nada de campo livre sem limite numa porta pública ---
 check("história gigante: recusa", "error" in validateApplyPayload({ ...valido, story: "x".repeat(5000) }), true);
+// Teto exato: 120 passa, 121 nao. O limite tem de recusar quando excedido, e
+// nao apenas existir na tabela.
+check("nome de 120: passa", "ok" in validateApplyPayload({ ...valido, contactName: "a".repeat(120) }), true);
+check("nome de 121: recusa", "error" in validateApplyPayload({ ...valido, contactName: "a".repeat(121) }), true);
+// O teto de 200 do texto de "Outro", onde ele e pedido.
+check(
+  "texto de OUTRO de 200: passa",
+  "ok" in validateApplyPayload({ ...valido, serviceModel: "OUTRO", serviceModelOther: "o".repeat(200) }),
+  true,
+);
+check(
+  "texto de OUTRO de 201: recusa",
+  "error" in validateApplyPayload({ ...valido, serviceModel: "OUTRO", serviceModelOther: "o".repeat(201) }),
+  true,
+);
 
 // --- o objeto inteiro pode não chegar ---
 // O cast existe porque quem chama de verdade é um cliente HTTP: o tipo

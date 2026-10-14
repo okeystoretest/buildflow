@@ -72,6 +72,17 @@ const CAMPOS_TEXTO = [
   { campo: "followTime", rotulo: "Tempo que você nos acompanha", max: 200 },
 ] as const;
 
+/**
+ * Os nomes de campo que a tabela acima declara, como união de literais.
+ *
+ * É o que faz o COMPILADOR carregar o mapeamento: `lidos` é indexado por este
+ * tipo, então `lidos.contactNome` (com o "e" trocado) não compila. Como um
+ * `Record<string, string>` ele compilava, devolvia `undefined` e espalhava esse
+ * `undefined` dentro do `prisma.create` — exatamente a quebra que o brief
+ * avisa, com o compilador cego para ela.
+ */
+type CampoTexto = (typeof CAMPOS_TEXTO)[number]["campo"];
+
 const MAX_OUTRO = 200;
 
 /** Leitura defensiva: o que não for string é tratado como vazio, não quebra. */
@@ -89,7 +100,10 @@ export function validateApplyPayload(campos: Record<string, string>): ApplyValid
 
   // 1. Obrigatórios e tetos, de uma vez, na ordem em que aparecem na tela:
   // a primeira mensagem que a lojista vê aponta o primeiro campo errado.
-  const lidos: Record<string, string> = {};
+  // O cast parte de um objeto vazio porque o laço abaixo o preenche; ele é
+  // seguro porque o laço percorre TODOS os campos da tabela e retorna no
+  // primeiro que falte, então quem chega à leitura tem os dez preenchidos.
+  const lidos = {} as Record<CampoTexto, string>;
   for (const { campo, rotulo, max } of CAMPOS_TEXTO) {
     const valor = texto(fonte, campo);
     if (!valor) return { error: `Preencha o campo "${rotulo}".` };

@@ -1,5 +1,6 @@
 "use server";
 
+import { WholesaleBrand } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { getClientIp } from "@/lib/request-ip";
@@ -27,12 +28,39 @@ import { validateApplyPayload } from "@/lib/wholesale-apply-validation";
  *
  * NADA aqui pode lançar. Exceção não tratada numa página pública é um 500 na
  * cara de quem acabou de preencher 18 campos, e ela não volta.
+ *
+ * Em troca, todo `catch` REGISTRA o erro com o prefixo `[atacado]` antes de
+ * devolver a mensagem amena. Esta é a única escrita sem sessão e sem rede de
+ * testes do sistema: engolir o diagnóstico faria "banco fora", "libvips sem
+ * HEIC" e "pool esgotado" chegarem como a mesma frase na tela e como nada
+ * algum no log, e o sintoma seria "os leads pararam de chegar" sem pista de
+ * qual dos três.
  */
 
 const GENERICO = "Não foi possível enviar agora. Tente novamente em alguns minutos.";
 const MIN_FILL_MS = 5_000;
 
-const BRANDS = ["OKEY", "LOV_CLUB"] as const;
+/**
+ * Teto POR IMAGEM, e são DUAS por envio.
+ *
+ * Não é o `MAX_UPLOAD_MB` (9) do `@/lib/image`: aquele foi calibrado para UM
+ * arquivo por requisição, e aqui vão duas fotos no mesmo corpo. O limite real
+ * é o `serverActions.bodySizeLimit` de 12mb do next.config, e o base64 infla o
+ * binário em 4/3 — duas fotos comuns de celular de 5MB chegam como ~13,3MB e
+ * morrem DENTRO do Next, antes desta action rodar, com erro opaco de rede numa
+ * página pública. Quatro megabytes por imagem deixam as duas mais os campos de
+ * texto abaixo do teto do Next com folga, e a recusa passa a ser a nossa
+ * mensagem em pt-BR em vez de uma falha sem explicação.
+ *
+ * Passado como parâmetro de `validateUploadDataUrl`; a constante do módulo de
+ * imagem continua valendo para os comprovantes e NÃO é redefinida aqui.
+ */
+const MAX_FOTO_MB = 4;
+
+// A tradução marca <-> slug só existe em `brandSlug`; a LISTA de marcas vem do
+// enum do Prisma, que é a única definição delas. Derivada, e não repetida à
+// mão, para que uma marca nova realmente não precise ser lembrada aqui.
+const BRANDS = Object.values(WholesaleBrand);
 
 export interface ApplyInput {
   brandSlug: string;
@@ -71,6 +99,46 @@ function bufferDoDataUrl(valor: unknown): Buffer {
   return Buffer.from(base64, "base64");
 }
 
+/**
+ * Recusa de uma das duas fotos, com a mensagem DESTA tela.
+ *
+ * As mensagens de `validateUploadDataUrl` servem ao fluxo de comprovantes e
+ * não podem ser repassadas aqui: ele oferece "Envie JPG, PNG, HEIC, WebP ou
+ * PDF" uma guarda antes de nós recusarmos PDF, e diz "Arquivo vazio ou
+ * invalido" sem acento, fora do padrão de pt-BR acentuado do resto da LP.
+ * Dizer à lojista que PDF serve, para recusá-lo em seguida, é desinformação em
+ * página pública.
+ *
+ * A validação endurecida continua sendo a dele, integralmente: é ele que
+ * sniffa os magic bytes e é o veredito dele que manda (CVE-2026-96889). O que
+ * trocamos é só o TEXTO. Tamanho e arquivo vazio são conferidos antes para que
+ * esses dois casos ganhem mensagem própria; qualquer outra recusa dele é, por
+ * eliminação, problema de formato.
+ */
+function erroDaFoto(
+  campo: { sujeito: string; objeto: string },
+  dataUrl: unknown,
+  buffer: Buffer,
+): string | null {
+  if (buffer.length === 0) return `Envie ${campo.objeto}.`;
+  if (buffer.length > MAX_FOTO_MB * 1024 * 1024) {
+    return `${campo.sujeito} passa de ${MAX_FOTO_MB}MB. Envie uma foto mais leve.`;
+  }
+  const recusa = validateUploadDataUrl(
+    typeof dataUrl === "string" ? dataUrl : "",
+    buffer,
+    MAX_FOTO_MB,
+  );
+  if (recusa) return `${campo.sujeito} precisa ser uma foto JPG, PNG, WebP ou HEIC.`;
+  if (ehPdf(buffer)) {
+    return `${campo.sujeito} é um PDF. Envie uma foto (JPG ou PNG).`;
+  }
+  return null;
+}
+
+const CAMPO_INSTAGRAM = { sujeito: "A imagem do Instagram", objeto: "a imagem do Instagram" };
+const CAMPO_LOJA = { sujeito: "A foto da loja", objeto: "a foto da loja" };
+
 export async function submitWholesaleApplication(
   input: ApplyInput,
 ): Promise<ActionResult<void>> {
@@ -86,7 +154,12 @@ export async function submitWholesaleApplication(
   ) {
     return actionError(GENERICO);
   }
-  const ip = getClientIp();
+  // Recortado em 45 caracteres (o maior IPv6 textual, inclusive o formato com
+  // sufixo IPv4). Em produção o valor vem do nosso proxy, contado do FIM do
+  // X-Forwarded-For, mas o fallback `x-real-ip` é texto escolhido por quem
+  // chama — e aqui ele vira chave de um `Map` em memória E linha no banco,
+  // partindo de uma requisição sem sessão.
+  const ip = getClientIp().slice(0, 45);
   // QUINZE por hora, não cinco. As operadoras móveis brasileiras usam CGNAT:
   // milhares de pessoas genuinamente distintas saem pelo mesmo IP público. O
   // teto precisa caber várias lojistas atrás do NAT da operadora MAIS as
@@ -101,9 +174,9 @@ export async function submitWholesaleApplication(
   const rate = checkRate(`atacado:${ip}`, { max: 15, windowMs: 60 * 60 * 1000 });
   if (!rate.allowed) return actionError(GENERICO);
 
-  // 2. Marca pelo caminho, nunca pelo payload. A tradução marca <-> slug tem
-  // um único lugar (`brandSlug`); aqui ela é percorrida de volta para que uma
-  // marca nova não precise ser lembrada em dois arquivos.
+  // 2. Marca pelo caminho, nunca pelo payload. `BRANDS` vem do enum do Prisma
+  // e a tradução para slug vem de `brandSlug`: nenhuma das duas é repetida
+  // aqui, então uma marca nova não precisa ser lembrada neste arquivo.
   const brand = BRANDS.find((b) => brandSlug(b) === input.brandSlug) ?? null;
   if (!brand) return actionError(GENERICO);
 
@@ -114,16 +187,10 @@ export async function submitWholesaleApplication(
   // 4. Imagens: assinatura manda, MIME declarado não (CVE-2026-96889).
   const insta = bufferDoDataUrl(input.instagramImage);
   const loja = bufferDoDataUrl(input.storeImage);
-  const erroInsta = validateUploadDataUrl(input.instagramImage, insta);
-  if (erroInsta) return actionError(`Imagem do Instagram: ${erroInsta}`);
-  if (ehPdf(insta)) {
-    return actionError("Imagem do Instagram: envie uma foto (JPG ou PNG), não um PDF.");
-  }
-  const erroLoja = validateUploadDataUrl(input.storeImage, loja);
-  if (erroLoja) return actionError(`Foto da loja: ${erroLoja}`);
-  if (ehPdf(loja)) {
-    return actionError("Foto da loja: envie uma foto (JPG ou PNG), não um PDF.");
-  }
+  const erroInsta = erroDaFoto(CAMPO_INSTAGRAM, input.instagramImage, insta);
+  if (erroInsta) return actionError(erroInsta);
+  const erroLoja = erroDaFoto(CAMPO_LOJA, input.storeImage, loja);
+  if (erroLoja) return actionError(erroLoja);
 
   // 5. Dono do lead. Elegibilidade conferida AGORA, não quando o link nasceu.
   // A consulta também vai em try/catch: banco indisponível aqui lançaria, e o
@@ -136,7 +203,8 @@ export async function submitWholesaleApplication(
       select: { id: true, referralCode: true, role: true, salesModel: true, active: true },
     });
     sellerId = resolveReferral(input.referralCode, candidatos);
-  } catch {
+  } catch (err) {
+    console.error("[atacado] falha ao carregar as vendedoras candidatas:", err);
     return actionError(GENERICO);
   }
 
@@ -151,7 +219,8 @@ export async function submitWholesaleApplication(
   let imgInsta: ProcessedImage;
   try {
     imgInsta = await processAndSaveImage(insta, { folder: "atacado", fileName: "instagram" });
-  } catch {
+  } catch (err) {
+    console.error("[atacado] sharp falhou na imagem do Instagram:", err);
     return actionError(
       "Não foi possível processar a imagem do Instagram. Tente enviar um JPG ou PNG.",
     );
@@ -160,7 +229,8 @@ export async function submitWholesaleApplication(
   let imgLoja: ProcessedImage;
   try {
     imgLoja = await processAndSaveImage(loja, { folder: "atacado", fileName: "loja" });
-  } catch {
+  } catch (err) {
+    console.error("[atacado] sharp falhou na foto da loja:", err);
     // A primeira imagem já está no disco e nenhuma linha vai apontar para
     // ela: sai junto, senão fica órfã (mesma regra de select-finance.ts).
     await deleteUploadedFile(imgInsta.filePath).catch(() => {});
@@ -183,7 +253,8 @@ export async function submitWholesaleApplication(
         submittedIp: ip === "desconhecido" ? null : ip,
       },
     });
-  } catch {
+  } catch (err) {
+    console.error("[atacado] falha ao gravar o lead:", err);
     // Os dois arquivos foram gravados antes da linha; se ela falhar, eles não
     // podem ficar órfãos no disco apontados por ninguém.
     await deleteUploadedFile(imgInsta.filePath).catch(() => {});
