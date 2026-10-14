@@ -11,8 +11,12 @@ import "./atacado.css";
  *
  * Por que funciona: uma custom property CSS resolve a partir do ancestral MAIS
  * PRÓXIMO que a declara. Este wrapper redeclara --background, --foreground e
- * os demais tokens (ver atacado.css), então para ele e tudo dentro dele valem
- * as declarações dele, não as herdadas de `html.dark`. Especificidade e ordem
+ * os tokens que a página de prova usa (8 deles; a lista está em atacado.css),
+ * então para ele e tudo dentro dele valem as declarações dele, não as herdadas
+ * de `html.dark`. ATENÇÃO: isso NÃO é o conjunto completo. Os outros 12 tokens
+ * seguem herdando o valor escuro do dashboard; a tarefa que construir o mundo
+ * visual de verdade precisa redeclará-los todos antes de qualquer conteúdo
+ * real entrar (lista e demais pendências em atacado.css). Especificidade e ordem
  * das folhas de estilo não entram na conta: elas só arbitram regras no MESMO
  * elemento, e aqui as declarações estão em elementos diferentes — o filho
  * sempre vence o ancestral. É por isso que globals.css não precisa mudar, e

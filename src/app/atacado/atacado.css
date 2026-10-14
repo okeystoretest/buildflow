@@ -6,6 +6,32 @@
   /* Placeholder berrante de propósito: esta tarefa prova o isolamento, não
      desenha a marca. Se estas cores aparecerem, o escopo funciona; se o azul
      do Build.Flow aparecer, não funciona. A Tarefa 16 as substitui. */
+
+  /* PENDENTE para a tarefa que construir o mundo visual de verdade (nota de
+     passagem; a prova de escopo só usa os 8 tokens abaixo e por isso passa):
+
+     1. Tokens NÃO redeclarados, que ainda herdam o valor ESCURO do dashboard
+        aqui dentro: --popover, --popover-foreground, --secondary,
+        --secondary-foreground, --muted, --muted-foreground, --accent,
+        --accent-foreground, --destructive, --destructive-foreground, --input,
+        --ring. Usar text-muted-foreground, bg-secondary, bg-muted,
+        border-input, ring-*, text-destructive ou bg-accent hoje dá azul-marinho
+        numa página clara (claro sobre claro / escuro sobre escuro). Redeclare
+        TODOS antes de qualquer conteúdo real. (--font-sans/--font-mono são
+        compartilhadas de propósito.)
+     2. <body> mantém o fundo escuro: globals.css pinta o body com --background
+        resolvido contra html.dark, e o wrapper só pinta a si mesmo. Em página
+        mais alta que a tela não aparece vão, mas o overscroll (bounce) do iOS
+        revela o body escuro. Repintar aqui mesmo, o que é escopado porque este
+        CSS só carrega nesta rota:
+        body:has([data-world="atacado"]) { background-color: ...; }
+        e trocar o min-height abaixo de 100vh para 100dvh.
+     3. Controles nativos seguem o modo do dashboard: globals.css define
+        html { color-scheme: light dark } e a classe .dark está no <html>, então
+        scrollbars, inputs e autofill desta página saem no esquema do
+        dashboard. Acrescentar color-scheme: light em [data-world="atacado"]
+        resolve sem custo — e pesa numa página cujo conteúdo principal é um
+        formulário de 18 campos. */
   --background: 20 60% 90%;
   --foreground: 20 80% 10%;
   --card: 0 0% 100%;
