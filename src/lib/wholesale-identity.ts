@@ -73,7 +73,14 @@ export function phoneMatchKeys(digits: string): string[] {
   const resto = d.slice(2);
 
   if (resto.length === 9 && resto.startsWith("9")) {
-    return [d, `${ddd}${resto.slice(1)}`];
+    const semNono = resto.slice(1);
+    // O nono digito foi prefixado a celulares de 8 digitos, que comecavam em
+    // 6-9. Se o que sobra depois do 9 nao comeca em 6-9, este numero nunca teve
+    // forma de 8 digitos: emitir a variante inventaria outro assinante (e, pior,
+    // quebraria a simetria — "11933334444" acharia "1133334444", mas nao o
+    // contrario, e o aviso de repetido falharia num dos dois sentidos, calado).
+    if (/^[6-9]/.test(semNono)) return [d, `${ddd}${semNono}`];
+    return [d];
   }
   if (resto.length === 8 && /^[6-9]/.test(resto)) {
     return [d, `${ddd}9${resto}`];
