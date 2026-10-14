@@ -96,6 +96,27 @@ check("telefone curto: recusa", "error" in validateApplyPayload({ ...valido, pho
 // --- tetos de texto: nada de campo livre sem limite numa porta pública ---
 check("história gigante: recusa", "error" in validateApplyPayload({ ...valido, story: "x".repeat(5000) }), true);
 
+// --- o objeto inteiro pode não chegar ---
+// O cast existe porque quem chama de verdade é um cliente HTTP: o tipo
+// `Record<string, string>` é promessa do compilador, não do navegador. Sem
+// estas três checagens, a guarda que troca o payload ausente por um vazio não
+// tem rede nenhuma, e a próxima refatoração a apaga como código morto.
+for (const [nome, entrada] of [
+  ["null", null],
+  ["undefined", undefined],
+  ["não é objeto", "nao sou objeto"],
+] as const) {
+  let r: unknown;
+  let lancou = false;
+  try {
+    r = validateApplyPayload(entrada as unknown as Record<string, string>);
+  } catch {
+    lancou = true;
+  }
+  check(`payload ${nome}: não lança`, lancou, false);
+  check(`payload ${nome}: recusa`, typeof r === "object" && r !== null && "error" in r, true);
+}
+
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);
   process.exit(1);

@@ -87,7 +87,18 @@ export async function submitWholesaleApplication(
     return actionError(GENERICO);
   }
   const ip = getClientIp();
-  const rate = checkRate(`atacado:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 });
+  // QUINZE por hora, não cinco. As operadoras móveis brasileiras usam CGNAT:
+  // milhares de pessoas genuinamente distintas saem pelo mesmo IP público. O
+  // teto precisa caber várias lojistas atrás do NAT da operadora MAIS as
+  // tentativas recusadas de uma delas — toda recusa queima uma ficha, inclusive
+  // erro de campo. Com cinco, uma única lojista errando duas fotos trancava
+  // candidatas reais da mesma operadora, numa página cujo propósito inteiro é
+  // captar lead. Passar de quinze num IP é abuso inequívoco e segue limitado, e
+  // o trabalho caro (sharp e a linha) está atrás da validação de campo de todo
+  // modo. Se o número estiver errado para cima, custa até quinze candidaturas
+  // de lixo por hora na fila da analista, que ela apaga; errado para baixo,
+  // custa uma revendedora real, calada.
+  const rate = checkRate(`atacado:${ip}`, { max: 15, windowMs: 60 * 60 * 1000 });
   if (!rate.allowed) return actionError(GENERICO);
 
   // 2. Marca pelo caminho, nunca pelo payload. A tradução marca <-> slug tem
