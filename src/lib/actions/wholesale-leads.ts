@@ -146,8 +146,10 @@ export async function decideLead(input: {
     });
     return true;
   });
-  // Mesma resposta de "não existe" da checagem inicial.
-  if (!gravou) return actionError(WHOLESALE_DENIED_MSG);
+  // O ator já passou por canDecideLead para este lead: dizer "sem permissão"
+  // seria falso. A verdade é que o registro sumiu, e não há o que esconder de
+  // quem já está autorizado a vê-lo.
+  if (!gravou) return actionError("Candidatura não encontrada.");
 
   revalidatePath("/vendas/analise-clientes");
   return actionOk({ status: toStatus });
@@ -218,9 +220,20 @@ export async function assignLeadSeller(input: {
   // lead, então aqui "não existe" é só uma mensagem honesta.
   const lead = await prisma.wholesaleLead.findUnique({
     where: { id: leadId },
-    select: { id: true },
+    select: { id: true, sellerId: true },
   });
   if (!lead) return actionError("Candidatura não encontrada.");
+  if (lead.sellerId) {
+    // A fila da Gestão é para DISTRIBUIR candidaturas sem dono (decisão 14),
+    // não para trocar a vendedora de uma já atribuída. Permitir a troca aqui
+    // mudaria o dono de um cadastro sem deixar rastro: esta action não escreve
+    // no diário, então a transferência seria invisível para a própria análise
+    // que o diário existe para servir. Se um dia a operação precisar
+    // transferir carteira, isso vem com evento próprio, de propósito — não
+    // como efeito colateral de um update sem guarda. Mensagem distinta da de
+    // negação: só GESTAO chega aqui e já vê todo lead, nada a esconder.
+    return actionError("Esta candidatura já tem uma vendedora responsável.");
+  }
 
   await prisma.wholesaleLead.update({
     where: { id: lead.id },
