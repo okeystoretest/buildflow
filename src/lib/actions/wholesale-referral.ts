@@ -44,12 +44,24 @@ export async function ensureMyReferralLink(
   // valor padrao nem inferencia a partir da requisicao.
   const base = process.env.APP_BASE_URL;
   if (!base) return actionError("APP_BASE_URL não configurada no servidor.");
-  // Sem esquema ("app.exemplo.com") ou com espaco sobrando o link sairia
-  // relativo ou malformado no celular da lojista: o mesmo defeito que esta
-  // decisao existe para evitar.
+  // `new URL` sozinho nao basta, e por dois motivos:
+  // - ele APARA espaco antes de parsear, entao "https://app.com " passa — e
+  //   `buildReferralLink` so remove barra final, nao espaco, produzindo um link
+  //   com espaco no meio;
+  // - ele aceita qualquer coisa com cara de esquema: "localhost:3000" parseia
+  //   com protocolo "localhost:" e gera link que nenhum celular abre.
+  // Como a razao desta validacao e justamente nao deixar link quebrado chegar
+  // ao celular da lojista (decisao 35), a guarda confere as duas coisas.
+  if (base !== base.trim()) {
+    return actionError("APP_BASE_URL inválida no servidor (espaço em volta do valor).");
+  }
+  let parsed: URL;
   try {
-    new URL(base);
+    parsed = new URL(base);
   } catch {
+    return actionError("APP_BASE_URL inválida no servidor (precisa incluir https://).");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     return actionError("APP_BASE_URL inválida no servidor (precisa incluir https://).");
   }
 
