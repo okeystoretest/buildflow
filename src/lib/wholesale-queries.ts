@@ -38,6 +38,9 @@ export function buildDuplicateWhere(
     // banco. Em vez de depender da semântica de `OR: []` no Prisma (que não
     // foi verificada aqui), devolvemos uma contradição lógica: o id precisa ser
     // igual ao do lead atual E diferente dele. Nenhuma linha satisfaz isso.
+    //
+    // Este ramo é INALCANÇÁVEL a partir de findDuplicateAlerts, que já sai
+    // antes de consultar; fica como guarda para quem chamar esta função direto.
     return { id: { not: leadId, in: [leadId] } };
   }
 
@@ -46,6 +49,31 @@ export function buildDuplicateWhere(
     status: { in: ["CUIDADO", "REPROVADO"] },
     OR: alternativas,
   };
+}
+
+export type DuplicateMatch = "cnpj" | "telefone" | "ambos";
+
+/**
+ * Por que o aviso disparou, para quem lê a tela.
+ *
+ * PURA de propósito: é o campo que a vendedora de fato lê, e etiquetar errado
+ * é pior que não etiquetar — ela decide sobre o negócio de uma empresa real a
+ * partir desta palavra. Função separada para um script conferir sem banco.
+ *
+ * O guard de 14 dígitos NÃO é decoração: a consulta só procura por CNPJ quando
+ * ele tem 14 dígitos, então comparar sem o mesmo guard faria um casamento
+ * achado só por telefone aparecer como "ambos" — bastando que os dois cadastros
+ * tivessem o CNPJ vazio.
+ */
+export function classifyDuplicateMatch(args: {
+  cnpjDigits: string;
+  phoneKeys: string[];
+  candidate: { cnpj: string; phone: string };
+}): DuplicateMatch {
+  const porCnpj = args.cnpjDigits.length === 14 && args.candidate.cnpj === args.cnpjDigits;
+  const porTelefone = args.phoneKeys.includes(args.candidate.phone);
+  if (porCnpj && porTelefone) return "ambos";
+  return porCnpj ? "cnpj" : "telefone";
 }
 
 export interface DuplicateAlert {
@@ -57,7 +85,7 @@ export interface DuplicateAlert {
   rejectionCode: string | null;
   cautionReason: string | null;
   decidedAt: Date | null;
-  matchedBy: "cnpj" | "telefone" | "ambos";
+  matchedBy: DuplicateMatch;
 }
 
 /**
@@ -95,11 +123,13 @@ export async function findDuplicateAlerts(lead: {
   });
 
   return achados.map((a) => {
-    const porCnpj = a.cnpj === cnpjDigits;
-    const porTelefone = telefones.includes(a.phone);
     return {
       ...a,
-      matchedBy: porCnpj && porTelefone ? "ambos" : porCnpj ? "cnpj" : "telefone",
+      matchedBy: classifyDuplicateMatch({
+        cnpjDigits,
+        phoneKeys: telefones,
+        candidate: { cnpj: a.cnpj, phone: a.phone },
+      }),
     };
   });
 }
@@ -135,6 +165,14 @@ export async function listLeadsFor(
   opts: { brand?: string; status?: string; page?: number } = {},
 ): Promise<{ leads: LeadRow[]; total: number; totalPages: number }> {
   if (!canUseWholesaleTool(actor)) return { leads: [], total: 0, totalPages: 1 };
+
+  // Falha FECHADA. Em Prisma, `sellerId: undefined` nao filtra nada — um
+  // userId vazio entregaria TODAS as candidaturas a uma vendedora. O tipo
+  // impede hoje; esta linha impede tambem quando alguem montar o ator a partir
+  // de um select parcial, que e como um vazamento nasce sem ninguem decidir.
+  if (actor.role !== "GESTAO" && !actor.userId) {
+    return { leads: [], total: 0, totalPages: 1 };
+  }
 
   const brand = (Object.values(WholesaleBrand) as string[]).includes(opts.brand ?? "")
     ? (opts.brand as WholesaleBrand)

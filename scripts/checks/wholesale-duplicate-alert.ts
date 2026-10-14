@@ -4,7 +4,7 @@
 // O que está em jogo: este filtro é o que faz um alerta de fraude aparecer
 // para OUTRA vendedora. Se ele procurar só a grafia recebida, o CNPJ pontuado
 // e o telefone sem o nono dígito escapam — e o alerta nunca dispara, calado.
-import { buildDuplicateWhere } from "../../src/lib/wholesale-queries";
+import { buildDuplicateWhere, classifyDuplicateMatch } from "../../src/lib/wholesale-queries";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -81,6 +81,37 @@ check(
   "CNPJ de tamanho errado também não gera cláusula",
   "OR" in buildDuplicateWhere("lead-atual", "123", ""),
   false,
+);
+
+// --- por que o aviso disparou: o campo que a vendedora le ---
+const cnpjA = "11222333000181";
+const fonesA = ["11988887777", "1188887777"];
+check(
+  "casou por CNPJ e telefone",
+  classifyDuplicateMatch({ cnpjDigits: cnpjA, phoneKeys: fonesA, candidate: { cnpj: cnpjA, phone: "1188887777" } }),
+  "ambos",
+);
+check(
+  "casou so por CNPJ",
+  classifyDuplicateMatch({ cnpjDigits: cnpjA, phoneKeys: fonesA, candidate: { cnpj: cnpjA, phone: "8577776666" } }),
+  "cnpj",
+);
+check(
+  "casou so por telefone",
+  classifyDuplicateMatch({ cnpjDigits: cnpjA, phoneKeys: fonesA, candidate: { cnpj: "11444777000161", phone: "1188887777" } }),
+  "telefone",
+);
+// O DEFEITO que esta correcao fecha: CNPJ vazio nos dois lados nao e casamento
+// de CNPJ, porque a consulta nem procurou por ele.
+check(
+  "CNPJ vazio nos dois lados nao vira casamento de CNPJ",
+  classifyDuplicateMatch({ cnpjDigits: "", phoneKeys: fonesA, candidate: { cnpj: "", phone: "1188887777" } }),
+  "telefone",
+);
+check(
+  "CNPJ malformado nos dois lados tambem nao",
+  classifyDuplicateMatch({ cnpjDigits: "112223", phoneKeys: fonesA, candidate: { cnpj: "112223", phone: "1188887777" } }),
+  "telefone",
 );
 
 if (falhas > 0) {
