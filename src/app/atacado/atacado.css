@@ -1,0 +1,21 @@
+/* Mundo visual das LPs de atacado, escopado em [data-world].
+   globals.css NÃO muda (decisão 30): mexer nos tokens globais poria o
+   dashboard inteiro em risco por causa de uma landing page. */
+
+[data-world="atacado"] {
+  /* Placeholder berrante de propósito: esta tarefa prova o isolamento, não
+     desenha a marca. Se estas cores aparecerem, o escopo funciona; se o azul
+     do Build.Flow aparecer, não funciona. A Tarefa 16 as substitui. */
+  --background: 20 60% 90%;
+  --foreground: 20 80% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 20 80% 10%;
+  --primary: 320 70% 45%;
+  --primary-foreground: 0 0% 100%;
+  --border: 20 30% 75%;
+  --radius: 0.25rem;
+
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  min-height: 100vh;
+}

@@ -10,7 +10,15 @@ import { getAuthSecret } from "@/lib/auth-secret";
 // grava um cookie proprio (bf_track), restrito a este path.
 // /api/integracao e maquina-a-maquina (Build.Connect): autentica por token de
 // servico dentro de cada rota, nao por cookie de sessao.
-const PUBLIC_PATHS = ["/login", "/api/health", "/acompanhar", "/api/integracao"];
+// /api/cron e o mesmo caso: chamada por um agendador externo, que nao tem
+// cookie nenhum. A rota confere o Bearer dela propria e, sem o segredo
+// configurado, responde 401 a tudo — liberar aqui nao abre nada.
+// /atacado e a LP PUBLICA de captacao de revendedor (link que a vendedora
+// compartilha). Nao usa sessao: e pagina de marca, aberta por quem ainda nao
+// e cliente. UM unico segmento serve as duas marcas (/atacado/okey e
+// /atacado/lov-club) — por isso a marca nao fica no primeiro nivel: um so
+// item aqui libera as duas, e uma marca nova nao exige mexer neste arquivo.
+const PUBLIC_PATHS = ["/login", "/api/health", "/acompanhar", "/api/integracao", "/api/cron", "/atacado"];
 
 // Arquivos publicos servidos de /public que NAO exigem sessao. Sem esta
 // liberacao o middleware redirecionava manifest/icones/service worker para
@@ -32,8 +40,13 @@ export async function middleware(req: NextRequest) {
 
   // Libera estáticos e rotas públicas. Nota: /uploads NÃO é mais liberado aqui;
   // agora é servido pela rota autenticada /api/uploads (ver route handler).
+  //
+  // O casamento é pelo caminho EXATO ou por um segmento abaixo dele, nunca por
+  // prefixo de texto: `startsWith("/api/cron")` sozinho liberaria também
+  // /api/cronx e qualquer rota cujo nome só comece igual — uma rota futura
+  // nasceria sem sessão sem ninguém ter decidido isso.
   if (
-    PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
     PUBLIC_FILES.includes(pathname) ||
     pathname.startsWith("/_next")
   ) {
