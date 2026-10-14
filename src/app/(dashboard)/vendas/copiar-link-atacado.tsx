@@ -28,20 +28,31 @@ export function CopiarLinkAtacado() {
   function copiar() {
     setErro(null);
     startTransition(async () => {
+      // Dois try/catch separados de propósito: se a chamada à action falhar
+      // (sessão expirada, banco fora), mandar a vendedora "verificar a área de
+      // transferência" seria um diagnóstico errado apontando para o lugar errado.
+      let link: string;
       try {
         const res = await ensureMyReferralLink("OKEY");
         if (!res.ok) {
           setErro(res.error);
           return;
         }
-        await navigator.clipboard.writeText(res.data.link);
-        setCopiado(true);
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => setCopiado(false), 2000);
+        link = res.data.link;
+      } catch {
+        setErro("Não foi possível obter o link agora. Recarregue a página e tente novamente.");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(link);
       } catch {
         setCopiado(false);
         setErro("Não foi possível copiar o link. Verifique a permissão da área de transferência.");
+        return;
       }
+      setCopiado(true);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopiado(false), 2000);
     });
   }
 

@@ -33,11 +33,25 @@ export async function ensureMyReferralLink(
     return actionError("O link de indicação é da equipe de Atacado.");
   }
 
-  const base = process.env.NEXT_PUBLIC_APP_URL;
-  // Falhar aqui é melhor que entregar link quebrado (decisão 35): o erro de
-  // um Host inferido só apareceria no celular da lojista, dias depois. Por isso
-  // não há valor padrão nem inferência a partir da requisição.
-  if (!base) return actionError("NEXT_PUBLIC_APP_URL não configurada no servidor.");
+  // Variavel de SERVIDOR, lida em tempo de execucao — nao NEXT_PUBLIC_*.
+  // Um NEXT_PUBLIC_ e embutido por Next no BUILD, e este projeto compila dentro
+  // da imagem Docker: uma variavel definida so no runtime do EasyPanel nunca
+  // chegaria aqui, e o botao falharia para sempre num servidor que tem o valor.
+  // O prefixo tambem nunca foi necessario: este valor e lido numa action
+  // "use server" e nunca vai ao navegador (decisao 35).
+  // Falhar aqui e melhor que entregar link quebrado: o erro de um Host
+  // inferido so apareceria no celular da lojista, dias depois. Por isso nao ha
+  // valor padrao nem inferencia a partir da requisicao.
+  const base = process.env.APP_BASE_URL;
+  if (!base) return actionError("APP_BASE_URL não configurada no servidor.");
+  // Sem esquema ("app.exemplo.com") ou com espaco sobrando o link sairia
+  // relativo ou malformado no celular da lojista: o mesmo defeito que esta
+  // decisao existe para evitar.
+  try {
+    new URL(base);
+  } catch {
+    return actionError("APP_BASE_URL inválida no servidor (precisa incluir https://).");
+  }
 
   let code = user.referralCode;
   if (!code) {
@@ -66,12 +80,15 @@ export async function ensureMyReferralLink(
           code = atual?.referralCode ?? null;
         }
       } catch (err) {
-        // Só a colisão de @unique (P2002) justifica sortear de novo. Qualquer
-        // outra falha (banco fora do ar, coluna ausente) é um defeito real e
-        // não pode ser engolida: tentar mais duas vezes só a esconderia atrás
-        // de um "tente novamente" genérico.
+        // Só a colisão de @unique (P2002) justifica sortear de novo.
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;
-        throw err;
+        // Qualquer outra falha (banco fora do ar, coluna ausente) é defeito
+        // real e não pode ser engolida como "colisão". O `throw` foi trocado
+        // por `actionError` logado: um throw numa Server Action chega ao
+        // navegador como 500 opaco e não diz nada à vendedora; assim a falha
+        // continua nos logs do servidor e ela recebe uma frase acionável.
+        console.error("ensureMyReferralLink: falha ao gravar o código de indicação", err);
+        return actionError("Não foi possível gerar o link agora. Tente novamente em instantes.");
       }
     }
     if (!code) return actionError("Não foi possível gerar o link. Tente novamente.");
