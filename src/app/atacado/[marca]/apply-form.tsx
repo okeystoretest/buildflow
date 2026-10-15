@@ -142,10 +142,12 @@ export function ApplyForm({
 
   useEffect(() => {
     if (!enviado) return;
-    window.scrollTo({ top: 0 });
     // Foco no título: o formulário inteiro sumiu, e leitor de tela precisa ser
     // levado à confirmação (role="status" sozinho nem sempre anuncia conteúdo
-    // que já nasce montado).
+    // que já nasce montado). O próprio focus() traz o título para a tela, e o
+    // scroll-margin-top de atacado.css lhe dá folga — havia aqui um
+    // window.scrollTo({top:0}) que, com a página inteira montada, rolava até o
+    // alto e voltava: dois movimentos para chegar onde um chega.
     tituloSucesso.current?.focus();
   }, [enviado]);
 
@@ -340,37 +342,41 @@ export function ApplyForm({
           autoComplete="tel"
         />
         <Bloco campo="story" rotulo="Conte-nos um pouco sobre você e sua trajetória:">
-          <textarea
-            id="story"
-            name="story"
-            required
-            rows={4}
-            value={campos.story}
-            onChange={(e) => definir("story", e.target.value)}
-            className="campo-regua"
-          />
+          {(nome) => (
+            <textarea
+              id={nome}
+              name={nome}
+              required
+              rows={4}
+              value={campos.story}
+              onChange={(e) => definir(nome, e.target.value)}
+              className="campo-regua"
+            />
+          )}
         </Bloco>
       </fieldset>
 
       <fieldset className="artigo space-y-5">
         <legend>Sobre o Seu Negócio</legend>
         <Bloco campo="state" rotulo="Qual é o seu estado?">
-          <select
-            id="state"
-            name="state"
-            required
-            autoComplete="address-level1"
-            value={campos.state}
-            onChange={(e) => definir("state", e.target.value)}
-            className="campo-regua"
-          >
-            <option value="">Selecione</option>
-            {UF_LIST.map((uf) => (
-              <option key={uf} value={uf}>
-                {uf}
-              </option>
-            ))}
-          </select>
+          {(nome) => (
+            <select
+              id={nome}
+              name={nome}
+              required
+              autoComplete="address-level1"
+              value={campos.state}
+              onChange={(e) => definir(nome, e.target.value)}
+              className="campo-regua"
+            >
+              <option value="">Selecione</option>
+              {UF_LIST.map((uf) => (
+                <option key={uf} value={uf}>
+                  {uf}
+                </option>
+              ))}
+            </select>
+          )}
         </Bloco>
         <Campo
           campo="city"
@@ -517,6 +523,9 @@ export function ApplyForm({
   );
 }
 
+/** Todo nome de campo do formulário: os 18 do validador mais os dois uploads. */
+type NomeDeCampo = CampoEsperado | "instagramImage" | "storeImage";
+
 /**
  * Rótulo visível mais o controle que ele nomeia.
  *
@@ -524,22 +533,29 @@ export function ApplyForm({
  * era aqui que a repetição de doze blocos podia soltar o rótulo do campo sem
  * que nada reclamasse. Usado direto quando o controle não é um <input> de
  * texto (o <textarea> da trajetória e o <select> de UF).
+ *
+ * `children` é FUNÇÃO e não nó: recebendo nó pronto, os dois pontos de uso
+ * escreveriam `id="story" name="story"` por conta própria, independentes do
+ * `campo` que virou o `htmlFor` — exatamente o defeito que este componente
+ * existe para tornar impossível. Como função, o nome chega de um lugar só.
+ * Genérico em T para que o ponto de uso receba o literal ("story") e não a
+ * união inteira, e possa passá-lo a `definir`, que exige `CampoEsperado`.
  */
-function Bloco({
+function Bloco<T extends NomeDeCampo>({
   campo,
   rotulo,
   children,
 }: {
-  campo: CampoEsperado | "instagramImage" | "storeImage";
+  campo: T;
   rotulo: string;
-  children: React.ReactNode;
+  children: (campo: T) => React.ReactNode;
 }) {
   return (
     <div>
       <label htmlFor={campo} className="rotulo-campo">
         {rotulo}
       </label>
-      {children}
+      {children(campo)}
     </div>
   );
 }
@@ -548,9 +564,11 @@ function Bloco({
  * Par rótulo + <input> de texto — doze dos dezoito campos.
  *
  * `campo` é tipado pela união que o validador exporta: nome que o servidor não
- * espera não compila. `required` vem DEPOIS de `{...resto}` de propósito: todos
- * os campos são obrigatórios (decisão 20) e nenhuma chamada consegue desligar
- * isso por descuido.
+ * espera não compila. `required` é obrigatoriedade de verdade por duas vias:
+ * está FORA do que `resto` aceita (`Omit` inclui "required", então
+ * `required={false}` não compila) e é escrito DEPOIS de `{...resto}` (então
+ * nem por `as any` dá para desligar). Todos os 18 campos são obrigatórios
+ * (decisão 20).
  */
 function Campo({
   campo,
@@ -565,19 +583,21 @@ function Campo({
   onChange: (campo: CampoEsperado, valor: string) => void;
 } & Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
-  "id" | "name" | "value" | "onChange" | "className"
+  "id" | "name" | "value" | "onChange" | "className" | "required"
 >) {
   return (
     <Bloco campo={campo} rotulo={rotulo}>
-      <input
-        {...resto}
-        id={campo}
-        name={campo}
-        required
-        value={valor}
-        onChange={(e) => onChange(campo, e.target.value)}
-        className="campo-regua"
-      />
+      {(nome) => (
+        <input
+          {...resto}
+          id={nome}
+          name={nome}
+          required
+          value={valor}
+          onChange={(e) => onChange(nome, e.target.value)}
+          className="campo-regua"
+        />
+      )}
     </Bloco>
   );
 }
@@ -609,22 +629,30 @@ function CampoImagem({
   const idErro = `erro-${campo}`;
   return (
     <Bloco campo={campo} rotulo={rotulo}>
-      <input
-        id={campo}
-        name={campo}
-        ref={inputRef}
-        type="file"
-        required
-        accept="image/*,.heic,.heif"
-        onChange={(e) => onEscolher(e.currentTarget)}
-        aria-describedby={erro ? idErro : undefined}
-        aria-invalid={erro ? true : undefined}
-        className="campo-regua"
-      />
-      {erro && (
-        <p id={idErro} role="alert" className="mt-2.5 text-sm font-medium text-destructive">
-          {erro}
-        </p>
+      {(nome) => (
+        <>
+          <input
+            id={nome}
+            name={nome}
+            ref={inputRef}
+            type="file"
+            required
+            accept="image/*,.heic,.heif"
+            onChange={(e) => onEscolher(e.currentTarget)}
+            aria-describedby={erro ? idErro : undefined}
+            aria-invalid={erro ? true : undefined}
+            className="campo-regua"
+          />
+          {erro && (
+            <p
+              id={idErro}
+              role="alert"
+              className="mt-2.5 text-sm font-medium text-destructive"
+            >
+              {erro}
+            </p>
+          )}
+        </>
       )}
     </Bloco>
   );

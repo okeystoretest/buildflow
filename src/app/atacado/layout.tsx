@@ -66,5 +66,20 @@ export const viewport: Viewport = {
  * intocada: ela pertence ao dashboard.
  */
 export default function AtacadoLayout({ children }: { children: React.ReactNode }) {
-  return <div data-world="atacado">{children}</div>;
+  return (
+    <div data-world="atacado">
+      {/* A tipografia da marca entra por @import no topo de atacado.css (é onde
+          um @import vale; depois de uma regra ele é descartado em silêncio), e
+          isso custa três idas e voltas em série antes de o nome da marca
+          pintar: a folha desta rota, o CSS do Google, e só então os arquivos de
+          fonte. O preconnect abre o aperto de mão com fonts.gstatic.com em
+          paralelo, em vez de esperar o CSS do Google revelar o endereço. Vale
+          uma linha no celular da lojista, em dados móveis.
+          `crossOrigin` vazio é obrigatório: arquivo de fonte é requisição CORS,
+          e sem isso o navegador abre uma SEGUNDA conexão e o preconnect é
+          desperdiçado. Nada aqui toca globals.css (decisão 30). */}
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+      {children}
+    </div>
+  );
 }

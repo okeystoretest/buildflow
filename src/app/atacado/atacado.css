@@ -56,7 +56,7 @@
                              lidas como sinal de setor e estão vetadas aqui
                              (roxo Vendas, rosa Financeiro, laranja Distribuição,
                              verde Motorista), e vermelho é reservado ao erro.
-                             Fica a 39° de matiz, 10 pontos de saturação e 10 de
+                             Fica a 39° de matiz, 14 pontos de saturação e 10 de
                              luminosidade do azul do Build.Flow (204 68% 50%),
                              que é um ciano claro de botão — este é tinta indigo
                              profunda. 9,2:1 sobre pedra; 9,5:1 contra o próprio
@@ -176,7 +176,13 @@ body:has([data-world="atacado"]) {
   --accent-foreground: 36 30% 97%;
   --destructive: 4 70% 62%; /* clareado: o vermelho de 42% não se lê sobre a aguada */
   --destructive-foreground: 243 54% 22%;
-  --border: 243 30% 62%; /* 3,5:1 sobre a aguada */
+  --border: 243 30% 64%; /* 3,1:1 sobre a aguada. A 62% dava 2,86:1 — abaixo do
+                            mínimo de 3:1 do WCAG 1.4.11 — e a cifra anterior
+                            neste comentário estava errada. Hoje nada nas faixas
+                            inundadas lê --border (todo filete daqui declara a
+                            própria cor), então foi corrigido no VALOR e não só
+                            no número: um token abaixo do mínimo parado no
+                            arquivo é armadilha para quem vier depois. */
   --input: 243 30% 72%;
   --ring: 36 30% 97%;
 
@@ -550,6 +556,15 @@ body:has([data-world="atacado"]) {
   min-height: 6.5rem;
   resize: vertical;
 }
+/* O <select> é o único campo que NÃO fica com fundo transparente. A seta é a
+   nativa de propósito (seletor nativo é o melhor acerto no celular), e como
+   nenhum navegador aqui pode ser medido, um controle nativo pintado sobre
+   fundo transparente é uma pergunta de plataforma sem resposta. --card é o
+   mesmo branco da placa que está atrás, então não muda nada visível e tira a
+   dúvida de um dos dezoito campos obrigatórios. */
+[data-world="atacado"] select.campo-regua {
+  background-color: hsl(var(--card));
+}
 [data-world="atacado"] .campo-regua::placeholder {
   color: hsl(var(--muted-foreground));
 }
@@ -603,6 +618,16 @@ body:has([data-world="atacado"]) {
   color: hsl(var(--card-foreground));
   padding: clamp(0.75rem, 3vw, 1rem) clamp(0.875rem, 4vw, 1.5rem)
     clamp(1.25rem, 4vw, 1.75rem);
+  min-width: 0; /* fieldset tem min-inline-size: min-content de fábrica, que
+                   estoura a grade em telas estreitas. Aqui o maior
+                   contribuinte de min-content é o <input type="file">: o
+                   ::file-selector-button estilizado mais o "Nenhum arquivo
+                   escolhido" do próprio navegador não quebram linha.
+                   E o sintoma seria MUDO: globals.css:70-73 põe
+                   overflow-x: hidden em html,body, então a placa seria cortada
+                   sem barra de rolagem nenhuma aparecer. Conferir isto é
+                   comparar .artigo.scrollWidth com .artigo.clientWidth, nunca
+                   procurar barra de rolagem. */
 }
 [data-world="atacado"] .artigo > legend {
   font-family: var(--fonte-placa);
