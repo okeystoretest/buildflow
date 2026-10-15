@@ -1,9 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { submitWholesaleApplication } from "@/lib/actions/wholesale-apply";
 import { shrinkImageToBase64 } from "@/lib/client-image";
-import { UF_LIST, type CampoEsperado } from "@/lib/wholesale-apply-validation";
+import {
+  FOUND_US,
+  INVESTMENT_BANDS,
+  SERVICE_MODELS,
+  UF_LIST,
+  type CampoEsperado,
+} from "@/lib/wholesale-apply-validation";
 
 /**
  * Formulário público de candidatura (18 campos, todos obrigatórios: decisão 20).
@@ -20,26 +26,38 @@ import { UF_LIST, type CampoEsperado } from "@/lib/wholesale-apply-validation";
 // no fim de 18 campos.
 const MAX_FOTO_BYTES = 4 * 1024 * 1024;
 
-const OPCOES_ATENDIMENTO = [
-  { valor: "LOJA_FISICA", rotulo: "Loja física" },
-  { valor: "LOJA_ONLINE", rotulo: "Loja online" },
-  { valor: "FISICA_E_ONLINE", rotulo: "Loja física e online" },
-  { valor: "OUTRO", rotulo: "Outro" },
-] as const;
+// Opções derivadas das tuplas do validador: valor novo no servidor sem rótulo
+// aqui deixa de compilar (Record exige todas as chaves), e valor que o servidor
+// não aceita não tem como ser enviado.
+const ROTULOS_ATENDIMENTO: Record<(typeof SERVICE_MODELS)[number], string> = {
+  LOJA_FISICA: "Loja física",
+  LOJA_ONLINE: "Loja online",
+  FISICA_E_ONLINE: "Loja física e online",
+  OUTRO: "Outro",
+};
+const OPCOES_ATENDIMENTO = SERVICE_MODELS.map((v) => ({
+  valor: v,
+  rotulo: ROTULOS_ATENDIMENTO[v],
+}));
 
-const OPCOES_ORIGEM = [
-  { valor: "INSTAGRAM", rotulo: "Instagram" },
-  { valor: "SITE", rotulo: "Site" },
-  { valor: "INDICACAO", rotulo: "Indicação" },
-  { valor: "OUTRO", rotulo: "Outro" },
-] as const;
+const ROTULOS_ORIGEM: Record<(typeof FOUND_US)[number], string> = {
+  INSTAGRAM: "Instagram",
+  SITE: "Site",
+  INDICACAO: "Indicação",
+  OUTRO: "Outro",
+};
+const OPCOES_ORIGEM = FOUND_US.map((v) => ({ valor: v, rotulo: ROTULOS_ORIGEM[v] }));
 
-const OPCOES_INVESTIMENTO = [
-  { valor: "ATE_3K", rotulo: "Até R$ 3 mil" },
-  { valor: "DE_3_A_5K", rotulo: "De R$ 3 a R$ 5 mil" },
-  { valor: "DE_5_A_10K", rotulo: "De R$ 5 a R$ 10 mil" },
-  { valor: "ACIMA_10K", rotulo: "Acima de R$ 10 mil" },
-] as const;
+const ROTULOS_INVESTIMENTO: Record<(typeof INVESTMENT_BANDS)[number], string> = {
+  ATE_3K: "Até R$ 3 mil",
+  DE_3_A_5K: "De R$ 3 a R$ 5 mil",
+  DE_5_A_10K: "De R$ 5 a R$ 10 mil",
+  ACIMA_10K: "Acima de R$ 10 mil",
+};
+const OPCOES_INVESTIMENTO = INVESTMENT_BANDS.map((v) => ({
+  valor: v,
+  rotulo: ROTULOS_INVESTIMENTO[v],
+}));
 
 // "sim"/"nao" explícitos: vazio é recusa no servidor, não "não" (decisão 20), e
 // só um par de radios distingue "não quero visita" de "não respondi".
@@ -82,7 +100,8 @@ function bytesDoDataUrl(dataUrl: string): number {
   return Math.floor((base64.length * 3) / 4);
 }
 
-type ImagemEstado = { base64: string; nome: string } | null;
+// Data-URL já encolhida, ou nada escolhido.
+type ImagemEstado = string | null;
 
 export function ApplyForm({
   brandSlug,
@@ -100,10 +119,33 @@ export function ApplyForm({
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
+  // Encolher foto grande no celular leva segundos: enviar nesse intervalo diria
+  // "envie as imagens" com os dois arquivos já escolhidos.
+  const [lendo, setLendo] = useState({ instagram: false, loja: false });
 
   // Fixado na montagem: o servidor recusa envio com menos de 5s de página
   // aberta (contenção contra robô). Uma pessoa real leva minutos.
   const openedAt = useRef(Date.now());
+
+  // Guarda de envio por ref: `enviando` (estado) só muda na próxima renderização,
+  // e dois toques antes dela passariam ambos. O custo seria cadastro duplicado
+  // na fila da analista, idêntico ao sinal de tentativa repetida.
+  const enviandoRef = useRef(false);
+
+  // Número da seleção mais recente de cada upload: resultado de uma seleção que
+  // já foi substituída (ou apagada) é descartado ao chegar.
+  const selecao = useRef({ instagram: 0, loja: 0 });
+  const inputLoja = useRef<HTMLInputElement>(null);
+  const tituloSucesso = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (!enviado) return;
+    window.scrollTo({ top: 0 });
+    // Foco no título: o formulário inteiro sumiu, e leitor de tela precisa ser
+    // levado à confirmação (role="status" sozinho nem sempre anuncia conteúdo
+    // que já nasce montado).
+    tituloSucesso.current?.focus();
+  }, [enviado]);
 
   function definir(campo: CampoEsperado, valor: string) {
     setCampos((atual) => ({ ...atual, [campo]: valor }));
@@ -117,46 +159,75 @@ export function ApplyForm({
     ? "Compartilhe conosco uma foto do seu espaço físico:"
     : "Compartilhe conosco um print da sua loja online:";
 
+  // Trocar a pergunta 7 entre "Loja online" e o resto muda O QUE o segundo
+  // upload pede (decisão 21). Uma foto já escolhida passaria a ser gravada com a
+  // rotulagem errada (foto de salão marcada como print de loja online), então é
+  // descartada, e a lojista é avisada para não parecer defeito.
+  function trocarAtendimento(valor: string) {
+    const passaAPedirFisico = valor !== "LOJA_ONLINE";
+    if (passaAPedirFisico !== pedeEspacoFisico && (storeImage || lendo.loja)) {
+      selecao.current.loja++;
+      setStoreImage(null);
+      setLendo((l) => ({ ...l, loja: false }));
+      if (inputLoja.current) inputLoja.current.value = "";
+      setErroLoja(
+        "Limpamos a imagem anterior porque a pergunta sobre como você atende mudou. " +
+          "Envie novamente, conforme o que é pedido agora.",
+      );
+    }
+    definir("serviceModel", valor);
+  }
+
   async function escolherImagem(input: HTMLInputElement, qual: "instagram" | "loja") {
     const guardar = qual === "instagram" ? setInstagramImage : setStoreImage;
     const avisar = qual === "instagram" ? setErroInstagram : setErroLoja;
     const file = input.files?.[0];
+    const id = ++selecao.current[qual];
     guardar(null);
     avisar(null);
-    if (!file) return;
+    if (!file) {
+      setLendo((l) => ({ ...l, [qual]: false }));
+      return;
+    }
+    setLendo((l) => ({ ...l, [qual]: true }));
 
-    // Review Focus 5: HEIC de iPhone.
-    // client-image.ts aceita image/heic, mas nem todo navegador decodifica HEIC em
-    // canvas — e aí a compressão falha. Com TUDO obrigatório (decisão 20), isso
-    // trancaria a lojista no fim do formulário sem saída. Então a falha é tratada
-    // e dita em voz alta, com o caminho de contorno.
     const r = await shrinkImageToBase64(file, { maxDimension: 1600 });
+    // Seleção substituída enquanto encolhia: quem manda é a mais nova.
+    if (selecao.current[qual] !== id) return;
+    setLendo((l) => ({ ...l, [qual]: false }));
+
     if (r.error !== undefined) {
-      avisar(
-        "Não conseguimos ler esta imagem. Se ela veio do iPhone, abra a foto, " +
-          "toque em Editar, salve e envie novamente — ou tire um print dela.",
-      );
+      // Texto do próprio client-image (tipo não aceito, acima de 25MB, ilegível):
+      // causas diferentes pedem ações diferentes, então não são fundidas.
+      avisar(r.error);
       // Limpa o input: o `required` nativo volta a apontar o campo, em vez de
       // deixar um arquivo "escolhido" que não foi aceito.
       input.value = "";
       return;
     }
-    // HEIC não passa pelo canvas (client-image devolve o original), então pode
-    // continuar pesado mesmo depois de "encolhido". Dito na hora, por foto.
     if (bytesDoDataUrl(r.base64) > MAX_FOTO_BYTES) {
+      // Review Focus 5: HEIC de iPhone. client-image tenta decodificar HEIC e só
+      // devolve o original quando a decodificação falha; um HEIC que AINDA passa
+      // do teto é esse caso. Abrir a foto, Editar e salvar faz o iOS regravá-la
+      // como JPEG, por isso a instrução funciona. Sem isso, com TUDO obrigatório
+      // (decisão 20), ela ficaria presa sem saída.
+      const ehHeic = file.type === "image/heic" || file.type === "image/heif";
       avisar(
-        "Esta foto está pesada demais (máximo de 4MB). Escolha uma foto mais " +
-          "leve ou tire um print dela.",
+        ehHeic
+          ? "Não conseguimos reduzir esta foto. Se ela veio do iPhone, abra a foto, " +
+              "toque em Editar, salve e envie novamente — ou tire um print dela."
+          : "Esta foto está pesada demais (máximo de 4MB). Escolha uma foto mais " +
+              "leve ou tire um print dela.",
       );
       input.value = "";
       return;
     }
-    guardar({ base64: r.base64, nome: file.name });
+    guardar(r.base64);
   }
 
   async function enviar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (enviando) return;
+    if (enviandoRef.current) return;
     setErro(null);
 
     if (!instagramImage || !storeImage) {
@@ -166,9 +237,9 @@ export function ApplyForm({
     // Conferência do PAR, depois de encolher e antes de enviar: é aqui, e não
     // dentro do Next, que a recusa pode dizer qual foto reduzir.
     const pesada =
-      bytesDoDataUrl(instagramImage.base64) > MAX_FOTO_BYTES
+      bytesDoDataUrl(instagramImage) > MAX_FOTO_BYTES
         ? "do perfil do Instagram"
-        : bytesDoDataUrl(storeImage.base64) > MAX_FOTO_BYTES
+        : bytesDoDataUrl(storeImage) > MAX_FOTO_BYTES
           ? pedeEspacoFisico
             ? "do espaço físico"
             : "da loja online"
@@ -180,20 +251,20 @@ export function ApplyForm({
       return;
     }
 
+    enviandoRef.current = true;
     setEnviando(true);
     try {
       const res = await submitWholesaleApplication({
         brandSlug,
         referralCode,
         campos,
-        instagramImage: instagramImage.base64,
-        storeImage: storeImage.base64,
+        instagramImage,
+        storeImage,
         honeypot,
         openedAt: openedAt.current,
       });
       if (res.ok) {
         setEnviado(true);
-        window.scrollTo({ top: 0 });
       } else {
         // Mensagem do servidor, como veio.
         setErro(res.error);
@@ -203,6 +274,7 @@ export function ApplyForm({
       // campos continuam preenchidos: ela só precisa tentar de novo.
       setErro("Não foi possível enviar agora. Confira a conexão e tente novamente.");
     } finally {
+      enviandoRef.current = false;
       setEnviando(false);
     }
   }
@@ -214,7 +286,9 @@ export function ApplyForm({
         role="status"
         className="space-y-2 rounded-md border bg-card p-6 text-card-foreground"
       >
-        <h2 className="text-2xl font-semibold">Cadastro recebido</h2>
+        <h2 ref={tituloSucesso} tabIndex={-1} className="text-2xl font-semibold">
+          Cadastro recebido
+        </h2>
         <p>
           Obrigada por se candidatar. Recebemos as suas informações e a nossa equipe vai
           analisá-las.
@@ -330,7 +404,7 @@ export function ApplyForm({
           legenda="Como você atende suas clientes hoje?"
           opcoes={OPCOES_ATENDIMENTO}
           valor={campos.serviceModel}
-          onChange={(v) => definir("serviceModel", v)}
+          onChange={trocarAtendimento}
         />
         {/* "Outro" revela o texto e o torna obrigatório (decisão 22). */}
         {campos.serviceModel === "OUTRO" && (
@@ -387,6 +461,7 @@ export function ApplyForm({
           <input
             id="storeImage"
             name="storeImage"
+            ref={inputLoja}
             type="file"
             required
             accept="image/*,.heic,.heif"
@@ -512,10 +587,10 @@ export function ApplyForm({
 
       <button
         type="submit"
-        disabled={enviando}
+        disabled={enviando || lendo.instagram || lendo.loja}
         className="w-full rounded-md bg-primary px-4 py-3 text-base font-semibold text-primary-foreground disabled:opacity-60"
       >
-        {enviando ? "Enviando…" : "Enviar cadastro"}
+        {enviando ? "Enviando…" : lendo.instagram || lendo.loja ? "Preparando imagem…" : "Enviar cadastro"}
       </button>
     </form>
   );

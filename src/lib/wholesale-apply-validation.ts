@@ -26,9 +26,9 @@ export const UF_LIST = [
   "TO",
 ] as const;
 
-const SERVICE_MODELS = ["LOJA_FISICA", "LOJA_ONLINE", "FISICA_E_ONLINE", "OUTRO"] as const;
-const FOUND_US = ["INSTAGRAM", "SITE", "INDICACAO", "OUTRO"] as const;
-const INVESTMENT_BANDS = ["ATE_3K", "DE_3_A_5K", "DE_5_A_10K", "ACIMA_10K"] as const;
+export const SERVICE_MODELS = ["LOJA_FISICA", "LOJA_ONLINE", "FISICA_E_ONLINE", "OUTRO"] as const;
+export const FOUND_US = ["INSTAGRAM", "SITE", "INDICACAO", "OUTRO"] as const;
+export const INVESTMENT_BANDS = ["ATE_3K", "DE_3_A_5K", "DE_5_A_10K", "ACIMA_10K"] as const;
 
 export interface CleanApply {
   contactName: string;
@@ -111,7 +111,7 @@ export type CampoEsperado = CampoTexto | CampoFechado;
 const MAX_OUTRO = 200;
 
 /** Leitura defensiva: o que não for string é tratado como vazio, não quebra. */
-function texto(campos: Record<string, string>, chave: string): string {
+function texto(campos: Record<string, string>, chave: CampoEsperado): string {
   const valor: unknown = (campos as Record<string, unknown>)[chave];
   return typeof valor === "string" ? valor.trim() : "";
 }
