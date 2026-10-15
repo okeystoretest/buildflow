@@ -14,17 +14,21 @@ import {
 /**
  * Formulário público de candidatura (18 campos, todos obrigatórios: decisão 20).
  *
+ * EM QUATRO ETAPAS, uma por seção da planilha. O motivo é de conversão, não de
+ * estética: dezoito campos obrigatórios numa rolagem só anunciam o tamanho do
+ * compromisso antes de a lojista ter investido nada, e cada etapa é conferida
+ * NO NAVEGADOR antes de avançar — assim ela nunca chega ao fim para descobrir
+ * um erro do começo, num fluxo onde não existe canal de resposta (decisão 7).
+ *
+ * Só a etapa corrente é renderizada. Isso é deliberado: com as outras escondidas
+ * por CSS, a validação nativa do navegador tentaria focar um campo invisível no
+ * envio e falharia com "not focusable". As respostas já digitadas vivem em
+ * `campos` (estado), então nada se perde ao ir e voltar.
+ *
  * Os textos de ERRO de campo vêm da Server Action e são exibidos como chegam:
  * uma segunda lista de mensagens aqui divergiria da do servidor. As únicas
  * mensagens daqui são as de falhas que acontecem no navegador (imagem ilegível,
  * foto pesada, rede).
- *
- * Forma visual: o requerimento de uma concessão. Cada grupo é uma placa com a
- * cabeça gravada pendurada no próprio filete — o <legend> nativo do <fieldset>
- * interrompe a borda por conta própria, que é exatamente a cabeça pendurada
- * deste mundo —, e cada campo é uma LINHA PARA ESCREVER e não uma caixa
- * arredondada (`.campo-regua` em atacado.css). As regras de estilo moram no
- * CSS escopado; aqui ficam só a estrutura e a semântica.
  */
 
 // Mesmo teto por imagem da action (MAX_FOTO_MB). Conferido aqui para que a
@@ -32,6 +36,15 @@ import {
 // 12mb do Next ANTES da action rodar, e a falha chegaria como erro opaco de rede
 // no fim de 18 campos.
 const MAX_FOTO_BYTES = 4 * 1024 * 1024;
+
+// Títulos das quatro seções, literais da planilha.
+const ETAPAS = [
+  "Boas-vindas e Identificação",
+  "Sobre o Seu Negócio",
+  "Conectividade e Parceria Comercial",
+  "Validação Cadastro",
+] as const;
+const TOTAL_ETAPAS = ETAPAS.length;
 
 // Opções derivadas das tuplas do validador: valor novo no servidor sem rótulo
 // aqui deixa de compilar (Record exige todas as chaves), e valor que o servidor
@@ -112,6 +125,7 @@ export function ApplyForm({
   brandSlug: string;
   referralCode: string | null;
 }) {
+  const [etapa, setEtapa] = useState(1);
   const [campos, setCampos] = useState<Record<CampoEsperado, string>>(CAMPOS_VAZIOS);
   const [instagramImage, setInstagramImage] = useState<ImagemEstado>(null);
   const [storeImage, setStoreImage] = useState<ImagemEstado>(null);
@@ -139,21 +153,63 @@ export function ApplyForm({
   const selecao = useRef({ instagram: 0, loja: 0 });
   const inputLoja = useRef<HTMLInputElement>(null);
   const tituloSucesso = useRef<HTMLHeadingElement>(null);
+  const painelEtapa = useRef<HTMLFieldSetElement>(null);
+  const tituloEtapa = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     if (!enviado) return;
     // Foco no título: o formulário inteiro sumiu, e leitor de tela precisa ser
     // levado à confirmação (role="status" sozinho nem sempre anuncia conteúdo
     // que já nasce montado). O próprio focus() traz o título para a tela, e o
-    // scroll-margin-top de atacado.css lhe dá folga — havia aqui um
-    // window.scrollTo({top:0}) que, com a página inteira montada, rolava até o
-    // alto e voltava: dois movimentos para chegar onde um chega.
+    // scroll-margin-top de atacado.css lhe dá folga.
     tituloSucesso.current?.focus();
   }, [enviado]);
 
   function definir(campo: CampoEsperado, valor: string) {
     setCampos((atual) => ({ ...atual, [campo]: valor }));
   }
+
+  /**
+   * Confere SÓ a etapa visível, usando a validação nativa do navegador.
+   *
+   * Pergunta a cada controle do painel se ele está válido e aponta o primeiro
+   * que não está, com a mensagem e o balão do próprio navegador — que já vêm
+   * traduzidos e já sabem rolar até o campo. Não há regra duplicada aqui: o
+   * `required` está na marcação, e o veredito final continua sendo do servidor.
+   */
+  function etapaValida(): boolean {
+    const painel = painelEtapa.current;
+    if (!painel) return true;
+    const controles = painel.querySelectorAll<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >("input, select, textarea");
+    for (const controle of controles) {
+      if (!controle.checkValidity()) {
+        controle.reportValidity();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function avancar() {
+    if (!etapaValida()) return;
+    setErro(null);
+    setEtapa((e) => Math.min(TOTAL_ETAPAS, e + 1));
+  }
+
+  function voltar() {
+    setErro(null);
+    setEtapa((e) => Math.max(1, e - 1));
+  }
+
+  // Trocar de etapa leva o foco ao título dela: sem isso, quem usa teclado ou
+  // leitor de tela continua com o foco num botão que acabou de mudar de função,
+  // e nada anuncia que a etapa mudou.
+  useEffect(() => {
+    if (enviado) return;
+    tituloEtapa.current?.focus();
+  }, [etapa, enviado]);
 
   // O rótulo do segundo upload MUDA com a resposta da pergunta 7 (decisão 21).
   // Loja só online não tem espaço físico para fotografar; o campo continua
@@ -231,6 +287,12 @@ export function ApplyForm({
 
   async function enviar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Enter num campo de texto envia o formulário. Antes da última etapa isso
+    // significa "avançar", não "enviar pela metade".
+    if (etapa < TOTAL_ETAPAS) {
+      avancar();
+      return;
+    }
     if (enviandoRef.current) return;
     setErro(null);
 
@@ -286,240 +348,301 @@ export function ApplyForm({
   // Sem prometer prazo nem canal de resposta: não há canal automático (decisão 7).
   if (enviado) {
     return (
-      <section role="status" className="placa p-7 sm:p-9">
-        <h2
-          ref={tituloSucesso}
-          tabIndex={-1}
-          className="cabeca-secao cabeca-placa text-primary"
-        >
-          <span>Cadastro recebido</span>
-        </h2>
-        <p className="corpo mt-5">
+      <div className="placa-form" role="status">
+        <h3 ref={tituloSucesso} tabIndex={-1} className="titulo-bloco">
+          Cadastro recebido
+        </h3>
+        <p className="corpo mt-4 text-[hsl(var(--muted-foreground))]">
           Obrigada por se candidatar. Recebemos as suas informações e a nossa equipe vai
           analisá-las.
         </p>
-      </section>
+      </div>
     );
   }
 
+  const preparandoImagem = lendo.instagram || lendo.loja;
+  const pct = Math.round((etapa / TOTAL_ETAPAS) * 100);
+
   return (
-    <form onSubmit={enviar} className="relative space-y-7">
-      {/* Honeypot: invisível e fora do alcance de leitor de tela e de Tab. Robô
-          preenche tudo o que encontra; pessoa nunca vê este campo. */}
-      <input
-        name="confirmacao"
-        tabIndex={-1}
-        aria-hidden
-        autoComplete="off"
-        value={honeypot}
-        onChange={(e) => setHoneypot(e.target.value)}
-        className="absolute left-[-9999px]"
-      />
+    <div className="placa-form">
+      <div className="mb-9">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p ref={tituloEtapa} tabIndex={-1} id="etapa-titulo" className="rotulo-campo">
+            Etapa {etapa} de {TOTAL_ETAPAS} · {ETAPAS[etapa - 1]}
+          </p>
+          <p className="rotulo-micro">{pct}% concluído</p>
+        </div>
+        <div className="trilha mt-3" data-completo={etapa === TOTAL_ETAPAS}>
+          <span style={{ width: `${pct}%` }} />
+        </div>
+      </div>
 
-      <fieldset className="artigo space-y-5">
-        <legend>Boas-vindas e Identificação</legend>
-        <Campo
-          campo="contactName"
-          rotulo="Como podemos te chamar?"
-          valor={campos.contactName}
-          onChange={definir}
-          autoComplete="name"
-        />
-        <Campo
-          campo="email"
-          rotulo="Qual é o seu melhor e-mail para contato?"
-          valor={campos.email}
-          onChange={definir}
-          type="email"
-          autoComplete="email"
-        />
-        <Campo
-          campo="phone"
-          rotulo="Qual é o seu WhatsApp ou telefone para conversarmos?"
-          valor={campos.phone}
-          onChange={definir}
-          type="tel"
-          autoComplete="tel"
-        />
-        <Bloco campo="story" rotulo="Conte-nos um pouco sobre você e sua trajetória:">
-          {(nome) => (
-            <textarea
-              id={nome}
-              name={nome}
-              required
-              rows={4}
-              value={campos.story}
-              onChange={(e) => definir(nome, e.target.value)}
-              className="campo-regua"
-            />
-          )}
-        </Bloco>
-      </fieldset>
-
-      <fieldset className="artigo space-y-5">
-        <legend>Sobre o Seu Negócio</legend>
-        <Bloco campo="state" rotulo="Qual é o seu estado?">
-          {(nome) => (
-            <select
-              id={nome}
-              name={nome}
-              required
-              autoComplete="address-level1"
-              value={campos.state}
-              onChange={(e) => definir(nome, e.target.value)}
-              className="campo-regua"
-            >
-              <option value="">Selecione</option>
-              {UF_LIST.map((uf) => (
-                <option key={uf} value={uf}>
-                  {uf}
-                </option>
-              ))}
-            </select>
-          )}
-        </Bloco>
-        <Campo
-          campo="city"
-          rotulo="Em qual cidade sua loja está localizada?"
-          valor={campos.city}
-          onChange={definir}
-          autoComplete="address-level2"
-        />
-
-        <GrupoRadio
-          nome="serviceModel"
-          legenda="Como você atende suas clientes hoje?"
-          opcoes={OPCOES_ATENDIMENTO}
-          valor={campos.serviceModel}
-          onChange={trocarAtendimento}
-        />
-        {/* "Outro" revela o texto e o torna obrigatório (decisão 22). */}
-        {campos.serviceModel === "OUTRO" && (
-          <Campo
-            campo="serviceModelOther"
-            rotulo="Descreva como você atende suas clientes hoje:"
-            valor={campos.serviceModelOther}
-            onChange={definir}
-          />
-        )}
-
-        <Campo
-          campo="instagram"
-          rotulo="Qual é o Instagram da sua loja? (@)"
-          valor={campos.instagram}
-          onChange={definir}
-          autoCapitalize="none"
-          autoCorrect="off"
-        />
-        <CampoImagem
-          campo="instagramImage"
-          rotulo="Envie uma imagem ou print do perfil do seu Instagram:"
-          erro={erroInstagram}
-          onEscolher={(input) => escolherImagem(input, "instagram")}
-        />
-        <CampoImagem
-          campo="storeImage"
-          rotulo={rotuloLoja}
-          erro={erroLoja}
-          onEscolher={(input) => escolherImagem(input, "loja")}
-          inputRef={inputLoja}
-        />
-
-        <Campo
-          campo="marketTime"
-          rotulo="Há quanto tempo sua loja atua no mercado?"
-          valor={campos.marketTime}
-          onChange={definir}
-        />
-        <Campo
-          campo="teamSize"
-          rotulo="Quantas pessoas fazem parte da sua equipe atualmente?"
-          valor={campos.teamSize}
-          onChange={definir}
-        />
-      </fieldset>
-
-      <fieldset className="artigo space-y-5">
-        <legend>Conectividade e Parceria Comercial</legend>
-        <Campo
-          campo="brandsCarried"
-          rotulo="Quais marcas já fazem parte do seu espaço?"
-          valor={campos.brandsCarried}
-          onChange={definir}
-        />
-
-        <GrupoRadio
-          nome="foundUs"
-          legenda="Como você nos encontrou?"
-          opcoes={OPCOES_ORIGEM}
-          valor={campos.foundUs}
-          onChange={(v) => definir("foundUs", v)}
-        />
-        {campos.foundUs === "OUTRO" && (
-          <Campo
-            campo="foundUsOther"
-            rotulo="Conte como você nos encontrou:"
-            valor={campos.foundUsOther}
-            onChange={definir}
-          />
-        )}
-
-        <Campo
-          campo="followTime"
-          rotulo="Há quanto tempo você acompanha a nossa marca?"
-          valor={campos.followTime}
-          onChange={definir}
-        />
-
-        <GrupoRadio
-          nome="investmentBand"
-          legenda="Qual valor você planeja investir na sua próxima coleção conosco?"
-          opcoes={OPCOES_INVESTIMENTO}
-          valor={campos.investmentBand}
-          onChange={(v) => definir("investmentBand", v)}
-        />
-        <GrupoRadio
-          nome="wantsVisit"
-          legenda="Gostaria de receber a visita de uma de nossas representantes em sua loja?"
-          opcoes={OPCOES_VISITA}
-          valor={campos.wantsVisit}
-          onChange={(v) => definir("wantsVisit", v)}
-        />
-      </fieldset>
-
-      <fieldset className="artigo space-y-5">
-        <legend>Validação Cadastro</legend>
-        <Campo
-          campo="cnpj"
-          rotulo="Para finalizarmos, informe o CNPJ da sua empresa (utilizado para confirmação do segmento):"
-          valor={campos.cnpj}
-          onChange={definir}
-          inputMode="numeric"
+      <form onSubmit={enviar} className="relative">
+        {/* Honeypot: invisível e fora do alcance de leitor de tela e de Tab. Robô
+            preenche tudo o que encontra; pessoa nunca vê este campo. Fica fora
+            do painel da etapa de propósito, para sobreviver à troca de etapa. */}
+        <input
+          name="confirmacao"
+          tabIndex={-1}
+          aria-hidden
           autoComplete="off"
+          value={honeypot}
+          onChange={(e) => setHoneypot(e.target.value)}
+          className="isca"
         />
-      </fieldset>
 
-      {erro && (
-        <p
-          role="alert"
-          className="border-2 border-destructive bg-card p-4 text-[0.9375rem] font-medium text-destructive"
-        >
-          {erro}
-        </p>
-      )}
+        <fieldset ref={painelEtapa} className="etapa space-y-6" aria-labelledby="etapa-titulo">
+          {etapa === 1 && (
+            <>
+              <Campo
+                campo="contactName"
+                rotulo="Como podemos te chamar?"
+                valor={campos.contactName}
+                onChange={definir}
+                autoComplete="name"
+                maxLength={120}
+              />
+              <Campo
+                campo="email"
+                rotulo="Qual é o seu melhor e-mail para contato?"
+                valor={campos.email}
+                onChange={definir}
+                type="email"
+                autoComplete="email"
+                maxLength={160}
+              />
+              <Campo
+                campo="phone"
+                rotulo="Qual é o seu WhatsApp ou telefone para conversarmos?"
+                valor={campos.phone}
+                onChange={definir}
+                type="tel"
+                autoComplete="tel"
+                maxLength={20}
+              />
+              <Bloco campo="story" rotulo="Conte-nos um pouco sobre você e sua trajetória:">
+                {(nome) => (
+                  <textarea
+                    id={nome}
+                    name={nome}
+                    required
+                    rows={4}
+                    maxLength={2000}
+                    value={campos.story}
+                    onChange={(e) => definir(nome, e.target.value)}
+                    className="campo-regua"
+                  />
+                )}
+              </Bloco>
+            </>
+          )}
 
-      <button
-        type="submit"
-        disabled={enviando || lendo.instagram || lendo.loja}
-        className="botao-placa"
-      >
-        {enviando
-          ? "Enviando…"
-          : lendo.instagram || lendo.loja
-            ? "Preparando imagem…"
-            : "Enviar cadastro"}
-      </button>
-    </form>
+          {etapa === 2 && (
+            <>
+              <div className="grid gap-6 sm:grid-cols-2">
+                <Bloco campo="state" rotulo="Qual é o seu estado?">
+                  {(nome) => (
+                    <select
+                      id={nome}
+                      name={nome}
+                      required
+                      autoComplete="address-level1"
+                      value={campos.state}
+                      onChange={(e) => definir(nome, e.target.value)}
+                      className="campo-regua"
+                    >
+                      <option value="">Selecione</option>
+                      {UF_LIST.map((uf) => (
+                        <option key={uf} value={uf}>
+                          {uf}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </Bloco>
+                <Campo
+                  campo="city"
+                  rotulo="Em qual cidade sua loja está localizada?"
+                  valor={campos.city}
+                  onChange={definir}
+                  autoComplete="address-level2"
+                  maxLength={120}
+                />
+              </div>
+
+              <GrupoRadio
+                nome="serviceModel"
+                legenda="Como você atende suas clientes hoje?"
+                opcoes={OPCOES_ATENDIMENTO}
+                valor={campos.serviceModel}
+                onChange={trocarAtendimento}
+              />
+              {/* "Outro" revela o texto e o torna obrigatório (decisão 22). */}
+              {campos.serviceModel === "OUTRO" && (
+                <Campo
+                  campo="serviceModelOther"
+                  rotulo="Descreva como você atende suas clientes hoje:"
+                  valor={campos.serviceModelOther}
+                  onChange={definir}
+                  maxLength={200}
+                />
+              )}
+
+              <Campo
+                campo="instagram"
+                rotulo="Qual é o Instagram da sua loja? (@)"
+                valor={campos.instagram}
+                onChange={definir}
+                autoCapitalize="none"
+                autoCorrect="off"
+                maxLength={60}
+              />
+
+              <div className="grid gap-6 sm:grid-cols-2">
+                <CampoImagem
+                  campo="instagramImage"
+                  rotulo="Envie uma imagem ou print do perfil do seu Instagram:"
+                  erro={erroInstagram}
+                  jaTem={instagramImage !== null}
+                  lendo={lendo.instagram}
+                  onEscolher={(input) => escolherImagem(input, "instagram")}
+                />
+                <CampoImagem
+                  campo="storeImage"
+                  rotulo={rotuloLoja}
+                  erro={erroLoja}
+                  jaTem={storeImage !== null}
+                  lendo={lendo.loja}
+                  onEscolher={(input) => escolherImagem(input, "loja")}
+                  inputRef={inputLoja}
+                />
+              </div>
+
+              <div className="grid gap-6 sm:grid-cols-2">
+                <Campo
+                  campo="marketTime"
+                  rotulo="Há quanto tempo sua loja atua no mercado?"
+                  valor={campos.marketTime}
+                  onChange={definir}
+                  maxLength={200}
+                />
+                <Campo
+                  campo="teamSize"
+                  rotulo="Quantas pessoas fazem parte da sua equipe atualmente?"
+                  valor={campos.teamSize}
+                  onChange={definir}
+                  maxLength={200}
+                />
+              </div>
+            </>
+          )}
+
+          {etapa === 3 && (
+            <>
+              <Campo
+                campo="brandsCarried"
+                rotulo="Quais marcas já fazem parte do seu espaço?"
+                valor={campos.brandsCarried}
+                onChange={definir}
+                maxLength={200}
+              />
+
+              <GrupoRadio
+                nome="foundUs"
+                legenda="Como você nos encontrou?"
+                opcoes={OPCOES_ORIGEM}
+                valor={campos.foundUs}
+                onChange={(v) => definir("foundUs", v)}
+              />
+              {campos.foundUs === "OUTRO" && (
+                <Campo
+                  campo="foundUsOther"
+                  rotulo="Conte como você nos encontrou:"
+                  valor={campos.foundUsOther}
+                  onChange={definir}
+                  maxLength={200}
+                />
+              )}
+
+              <Campo
+                campo="followTime"
+                rotulo="Há quanto tempo você acompanha a nossa marca?"
+                valor={campos.followTime}
+                onChange={definir}
+                maxLength={200}
+              />
+
+              <GrupoRadio
+                nome="investmentBand"
+                legenda="Qual valor você planeja investir na sua próxima coleção conosco?"
+                opcoes={OPCOES_INVESTIMENTO}
+                valor={campos.investmentBand}
+                onChange={(v) => definir("investmentBand", v)}
+              />
+              <GrupoRadio
+                nome="wantsVisit"
+                legenda="Gostaria de receber a visita de uma de nossas representantes em sua loja?"
+                opcoes={OPCOES_VISITA}
+                valor={campos.wantsVisit}
+                onChange={(v) => definir("wantsVisit", v)}
+              />
+            </>
+          )}
+
+          {etapa === 4 && (
+            <>
+              <Campo
+                campo="cnpj"
+                rotulo="Para finalizarmos, informe o CNPJ da sua empresa:"
+                valor={campos.cnpj}
+                onChange={definir}
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={18}
+              />
+              <p className="corpo-pequeno text-[hsl(var(--muted-foreground))]">
+                O CNPJ é usado para confirmar o segmento da sua loja.
+              </p>
+            </>
+          )}
+        </fieldset>
+
+        {erro && (
+          <p role="alert" className="aviso-erro mt-7 border border-[hsl(var(--destructive))] p-4">
+            {erro}
+          </p>
+        )}
+
+        <div className="mt-9 flex flex-wrap items-center justify-between gap-4 border-t border-[hsl(var(--border))] pt-7">
+          {etapa > 1 ? (
+            <button type="button" onClick={voltar} className="acao-vazia">
+              Voltar
+            </button>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+
+          {etapa < TOTAL_ETAPAS ? (
+            <button
+              type="button"
+              onClick={avancar}
+              disabled={preparandoImagem}
+              className="acao"
+            >
+              {preparandoImagem ? "Preparando imagem…" : "Próxima etapa"}
+            </button>
+          ) : (
+            <button type="submit" disabled={enviando || preparandoImagem} className="acao">
+              {enviando
+                ? "Enviando…"
+                : preparandoImagem
+                  ? "Preparando imagem…"
+                  : "Enviar cadastro"}
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -552,7 +675,7 @@ function Bloco<T extends NomeDeCampo>({
 }) {
   return (
     <div>
-      <label htmlFor={campo} className="rotulo-campo">
+      <label htmlFor={campo} className="rotulo-campo mb-2 block">
         {rotulo}
       </label>
       {children(campo)}
@@ -569,6 +692,10 @@ function Bloco<T extends NomeDeCampo>({
  * `required={false}` não compila) e é escrito DEPOIS de `{...resto}` (então
  * nem por `as any` dá para desligar). Todos os 18 campos são obrigatórios
  * (decisão 20).
+ *
+ * `maxLength` vem de fora porque o teto é por campo e é o MESMO do servidor:
+ * sem ele, ela escreve 300 caracteres onde cabem 200 e descobre no envio, com
+ * uma mensagem que nomeia o campo pelo nome interno dele.
  */
 function Campo({
   campo,
@@ -609,20 +736,31 @@ function Campo({
  * nos dois blocos quase idênticos de antes, errar um dos dois ids deixava a
  * mensagem invisível para leitor de tela sem quebrar nada visível.
  *
+ * `required` é condicionado a `jaTem` — e isto é consequência direta das quatro
+ * etapas. Ao voltar para a etapa 2, o <input type="file"> é remontado VAZIO,
+ * porque seleção de arquivo vive no DOM e não em estado do React; a imagem em
+ * si continua guardada (já encolhida) no estado do formulário. Mantê-lo
+ * `required` aqui travaria a etapa pedindo de novo um arquivo que já temos. O
+ * par continua obrigatório: `enviar` recusa sem as duas imagens.
+ *
  * `inputRef` é opcional porque só o segundo upload precisa de ref — a foto é
  * descartada quando a pergunta 7 muda (decisão 21) e o input nativo tem de ser
- * esvaziado junto. Fora disso os dois campos são iguais.
+ * esvaziado junto.
  */
 function CampoImagem({
   campo,
   rotulo,
   erro,
+  jaTem,
+  lendo,
   onEscolher,
   inputRef,
 }: {
   campo: "instagramImage" | "storeImage";
   rotulo: string;
   erro: string | null;
+  jaTem: boolean;
+  lendo: boolean;
   onEscolher: (input: HTMLInputElement) => void;
   inputRef?: React.Ref<HTMLInputElement>;
 }) {
@@ -630,29 +768,34 @@ function CampoImagem({
   return (
     <Bloco campo={campo} rotulo={rotulo}>
       {(nome) => (
-        <>
+        <div className="area-anexo">
           <input
             id={nome}
             name={nome}
             ref={inputRef}
             type="file"
-            required
+            required={!jaTem}
             accept="image/*,.heic,.heif"
             onChange={(e) => onEscolher(e.currentTarget)}
             aria-describedby={erro ? idErro : undefined}
             aria-invalid={erro ? true : undefined}
-            className="campo-regua"
           />
+          {lendo && (
+            <p className="corpo-pequeno mt-2 text-[hsl(var(--muted-foreground))]">
+              Preparando a imagem…
+            </p>
+          )}
+          {!lendo && jaTem && !erro && (
+            <p className="corpo-pequeno mt-2 text-[hsl(var(--muted-foreground))]">
+              Imagem pronta. Escolha outro arquivo se quiser trocar.
+            </p>
+          )}
           {erro && (
-            <p
-              id={idErro}
-              role="alert"
-              className="mt-2.5 text-sm font-medium text-destructive"
-            >
+            <p id={idErro} role="alert" className="aviso-erro mt-2 text-left">
               {erro}
             </p>
           )}
-        </>
+        </div>
       )}
     </Bloco>
   );
@@ -664,9 +807,9 @@ function CampoImagem({
  * de tela.
  *
  * As opções chegam prontas das tuplas que o validador exporta (SERVICE_MODELS,
- * FOUND_US, INVESTMENT_BANDS); este componente não conhece valor nenhum.
- * Cada opção é uma linha de largura inteira separada por filete, com a <label>
- * cobrindo a linha toda: alvo de toque grande sem nada desenhado a mais.
+ * FOUND_US, INVESTMENT_BANDS); este componente não conhece valor nenhum. Cada
+ * opção é uma placa clicável de alvo generoso, com a borda inteira respondendo
+ * ao toque — não só o círculo do radio.
  */
 function GrupoRadio({
   nome,
@@ -683,10 +826,10 @@ function GrupoRadio({
 }) {
   return (
     <fieldset className="grupo-opcoes">
-      <legend>{legenda}</legend>
-      <div className="mt-2">
+      <legend className="rotulo-campo mb-2">{legenda}</legend>
+      <div className="grid gap-2.5 sm:grid-cols-2">
         {opcoes.map((o) => (
-          <label key={o.valor} className="linha-opcao">
+          <label key={o.valor} className="opcao">
             <input
               type="radio"
               name={nome}

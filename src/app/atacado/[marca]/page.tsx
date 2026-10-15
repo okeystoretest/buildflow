@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getBrandContent } from "@/lib/wholesale-content";
 import { ApplyForm } from "./apply-form";
-import { Abertura, Motivos, Perguntas, Vantagens } from "./sections";
+import { Abertura, Cabecalho, Metricas, Motivos, Perguntas, Rodape, Vantagens } from "./sections";
 
-// robots e themeColor vêm do layout do mundo (decisões 28 e 30); aqui só o que
-// varia por marca.
+// robots, themeColor e a identidade da página vêm do layout do mundo (decisões
+// 28 e 30); aqui só o que varia por marca.
 //
 // Rota DINÂMICA de propósito: lê `?r=` para atribuir o cadastro à vendedora que
 // compartilhou o link. Por isso não há `generateStaticParams` (não prerenderiza
@@ -15,7 +15,19 @@ import { Abertura, Motivos, Perguntas, Vantagens } from "./sections";
 export function generateMetadata({ params }: { params: { marca: string } }): Metadata {
   const marca = getBrandContent(params.marca);
   if (!marca) return {};
-  return { title: `Seja revendedora | ${marca.content.brandName}` };
+  const nome = marca.content.brandName;
+  return {
+    title: `Seja revendedora | ${nome}`,
+    // Descrição por marca: o preview do WhatsApp — único canal por onde este
+    // link circula — herdava a do dashboard e anunciava a marca da lojista como
+    // "Logística e controle de vendas".
+    description: `Revenda ${nome} na sua loja: margem de até 100%, tecidos da Linha Italiana Premium e exclusividade territorial por região.`,
+    openGraph: {
+      title: `Seja revendedora | ${nome}`,
+      description: `Cadastro de lojista para revender ${nome}.`,
+      type: "website",
+    },
+  };
 }
 
 export default function MarcaPage({
@@ -28,35 +40,52 @@ export default function MarcaPage({
   const marca = getBrandContent(params.marca);
   if (!marca) notFound();
 
+  const nome = marca.content.brandName;
+
   // `?r=` identifica a vendedora que indicou. Repetido na URL (`?r=a&r=b`)
   // chega como lista; pega a primeira em vez de quebrar. Sem o parâmetro, o
   // cadastro entra sem dono e fica com a Gestão.
   const r = Array.isArray(searchParams.r) ? searchParams.r[0] : searchParams.r;
 
-  // A ordem é a da planilha, que a especificação chamou de "dispostas
-  // sequencialmente conforme otimização de UX": abertura → por que revender →
-  // por que escolher → cadastro → perguntas. As seções sangram de ponta a
-  // ponta (`faixa`) e medem o conteúdo por dentro (`interno`), então o <main>
-  // não tem largura nem respiro próprios.
+  // Ordem: abertura → condições → por que revender → por que escolher →
+  // perguntas → cadastro. As perguntas vêm ANTES do cadastro de propósito,
+  // seguindo a referência do dono: responder a objeção antes de pedir 18 campos
+  // converte melhor que pedir primeiro e explicar depois. É divergência da
+  // ordem original da spec, registrada para emenda.
   return (
-    <main>
-      <Abertura brandName={marca.content.brandName} />
-      <Motivos reasons={marca.content.reasons} />
-      <Vantagens advantages={marca.content.advantages} />
-      <section id="requerimento" className="faixa faixa-alta" aria-labelledby="cadastro-titulo">
-        <div className="interno">
-          <h2 id="cadastro-titulo" className="cabeca-secao cabeca-placa">
-            <span>Cadastro</span>
-          </h2>
-          {/* mt menor que nas outras seções de propósito: o honeypot do
-              formulário é o primeiro filho do <form> e o `space-y` já soma um
-              espaço antes da primeira placa. */}
-          <div className="mt-5">
-            <ApplyForm brandSlug={params.marca} referralCode={r ?? null} />
+    <>
+      <Cabecalho brandName={nome} />
+      <main>
+        <Abertura brandName={nome} />
+        <Metricas />
+        <Motivos reasons={marca.content.reasons} brandName={nome} />
+        <Vantagens advantages={marca.content.advantages} />
+        <Perguntas faq={marca.content.faq} />
+
+        <section
+          id="requerimento"
+          className="faixa bg-[hsl(var(--secondary))]"
+          aria-labelledby="cadastro-titulo"
+        >
+          <div className="interno py-20 lg:py-28">
+            <div className="mx-auto max-w-[56rem]">
+              <h2 id="cadastro-titulo" className="titulo-secao">
+                Faça parte da {nome}
+              </h2>
+              <div className="mt-4 h-px w-12 bg-[hsl(var(--primary))]" aria-hidden="true" />
+              {/* Sem prometer contato, prazo ou acesso a catálogo: não existe
+                  canal de saída nesta feature (decisão 7). */}
+              <p className="corpo mt-6 text-[hsl(var(--muted-foreground))]">
+                Preencha o cadastro para a nossa equipe analisar a sua candidatura.
+              </p>
+              <div className="mt-10">
+                <ApplyForm brandSlug={params.marca} referralCode={r ?? null} />
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
-      <Perguntas faq={marca.content.faq} brandName={marca.content.brandName} />
-    </main>
+        </section>
+      </main>
+      <Rodape brandName={nome} />
+    </>
   );
 }
