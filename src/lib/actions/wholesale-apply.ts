@@ -56,6 +56,16 @@ const MIN_FILL_MS = 5_000;
  * imagem continua valendo para os comprovantes e NÃO é redefinida aqui.
  */
 const MAX_FOTO_MB = 4;
+// Tetos de DECODIFICACAO desta porta, apertados em relacao ao padrao de
+// image.ts. O cliente ja encolhe para 1600 px e o servidor redimensiona para
+// 1600 px, entao nada maior que isto tem utilidade aqui — e esta e a unica
+// porta de upload sem sessao do sistema, onde o custo de uma bomba de
+// descompressao e o processo inteiro, nao so a LP.
+const TETOS_DE_DECODIFICACAO = {
+  limitInputPixels: 50_000_000,
+  maxDecodedBytes: 64 * 1024 * 1024,
+} as const;
+
 
 // A tradução marca <-> slug só existe em `brandSlug`; a LISTA de marcas vem do
 // enum do Prisma, que é a única definição delas. Derivada, e não repetida à
@@ -218,7 +228,11 @@ export async function submitWholesaleApplication(
   // em toda build do libvips. Sem o catch, esse envio seria um 500.
   let imgInsta: ProcessedImage;
   try {
-    imgInsta = await processAndSaveImage(insta, { folder: "atacado", fileName: "instagram" });
+    imgInsta = await processAndSaveImage(insta, {
+      folder: "atacado",
+      fileName: "instagram",
+      ...TETOS_DE_DECODIFICACAO,
+    });
   } catch (err) {
     console.error("[atacado] sharp falhou na imagem do Instagram:", err);
     return actionError(
@@ -228,7 +242,11 @@ export async function submitWholesaleApplication(
 
   let imgLoja: ProcessedImage;
   try {
-    imgLoja = await processAndSaveImage(loja, { folder: "atacado", fileName: "loja" });
+    imgLoja = await processAndSaveImage(loja, {
+      folder: "atacado",
+      fileName: "loja",
+      ...TETOS_DE_DECODIFICACAO,
+    });
   } catch (err) {
     console.error("[atacado] sharp falhou na foto da loja:", err);
     // A primeira imagem já está no disco e nenhuma linha vai apontar para

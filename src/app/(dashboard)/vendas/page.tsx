@@ -100,9 +100,6 @@ export default async function VendasPage({
           <Button asChild variant="outline"><Link href="/vendas/tarefas"><ListTodo className="h-4 w-4" /> Tarefas Diárias</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/relatorio-campanha"><BarChart3 className="h-4 w-4" /> Relatório de Campanha</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/historico"><History className="h-4 w-4" /> Histórico de Vendas</Link></Button>
-          {/* Venda de SERVICO (Select). Verde proprio: nao e um pedido, e o
-              Financeiro acompanha por outra tela. */}
-          <Button asChild variant="servico"><Link href="/vendas/novo-select"><Plus className="h-4 w-4" /> Novo select</Link></Button>
           <Button asChild variant="vendas"><Link href="/vendas/novo"><Plus className="h-4 w-4" /> Novo pedido</Link></Button>
         </div>
       </div>
