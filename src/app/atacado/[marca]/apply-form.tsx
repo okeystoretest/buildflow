@@ -18,6 +18,13 @@ import {
  * uma segunda lista de mensagens aqui divergiria da do servidor. As únicas
  * mensagens daqui são as de falhas que acontecem no navegador (imagem ilegível,
  * foto pesada, rede).
+ *
+ * Forma visual: o requerimento de uma concessão. Cada grupo é uma placa com a
+ * cabeça gravada pendurada no próprio filete — o <legend> nativo do <fieldset>
+ * interrompe a borda por conta própria, que é exatamente a cabeça pendurada
+ * deste mundo —, e cada campo é uma LINHA PARA ESCREVER e não uma caixa
+ * arredondada (`.campo-regua` em atacado.css). As regras de estilo moram no
+ * CSS escopado; aqui ficam só a estrutura e a semântica.
  */
 
 // Mesmo teto por imagem da action (MAX_FOTO_MB). Conferido aqui para que a
@@ -88,11 +95,6 @@ const CAMPOS_VAZIOS: Record<CampoEsperado, string> = {
   wantsVisit: "",
   cnpj: "",
 };
-
-const CLASSE_CAMPO =
-  "w-full rounded-md border bg-card px-3 py-2 text-base text-card-foreground";
-const CLASSE_FIELDSET = "space-y-4 rounded-md border p-4";
-const CLASSE_LEGEND = "px-1 text-lg font-semibold";
 
 /** Tamanho aproximado, em bytes, do binário dentro de um data-URL base64. */
 function bytesDoDataUrl(dataUrl: string): number {
@@ -282,14 +284,15 @@ export function ApplyForm({
   // Sem prometer prazo nem canal de resposta: não há canal automático (decisão 7).
   if (enviado) {
     return (
-      <section
-        role="status"
-        className="space-y-2 rounded-md border bg-card p-6 text-card-foreground"
-      >
-        <h2 ref={tituloSucesso} tabIndex={-1} className="text-2xl font-semibold">
-          Cadastro recebido
+      <section role="status" className="placa p-7 sm:p-9">
+        <h2
+          ref={tituloSucesso}
+          tabIndex={-1}
+          className="cabeca-secao cabeca-placa text-primary"
+        >
+          <span>Cadastro recebido</span>
         </h2>
-        <p>
+        <p className="corpo mt-5">
           Obrigada por se candidatar. Recebemos as suas informações e a nossa equipe vai
           analisá-las.
         </p>
@@ -298,7 +301,7 @@ export function ApplyForm({
   }
 
   return (
-    <form onSubmit={enviar} className="relative space-y-6">
+    <form onSubmit={enviar} className="relative space-y-7">
       {/* Honeypot: invisível e fora do alcance de leitor de tela e de Tab. Robô
           preenche tudo o que encontra; pessoa nunca vê este campo. */}
       <input
@@ -311,48 +314,32 @@ export function ApplyForm({
         className="absolute left-[-9999px]"
       />
 
-      <fieldset className={CLASSE_FIELDSET}>
-        <legend className={CLASSE_LEGEND}>Boas-vindas e Identificação</legend>
-        <div>
-          <label htmlFor="contactName">Como podemos te chamar?</label>
-          <input
-            id="contactName"
-            name="contactName"
-            required
-            autoComplete="name"
-            value={campos.contactName}
-            onChange={(e) => definir("contactName", e.target.value)}
-            className={CLASSE_CAMPO}
-          />
-        </div>
-        <div>
-          <label htmlFor="email">Qual é o seu melhor e-mail para contato?</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={campos.email}
-            onChange={(e) => definir("email", e.target.value)}
-            className={CLASSE_CAMPO}
-          />
-        </div>
-        <div>
-          <label htmlFor="phone">Qual é o seu WhatsApp ou telefone para conversarmos?</label>
-          <input
-            id="phone"
-            name="phone"
-            type="tel"
-            required
-            autoComplete="tel"
-            value={campos.phone}
-            onChange={(e) => definir("phone", e.target.value)}
-            className={CLASSE_CAMPO}
-          />
-        </div>
-        <div>
-          <label htmlFor="story">Conte-nos um pouco sobre você e sua trajetória:</label>
+      <fieldset className="artigo space-y-5">
+        <legend>Boas-vindas e Identificação</legend>
+        <Campo
+          campo="contactName"
+          rotulo="Como podemos te chamar?"
+          valor={campos.contactName}
+          onChange={definir}
+          autoComplete="name"
+        />
+        <Campo
+          campo="email"
+          rotulo="Qual é o seu melhor e-mail para contato?"
+          valor={campos.email}
+          onChange={definir}
+          type="email"
+          autoComplete="email"
+        />
+        <Campo
+          campo="phone"
+          rotulo="Qual é o seu WhatsApp ou telefone para conversarmos?"
+          valor={campos.phone}
+          onChange={definir}
+          type="tel"
+          autoComplete="tel"
+        />
+        <Bloco campo="story" rotulo="Conte-nos um pouco sobre você e sua trajetória:">
           <textarea
             id="story"
             name="story"
@@ -360,15 +347,14 @@ export function ApplyForm({
             rows={4}
             value={campos.story}
             onChange={(e) => definir("story", e.target.value)}
-            className={CLASSE_CAMPO}
+            className="campo-regua"
           />
-        </div>
+        </Bloco>
       </fieldset>
 
-      <fieldset className={CLASSE_FIELDSET}>
-        <legend className={CLASSE_LEGEND}>Sobre o Seu Negócio</legend>
-        <div>
-          <label htmlFor="state">Qual é o seu estado?</label>
+      <fieldset className="artigo space-y-5">
+        <legend>Sobre o Seu Negócio</legend>
+        <Bloco campo="state" rotulo="Qual é o seu estado?">
           <select
             id="state"
             name="state"
@@ -376,7 +362,7 @@ export function ApplyForm({
             autoComplete="address-level1"
             value={campos.state}
             onChange={(e) => definir("state", e.target.value)}
-            className={CLASSE_CAMPO}
+            className="campo-regua"
           >
             <option value="">Selecione</option>
             {UF_LIST.map((uf) => (
@@ -385,19 +371,14 @@ export function ApplyForm({
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <label htmlFor="city">Em qual cidade sua loja está localizada?</label>
-          <input
-            id="city"
-            name="city"
-            required
-            autoComplete="address-level2"
-            value={campos.city}
-            onChange={(e) => definir("city", e.target.value)}
-            className={CLASSE_CAMPO}
-          />
-        </div>
+        </Bloco>
+        <Campo
+          campo="city"
+          rotulo="Em qual cidade sua loja está localizada?"
+          valor={campos.city}
+          onChange={definir}
+          autoComplete="address-level2"
+        />
 
         <GrupoRadio
           nome="serviceModel"
@@ -408,111 +389,58 @@ export function ApplyForm({
         />
         {/* "Outro" revela o texto e o torna obrigatório (decisão 22). */}
         {campos.serviceModel === "OUTRO" && (
-          <div>
-            <label htmlFor="serviceModelOther">
-              Descreva como você atende suas clientes hoje:
-            </label>
-            <input
-              id="serviceModelOther"
-              name="serviceModelOther"
-              required
-              value={campos.serviceModelOther}
-              onChange={(e) => definir("serviceModelOther", e.target.value)}
-              className={CLASSE_CAMPO}
-            />
-          </div>
+          <Campo
+            campo="serviceModelOther"
+            rotulo="Descreva como você atende suas clientes hoje:"
+            valor={campos.serviceModelOther}
+            onChange={definir}
+          />
         )}
 
-        <div>
-          <label htmlFor="instagram">Qual é o Instagram da sua loja? (@)</label>
-          <input
-            id="instagram"
-            name="instagram"
-            required
-            autoCapitalize="none"
-            autoCorrect="off"
-            value={campos.instagram}
-            onChange={(e) => definir("instagram", e.target.value)}
-            className={CLASSE_CAMPO}
-          />
-        </div>
-        <div>
-          <label htmlFor="instagramImage">
-            Envie uma imagem ou print do perfil do seu Instagram:
-          </label>
-          <input
-            id="instagramImage"
-            name="instagramImage"
-            type="file"
-            required
-            accept="image/*,.heic,.heif"
-            onChange={(e) => escolherImagem(e.currentTarget, "instagram")}
-            aria-describedby={erroInstagram ? "erro-instagramImage" : undefined}
-            className={CLASSE_CAMPO}
-          />
-          {erroInstagram && (
-            <p id="erro-instagramImage" role="alert">
-              {erroInstagram}
-            </p>
-          )}
-        </div>
-        <div>
-          <label htmlFor="storeImage">{rotuloLoja}</label>
-          <input
-            id="storeImage"
-            name="storeImage"
-            ref={inputLoja}
-            type="file"
-            required
-            accept="image/*,.heic,.heif"
-            onChange={(e) => escolherImagem(e.currentTarget, "loja")}
-            aria-describedby={erroLoja ? "erro-storeImage" : undefined}
-            className={CLASSE_CAMPO}
-          />
-          {erroLoja && (
-            <p id="erro-storeImage" role="alert">
-              {erroLoja}
-            </p>
-          )}
-        </div>
+        <Campo
+          campo="instagram"
+          rotulo="Qual é o Instagram da sua loja? (@)"
+          valor={campos.instagram}
+          onChange={definir}
+          autoCapitalize="none"
+          autoCorrect="off"
+        />
+        <CampoImagem
+          campo="instagramImage"
+          rotulo="Envie uma imagem ou print do perfil do seu Instagram:"
+          erro={erroInstagram}
+          onEscolher={(input) => escolherImagem(input, "instagram")}
+        />
+        <CampoImagem
+          campo="storeImage"
+          rotulo={rotuloLoja}
+          erro={erroLoja}
+          onEscolher={(input) => escolherImagem(input, "loja")}
+          inputRef={inputLoja}
+        />
 
-        <div>
-          <label htmlFor="marketTime">Há quanto tempo sua loja atua no mercado?</label>
-          <input
-            id="marketTime"
-            name="marketTime"
-            required
-            value={campos.marketTime}
-            onChange={(e) => definir("marketTime", e.target.value)}
-            className={CLASSE_CAMPO}
-          />
-        </div>
-        <div>
-          <label htmlFor="teamSize">Quantas pessoas fazem parte da sua equipe atualmente?</label>
-          <input
-            id="teamSize"
-            name="teamSize"
-            required
-            value={campos.teamSize}
-            onChange={(e) => definir("teamSize", e.target.value)}
-            className={CLASSE_CAMPO}
-          />
-        </div>
+        <Campo
+          campo="marketTime"
+          rotulo="Há quanto tempo sua loja atua no mercado?"
+          valor={campos.marketTime}
+          onChange={definir}
+        />
+        <Campo
+          campo="teamSize"
+          rotulo="Quantas pessoas fazem parte da sua equipe atualmente?"
+          valor={campos.teamSize}
+          onChange={definir}
+        />
       </fieldset>
 
-      <fieldset className={CLASSE_FIELDSET}>
-        <legend className={CLASSE_LEGEND}>Conectividade e Parceria Comercial</legend>
-        <div>
-          <label htmlFor="brandsCarried">Quais marcas já fazem parte do seu espaço?</label>
-          <input
-            id="brandsCarried"
-            name="brandsCarried"
-            required
-            value={campos.brandsCarried}
-            onChange={(e) => definir("brandsCarried", e.target.value)}
-            className={CLASSE_CAMPO}
-          />
-        </div>
+      <fieldset className="artigo space-y-5">
+        <legend>Conectividade e Parceria Comercial</legend>
+        <Campo
+          campo="brandsCarried"
+          rotulo="Quais marcas já fazem parte do seu espaço?"
+          valor={campos.brandsCarried}
+          onChange={definir}
+        />
 
         <GrupoRadio
           nome="foundUs"
@@ -522,30 +450,20 @@ export function ApplyForm({
           onChange={(v) => definir("foundUs", v)}
         />
         {campos.foundUs === "OUTRO" && (
-          <div>
-            <label htmlFor="foundUsOther">Conte como você nos encontrou:</label>
-            <input
-              id="foundUsOther"
-              name="foundUsOther"
-              required
-              value={campos.foundUsOther}
-              onChange={(e) => definir("foundUsOther", e.target.value)}
-              className={CLASSE_CAMPO}
-            />
-          </div>
+          <Campo
+            campo="foundUsOther"
+            rotulo="Conte como você nos encontrou:"
+            valor={campos.foundUsOther}
+            onChange={definir}
+          />
         )}
 
-        <div>
-          <label htmlFor="followTime">Há quanto tempo você acompanha a nossa marca?</label>
-          <input
-            id="followTime"
-            name="followTime"
-            required
-            value={campos.followTime}
-            onChange={(e) => definir("followTime", e.target.value)}
-            className={CLASSE_CAMPO}
-          />
-        </div>
+        <Campo
+          campo="followTime"
+          rotulo="Há quanto tempo você acompanha a nossa marca?"
+          valor={campos.followTime}
+          onChange={definir}
+        />
 
         <GrupoRadio
           nome="investmentBand"
@@ -563,36 +481,152 @@ export function ApplyForm({
         />
       </fieldset>
 
-      <fieldset className={CLASSE_FIELDSET}>
-        <legend className={CLASSE_LEGEND}>Validação Cadastro</legend>
-        <div>
-          <label htmlFor="cnpj">
-            Para finalizarmos, informe o CNPJ da sua empresa (utilizado para confirmação do
-            segmento):
-          </label>
-          <input
-            id="cnpj"
-            name="cnpj"
-            required
-            inputMode="numeric"
-            autoComplete="off"
-            value={campos.cnpj}
-            onChange={(e) => definir("cnpj", e.target.value)}
-            className={CLASSE_CAMPO}
-          />
-        </div>
+      <fieldset className="artigo space-y-5">
+        <legend>Validação Cadastro</legend>
+        <Campo
+          campo="cnpj"
+          rotulo="Para finalizarmos, informe o CNPJ da sua empresa (utilizado para confirmação do segmento):"
+          valor={campos.cnpj}
+          onChange={definir}
+          inputMode="numeric"
+          autoComplete="off"
+        />
       </fieldset>
 
-      {erro && <p role="alert">{erro}</p>}
+      {erro && (
+        <p
+          role="alert"
+          className="border-2 border-destructive bg-card p-4 text-[0.9375rem] font-medium text-destructive"
+        >
+          {erro}
+        </p>
+      )}
 
       <button
         type="submit"
         disabled={enviando || lendo.instagram || lendo.loja}
-        className="w-full rounded-md bg-primary px-4 py-3 text-base font-semibold text-primary-foreground disabled:opacity-60"
+        className="botao-placa"
       >
-        {enviando ? "Enviando…" : lendo.instagram || lendo.loja ? "Preparando imagem…" : "Enviar cadastro"}
+        {enviando
+          ? "Enviando…"
+          : lendo.instagram || lendo.loja
+            ? "Preparando imagem…"
+            : "Enviar cadastro"}
       </button>
     </form>
+  );
+}
+
+/**
+ * Rótulo visível mais o controle que ele nomeia.
+ *
+ * `campo` serve de `htmlFor` E de `id`/`name` do controle, numa variável só:
+ * era aqui que a repetição de doze blocos podia soltar o rótulo do campo sem
+ * que nada reclamasse. Usado direto quando o controle não é um <input> de
+ * texto (o <textarea> da trajetória e o <select> de UF).
+ */
+function Bloco({
+  campo,
+  rotulo,
+  children,
+}: {
+  campo: CampoEsperado | "instagramImage" | "storeImage";
+  rotulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label htmlFor={campo} className="rotulo-campo">
+        {rotulo}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Par rótulo + <input> de texto — doze dos dezoito campos.
+ *
+ * `campo` é tipado pela união que o validador exporta: nome que o servidor não
+ * espera não compila. `required` vem DEPOIS de `{...resto}` de propósito: todos
+ * os campos são obrigatórios (decisão 20) e nenhuma chamada consegue desligar
+ * isso por descuido.
+ */
+function Campo({
+  campo,
+  rotulo,
+  valor,
+  onChange,
+  ...resto
+}: {
+  campo: CampoEsperado;
+  rotulo: string;
+  valor: string;
+  onChange: (campo: CampoEsperado, valor: string) => void;
+} & Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "id" | "name" | "value" | "onChange" | "className"
+>) {
+  return (
+    <Bloco campo={campo} rotulo={rotulo}>
+      <input
+        {...resto}
+        id={campo}
+        name={campo}
+        required
+        value={valor}
+        onChange={(e) => onChange(campo, e.target.value)}
+        className="campo-regua"
+      />
+    </Bloco>
+  );
+}
+
+/**
+ * Campo de imagem, dono do id da sua própria mensagem de erro.
+ *
+ * O `aria-describedby` e o `id` do parágrafo de erro saem da MESMA variável:
+ * nos dois blocos quase idênticos de antes, errar um dos dois ids deixava a
+ * mensagem invisível para leitor de tela sem quebrar nada visível.
+ *
+ * `inputRef` é opcional porque só o segundo upload precisa de ref — a foto é
+ * descartada quando a pergunta 7 muda (decisão 21) e o input nativo tem de ser
+ * esvaziado junto. Fora disso os dois campos são iguais.
+ */
+function CampoImagem({
+  campo,
+  rotulo,
+  erro,
+  onEscolher,
+  inputRef,
+}: {
+  campo: "instagramImage" | "storeImage";
+  rotulo: string;
+  erro: string | null;
+  onEscolher: (input: HTMLInputElement) => void;
+  inputRef?: React.Ref<HTMLInputElement>;
+}) {
+  const idErro = `erro-${campo}`;
+  return (
+    <Bloco campo={campo} rotulo={rotulo}>
+      <input
+        id={campo}
+        name={campo}
+        ref={inputRef}
+        type="file"
+        required
+        accept="image/*,.heic,.heif"
+        onChange={(e) => onEscolher(e.currentTarget)}
+        aria-describedby={erro ? idErro : undefined}
+        aria-invalid={erro ? true : undefined}
+        className="campo-regua"
+      />
+      {erro && (
+        <p id={idErro} role="alert" className="mt-2.5 text-sm font-medium text-destructive">
+          {erro}
+        </p>
+      )}
+    </Bloco>
   );
 }
 
@@ -600,6 +634,11 @@ export function ApplyForm({
  * Pergunta de alternativa como radios dentro de <fieldset>: no celular o radio
  * mostra as opções sem abrir painel, e o `<legend>` dá o nome do grupo ao leitor
  * de tela.
+ *
+ * As opções chegam prontas das tuplas que o validador exporta (SERVICE_MODELS,
+ * FOUND_US, INVESTMENT_BANDS); este componente não conhece valor nenhum.
+ * Cada opção é uma linha de largura inteira separada por filete, com a <label>
+ * cobrindo a linha toda: alvo de toque grande sem nada desenhado a mais.
  */
 function GrupoRadio({
   nome,
@@ -615,21 +654,23 @@ function GrupoRadio({
   onChange: (valor: string) => void;
 }) {
   return (
-    <fieldset className="space-y-2">
+    <fieldset className="grupo-opcoes">
       <legend>{legenda}</legend>
-      {opcoes.map((o) => (
-        <label key={o.valor} className="flex items-center gap-2">
-          <input
-            type="radio"
-            name={nome}
-            value={o.valor}
-            required
-            checked={valor === o.valor}
-            onChange={() => onChange(o.valor)}
-          />
-          {o.rotulo}
-        </label>
-      ))}
+      <div className="mt-2">
+        {opcoes.map((o) => (
+          <label key={o.valor} className="linha-opcao">
+            <input
+              type="radio"
+              name={nome}
+              value={o.valor}
+              required
+              checked={valor === o.valor}
+              onChange={() => onChange(o.valor)}
+            />
+            <span className="text-[0.9375rem]">{o.rotulo}</span>
+          </label>
+        ))}
+      </div>
     </fieldset>
   );
 }

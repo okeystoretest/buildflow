@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getBrandContent } from "@/lib/wholesale-content";
 import { ApplyForm } from "./apply-form";
+import { Abertura, Motivos, Perguntas, Vantagens } from "./sections";
 
 // robots e themeColor vêm do layout do mundo (decisões 28 e 30); aqui só o que
 // varia por marca.
@@ -32,12 +33,30 @@ export default function MarcaPage({
   // cadastro entra sem dono e fica com a Gestão.
   const r = Array.isArray(searchParams.r) ? searchParams.r[0] : searchParams.r;
 
+  // A ordem é a da planilha, que a especificação chamou de "dispostas
+  // sequencialmente conforme otimização de UX": abertura → por que revender →
+  // por que escolher → cadastro → perguntas. As seções sangram de ponta a
+  // ponta (`faixa`) e medem o conteúdo por dentro (`interno`), então o <main>
+  // não tem largura nem respiro próprios.
   return (
-    <main className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
-      <h1 className="text-3xl font-bold text-primary">
-        Seja revendedora {marca.content.brandName}
-      </h1>
-      <ApplyForm brandSlug={params.marca} referralCode={r ?? null} />
+    <main>
+      <Abertura brandName={marca.content.brandName} />
+      <Motivos reasons={marca.content.reasons} />
+      <Vantagens advantages={marca.content.advantages} />
+      <section id="requerimento" className="faixa faixa-alta" aria-labelledby="cadastro-titulo">
+        <div className="interno">
+          <h2 id="cadastro-titulo" className="cabeca-secao cabeca-placa">
+            <span>Cadastro</span>
+          </h2>
+          {/* mt menor que nas outras seções de propósito: o honeypot do
+              formulário é o primeiro filho do <form> e o `space-y` já soma um
+              espaço antes da primeira placa. */}
+          <div className="mt-5">
+            <ApplyForm brandSlug={params.marca} referralCode={r ?? null} />
+          </div>
+        </div>
+      </section>
+      <Perguntas faq={marca.content.faq} brandName={marca.content.brandName} />
     </main>
   );
 }

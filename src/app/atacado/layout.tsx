@@ -14,8 +14,23 @@ export const metadata: Metadata = {
 
 // themeColor próprio sobrescreve o azul do Build.Flow declarado no root layout
 // (decisão 30). No Next 14 ele pertence ao `viewport`, não ao `metadata`.
+//
+// O valor é o ULTRAMARINO da abertura (hsl(243 54% 40%)), não branco: a barra
+// de status tem de casar com a cor do TOPO da página, e o topo desta página é o
+// campo inundado. É o mesmo valor com que atacado.css repinta o <body>, pela
+// mesma razão. Um só valor, sem variante por esquema de cor, porque esta página
+// tem um esquema só (color-scheme: light em atacado.css).
+//
+// `width`/`initialScale` repetem o root porque sobrescrever o `viewport` de um
+// layout aninhado substitui o objeto, não mescla campo por campo.
+// `viewportFit: "cover"` é o que faz a página passar por baixo do recorte da
+// tela do celular — e sem ele os `env(safe-area-inset-*)` de atacado.css valem
+// 0 e o respiro do notch não existe.
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#342F9D",
 };
 
 /**
@@ -28,17 +43,22 @@ export const viewport: Viewport = {
  * escopo, não por substituição (decisão 30).
  *
  * Por que funciona: uma custom property CSS resolve a partir do ancestral MAIS
- * PRÓXIMO que a declara. Este wrapper redeclara --background, --foreground e
- * os tokens que a página de prova usa (8 deles; a lista está em atacado.css),
+ * PRÓXIMO que a declara. Este wrapper redeclara os 20 tokens shadcn — todos
+ * eles, com os MESMOS nomes do dashboard e valores da marca (atacado.css) —,
  * então para ele e tudo dentro dele valem as declarações dele, não as herdadas
- * de `html.dark`. ATENÇÃO: isso NÃO é o conjunto completo. Os outros 12 tokens
- * seguem herdando o valor escuro do dashboard; a tarefa que construir o mundo
- * visual de verdade precisa redeclará-los todos antes de qualquer conteúdo
- * real entrar (lista e demais pendências em atacado.css). Especificidade e ordem
- * das folhas de estilo não entram na conta: elas só arbitram regras no MESMO
- * elemento, e aqui as declarações estão em elementos diferentes — o filho
- * sempre vence o ancestral. É por isso que globals.css não precisa mudar, e
- * que alternar o tema do dashboard não atinge a LP.
+ * de `html.dark`. Especificidade e ordem das folhas de estilo não entram na
+ * conta: elas só arbitram regras no MESMO elemento, e aqui as declarações estão
+ * em elementos diferentes — o filho sempre vence o ancestral. É por isso que
+ * globals.css não precisa mudar, e que alternar o tema do dashboard não atinge
+ * a LP. O mesmo mecanismo é usado uma segunda vez, aninhado, em
+ * `.campo-concedido`: dentro das faixas inundadas os tokens valem outros
+ * valores e os utilitários acompanham sem exceção.
+ *
+ * O que NÃO é token e por isso é aplicado por CSS: a família tipográfica. O
+ * utilitário font-sans do Tailwind escreve "IBM Plex Sans" literal (não lê a
+ * variável) e tailwind.config.ts não muda (decisão 30), então atacado.css
+ * aplica `font-family` no próprio wrapper e a marcação desta página nunca usa
+ * font-sans/font-serif.
  *
  * Os utilitários do Tailwind (bg-card, border-border, text-primary...) apenas
  * leem `hsl(var(--token))`; resolvem contra o token já redeclarado aqui, então

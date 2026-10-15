@@ -1,47 +1,727 @@
-/* Mundo visual das LPs de atacado, escopado em [data-world].
+/* A tipografia da marca entra por @import, e o @import precisa vir ANTES de
+   qualquer regra deste arquivo ou o navegador o descarta em silêncio.
+   Por que aqui e não em globals.css: globals.css não muda (decisão 30) e este
+   projeto não usa next/font — globals.css:1 também carrega a IBM Plex assim.
+   Duas famílias, um pedido só: cada arquivo de fonte a mais é latência no
+   celular da lojista, em dados móveis.
+     Marcellus      = capital romana inscricional. É a letra gravada da placa
+                      cadastral E o registro de uma casa atemporal: "atemporalidade"
+                      escrita na letra latina mais antiga que ainda se lê.
+     Libre Franklin = gótica de ofício (linhagem Franklin Gothic), a letra das
+                      legendas, tabelas e requerimentos impressos por um século.
+                      Aguenta 18 campos a 16px com acentuação completa. */
+@import url('https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Marcellus&display=swap');
+
+/* ===========================================================================
+   Mundo visual das LPs de atacado, escopado em [data-world].
    globals.css NÃO muda (decisão 30): mexer nos tokens globais poria o
-   dashboard inteiro em risco por causa de uma landing page. */
+   dashboard inteiro em risco por causa de uma landing page.
+
+   A DIREÇÃO: a página é a planta cadastral de uma concessão de território — o
+   documento onde um lote fica reservado a um nome. Vem da promessa mais forte
+   da própria copy ("Avaliamos a localização [...] para garantir a exclusividade
+   de marca em determinadas regiões") e da tagline da marca
+   ("Atemporalidade e Arte em Cada Detalhe"). Consequências que o CSS inteiro
+   obedece: campo inundado em ultramarino abre e fecha a página, a cor fica em
+   quarentena dentro de placas com borda no meio, tudo é filete de 1px e nada
+   é arredondado. Sem foto e sem logo — não existem no repositório — o mundo é
+   feito de tipo, filete, campo de cor e geometria em CSS.
+   =========================================================================== */
 
 [data-world="atacado"] {
-  /* Placeholder berrante de propósito: esta tarefa prova o isolamento, não
-     desenha a marca. Se estas cores aparecerem, o escopo funciona; se o azul
-     do Build.Flow aparecer, não funciona. A Tarefa 16 as substitui. */
+  /* -- Os 20 tokens shadcn, TODOS redeclarados -------------------------------
+     O isolamento provado na Tarefa 12 é por ESCOPO, não por substituição: uma
+     custom property resolve a partir do ancestral mais próximo que a declara.
+     Por isso os NOMES são os mesmos do dashboard e só os valores mudam — o
+     que mantém todo utilitário do Tailwind funcionando sem override. Os 12
+     que a Tarefa 12 deixou herdando o valor escuro do dashboard
+     (popover, secondary, muted, accent, destructive, input, ring e seus
+     -foreground) estão aqui: sem eles, text-muted-foreground, bg-secondary,
+     border-input, ring-* e text-destructive sairiam azul-marinho numa página
+     clara, e o formulário usa todos. */
+  --background: 36 6% 95%; /* pedra: o estoque de papel da placa. Não é creme
+                              (creme vive em ~45°/25% de saturação) e não é o
+                              off-white AZULADO do tema claro do dashboard
+                              (220 24% 95%) — famílias de matiz distintas, para
+                              que "vazou o Build.Flow?" tenha resposta óbvia. */
+  --foreground: 30 10% 14%; /* tinta de prensa, quente-quase-preta. 13,9:1 */
+  --card: 0 0% 100%; /* a placa: branco de verdade dentro da própria borda */
+  --card-foreground: 30 10% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 30 10% 14%;
 
-  /* PENDENTE para a tarefa que construir o mundo visual de verdade (nota de
-     passagem; a prova de escopo só usa os 8 tokens abaixo e por isso passa):
+  --primary: 243 54% 40%; /* ULTRAMARINO: a aguada da concessão, e a única cor
+                             saturada do sistema. Escolhido por eliminação
+                             declarada: as cores de setor do Build.Flow são
+                             lidas como sinal de setor e estão vetadas aqui
+                             (roxo Vendas, rosa Financeiro, laranja Distribuição,
+                             verde Motorista), e vermelho é reservado ao erro.
+                             Fica a 39° de matiz, 10 pontos de saturação e 10 de
+                             luminosidade do azul do Build.Flow (204 68% 50%),
+                             que é um ciano claro de botão — este é tinta indigo
+                             profunda. 9,2:1 sobre pedra; 9,5:1 contra o próprio
+                             -foreground. */
+  --primary-foreground: 36 30% 97%;
+  --secondary: 36 8% 90%; /* segundo tom do estoque, para preenchimentos quietos */
+  --secondary-foreground: 30 10% 20%;
+  --muted: 36 8% 91%;
+  --muted-foreground: 30 8% 38%; /* 5,5:1 sobre pedra — texto secundário de
+                                    verdade, não cinza de placeholder */
+  --accent: 243 40% 93%; /* a aguada diluída: a cor em quarentena dentro da
+                            placa dos 3 motivos */
+  --accent-foreground: 243 54% 28%;
+  --destructive: 4 66% 42%; /* o ÚNICO vermelho do sistema, e significa recusa.
+                               5,7:1 sobre pedra. Se a cor da marca fosse
+                               vermelha, o erro perderia o sinal. */
+  --destructive-foreground: 36 30% 97%;
 
-     1. Tokens NÃO redeclarados, que ainda herdam o valor ESCURO do dashboard
-        aqui dentro: --popover, --popover-foreground, --secondary,
-        --secondary-foreground, --muted, --muted-foreground, --accent,
-        --accent-foreground, --destructive, --destructive-foreground, --input,
-        --ring. Usar text-muted-foreground, bg-secondary, bg-muted,
-        border-input, ring-*, text-destructive ou bg-accent hoje dá azul-marinho
-        numa página clara (claro sobre claro / escuro sobre escuro). Redeclare
-        TODOS antes de qualquer conteúdo real. (--font-sans/--font-mono são
-        compartilhadas de propósito.)
-     2. <body> mantém o fundo escuro: globals.css pinta o body com --background
-        resolvido contra html.dark, e o wrapper só pinta a si mesmo. Em página
-        mais alta que a tela não aparece vão, mas o overscroll (bounce) do iOS
-        revela o body escuro. Repintar aqui mesmo, o que é escopado porque este
-        CSS só carrega nesta rota:
-        body:has([data-world="atacado"]) { background-color: ...; }
-        e trocar o min-height abaixo de 100vh para 100dvh.
-     3. Controles nativos seguem o modo do dashboard: globals.css define
-        html { color-scheme: light dark } e a classe .dark está no <html>, então
-        scrollbars, inputs e autofill desta página saem no esquema do
-        dashboard. Acrescentar color-scheme: light em [data-world="atacado"]
-        resolve sem custo — e pesa numa página cujo conteúdo principal é um
-        formulário de 18 campos. */
-  --background: 20 60% 90%;
-  --foreground: 20 80% 10%;
-  --card: 0 0% 100%;
-  --card-foreground: 20 80% 10%;
-  --primary: 320 70% 45%;
-  --primary-foreground: 0 0% 100%;
-  --border: 20 30% 75%;
-  --radius: 0.25rem;
+  --border: 30 10% 78%; /* filete */
+  --input: 30 10% 50%; /* a linha PARA ESCREVER é mais escura que uma borda
+                          decorativa: 3,5:1 sobre pedra, o mínimo do WCAG
+                          1.4.11 para limite de componente */
+  --ring: 243 54% 40%;
+  --radius: 0rem; /* placa gravada: nada é arredondado. A marcação desta página
+                     também não usa utilitário rounded-*. */
+
+  /* -- Tipografia, escopada --------------------------------------------------
+     O utilitário font-sans do Tailwind NÃO serve aqui: tailwind.config.ts
+     escreve "IBM Plex Sans" literal na família (não lê a variável) e o config
+     não muda (decisão 30). Então a família é aplicada por CSS, aqui, e a
+     marcação desta página nunca usa font-sans/font-serif.
+     globals.css pinta font-family no <body>, que está FORA deste wrapper; os
+     filhos herdariam a IBM Plex se esta linha não existisse. */
+  --font-sans: 'Libre Franklin', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --fonte-placa: 'Marcellus', 'Times New Roman', Times, serif;
+  font-family: var(--font-sans);
+
+  /* -- Medidas do mundo ----------------------------------------------------- */
+  --respiro: 1rem; /* 16px de respiro lateral, exigência a 360px */
 
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
-  min-height: 100vh;
+  min-height: 100dvh; /* dvh, não vh: com vh o wrapper fica mais alto que a
+                         área visível enquanto a barra de endereço está aberta */
+
+  /* globals.css declara color-scheme: light dark no <html>, e a classe .dark
+     mora no <html>. Sem esta linha, as scrollbars, os controles nativos e o
+     autofill desta página seguiriam o modo do dashboard — numa página cujo
+     conteúdo principal é um formulário de 18 campos. */
+  color-scheme: light;
+
+  /* Acabamento de celular (herdáveis, por isso cabem no wrapper):
+     o realce cinza do toque é o sinal mais alto de "isto é um site", e o
+     text-size-adjust impede o iOS de inflar a fonte em paisagem. Cada
+     elemento tocável tem :active próprio, mais abaixo. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-wrap: break-word;
+
+  /* Superfícies do navegador: o que não desenhamos também carrega o projeto.
+     Rádio e checkbox nativos saem na cor da concessão em uma linha. */
+  accent-color: hsl(var(--primary));
+  caret-color: hsl(var(--primary));
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--input)) hsl(var(--background));
+}
+
+[data-world="atacado"] ::selection {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+[data-world="atacado"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+[data-world="atacado"] ::-webkit-scrollbar-track {
+  background-color: hsl(var(--background));
+}
+[data-world="atacado"] ::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--input));
+}
+
+/* O <body> mantinha o fundo ESCURO do dashboard: globals.css o pinta com
+   --background resolvido contra html.dark, e o wrapper só pinta a si mesmo.
+   Em página mais alta que a tela não aparece vão, mas o overscroll (bounce) do
+   iOS revela o body atrás. Escopado porque esta folha só carrega nesta rota.
+   Pintado de ULTRAMARINO, não de pedra: a página abre e fecha em campo
+   inundado, então o bounce em qualquer das duas pontas cai na mesma cor.
+   É também o valor do themeColor em layout.tsx, pela mesma razão. */
+body:has([data-world="atacado"]) {
+  background-color: hsl(243 54% 40%);
+}
+
+/* ===========================================================================
+   CAMPO CONCEDIDO — a aguada inundada
+   Mesmo mecanismo do isolamento, usado uma segunda vez, aninhado: dentro desta
+   região os tokens valem outros valores, e todo utilitário do Tailwind
+   (bg-card, text-muted-foreground, border-border) acompanha sem exceção. Aqui a
+   TINTA é o giz e o papel é a aguada — é o lote concedido.
+   =========================================================================== */
+[data-world="atacado"] .campo-concedido {
+  --background: 243 54% 40%;
+  --foreground: 36 30% 97%;
+  --card: 243 50% 34%;
+  --card-foreground: 36 30% 97%;
+  --popover: 243 50% 34%;
+  --popover-foreground: 36 30% 97%;
+  --primary: 36 30% 97%; /* a tinta desta região é o giz: um botão aqui sai
+                            placa clara com letra ultramarina */
+  --primary-foreground: 243 54% 22%; /* 14,6:1 */
+  --secondary: 243 44% 30%;
+  --secondary-foreground: 36 30% 97%;
+  --muted: 243 44% 30%;
+  --muted-foreground: 243 30% 84%; /* 5,7:1 sobre a aguada */
+  --accent: 243 44% 32%;
+  --accent-foreground: 36 30% 97%;
+  --destructive: 4 70% 62%; /* clareado: o vermelho de 42% não se lê sobre a aguada */
+  --destructive-foreground: 243 54% 22%;
+  --border: 243 30% 62%; /* 3,5:1 sobre a aguada */
+  --input: 243 30% 72%;
+  --ring: 36 30% 97%;
+
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* ===========================================================================
+   FAIXA E MEDIDA
+   A faixa sangra de ponta a ponta; o conteúdo dentro dela é medido. Os 16px de
+   respiro lateral vêm daqui, e o max() com env() devolve o conteúdo de baixo
+   do recorte da tela em celular com notch (layout.tsx pede viewport-fit=cover,
+   sem o qual env() vale 0).
+   =========================================================================== */
+[data-world="atacado"] .faixa {
+  width: 100%;
+}
+[data-world="atacado"] .interno {
+  width: 100%;
+  max-width: 46rem; /* ~66 caracteres na Libre Franklin a 17px: dentro da
+                       medida de leitura de 65–75ch */
+  margin-inline: auto;
+  padding-left: max(var(--respiro), env(safe-area-inset-left));
+  padding-right: max(var(--respiro), env(safe-area-inset-right));
+}
+[data-world="atacado"] .interno-largo {
+  max-width: 64rem; /* só onde a placa se divide em colunas */
+}
+@media (min-width: 640px) {
+  [data-world="atacado"] {
+    --respiro: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  [data-world="atacado"] {
+    --respiro: 2rem;
+  }
+}
+
+/* Ritmo vertical único para a página inteira. */
+[data-world="atacado"] .faixa-alta {
+  padding-top: clamp(3rem, 9vw, 5.5rem);
+  padding-bottom: clamp(3rem, 9vw, 5.5rem);
+}
+
+/* Âncora do herói para o requerimento: sem a margem de rolagem o campo cairia
+   encostado no topo da tela. */
+[data-world="atacado"] [id] {
+  scroll-margin-top: 1.25rem;
+}
+/* Sem scroll-behavior: smooth, de propósito. O formulário, ao confirmar o
+   envio, chama window.scrollTo e depois focus() no título — com rolagem suave
+   as duas viriam animadas e disputando o mesmo movimento. Salto instantâneo
+   também é mais honesto numa página de cinco telas. */
+
+/* Filete entre itens de uma lista do documento. Em CSS, e não em
+   `border-foreground/22`: os tokens shadcn deste projeto são declarados como
+   `hsl(var(--x))` sem o marcador <alpha-value>, então o modificador de opacidade
+   do Tailwind não tem onde injetar o alfa e sairia cor cheia. */
+[data-world="atacado"] .filete-item {
+  border-top: 1px solid hsl(var(--foreground) / 0.22);
+}
+/* O primeiro item não leva filete: ele viria encostado no filete da cabeça da
+   seção, e sairiam duas linhas. Em CSS, e não com `first:border-t-0`: esta
+   folha carrega DEPOIS dos utilitários do Tailwind e o seletor
+   `[data-world] .filete-item` tem especificidade maior que a de um utilitário,
+   então o utilitário perderia em silêncio. */
+[data-world="atacado"] .filete-item:first-child {
+  border-top: 0;
+}
+
+/* ===========================================================================
+   A ABERTURA
+   O primeiro quadro é o lote concedido: campo inundado de ponta a ponta, com o
+   bloco-título alinhado à BASE — é onde a cartela de título vive numa planta.
+   100svh (e não dvh) de propósito: svh é a menor altura possível do viewport,
+   então nada é cortado na carga e nada se desloca quando a barra de endereço
+   recolhe no meio da rolagem. 82% dela deixa a borda da seção seguinte
+   aparecendo, que é o que diz que o documento continua.
+   =========================================================================== */
+[data-world="atacado"] .abertura {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 72vh; /* reserva para navegador sem svh (Chrome < 108): 72 e não
+                       82 porque vh é a altura MAIOR do viewport e 82 estouraria
+                       a tela enquanto a barra de endereço está aberta */
+  min-height: 82svh;
+  padding-top: calc(clamp(3rem, 12vw, 6rem) + env(safe-area-inset-top));
+  padding-bottom: clamp(2.5rem, 9vw, 4.5rem);
+}
+/* O filete do bloco-título sangra pela borda direita: a marca desta página é
+   um traço contínuo que ela mesma desenha, porque não existe símbolo entregue.
+   A margem negativa anula exatamente o respiro lateral de .interno. */
+[data-world="atacado"] .abertura-filete {
+  margin-right: calc(-1 * max(var(--respiro), env(safe-area-inset-right)));
+}
+
+/* ===========================================================================
+   TIPOGRAFIA DO MUNDO
+   =========================================================================== */
+[data-world="atacado"] .gravado {
+  font-family: var(--fonte-placa);
+  font-weight: 400; /* a capital inscricional tem um peso só: é propriedade da
+                       letra gravada, não limitação */
+  letter-spacing: 0.08em;
+}
+
+/* O nome da marca. Não existe símbolo entregue (PRODUCT.md: "Em aberto: o
+   símbolo da marca"), então o nome em texto é o logotipo — e é por isso que
+   ele é a única coisa desta escala na página. */
+[data-world="atacado"] .nome-marca {
+  font-family: var(--fonte-placa);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  line-height: 0.95;
+  font-size: clamp(2.75rem, 15vw, 6rem);
+}
+[data-world="atacado"] .frase-titulo {
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: clamp(0.8125rem, 3.2vw, 1rem);
+  font-weight: 600;
+}
+[data-world="atacado"] .cabeca-secao {
+  font-family: var(--fonte-placa);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  line-height: 1.15;
+  font-size: clamp(1.375rem, 5vw, 2rem);
+}
+[data-world="atacado"] .titulo-item {
+  font-family: var(--fonte-placa);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+}
+[data-world="atacado"] .rotulo-pequeno {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+[data-world="atacado"] .corpo {
+  font-size: 1.0625rem;
+  line-height: 1.65;
+}
+
+/* ===========================================================================
+   O FILETE
+   Único momento de movimento autorado da página: o filete do bloco-título é
+   gravado da esquerda para a direita e sangra pela borda. Sem logo, a marca é
+   este traço contínuo que a própria página desenha. Só transform — não força
+   layout nem paint. Com movimento reduzido, o filete simplesmente já está lá.
+   =========================================================================== */
+[data-world="atacado"] .filete-corrido {
+  height: 1px;
+  background-color: currentColor;
+  opacity: 0.55;
+  transform-origin: left center;
+  animation: atacado-gravar 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes atacado-gravar {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-world="atacado"] .filete-corrido {
+    animation: none;
+  }
+}
+
+/* Cabeça pendurada mais filete inteiro: é o POSTO de um item no documento, e
+   substitui o cartão. O filete é desenhado pela pseudo, então acompanha
+   qualquer largura sem emenda. */
+[data-world="atacado"] .cabeca-placa {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+[data-world="atacado"] .cabeca-placa::after {
+  content: "";
+  flex: 1 1 auto;
+  min-width: 1.5rem;
+  height: 1px;
+  background-color: hsl(var(--foreground) / 0.35);
+}
+
+/* ===========================================================================
+   PLACAS E DIVISÕES
+   =========================================================================== */
+[data-world="atacado"] .placa {
+  border: 1px solid hsl(var(--foreground) / 0.5);
+  border-radius: 0;
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+}
+[data-world="atacado"] .placa-aguada {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+/* As divisões de um lote são separadas por FILETE, nunca por vão: é uma placa
+   dividida, não uma fileira de cartões. */
+[data-world="atacado"] .divisao + .divisao {
+  border-top: 1px solid hsl(var(--foreground) / 0.5);
+}
+@media (min-width: 768px) {
+  [data-world="atacado"] .lote {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  [data-world="atacado"] .lote .divisao + .divisao {
+    border-top: 0;
+    border-left: 1px solid hsl(var(--foreground) / 0.5);
+  }
+}
+
+/* ===========================================================================
+   MARCA DE LEGENDA
+   Toda planta carrega uma legenda, e cada entrada da legenda tem a sua marca.
+   São hachuras — geometria desenhada por gradiente, que se refaz em qualquer
+   largura sem emenda e sem arquivo. É a razão de não haver aqui nenhum ícone
+   de biblioteca nem emoji: a legenda da planta já tem o seu sistema de marcas.
+   =========================================================================== */
+[data-world="atacado"] .marca-legenda {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid hsl(var(--foreground) / 0.55);
+  background-color: hsl(var(--card));
+  background-repeat: repeat;
+}
+[data-world="atacado"] .marca-legenda[data-marca="0"] {
+  background-image: repeating-linear-gradient(
+    45deg,
+    hsl(var(--primary)) 0 1.5px,
+    transparent 1.5px 5px
+  );
+}
+[data-world="atacado"] .marca-legenda[data-marca="1"] {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    hsl(var(--primary)) 0 1.5px,
+    transparent 1.5px 5px
+  );
+}
+[data-world="atacado"] .marca-legenda[data-marca="2"] {
+  background-image: repeating-linear-gradient(
+    0deg,
+    hsl(var(--primary)) 0 1.5px,
+    transparent 1.5px 5px
+  );
+}
+[data-world="atacado"] .marca-legenda[data-marca="3"] {
+  background-image: repeating-linear-gradient(
+    90deg,
+    hsl(var(--primary)) 0 1.5px,
+    transparent 1.5px 5px
+  );
+}
+[data-world="atacado"] .marca-legenda[data-marca="4"] {
+  background-image:
+    repeating-linear-gradient(45deg, hsl(var(--primary)) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(-45deg, hsl(var(--primary)) 0 1px, transparent 1px 6px);
+}
+[data-world="atacado"] .marca-legenda[data-marca="5"] {
+  background-image: radial-gradient(
+    hsl(var(--primary)) 0 1.1px,
+    transparent 1.2px
+  );
+  background-size: 5px 5px;
+}
+
+/* ===========================================================================
+   NOTAS (o FAQ)
+   <details>/<summary> nativos: acordeão acessível que funciona sem JavaScript,
+   e a página pública fica leve. A marca é um triângulo cheio desenhado em
+   borda, que VIRA ao abrir — todo controle deste mundo é marca impressa.
+   =========================================================================== */
+/* `display: block` no <summary>, com a linha em flex num filho: Safari antigo
+   tem defeitos conhecidos quando o próprio summary deixa de ser list-item, e o
+   custo de evitar isso é uma div. O marcador nativo sai por list-style mais a
+   pseudo do WebKit. */
+[data-world="atacado"] .nota > summary {
+  display: block;
+  cursor: pointer;
+  list-style: none;
+  padding: 0.875rem 0;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+[data-world="atacado"] .nota > summary::-webkit-details-marker {
+  display: none;
+}
+[data-world="atacado"] .nota > summary::marker {
+  content: "";
+}
+[data-world="atacado"] .linha-nota {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-height: 1.5rem;
+}
+[data-world="atacado"] .nota > summary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+/* Feedback no toque, e não na soltura: o realce cinza do navegador foi
+   desligado no wrapper, então cada alvo precisa do seu :active. */
+[data-world="atacado"] .nota > summary:active .linha-nota {
+  color: hsl(var(--muted-foreground));
+}
+[data-world="atacado"] .marca-nota {
+  flex: none;
+  width: 0;
+  height: 0;
+  margin-top: 0.42em;
+  border-left: 0.45rem solid currentColor;
+  border-top: 0.3rem solid transparent;
+  border-bottom: 0.3rem solid transparent;
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-world="atacado"] .nota[open] > summary .marca-nota {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-world="atacado"] .marca-nota {
+    transition: none;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-world="atacado"] .nota > summary:hover {
+    color: hsl(var(--muted-foreground));
+  }
+}
+
+/* ===========================================================================
+   O REQUERIMENTO
+   Uma concessão se pede em formulário impresso: cabeça gravada, artigos
+   numerados e LINHA PARA ESCREVER. O campo é uma régua, não uma caixa
+   arredondada — e no celular isso dá alvo maior sem moldura que estreite o
+   campo útil.
+   =========================================================================== */
+[data-world="atacado"] .campo-regua {
+  display: block;
+  width: 100%;
+  margin-top: 0.375rem;
+  padding: 0.5rem 0.125rem;
+  min-height: 2.75rem; /* 44px */
+  font-family: inherit;
+  font-size: 1rem; /* 16px é o mínimo: abaixo disso o iOS dá zoom ao focar o
+                      campo e não volta. Nunca resolver isso com
+                      maximum-scale=1, que quebra o zoom da página. */
+  line-height: 1.5;
+  color: hsl(var(--card-foreground));
+  background-color: transparent;
+  border: 0;
+  border-bottom: 2px solid hsl(var(--input)); /* 2px desde o começo: no foco só
+                                                 a cor muda, então nada desloca */
+  border-radius: 0;
+}
+[data-world="atacado"] textarea.campo-regua {
+  min-height: 6.5rem;
+  resize: vertical;
+}
+[data-world="atacado"] .campo-regua::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+[data-world="atacado"] .campo-regua:focus-visible {
+  border-bottom-color: hsl(var(--primary));
+  /* O anel externo acompanha a régua: engrossar a linha é a marca do mundo,
+     mas sozinha ela é sutil demais para quem navega por teclado. */
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+[data-world="atacado"] .campo-regua[aria-invalid="true"] {
+  border-bottom-color: hsl(var(--destructive));
+}
+[data-world="atacado"] input[type="file"].campo-regua {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+[data-world="atacado"] .campo-regua::file-selector-button {
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-right: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  color: hsl(var(--secondary-foreground));
+  background-color: hsl(var(--secondary));
+  border: 1px solid hsl(var(--foreground) / 0.5);
+  border-radius: 0;
+  cursor: pointer;
+}
+[data-world="atacado"] .campo-regua::file-selector-button:active {
+  color: hsl(var(--primary-foreground));
+  background-color: hsl(var(--primary));
+}
+
+[data-world="atacado"] .rotulo-campo {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* A cabeça do artigo pendura no filete da própria placa: o <legend> nativo
+   interrompe a borda do <fieldset> por conta própria, que é exatamente a
+   cabeça pendurada deste mundo. O mundo e o HTML coincidem aqui. */
+[data-world="atacado"] .artigo {
+  border: 1px solid hsl(var(--foreground) / 0.5);
+  border-radius: 0;
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  padding: clamp(0.75rem, 3vw, 1rem) clamp(0.875rem, 4vw, 1.5rem)
+    clamp(1.25rem, 4vw, 1.75rem);
+}
+[data-world="atacado"] .artigo > legend {
+  font-family: var(--fonte-placa);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: clamp(0.875rem, 3.4vw, 1.0625rem);
+  padding-inline: 0.625rem;
+  margin-inline: -0.25rem;
+}
+
+/* Grupo de alternativas: linhas de largura inteira separadas por filete, com
+   a <label> cobrindo a linha toda — alvo de toque grande sem nada desenhado
+   a mais. */
+[data-world="atacado"] .grupo-opcoes {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0; /* fieldset tem min-width:min-content de fábrica, que estoura
+                   a grade em telas estreitas */
+}
+[data-world="atacado"] .grupo-opcoes > legend {
+  padding: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+[data-world="atacado"] .linha-opcao {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem; /* 44px */
+  padding: 0.375rem 0.125rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: background-color 110ms ease-out;
+}
+[data-world="atacado"] .linha-opcao + .linha-opcao {
+  border-top: 1px solid hsl(var(--border));
+}
+[data-world="atacado"] .linha-opcao input[type="radio"] {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+}
+[data-world="atacado"] .linha-opcao:active {
+  background-color: hsl(var(--accent));
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-world="atacado"] .linha-opcao:hover {
+    background-color: hsl(var(--accent));
+  }
+}
+
+/* ===========================================================================
+   A PLACA-BOTÃO
+   Quadrada, inundada, com o filete interno gravado (outline com deslocamento
+   negativo — é um filete desenhado, não uma sombra). Pressionada, ela "vira
+   para baixo": o filete recolhe e a placa desce 1px, feedback no toque e não
+   na soltura.
+   =========================================================================== */
+[data-world="atacado"] .botao-placa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 3.25rem; /* 52px */
+  padding: 0.875rem 1.25rem;
+  font-family: var(--fonte-placa);
+  font-weight: 400;
+  font-size: clamp(0.9375rem, 3.6vw, 1.0625rem);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-decoration: none;
+  color: hsl(var(--primary-foreground));
+  background-color: hsl(var(--primary));
+  border: 0;
+  border-radius: 0;
+  outline: 1px solid hsl(var(--primary-foreground) / 0.45);
+  outline-offset: -5px;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+  transition:
+    transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
+    outline-offset 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-world="atacado"] .botao-placa:active {
+  transform: translateY(1px);
+  outline-offset: -4px;
+}
+[data-world="atacado"] .botao-placa:focus-visible {
+  outline: 3px solid hsl(var(--foreground));
+  outline-offset: 3px;
+}
+[data-world="atacado"] .botao-placa:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+[data-world="atacado"] .botao-placa:disabled:active {
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-world="atacado"] .botao-placa,
+  [data-world="atacado"] .linha-opcao {
+    transition: none;
+  }
+}
+
+/* Foco visível em qualquer outro alvo do mundo (links de âncora, etc.). */
+[data-world="atacado"] a:focus-visible,
+[data-world="atacado"] [tabindex]:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
 }
