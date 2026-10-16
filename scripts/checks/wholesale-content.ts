@@ -6,6 +6,7 @@
 // reescrito significa promessa comercial inventada numa página pública.
 import { createHash } from "node:crypto";
 import { WHOLESALE_CONTENT, getBrandContent } from "../../src/lib/wholesale-content";
+import { RETENCAO_DIAS } from "../../src/lib/wholesale-retention";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -24,11 +25,58 @@ check("4 grupos de FAQ", okey.faq.length, 4);
 // na planilha. O número existe para que um bloco perdido falhe aqui; não suba
 // para 8 sem que a planilha tenha ganhado uma pergunta.
 check("7 perguntas no total", okey.faq.reduce((n, g) => n + g.items.length, 0), 7);
+// Titulo e subtitulo seguem LITERAIS da planilha; o `body` nao e dela e tem
+// assercao propria mais abaixo. Comparar o objeto inteiro aqui foi o que pegou a
+// adicao do paragrafo quando ela aconteceu — por isso os dois campos sao
+// conferidos nome a nome, e nao por igualdade do objeto: assim um terceiro campo
+// futuro nao reprova esta linha, mas uma mexida no texto da planilha reprova.
+check("motivo 2: titulo literal da planilha", okey.reasons[1].title, "Diferencial Qualitativo");
 check(
-  "motivo 2 literal da planilha",
-  okey.reasons[1],
-  { title: "Diferencial Qualitativo", subtitle: "Atemporalidade e padrão alta-costura" },
+  "motivo 2: subtitulo literal da planilha",
+  okey.reasons[1].subtitle,
+  "Atemporalidade e padrão alta-costura",
 );
+
+// --- os paragrafos dos motivos, que NAO vem da planilha --------------------
+// Foram escritos em 16/10/2026 com autorizacao do dono, sob a regra de nenhuma
+// afirmacao nova. A regra e conferivel: cada paragrafo precisa carregar um
+// trecho que JA aparece na copy aprovada da planilha. Sem isto, "nenhuma
+// afirmacao nova" seria uma promessa num comentario — e a proxima edicao
+// poderia inventar uma margem diferente sem nada reclamar.
+const ANCORAS = [
+  "variando conforme a linha de produtos e o volume de aquisição",
+  "tecidos importados da Linha Italiana Premium",
+  "exclusividade de marca em determinadas regiões",
+];
+const copyAprovada = JSON.stringify([okey.advantages, okey.faq, okey.metrics, okey.highlights]);
+okey.reasons.forEach((r, i) => {
+  check(`motivo ${i + 1} tem paragrafo`, r.body.length > 80, true);
+  check(`motivo ${i + 1} carrega afirmacao ja aprovada`, r.body.includes(ANCORAS[i]), true);
+  check(`a ancora do motivo ${i + 1} existe na copy da planilha`, copyAprovada.includes(ANCORAS[i]), true);
+});
+
+// --- aviso de privacidade (Art. 9) e contato -------------------------------
+// O controlador e a RAZAO SOCIAL. "Okey Store" e nome comercial e nao identifica
+// agente de tratamento — se alguem trocar por ele, o aviso para de cumprir o
+// Art. 9 e a pagina continua parecendo certa.
+check("controlador nao e o nome comercial", okey.privacidade.controlador.includes("Okey Store"), false);
+check("controlador esta preenchido", okey.privacidade.controlador.length > 10, true);
+check("cnpj tem a forma de cnpj", /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(okey.privacidade.cnpj), true);
+check("ha e-mail para os direitos do titular", okey.privacidade.email.includes("@"), true);
+// 90 dias e decisao do dono, e e o MESMO numero que o expurgo usa. As duas
+// pontas leem a mesma constante; esta linha prende que continuem lendo.
+check("retencao declarada e de 90 dias", okey.privacidade.retencaoDias, RETENCAO_DIAS);
+check("retencao declarada e positiva", okey.privacidade.retencaoDias > 0, true);
+// Link de WhatsApp montado com digito escolhido manda a lojista para um
+// estranho. Ou e null, ou tem os 13 digitos de um celular brasileiro (55 + DDD
+// + 9 digitos). Nao existe meio caminho.
+const link = okey.contato.whatsappLink;
+check(
+  "link de whatsapp e null ou tem 13 digitos",
+  link === null || /^https:\/\/wa\.me\/55\d{11}$/.test(link),
+  true,
+);
+check("whatsapp aparece como texto", okey.contato.whatsapp.length > 8, true);
 check(
   "vantagem 5 tem o texto da planilha",
   okey.advantages[4].body.startsWith("Proporcione ao seu negócio margens de lucro atrativas"),
@@ -57,22 +105,44 @@ check("slug desconhecido devolve null", getBrandContent("nike"), null);
 // mudou foi o conjunto coberto, que passou a incluir as dez afirmacoes que
 // estavam soltas. A unica frase reescrita foi a meta description, para carregar
 // a condicao da margem que a planilha exige e que ela omitia.
-const DIGEST_ESPERADO = "196980fc599555915d8e2b3ad6849b30b2cb04f4bff7ef1fd9a35fcb38dd603a";
+// Digest de 16/10/2026 (o anterior, 196980fc...603a, cobria reasons+advantages+
+// faq+metrics+highlights). Mudou por tres coisas, todas autorizadas pelo dono
+// nesta data: os TRES motivos ganharam `body` — a planilha nunca trouxe esses
+// paragrafos, e cada frase deles reaproveita afirmacao que a planilha ja
+// aprovou em outro lugar da pagina, nenhuma nova; e `privacidade` e `contato`
+// nasceram e entraram no conjunto coberto.
+const DIGEST_ESPERADO = "09d5102a34e9f3e91fe65c72cb57e3a8af79ee97f5234e6de4ca34797d95a657";
 // `metrics` e `highlights` entram no digest porque sao AFIRMACAO COMERCIAL —
 // margem, tecido, atendimento, exclusividade. Viviam em texto fixo no TSX, fora
 // de qualquer trava, enquanto o cabecalho de sections.tsx declarava que
 // afirmacao comercial nao se escreve ali. `metaDescription` fica FORA do digest
 // compartilhado porque e a unica string que difere por marca (leva o nome
 // exibido); ela tem assercao propria abaixo.
+// `privacidade` e `contato` entram no digest por um motivo mais forte que o das
+// afirmacoes comerciais: um controlador errado quebra o Art. 9, e um numero de
+// WhatsApp errado manda a lojista falar com um estranho. Sao os dois campos da
+// pagina em que "parece certo" nao basta.
 function digestDaCopy(c: {
   reasons: unknown;
   advantages: unknown;
   faq: unknown;
   metrics: unknown;
   highlights: unknown;
+  privacidade: unknown;
+  contato: unknown;
 }) {
   return createHash("sha256")
-    .update(JSON.stringify([c.reasons, c.advantages, c.faq, c.metrics, c.highlights]))
+    .update(
+      JSON.stringify([
+        c.reasons,
+        c.advantages,
+        c.faq,
+        c.metrics,
+        c.highlights,
+        c.privacidade,
+        c.contato,
+      ]),
+    )
     .digest("hex");
 }
 check("digest da copy OKEY", digestDaCopy(WHOLESALE_CONTENT.OKEY), DIGEST_ESPERADO);

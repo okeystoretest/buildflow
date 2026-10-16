@@ -353,6 +353,23 @@ body:has([data-world="atacado"]) {
   border-bottom-color: hsl(var(--accent-text));
 }
 
+/* Elo DENTRO de um parágrafo (e-mail do aviso de privacidade, WhatsApp do
+   rodapé). Não é `.acao-linha`: aquela é chamada para ação em caixa alta com
+   régua embaixo, e no meio de uma frase ela grita. Aqui herda tamanho e cor do
+   parágrafo e marca a si mesma só pelo sublinhado — o que mantém o contraste do
+   texto em que vive (muted-foreground, 7,4:1) em vez de inventar o seu. */
+[data-world="atacado"] .elo-sublinhado {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  transition: color 150ms ease-out;
+}
+
+[data-world="atacado"] .elo-sublinhado:hover {
+  color: hsl(var(--accent-text));
+}
+
 /* ---------------------------------------------------------------------------
    5. ESTRUTURA
    ------------------------------------------------------------------------ */

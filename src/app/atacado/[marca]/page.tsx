@@ -104,7 +104,11 @@ export default async function MarcaPage(
           </div>
         </section>
       </main>
-      <Rodape brandName={nome} />
+      <Rodape
+        brandName={nome}
+        privacidade={marca.content.privacidade}
+        contato={marca.content.contato}
+      />
     </ModoEdicaoProvider>
   );
 }

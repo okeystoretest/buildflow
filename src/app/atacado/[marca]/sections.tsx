@@ -257,6 +257,7 @@ export function Motivos({
                   {String(i + 1).padStart(2, "0")} — {r.title}
                 </p>
                 <h3 className="titulo-bloco mt-4">{r.subtitle}</h3>
+                <p className="corpo mt-5">{r.body}</p>
                 <a href="#requerimento" className="acao-linha mt-8">
                   Quero me cadastrar
                   <Seta />
@@ -355,7 +356,15 @@ export function Perguntas({ faq }: { faq: BrandContent["faq"] }) {
   );
 }
 
-export function Rodape({ brandName }: { brandName: string }) {
+export function Rodape({
+  brandName,
+  privacidade,
+  contato,
+}: {
+  brandName: string;
+  privacidade: BrandContent["privacidade"];
+  contato: BrandContent["contato"];
+}) {
   return (
     <footer className="rodape" aria-label="Rodapé">
       <div className="interno flex flex-col gap-8 py-12 sm:flex-row sm:items-end sm:justify-between">
@@ -367,16 +376,50 @@ export function Rodape({ brandName }: { brandName: string }) {
             <p className="marca-nome">{brandName}</p>
           </GatilhoOculto>
           <p className="rotulo-micro mt-1">Atacado</p>
-          {/* Finalidade declarada do tratamento, em uma linha. Não é a política
-              de privacidade: o aviso completo precisa de controlador, prazo de
-              retenção e contato para os direitos do titular, que são do dono. */}
+
+          {/* Aviso de privacidade do Art. 9: quem trata, para quê, por quanto
+              tempo e como exercer os direitos do Art. 18. Antes havia só a
+              finalidade, numa linha. O prazo sai de `privacidade.retencaoDias`,
+              que é a mesma constante que o expurgo usa — página e job não podem
+              discordar sobre quanto tempo o dado fica. */}
           <p className="corpo-pequeno mt-5 max-w-sm text-[hsl(var(--muted-foreground))]">
-            Os dados deste cadastro são usados para analisar a sua candidatura a revenda.
+            Os dados deste cadastro são usados para analisar a sua candidatura a
+            revenda, e são tratados por {privacidade.controlador} (CNPJ{" "}
+            {privacidade.cnpj}). Ficam guardados por até {privacidade.retencaoDias} dias
+            a contar do envio, e depois são apagados. Para acessar, corrigir ou
+            apagar os seus dados antes disso, escreva para{" "}
+            <a className="elo-sublinhado" href={`mailto:${privacidade.email}`}>
+              {privacidade.email}
+            </a>
+            .
           </p>
         </div>
-        <p className="corpo-pequeno text-[hsl(var(--muted-foreground))]">
-          © {new Date().getFullYear()} {brandName}
-        </p>
+
+        <div className="flex flex-col gap-2 sm:items-end">
+          {/* Dois canais, por decisão do dono: a LP é de captação, não de
+              visita. `whatsappLink` pode ser null — ver o comentário em
+              wholesale-content.ts: o número publicado tem oito dígitos, e
+              montar um `wa.me` exigiria escolher o nono. Sem o link, o número
+              aparece como texto, que continua verdadeiro. */}
+          <p className="corpo-pequeno text-[hsl(var(--muted-foreground))]">
+            WhatsApp{" "}
+            {contato.whatsappLink ? (
+              <a className="elo-sublinhado" href={contato.whatsappLink}>
+                {contato.whatsapp}
+              </a>
+            ) : (
+              contato.whatsapp
+            )}
+          </p>
+          <p className="corpo-pequeno text-[hsl(var(--muted-foreground))]">
+            <a className="elo-sublinhado" href={`mailto:${contato.email}`}>
+              {contato.email}
+            </a>
+          </p>
+          <p className="corpo-pequeno text-[hsl(var(--muted-foreground))]">
+            © {new Date().getFullYear()} {brandName}
+          </p>
+        </div>
       </div>
     </footer>
   );
