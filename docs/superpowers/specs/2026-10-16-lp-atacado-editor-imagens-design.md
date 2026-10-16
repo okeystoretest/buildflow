@@ -16,7 +16,7 @@ exatamente o que o dono pediu para não precisar fazer.
 |---|---|---|---|
 | 1 | **Autoridade é a sessão do Build.Flow** (`GESTAO`) | senha própria da LP; link secreto | Zero credencial nova e zero porta de autenticação nova numa página pública. Senha que vaza entrega o texto e as fotos da marca a um estranho |
 | 2 | **Só imagens são editáveis** | imagens + textos; tudo | A copy segue vinda da planilha e travada por digest sha256. Abrir texto à edição tornaria a trava decorativa: a garantia de que ninguém publica promessa que o negócio não fez vale mais que a comodidade |
-| 3 | **Rota de leitura pública só para a pasta `atacado`** | gravar em `public/` | O upload continua pelo caminho endurecido (assinatura por magic bytes, sharp, webp, tetos de decodificação). Só o que o dono publicou fica legível sem sessão; o resto dos uploads segue exigindo login |
+| 3 | **Rota de leitura pública só para a pasta `lp-publico`** (emenda 16/10/2026: era `atacado`) | gravar em `public/` | O upload continua pelo caminho endurecido (assinatura por magic bytes, sharp, webp, tetos de decodificação). Só o que o dono publicou fica legível sem sessão; o resto dos uploads segue exigindo login. `atacado/` **não** pode ser a pasta pública: é onde `wholesale-apply.ts` grava as duas fotos de cada candidata, com a mesma extensão `.webp` — apontar a rota pública para lá vazava foto de não-cliente |
 
 ## Decisão técnica que é minha, e o motivo
 

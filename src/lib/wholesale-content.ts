@@ -112,11 +112,70 @@ const FAQ = [
   },
 ] as const;
 
+/**
+ * A faixa de métricas e os dois pares da abertura.
+ *
+ * ESTAVAM NO TSX, e é por isso que mudaram de lugar. `sections.tsx` estabelece
+ * no próprio cabeçalho que "nenhuma afirmação comercial é escrita aqui" — e
+ * então afirmava, em texto fixo, margem, tecido, atendimento e exclusividade.
+ * Todas rastreáveis ao anexo A (FAQ 3, FAQ 4, vantagem 1), nada inventado; o
+ * problema era a GARANTIA: fora do digest, essas dez frases podiam ser editadas
+ * sem nenhuma checagem ficar vermelha, enquanto a decisão do dono de não abrir
+ * texto à edição existe justamente porque "a garantia de que ninguém publica
+ * promessa que o negócio não fez vale mais que a comodidade".
+ *
+ * `nota` carrega a CONDIÇÃO junto do número, sempre. A planilha condiciona a
+ * margem ("até 100%, variando conforme a linha de produtos e o volume"), e
+ * número sem condição é promessa que o negócio não fez.
+ */
+const METRICS = [
+  {
+    valor: "Até 100%",
+    rotulo: "De margem na revenda",
+    nota: "Varia conforme a linha de produtos e o volume de aquisição.",
+  },
+  {
+    valor: "Linha Italiana Premium",
+    rotulo: "Tecidos importados",
+    nota: "Controle de qualidade do tecido à confecção artesanal dos detalhes.",
+  },
+  {
+    valor: "Consultora exclusiva",
+    rotulo: "Atendimento dedicado",
+    nota: "Catálogos com especificação de cada peça e apoio na escolha.",
+  },
+  {
+    valor: "Exclusividade territorial",
+    rotulo: "Por região",
+    nota: "Avaliada pela localização e viabilidade do ponto de venda.",
+  },
+] as const;
+
+/** Os dois pares trazidos para perto da ação, na abertura. */
+const HIGHLIGHTS = [
+  { termo: "Margem na revenda", valor: "Até 100%, conforme a linha e o volume" },
+  { termo: "Exclusividade", valor: "Por região, sob critério" },
+] as const;
+
+/**
+ * A frase do preview do WhatsApp, que é a PRIMEIRA coisa que a lojista lê.
+ *
+ * `{marca}` é substituído pelo nome exibido. Estava no `generateMetadata` como
+ * template literal, afirmando "margem de até 100%" sem a condição — a
+ * afirmação mais exposta da página era a única sem o "varia conforme".
+ */
+const META_DESCRIPTION =
+  "Revenda {marca} na sua loja: margem de até 100% conforme a linha e o volume, " +
+  "tecidos da Linha Italiana Premium e exclusividade territorial avaliada por região.";
+
 export interface BrandContent {
   brandName: string;
   reasons: { title: string; subtitle: string }[];
   advantages: { title: string; subtitle: string; body: string }[];
   faq: { group: string; items: { q: string; a: string }[] }[];
+  metrics: { valor: string; rotulo: string; nota: string }[];
+  highlights: { termo: string; valor: string }[];
+  metaDescription: string;
 }
 
 // Os itens são compartilhados por referência entre as marcas, de propósito: a
@@ -128,12 +187,18 @@ export const WHOLESALE_CONTENT: Record<"OKEY" | "LOV_CLUB", BrandContent> = {
     reasons: [...REASONS],
     advantages: [...ADVANTAGES],
     faq: FAQ.map((g) => ({ group: g.group, items: [...g.items] })),
+    metrics: [...METRICS],
+    highlights: [...HIGHLIGHTS],
+    metaDescription: META_DESCRIPTION.replace("{marca}", "OKEY"),
   },
   LOV_CLUB: {
     brandName: "Lov Club",
     reasons: [...REASONS],
     advantages: [...ADVANTAGES],
     faq: FAQ.map((g) => ({ group: g.group, items: [...g.items] })),
+    metrics: [...METRICS],
+    highlights: [...HIGHLIGHTS],
+    metaDescription: META_DESCRIPTION.replace("{marca}", "Lov Club"),
   },
 };
 

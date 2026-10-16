@@ -59,18 +59,80 @@ export type ApplyValidation = { error: string } | { ok: true; clean: CleanApply 
  * convite a encher a tabela: ninguém digita 5.000 caracteres de história, e
  * quem manda não está preenchendo um formulário.
  */
+/**
+ * O RÓTULO É O DA TELA, palavra por palavra.
+ *
+ * Antes eram nomes internos ("Nome completo", "Sua história", "Tempo de
+ * mercado") que **não existem na página**: a lojista lia *Preencha o campo
+ * "Nome completo"* procurando um campo chamado assim, enquanto a tela perguntava
+ * "Como podemos te chamar?". Mensagem de erro que nomeia um campo invisível é
+ * pior que mensagem genérica, porque manda procurar o que não está lá.
+ *
+ * `scripts/checks/wholesale-apply-validation.ts` lê o `rotulo=` de cada campo em
+ * `apply-form.tsx` e afirma que casa com esta tabela — então divergir aqui fica
+ * vermelho, em vez de só chegar à lojista.
+ */
 const CAMPOS_TEXTO = [
-  { campo: "contactName", rotulo: "Nome completo", max: 120 },
-  { campo: "email", rotulo: "E-mail", max: 160 },
-  { campo: "phone", rotulo: "WhatsApp", max: 200 },
-  { campo: "story", rotulo: "Sua história", max: 2000 },
-  { campo: "city", rotulo: "Cidade", max: 120 },
-  { campo: "instagram", rotulo: "Instagram da loja", max: 60 },
-  { campo: "marketTime", rotulo: "Tempo de mercado", max: 200 },
-  { campo: "teamSize", rotulo: "Tamanho da equipe", max: 200 },
-  { campo: "brandsCarried", rotulo: "Marcas que você trabalha", max: 200 },
-  { campo: "followTime", rotulo: "Tempo que você nos acompanha", max: 200 },
+  { campo: "contactName", rotulo: "Como podemos te chamar?", max: 120 },
+  { campo: "email", rotulo: "Qual é o seu melhor e-mail para contato?", max: 160 },
+  { campo: "phone", rotulo: "Qual é o seu WhatsApp ou telefone para conversarmos?", max: 200 },
+  { campo: "story", rotulo: "Conte-nos um pouco sobre você e sua trajetória", max: 2000 },
+  { campo: "city", rotulo: "Em qual cidade sua loja está localizada?", max: 120 },
+  { campo: "instagram", rotulo: "Qual é o Instagram da sua loja?", max: 60 },
+  { campo: "marketTime", rotulo: "Há quanto tempo sua loja atua no mercado?", max: 200 },
+  { campo: "teamSize", rotulo: "Quantas pessoas fazem parte da sua equipe atualmente?", max: 200 },
+  { campo: "brandsCarried", rotulo: "Quais marcas já fazem parte do seu espaço?", max: 200 },
+  { campo: "followTime", rotulo: "Há quanto tempo você acompanha a nossa marca?", max: 200 },
 ] as const;
+
+/**
+ * Os rótulos, expostos para a checagem poder compará-los com a tela.
+ * Não é para consumo em runtime.
+ */
+export const ROTULOS_DE_CAMPO: Readonly<Record<string, string>> = Object.fromEntries(
+  CAMPOS_TEXTO.map(({ campo, rotulo }) => [campo, rotulo]),
+);
+
+/**
+ * Forma de e-mail. Prova FORMA, não endereço entregável — `foo@bar.com` passa e
+ * pode não existir. Exigir o ponto no domínio é o que separa "ana@loja" (que o
+ * `type="email"` nativo aceita) de algo que um mailer tem chance de entregar.
+ *
+ * ReDoS descartado por medição: pior caso de 160 caracteres leva 0,05 ms.
+ */
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * A gramática real e pública do handle do Instagram: letras, números, ponto e
+ * sublinhado, até 30. Antes o campo tinha só teto de tamanho e remoção do "@",
+ * então `minhaloja/?x=1` e uma quebra de linha eram gravados como se fossem
+ * handle. Sem XSS hoje — os dois renders são texto JSX, que o React escapa —
+ * mas a exposição é a próxima pessoa que escrever
+ * `href={`https://instagram.com/${lead.instagram}`}` e herdar barra, `?`, `#`
+ * ou newline. Fechar a gramática agora custa uma linha; depois custa auditar
+ * todo consumidor.
+ */
+export const GRAMATICA_INSTAGRAM = /^[A-Za-z0-9._]{1,30}$/;
+
+/**
+ * Reduz ao handle o que a lojista realmente cola.
+ *
+ * No celular, "Copiar link do perfil" entrega
+ * `https://www.instagram.com/minhaloja/` — e com gramática fechada isso viraria
+ * uma recusa para alguém que fez exatamente o que parecia certo. Então o prefixo
+ * conhecido, a arroba, a barra final e qualquer `?`/`#` saem ANTES da gramática
+ * decidir. O que a gramática recusa é o que sobrou sem ser handle.
+ */
+export function normalizarInstagram(valor: string): string {
+  return valor
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^(?:www\.)?instagram\.com\//i, "")
+    .split(/[?#]/)[0]
+    .replace(/^@+/, "")
+    .replace(/\/+$/, "")
+    .trim();
+}
 
 /**
  * Os nomes de campo que a tabela acima declara, como união de literais.
@@ -140,14 +202,17 @@ export function validateApplyPayload(campos: Record<string, string>): ApplyValid
 
   // Handle sem o "@": é assim que o campo é gravado e é assim que a analista
   // monta o link do perfil. Deixar a arroba entrar produziria "@@loja".
-  // Conferido depois de tirar a arroba: "@" sozinho passa no obrigatório acima
-  // e não é handle nenhum.
-  const instagram = lidos.instagram.replace(/^@+/, "").trim();
-  if (!instagram) return { error: 'Preencha o campo "Instagram da loja".' };
+  const instagram = normalizarInstagram(lidos.instagram);
+  if (!instagram) {
+    return { error: `Preencha o campo "${ROTULOS_DE_CAMPO.instagram}".` };
+  }
+  if (!GRAMATICA_INSTAGRAM.test(instagram)) {
+    return { error: "Instagram inválido. Informe só o @ da loja, sem link." };
+  }
 
   // 2. E-mail e telefone: formato conferido aqui porque são os dois caminhos
   // pelos quais a vendedora vai responder. Errados, o cadastro não serve.
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lidos.email)) {
+  if (!EMAIL_RE.test(lidos.email)) {
     return { error: "E-mail inválido. Confira o endereço." };
   }
   const phone = normalizePhone(lidos.phone);

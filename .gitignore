@@ -23,3 +23,6 @@ service-account.json
 # Configuracao local do Claude Code (agentes, permissoes, hooks). Nao faz
 # parte da aplicacao e varia por maquina/desenvolvedor.
 .claude/
+
+# Saida do graphify (grafo de conhecimento gerado) — artefato, nao fonte.
+graphify-out/

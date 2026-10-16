@@ -37,7 +37,10 @@ import { validateApplyPayload } from "@/lib/wholesale-apply-validation";
  * qual dos três.
  */
 
-const GENERICO = "Não foi possível enviar agora. Tente novamente em alguns minutos.";
+// "mais tarde", não "em alguns minutos": o balde do rate limit é de SESSENTA
+// minutos, então quem bateu no teto e volta em cinco leva a mesma recusa e
+// conclui que a página está quebrada.
+const GENERICO = "Não foi possível enviar agora. Tente novamente mais tarde.";
 const MIN_FILL_MS = 5_000;
 
 /**
@@ -79,7 +82,14 @@ export interface ApplyInput {
   instagramImage: string; // data-URL
   storeImage: string; // data-URL
   honeypot: string;
-  openedAt: number;
+  /**
+   * Milissegundos que a página ficou aberta, medidos NO CLIENTE.
+   *
+   * Tempo decorrido, não um instante: comparar `Date.now()` do servidor com um
+   * `Date.now()` do celular trancava fora toda lojista com relógio adiantado,
+   * porque a diferença ficava negativa e negativo é sempre menor que o mínimo.
+   */
+  msPreenchendo: number;
 }
 
 /**
@@ -157,10 +167,14 @@ export async function submitWholesaleApplication(
   // quem chama esta action é um navegador qualquer.
   if (!input || typeof input !== "object") return actionError(GENERICO);
   if (input.honeypot) return actionError(GENERICO);
+  // Número vindo do cliente, e já era: `Date.now() - 10000` derrotava a versão
+  // anterior num token. Continua valendo as seis linhas contra robô de
+  // formulário, e continua NÃO sendo controle de segurança. O que mudou é que
+  // agora não há dois relógios na conta, então ninguém real é trancado fora.
   if (
-    typeof input.openedAt !== "number" ||
-    !Number.isFinite(input.openedAt) ||
-    Date.now() - input.openedAt < MIN_FILL_MS
+    typeof input.msPreenchendo !== "number" ||
+    !Number.isFinite(input.msPreenchendo) ||
+    input.msPreenchendo < MIN_FILL_MS
   ) {
     return actionError(GENERICO);
   }
@@ -277,7 +291,13 @@ export async function submitWholesaleApplication(
     // podem ficar órfãos no disco apontados por ninguém.
     await deleteUploadedFile(imgInsta.filePath).catch(() => {});
     await deleteUploadedFile(imgLoja.filePath).catch(() => {});
-    return actionError("Não foi possível registrar o seu cadastro. Tente novamente.");
+    // GENERICO, e não uma mensagem própria: a anterior dizia a um remetente SEM
+    // SESSÃO que a escrita no banco falhou — reconhecimento de graça, e a única
+    // falha pós-contenção que não ajudava em nada a lojista. As duas recusas de
+    // sharp acima seguem específicas de propósito (ela precisa saber QUAL foto
+    // trocar); esta não oferece ação nenhuma, então dobrar no genérico não custa
+    // nada a ela. O diagnóstico fica no `console.error`, onde pertence.
+    return actionError(GENERICO);
   }
 
   return actionOk(undefined);

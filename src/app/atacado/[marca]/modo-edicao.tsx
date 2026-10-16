@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { salvarImagemDaLp } from "@/lib/actions/lp-assets";
 import { shrinkImageToBase64 } from "@/lib/client-image";
 import { MAX_ALT, type LugarDeImagem } from "@/lib/lp-assets";
@@ -28,6 +29,22 @@ interface Contexto {
   editando: boolean;
   alternar: () => void;
   marcaSlug: string;
+  /**
+   * Alguma gravação em voo, em QUALQUER lugar de imagem.
+   *
+   * Existe porque o manifesto é um read-modify-write sem transação, e o risco
+   * real não é "dois editores": é o MESMO dono trocando duas imagens em
+   * sequência. A página renderiza um editor por lugar, cada um com seu
+   * `<input type="file">`; encolher mais sharp mais disco leva segundos no
+   * celular, e tocar em `motivo-1` enquanto o `hero` sobe produzia duas actions
+   * concorrentes lendo o manifesto antigo. A segunda sobrescrevia a entrada da
+   * primeira: a imagem já gravada desaparecia da página e o arquivo ficava
+   * órfão no volume para sempre — e as duas chamadas respondiam "Imagem
+   * trocada". Serializar na interface honra a premissa registrada ("existe um
+   * editor só") em vez de contradizê-la.
+   */
+  ocupado: boolean;
+  marcarOcupado: (v: boolean) => void;
 }
 
 const ModoEdicaoContexto = createContext<Contexto | null>(null);
@@ -42,13 +59,17 @@ export function ModoEdicaoProvider({
   children: React.ReactNode;
 }) {
   const [editando, setEditando] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
   const alternar = useCallback(() => {
     if (!podeEditar) return;
     setEditando((e) => !e);
   }, [podeEditar]);
+  const marcarOcupado = useCallback((v: boolean) => setOcupado(v), []);
 
   return (
-    <ModoEdicaoContexto.Provider value={{ podeEditar, editando, alternar, marcaSlug }}>
+    <ModoEdicaoContexto.Provider
+      value={{ podeEditar, editando, alternar, marcaSlug, ocupado, marcarOcupado }}
+    >
       {children}
       {podeEditar && editando && (
         <div
@@ -70,7 +91,14 @@ function useModoEdicao(): Contexto {
   if (!ctx) {
     // Em vez de lançar: um componente de edição fora do provider não deve
     // derrubar uma página pública inteira.
-    return { podeEditar: false, editando: false, alternar: () => {}, marcaSlug: "" };
+    return {
+      podeEditar: false,
+      editando: false,
+      alternar: () => {},
+      marcaSlug: "",
+      ocupado: false,
+      marcarOcupado: () => {},
+    };
   }
   return ctx;
 }
@@ -98,16 +126,33 @@ export function GatilhoOculto({ children }: { children: React.ReactNode }) {
   // `onPointerDown`/`onPointerUp` cobrem mouse e toque com um par de eventos;
   // `onPointerLeave` e `onPointerCancel` cancelam quando o dedo sai ou o
   // navegador assume a rolagem, para o modo não abrir durante um scroll.
+  // `user-select: none` e `-webkit-touch-callout: none` NÃO são enfeite: sem
+  // eles, pressionar e segurar texto selecionável dispara a seleção nativa no
+  // Android e o callout no iOS por volta de 500 ms — antes dos 800 ms do timer.
+  // Nesse instante o navegador assume o gesto e emite `pointercancel`, que o
+  // `onPointerCancel` abaixo traduz em `limpar()`: o timer morre e o modo de
+  // edição nunca abre. `touch-action: manipulation` só desliga duplo-toque-para-
+  // zoom; não desliga seleção nem callout. Este é o único caminho de entrada da
+  // feature, então o gesto falhar é a feature inteira falhar.
+  //
+  // `<div>` e não `<span>`: o filho é um `<p>`, e bloco dentro de inline é HTML
+  // inválido — o parser do navegador (que vê este HTML no SSR) reestrutura a
+  // caixa e isso arrisca divergência de hidratação.
   return (
-    <span
+    <div
       onPointerDown={comecar}
       onPointerUp={limpar}
       onPointerLeave={limpar}
       onPointerCancel={limpar}
-      style={{ touchAction: "manipulation" }}
+      style={{
+        touchAction: "manipulation",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+      }}
     >
       {children}
-    </span>
+    </div>
   );
 }
 
@@ -125,12 +170,22 @@ export function EditorDeImagem({
   lugar: LugarDeImagem;
   altAtual: string;
 }) {
-  const { podeEditar, editando, marcaSlug } = useModoEdicao();
+  const { podeEditar, editando, marcaSlug, ocupado, marcarOcupado } = useModoEdicao();
+  const router = useRouter();
   const [alt, setAlt] = useState(altAtual);
   const [estado, setEstado] = useState<"parado" | "lendo" | "salvando">("parado");
   const [aviso, setAviso] = useState<string | null>(null);
 
   if (!podeEditar || !editando) return null;
+
+  // Teto do mesmo tamanho que a porta pública aceita. O `shrinkImageToBase64`
+  // devolve o ORIGINAL quando não consegue decodificar (é o caso do HEIC de
+  // iPhone em navegador que não o lê), então "sem erro" não significa "pequeno".
+  // Sem esta conferência, um HEIC grande estourava o `bodySizeLimit` de 12 MB e
+  // o `catch` culpava a conexão — a única coisa que não estava errada.
+  const MAX_BYTES = 4 * 1024 * 1024;
+  const bytesDoBase64 = (b64: string) =>
+    Math.floor((b64.length * 3) / 4) - (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
 
   async function escolher(input: HTMLInputElement) {
     const file = input.files?.[0];
@@ -138,10 +193,25 @@ export function EditorDeImagem({
     if (!file) return;
 
     setEstado("lendo");
+    marcarOcupado(true);
     const r = await shrinkImageToBase64(file, { maxDimension: 1600 });
     if (r.error !== undefined) {
       setEstado("parado");
+      marcarOcupado(false);
       setAviso(r.error);
+      input.value = "";
+      return;
+    }
+    if (bytesDoBase64(r.base64) > MAX_BYTES) {
+      setEstado("parado");
+      marcarOcupado(false);
+      const ehHeic = file.type === "image/heic" || file.type === "image/heif";
+      setAviso(
+        ehHeic
+          ? "Não conseguimos reduzir esta foto. Se ela veio do iPhone, abra a foto, " +
+              "toque em Editar, salve e envie novamente."
+          : "Esta foto está pesada demais (máximo de 4MB). Escolha uma mais leve.",
+      );
       input.value = "";
       return;
     }
@@ -150,7 +220,11 @@ export function EditorDeImagem({
     try {
       const res = await salvarImagemDaLp({ marcaSlug, lugar, imagem: r.base64, alt });
       if (res.ok) {
-        setAviso("Imagem trocada. Recarregue para ver no lugar.");
+        setAviso("Imagem trocada.");
+        // `revalidatePath` sozinho não aparece aqui: a rota é dinâmica
+        // (searchParams), então sem o refresh o dono não tinha confirmação
+        // visual nenhuma de que a imagem certa entrou.
+        router.refresh();
       } else {
         setAviso(res.error);
       }
@@ -158,7 +232,28 @@ export function EditorDeImagem({
       setAviso("Não foi possível salvar agora. Confira a conexão.");
     } finally {
       setEstado("parado");
+      marcarOcupado(false);
       input.value = "";
+    }
+  }
+
+  async function salvarDescricao() {
+    setAviso(null);
+    setEstado("salvando");
+    marcarOcupado(true);
+    try {
+      const res = await salvarImagemDaLp({ marcaSlug, lugar, imagem: "", alt });
+      if (res.ok) {
+        setAviso("Descrição salva.");
+        router.refresh();
+      } else {
+        setAviso(res.error);
+      }
+    } catch {
+      setAviso("Não foi possível salvar agora. Confira a conexão.");
+    } finally {
+      setEstado("parado");
+      marcarOcupado(false);
     }
   }
 
@@ -172,13 +267,25 @@ export function EditorDeImagem({
         id={`alt-${lugar}`}
         value={alt}
         maxLength={MAX_ALT}
+        disabled={ocupado}
         onChange={(e) => setAlt(e.target.value)}
         className="campo-regua"
       />
+      <button
+        type="button"
+        onClick={salvarDescricao}
+        disabled={ocupado || alt === altAtual}
+        className="acao-vazia mt-2"
+        style={{ padding: "0.4rem 0.9rem" }}
+      >
+        Salvar descrição
+      </button>
       <input
         type="file"
         accept="image/*,.heic,.heif"
-        disabled={estado !== "parado"}
+        // `ocupado` e não só o estado local: o travamento é GLOBAL enquanto
+        // qualquer lugar grava, porque o manifesto é lido e reescrito inteiro.
+        disabled={ocupado || estado !== "parado"}
         onChange={(e) => escolher(e.currentTarget)}
         className="mt-3"
         aria-label={`Escolher nova imagem para ${lugar}`}

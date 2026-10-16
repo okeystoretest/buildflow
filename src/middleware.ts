@@ -21,8 +21,11 @@ import { getAuthSecret } from "@/lib/auth-secret";
 // /api/lp serve as IMAGENS dessa LP, e so elas: a lojista nao tem sessao, e
 // /api/uploads exige uma de proposito, porque serve comprovante de pagamento,
 // nota fiscal e comprovante de entrega. A rota propria confina a leitura a
-// <UPLOAD_DIR>/atacado por canonicalizacao e aceita so .webp (ver
-// src/lib/lp-assets.ts). Liberar aqui nao alcanca o resto do volume.
+// <UPLOAD_DIR>/lp-publico por canonicalizacao e aceita so .webp (ver
+// src/lib/lp-assets.ts). NAO e <UPLOAD_DIR>/atacado: aquela pasta guarda as
+// duas fotos de cada candidata, com a mesma extensao .webp, e apontar esta
+// rota para la deixava a foto da loja de uma nao-cliente legivel sem sessao.
+// Liberar aqui nao alcanca o resto do volume.
 const PUBLIC_PATHS = [
   "/login",
   "/api/health",

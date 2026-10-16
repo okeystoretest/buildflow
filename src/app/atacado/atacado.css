@@ -33,7 +33,17 @@
 
 @font-face {
   font-family: "Playfair LP";
-  src: url("/fonts/atacado/playfair-latin.woff2") format("woff2-variations");
+  /* Três entradas para o MESMO arquivo, e a ordem importa. `woff2-variations` é
+     descritor legado (Safari 10–13), removido de CSS Fonts 4 em favor de
+     `format("woff2") tech(variations)`. O UA PULA a entrada cujo format() ele
+     não reconhece — e com uma entrada só, não reconhecer significava @font-face
+     sem fonte usável: com font-display: swap ninguém vê erro, a página
+     simplesmente aparece em Georgia, e toda a direção visual mora nestas duas
+     famílias. Fallback final sem tech() para quem não entende nenhum dos dois. */
+  src:
+    url("/fonts/atacado/playfair-latin.woff2") format("woff2") tech(variations),
+    url("/fonts/atacado/playfair-latin.woff2") format("woff2-variations"),
+    url("/fonts/atacado/playfair-latin.woff2") format("woff2");
   font-weight: 400 700;
   font-style: normal;
   font-display: swap;
@@ -44,7 +54,11 @@
 
 @font-face {
   font-family: "Manrope LP";
-  src: url("/fonts/atacado/manrope-latin.woff2") format("woff2-variations");
+  /* Mesma razão do @font-face acima. */
+  src:
+    url("/fonts/atacado/manrope-latin.woff2") format("woff2") tech(variations),
+    url("/fonts/atacado/manrope-latin.woff2") format("woff2-variations"),
+    url("/fonts/atacado/manrope-latin.woff2") format("woff2");
   font-weight: 400 700;
   font-style: normal;
   font-display: swap;
@@ -410,17 +424,12 @@ body:has([data-world="atacado"]) {
   text-align: center;
 }
 
-/* Ficha sobreposta à imagem do herói (a "Atelier Fortaleza" da referência,
-   aqui sem nenhum fato que a planilha não afirme). */
-[data-world="atacado"] .ficha-imagem {
-  position: absolute;
-  bottom: 1.25rem;
-  right: 1.25rem;
-  background-color: hsl(0 0% 100% / 0.92);
-  backdrop-filter: blur(4px);
-  border: 1px solid hsl(var(--border));
-  padding: 0.75rem 1rem;
-}
+/* A "ficha sobreposta" da referência (a tarja "Atelier Fortaleza") foi RETIRADA
+   daqui: nenhum TSX emitia `.ficha-imagem`, então eram sete declarações
+   descrevendo um elemento que a página não tem. Ela só existe quando o dono
+   mandar os fatos dele — endereço, ano, prazo — e hoje a instrução é ignorar os
+   fatos da referência. Regra sem emissor é como CSS morto volta a ser editado
+   por engano. */
 
 /* ---------------------------------------------------------------------------
    6. FAIXA DE MÉTRICAS

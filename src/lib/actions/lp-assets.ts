@@ -12,10 +12,13 @@ import {
   MAX_ALT,
   PASTA_PUBLICA,
   ehLugarDeImagem,
-  escreverManifesto,
-  lerManifesto,
   type LugarDeImagem,
 } from "@/lib/lp-assets";
+import {
+  caminhoRelativoDaLp,
+  escreverManifesto,
+  lerManifesto,
+} from "@/lib/lp-assets-server";
 
 /**
  * Troca de imagem da LP pública, feita pelo dono sem deploy.
@@ -38,7 +41,15 @@ const MAX_FOTO_MB = 4;
 export interface SalvarImagemInput {
   marcaSlug: string;
   lugar: string;
-  /** data-URL já encolhida no navegador. */
+  /**
+   * data-URL já encolhida no navegador, ou VAZIA para só atualizar a descrição.
+   *
+   * O campo "Descrição da imagem" é editável na tela e, antes, só viajava
+   * carona num arquivo novo: quem corrigisse um erro de digitação e saísse da
+   * página perdia o texto sem aviso, e quem escolhesse o arquivo antes de
+   * digitar gravava a descrição antiga. Campo de texto editável sem ação de
+   * salvar promete persistência que não existia.
+   */
   imagem: string;
   alt: string;
 }
@@ -71,6 +82,30 @@ export async function salvarImagemDaLp(
   const alt = typeof input.alt === "string" ? input.alt.trim().slice(0, MAX_ALT) : "";
 
   const dataUrl = typeof input.imagem === "string" ? input.imagem : "";
+
+  // CAMINHO SÓ-DESCRIÇÃO: sem imagem nova, nada é decodificado, nada é escrito
+  // no volume e nada é apagado — só o `alt` da entrada que já existe. Exigir que
+  // ela exista é o que impede este caminho de criar entrada apontando para
+  // arquivo nenhum.
+  if (dataUrl === "") {
+    const atual = await lerManifesto(marcaSlug);
+    const entrada = atual[lugar];
+    if (!entrada) {
+      return actionError("Envie uma imagem antes de descrever este lugar.");
+    }
+    if (entrada.alt === alt) {
+      return actionOk({ arquivo: entrada.arquivo });
+    }
+    try {
+      await escreverManifesto(marcaSlug, { ...atual, [lugar]: { ...entrada, alt } });
+    } catch (err) {
+      console.error("[lp-assets] falha ao gravar a descrição:", err);
+      return actionError("Não foi possível salvar a descrição. Tente novamente.");
+    }
+    revalidatePath(`/atacado/${marcaSlug}`);
+    return actionOk({ arquivo: entrada.arquivo });
+  }
+
   const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
   const buffer = Buffer.from(base64, "base64");
 
@@ -101,10 +136,16 @@ export async function salvarImagemDaLp(
     return actionError("Não foi possível processar esta imagem. Tente um JPG ou PNG.");
   }
 
-  // `processAndSaveImage` devolve o caminho público de /api/uploads, que exige
-  // sessão. O manifesto guarda o caminho RELATIVO a uploads, e a rota pública
-  // de leitura o remonta — é o que mantém o resto do volume fora do alcance.
-  const relativo = salva.filePath.replace(/^\/api\/uploads\//, "").replace(/^\/+/, "");
+  // O manifesto guarda o caminho RELATIVO a uploads, e a rota pública de leitura
+  // o remonta — é o que mantém o resto do volume fora do alcance. Derivado do
+  // caminho em DISCO, não do público: a base pública é configurável, e um
+  // `replace` de uma base só gravava caminho inválido em silêncio.
+  const relativo = caminhoRelativoDaLp(salva.absolutePath);
+  if (!relativo) {
+    console.error("[lp-assets] caminho gravado fora da pasta pública:", salva.absolutePath);
+    await deleteUploadedFile(salva.filePath).catch(() => {});
+    return actionError("Não foi possível salvar a imagem. Tente novamente.");
+  }
 
   try {
     await escreverManifesto(marcaSlug, { ...anterior, [lugar]: { arquivo: relativo, alt } });

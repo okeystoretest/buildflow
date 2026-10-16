@@ -4,12 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { submitWholesaleApplication } from "@/lib/actions/wholesale-apply";
 import { shrinkImageToBase64 } from "@/lib/client-image";
 import {
+  EMAIL_RE,
   FOUND_US,
+  GRAMATICA_INSTAGRAM,
   INVESTMENT_BANDS,
   SERVICE_MODELS,
   UF_LIST,
+  normalizarInstagram,
   type CampoEsperado,
 } from "@/lib/wholesale-apply-validation";
+import { isValidPhone, normalizePhone } from "@/lib/phone";
 
 /**
  * Formulário público de candidatura (18 campos, todos obrigatórios: decisão 20).
@@ -141,7 +145,18 @@ export function ApplyForm({
 
   // Fixado na montagem: o servidor recusa envio com menos de 5s de página
   // aberta (contenção contra robô). Uma pessoa real leva minutos.
-  const openedAt = useRef(Date.now());
+  //
+  // `performance.now()` e não `Date.now()`, e o que viaja é o TEMPO DECORRIDO e
+  // não um instante. Antes o cliente mandava `Date.now()` e o servidor fazia
+  // `Date.now() - openedAt` com o SEU relógio: um celular adiantado — comum, e
+  // nada que a lojista saiba diagnosticar — produzia diferença negativa, que é
+  // sempre menor que 5s, e ela **nunca conseguia enviar**, recebendo a recusa
+  // genérica depois de preencher 18 campos. Medindo de um lado só, não existe
+  // comparação entre relógios para errar. `performance.now()` é monotônico, então
+  // também não sofre ajuste de fuso ou de NTP no meio do preenchimento.
+  const abertoEm = useRef(
+    typeof performance !== "undefined" ? performance.now() : Date.now(),
+  );
 
   // Guarda de envio por ref: `enviando` (estado) só muda na próxima renderização,
   // e dois toques antes dela passariam ambos. O custo seria cadastro duplicado
@@ -155,6 +170,12 @@ export function ApplyForm({
   const tituloSucesso = useRef<HTMLHeadingElement>(null);
   const painelEtapa = useRef<HTMLFieldSetElement>(null);
   const tituloEtapa = useRef<HTMLParagraphElement>(null);
+  // O efeito de foco abaixo roda TAMBÉM na montagem, e `etapa` nasce 1. Como o
+  // alvo do foco fica na última seção antes do rodapé, `focus()` rolava a página
+  // até lá: toda visitante que abrisse o link do WhatsApp caía direto nos 18
+  // campos, sem ver o herói, as métricas, os motivos nem o FAQ — exatamente a
+  // argumentação que o cadastro em etapas existe para que ela leia primeiro.
+  const montou = useRef(false);
 
   useEffect(() => {
     if (!enviado) return;
@@ -168,6 +189,29 @@ export function ApplyForm({
   function definir(campo: CampoEsperado, valor: string) {
     setCampos((atual) => ({ ...atual, [campo]: valor }));
   }
+
+  /**
+   * As regras do SERVIDOR que a validação nativa não expressa, por campo.
+   *
+   * Mesmas funções puras que a action usa — importadas, não reescritas: duas
+   * cópias da regra de telefone divergiriam, e aí a etapa aprovaria o que o
+   * servidor recusa, que é o problema que isto existe para resolver.
+   * `ok` só é consultado com valor não vazio; o vazio é trabalho do `required`.
+   */
+  const REGRAS_DA_ETAPA: Record<string, { ok: (v: string) => boolean; msg: string }> = {
+    email: {
+      ok: (v) => EMAIL_RE.test(v.trim()),
+      msg: "E-mail inválido. Confira o endereço.",
+    },
+    phone: {
+      ok: (v) => isValidPhone(normalizePhone(v)),
+      msg: "WhatsApp inválido. Informe o número com DDD.",
+    },
+    instagram: {
+      ok: (v) => GRAMATICA_INSTAGRAM.test(normalizarInstagram(v)),
+      msg: "Instagram inválido. Informe só o @ da loja, sem link.",
+    },
+  };
 
   /**
    * Confere SÓ a etapa visível, usando a validação nativa do navegador.
@@ -184,6 +228,23 @@ export function ApplyForm({
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >("input, select, textarea");
     for (const controle of controles) {
+      // As três regras que o `required`/`type=` NÃO cobrem, aplicadas na etapa
+      // DONA do campo. Sem isto, elas só eram ditas pelo servidor: a lojista
+      // chegava à etapa 4, olhando o CNPJ, e lia "WhatsApp inválido. Informe o
+      // número com DDD." — sem saber a qual etapa voltar, num funil onde não
+      // existe canal de resposta. `type="tel"` não valida nada e o
+      // `type="email"` nativo aceita "ana@loja".
+      //
+      // Via `setCustomValidity`, e não um erro próprio: reusa o balão do
+      // navegador, que já vem traduzido, já rola até o campo e já é o que as
+      // outras recusas desta etapa usam. A mesma mensagem do servidor, para a
+      // lojista não ler duas redações do mesmo problema.
+      const regra = REGRAS_DA_ETAPA[controle.name];
+      if (regra) {
+        controle.setCustomValidity(
+          controle.value.trim() === "" || regra.ok(controle.value) ? "" : regra.msg,
+        );
+      }
       if (!controle.checkValidity()) {
         controle.reportValidity();
         return false;
@@ -207,6 +268,12 @@ export function ApplyForm({
   // leitor de tela continua com o foco num botão que acabou de mudar de função,
   // e nada anuncia que a etapa mudou.
   useEffect(() => {
+    // Na primeira passada não há troca de etapa a anunciar: só a página abrindo.
+    // Não usar `preventScroll` aqui — na troca de etapa o scroll é desejado.
+    if (!montou.current) {
+      montou.current = true;
+      return;
+    }
     if (enviado) return;
     tituloEtapa.current?.focus();
   }, [etapa, enviado]);
@@ -243,12 +310,18 @@ export function ApplyForm({
     const avisar = qual === "instagram" ? setErroInstagram : setErroLoja;
     const file = input.files?.[0];
     const id = ++selecao.current[qual];
-    guardar(null);
-    avisar(null);
     if (!file) {
+      // CANCELAR o seletor não pode apagar a foto já aceita. Vários navegadores
+      // (e a WebView do Android em particular) disparam `change` com lista vazia
+      // quando a pessoa fecha o seletor sem escolher nada: limpar o estado antes
+      // desta checagem fazia a linha "Imagem pronta" desaparecer e o campo voltar
+      // a `required`, sem mensagem nenhuma, depois de ela já ter enviado a foto
+      // certa. O estado só é descartado quando há arquivo novo para substituí-lo.
       setLendo((l) => ({ ...l, [qual]: false }));
       return;
     }
+    guardar(null);
+    avisar(null);
     setLendo((l) => ({ ...l, [qual]: true }));
 
     const r = await shrinkImageToBase64(file, { maxDimension: 1600 });
@@ -327,7 +400,10 @@ export function ApplyForm({
         instagramImage,
         storeImage,
         honeypot,
-        openedAt: openedAt.current,
+        msPreenchendo: Math.round(
+          (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+            abertoEm.current,
+        ),
       });
       if (res.ok) {
         setEnviado(true);
@@ -361,7 +437,12 @@ export function ApplyForm({
   }
 
   const preparandoImagem = lendo.instagram || lendo.loja;
-  const pct = Math.round((etapa / TOTAL_ETAPAS) * 100);
+  // `etapa - 1`: progresso é o que ela CONCLUIU, não a etapa em que está. Com
+  // `etapa / TOTAL` a barra anunciava "25% concluído" antes de ela escrever uma
+  // letra, e nunca chegava a 100% — na última etapa marcava 100% com o
+  // formulário ainda por enviar. A fração agora vai de 0 a 1 de verdade, e
+  // "Etapa 1 de 4" ao lado continua dizendo onde ela está.
+  const pct = Math.round(((etapa - 1) / TOTAL_ETAPAS) * 100);
 
   return (
     <div className="placa-form">
@@ -591,6 +672,11 @@ export function ApplyForm({
 
           {etapa === 4 && (
             <>
+              {/* Na planilha a explicação vem entre parênteses, dentro da própria
+                  pergunta. Na tela ela é parágrafo à parte por ritmo visual — mas
+                  sem `aria-describedby` quem usa leitor de tela ouvia só a pergunta.
+                  O texto não pode entrar no `rotulo`: o rótulo é o nome do campo nas
+                  recusas do servidor (`Preencha o campo "…"`). */}
               <Campo
                 campo="cnpj"
                 rotulo="Para finalizarmos, informe o CNPJ da sua empresa:"
@@ -599,8 +685,9 @@ export function ApplyForm({
                 inputMode="numeric"
                 autoComplete="off"
                 maxLength={18}
+                aria-describedby="ajuda-cnpj"
               />
-              <p className="corpo-pequeno text-[hsl(var(--muted-foreground))]">
+              <p id="ajuda-cnpj" className="corpo-pequeno text-[hsl(var(--muted-foreground))]">
                 O CNPJ é usado para confirmar o segmento da sua loja.
               </p>
             </>

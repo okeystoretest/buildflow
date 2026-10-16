@@ -1888,10 +1888,10 @@ export async function ensureMyReferralLink(
     return actionError("O link de indicação é da equipe de Atacado.");
   }
 
-  const base = process.env.NEXT_PUBLIC_APP_URL;
+  const base = process.env.APP_BASE_URL;
   // Falhar aqui é melhor que entregar link quebrado (decisão 35): o erro de
   // um Host inferido só apareceria no celular da lojista.
-  if (!base) return actionError("NEXT_PUBLIC_APP_URL não configurada no servidor.");
+  if (!base) return actionError("APP_BASE_URL não configurada no servidor.");
 
   let code = user.referralCode;
   if (!code) {
@@ -2694,4 +2694,4 @@ git commit -m "LP Atacado OKEY: mundo visual da marca e as secoes institucionais
 - [ ] Invoque `superpowers:verification-before-completion` antes de declarar pronto.
 - [ ] Invoque `superpowers:requesting-code-review` para a revisão da branch.
 - [ ] Acrescente ao `PRODUCT.md`, em **Operating Context** e **Brand Commitments**, o fato de a operação ter marcas (OKEY e Lov Club) e de a captação de revendedor acontecer por LP pública com link por vendedora. Foi descoberto nesta conversa e ainda não está lá.
-- [ ] Confirme com o usuário se `NEXT_PUBLIC_APP_URL` está configurada no EasyPanel antes do deploy — sem ela o botão de copiar link devolve erro em vez de link quebrado, que é o comportamento desejado, mas ninguém consegue usar a feature.
+- [ ] Confirme com o usuário se `APP_BASE_URL` está configurada no EasyPanel antes do deploy — sem ela o botão de copiar link devolve erro em vez de link quebrado, que é o comportamento desejado, mas ninguém consegue usar a feature.

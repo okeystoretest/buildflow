@@ -38,6 +38,12 @@ export function canSeeLead(
 ): boolean {
   if (!canUseWholesaleTool(actor)) return false;
   if (actor.role === "GESTAO") return true;
+  // `actor.userId` conferido explicitamente: sem isto, ator e lead ambos com o
+  // campo `undefined` casavam e a função devolvia `true`. Inalcançável hoje —
+  // `atorAtual` sempre preenche o id —, mas `listLeadsFor` já decidiu que esta
+  // classe de comparação merece guarda, e "comparar dois vazios" é como um
+  // controle de acesso passa a liberar em vez de negar.
+  if (!actor.userId) return false;
   return lead.sellerId !== null && lead.sellerId === actor.userId;
 }
 

@@ -65,8 +65,17 @@ function LugarImagem({
         // Sem next/image: `images.unoptimized` esta ligado no projeto, entao o
         // componente nao otimizaria nada e so acrescentaria JS. A imagem ja sai
         // do servidor como webp de 1600 px.
+        // O MESMO componente serve o herói e os três motivos, e o herói é a
+        // imagem de LCP: `lazy` nele atrasava a descoberta da imagem mais
+        // importante na conexão móvel que é o cenário declarado. Derivado do
+        // lugar, não passado por prop, para não haver chamada que erre.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={urlPublicaDaImagem(imagem.arquivo)} alt={imagem.alt} loading="lazy" />
+        <img
+          src={urlPublicaDaImagem(imagem.arquivo)}
+          alt={imagem.alt}
+          loading={lugar === "hero" ? "eager" : "lazy"}
+          fetchPriority={lugar === "hero" ? "high" : undefined}
+        />
       ) : (
         <>
           <span className="monograma" aria-hidden="true">
@@ -115,7 +124,15 @@ export function Cabecalho({ brandName }: { brandName: string }) {
   );
 }
 
-export function Abertura({ brandName, assets }: { brandName: string; assets: ManifestoDaLp }) {
+export function Abertura({
+  brandName,
+  assets,
+  highlights,
+}: {
+  brandName: string;
+  assets: ManifestoDaLp;
+  highlights: BrandContent["highlights"];
+}) {
   return (
     <section id="abertura" className="faixa" aria-labelledby="abertura-titulo">
       <div className="interno grid items-center gap-10 pb-16 pt-10 lg:grid-cols-2 lg:gap-14 lg:pb-24 lg:pt-16">
@@ -152,14 +169,12 @@ export function Abertura({ brandName, assets }: { brandName: string; assets: Man
               trazidas da margem (FAQ 3) e da exclusividade (FAQ 3) para perto
               da ação, em vez de ficarem enterradas no fim da página. */}
           <dl className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-[hsl(var(--border))] pt-7">
-            <div>
-              <dt className="rotulo-micro">Margem na revenda</dt>
-              <dd className="corpo-pequeno mt-1">Até 100%</dd>
-            </div>
-            <div>
-              <dt className="rotulo-micro">Exclusividade</dt>
-              <dd className="corpo-pequeno mt-1">Por região, sob critério</dd>
-            </div>
+            {highlights.map((h) => (
+              <div key={h.termo}>
+                <dt className="rotulo-micro">{h.termo}</dt>
+                <dd className="corpo-pequeno mt-1">{h.valor}</dd>
+              </div>
+            ))}
           </dl>
         </div>
 
@@ -178,29 +193,7 @@ export function Abertura({ brandName, assets }: { brandName: string; assets: Man
 /** Faixa de métricas. Cada célula afirma algo que a planilha já afirma, com a
  *  condição dela embaixo — é a parte mais comercial do layout e não depende de
  *  nenhum dado novo. */
-export function Metricas() {
-  const celulas = [
-    {
-      valor: "Até 100%",
-      rotulo: "De margem na revenda",
-      nota: "Varia conforme a linha de produtos e o volume de aquisição.",
-    },
-    {
-      valor: "Linha Italiana Premium",
-      rotulo: "Tecidos importados",
-      nota: "Controle de qualidade do tecido à confecção artesanal dos detalhes.",
-    },
-    {
-      valor: "Consultora exclusiva",
-      rotulo: "Atendimento dedicado",
-      nota: "Catálogos com especificação de cada peça e apoio na escolha.",
-    },
-    {
-      valor: "Exclusividade territorial",
-      rotulo: "Por região",
-      nota: "Avaliada pela localização e viabilidade do ponto de venda.",
-    },
-  ];
+export function Metricas({ celulas }: { celulas: BrandContent["metrics"] }) {
 
   return (
     <section className="faixa bg-[hsl(var(--secondary))]" aria-label="Condições para lojistas">
@@ -218,6 +211,18 @@ export function Metricas() {
     </section>
   );
 }
+
+/**
+ * Os lugares de imagem dos motivos, na ordem.
+ *
+ * Tupla explícita em vez de `` `motivo-${i + 1}` as LugarDeImagem ``: o cast
+ * escondia o acoplamento de que `reasons` tem exatamente três itens. Um quarto
+ * motivo produzia "motivo-4" — a página caía no espaço reservado e a action
+ * respondia "Lugar de imagem desconhecido", sem nada reclamar antes. Assim o
+ * limite é visível ao compilador, e um quarto motivo reusa o último lugar em
+ * vez de inventar um que não existe.
+ */
+const LUGARES_DOS_MOTIVOS = ["motivo-1", "motivo-2", "motivo-3"] as const;
 
 export function Motivos({
   reasons,
@@ -242,7 +247,7 @@ export function Motivos({
               <LugarImagem
                 marca={brandName}
                 className={`h-[18rem] w-full sm:h-[26rem] ${i % 2 === 1 ? "lg:order-2" : ""}`}
-                lugar={`motivo-${i + 1}` as LugarDeImagem}
+                lugar={LUGARES_DOS_MOTIVOS[i] ?? "motivo-3"}
                 assets={assets}
               />
               <div className={i % 2 === 1 ? "lg:order-1" : ""}>

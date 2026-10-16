@@ -50,16 +50,60 @@ check("slug desconhecido devolve null", getBrandContent("nike"), null);
 // de propósito e a planilha respalda, o novo hash entra no mesmo commit da copy,
 // onde a revisão vê as duas linhas. Digest falhando com as contagens passando
 // quer dizer que o texto se mexeu, não a estrutura.
-const DIGEST_ESPERADO = "3ced04f351e9cd75e8d842afe79dbb36587aeda821e5b836bacfd59d4f6746fe";
-function digestDaCopy(c: { reasons: unknown; advantages: unknown; faq: unknown }) {
+// Recalculado em 16/10/2026 ao trazer `metrics` e `highlights` do TSX para
+// dentro do modulo travado. O digest anterior
+// (3ced04f351e9cd75e8d842afe79dbb36587aeda821e5b836bacfd59d4f6746fe) cobria
+// reasons+advantages+faq; nenhum TEXTO da planilha mudou nesta passada — o que
+// mudou foi o conjunto coberto, que passou a incluir as dez afirmacoes que
+// estavam soltas. A unica frase reescrita foi a meta description, para carregar
+// a condicao da margem que a planilha exige e que ela omitia.
+const DIGEST_ESPERADO = "196980fc599555915d8e2b3ad6849b30b2cb04f4bff7ef1fd9a35fcb38dd603a";
+// `metrics` e `highlights` entram no digest porque sao AFIRMACAO COMERCIAL —
+// margem, tecido, atendimento, exclusividade. Viviam em texto fixo no TSX, fora
+// de qualquer trava, enquanto o cabecalho de sections.tsx declarava que
+// afirmacao comercial nao se escreve ali. `metaDescription` fica FORA do digest
+// compartilhado porque e a unica string que difere por marca (leva o nome
+// exibido); ela tem assercao propria abaixo.
+function digestDaCopy(c: {
+  reasons: unknown;
+  advantages: unknown;
+  faq: unknown;
+  metrics: unknown;
+  highlights: unknown;
+}) {
   return createHash("sha256")
-    .update(JSON.stringify([c.reasons, c.advantages, c.faq]))
+    .update(JSON.stringify([c.reasons, c.advantages, c.faq, c.metrics, c.highlights]))
     .digest("hex");
 }
 check("digest da copy OKEY", digestDaCopy(WHOLESALE_CONTENT.OKEY), DIGEST_ESPERADO);
 // O conteúdo é compartilhado entre as marcas: a planilha diz "(marca)" e
 // "nossa marca", nunca OKEY. Só o nome exibido difere.
 check("digest da copy Lov Club igual ao da OKEY", digestDaCopy(WHOLESALE_CONTENT.LOV_CLUB), DIGEST_ESPERADO);
+
+// --- as afirmacoes que estavam soltas no TSX --------------------------------
+check("sao quatro metricas", okey.metrics.length, 4);
+check("sao dois destaques", okey.highlights.length, 2);
+// Numero sem condicao e promessa que o negocio nao fez: a planilha condiciona a
+// margem ("variando conforme a linha de produtos e o volume"). As TRES
+// aparicoes da margem tem de carregar a condicao — inclusive a meta description,
+// que e a primeira coisa que a lojista le no preview do WhatsApp.
+const margem = okey.metrics.find((m) => m.valor === "Até 100%");
+check("a metrica de margem existe", margem !== undefined, true);
+check("a metrica de margem condiciona na nota", margem?.nota.includes("Varia conforme"), true);
+check(
+  "o destaque de margem condiciona",
+  okey.highlights.find((h) => h.termo === "Margem na revenda")?.valor.includes("conforme"),
+  true,
+);
+for (const [marca, esperado] of [
+  ["OKEY", "OKEY"],
+  ["LOV_CLUB", "Lov Club"],
+] as const) {
+  const d = WHOLESALE_CONTENT[marca].metaDescription;
+  check(`meta description da ${marca} nomeia a marca`, d.includes(esperado), true);
+  check(`meta description da ${marca} condiciona a margem`, d.includes("conforme"), true);
+  check(`meta description da ${marca} nao tem placeholder`, d.includes("{marca}"), false);
+}
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

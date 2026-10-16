@@ -235,10 +235,22 @@ export async function assignLeadSeller(input: {
     return actionError("Esta candidatura já tem uma vendedora responsável.");
   }
 
-  await prisma.wholesaleLead.update({
-    where: { id: lead.id },
+  // `updateMany` com `sellerId: null` no WHERE, e não `update` pelo id: a
+  // leitura acima e a escrita são duas idas ao banco, e entre elas outra pessoa
+  // da Gestão pode ter distribuído a MESMA candidata. Com `update`, a segunda
+  // gravação sobrescrevia a primeira sem erro e sem rastro — esta action não
+  // escreve no diário, então a troca de dono ficava invisível justamente para a
+  // análise que o diário serve. Quem encontra `sellerId` ainda nulo vence; a
+  // outra recebe a mesma mensagem do caminho acima, porque é o mesmo fato.
+  // Idioma já usado na casa em `actions/deliveries.ts` para a corrida de
+  // motoristas assumindo a mesma entrega.
+  const { count } = await prisma.wholesaleLead.updateMany({
+    where: { id: lead.id, sellerId: null },
     data: { sellerId: destino.id },
   });
+  if (count !== 1) {
+    return actionError("Esta candidatura já tem uma vendedora responsável.");
+  }
 
   revalidatePath("/vendas/analise-clientes");
   return actionOk(undefined);

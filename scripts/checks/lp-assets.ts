@@ -2,22 +2,30 @@
 // Rodar com: npx tsx scripts/checks/lp-assets.ts
 //
 // O QUE ESTA EM JOGO: estas funcoes decidem o que a rota de leitura PUBLICA
-// (/api/lp) consegue servir. Se o caminho escapar de <UPLOAD_DIR>/atacado, um
+// (/api/lp) consegue servir. Se o caminho escapar de <UPLOAD_DIR>/lp-publico, um
 // visitante sem sessao le comprovante de pagamento, nota fiscal e comprovante
 // de entrega — tudo que /api/uploads protege de proposito. A travessia de
 // caminho e a falha que esta rota mais convida, e e barrada em duas camadas:
 // primeiro o texto (ehCaminhoDeImagemDaLp), depois o sistema de arquivos
 // (caminhoAbsolutoDaLp, que canonicaliza).
+//
+// E NAO E SO ESCAPAR. Ficar DENTRO da pasta tambem era falha: enquanto a pasta
+// publica se chamava "atacado", ela era a MESMA que wholesale-apply.ts usa para
+// as duas fotografias de cada candidata a revenda, com a mesma extensao .webp.
+// Qualquer um lia a foto da loja de uma nao-cliente sem sessao, trocando
+// /api/uploads por /api/lp. O caso "caminho de lead recusado" abaixo e o que
+// prende isso: ele falha se alguem reaproximar os dois namespaces.
 import path from "path";
 import {
   LUGARES_DE_IMAGEM,
   MAX_ALT,
-  caminhoAbsolutoDaLp,
+  PASTA_PUBLICA,
   ehCaminhoDeImagemDaLp,
   ehLugarDeImagem,
   normalizarManifesto,
   urlPublicaDaImagem,
 } from "../../src/lib/lp-assets";
+import { caminhoAbsolutoDaLp } from "../../src/lib/lp-assets-server";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -37,26 +45,39 @@ for (const ruim of ["hero2", "motivo-4", "", "HERO", "__proto__", "../hero", nul
 }
 
 // --- caminho: o que a rota publica pode servir -----------------------------
-const bom = "atacado/okey/2026/10/hero_7b1c.webp";
+const bom = "lp-publico/okey/2026/10/hero_7b1c.webp";
 check("caminho valido aceito", ehCaminhoDeImagemDaLp(bom), true);
+
+// A pasta publica NAO pode ser a pasta onde os leads gravam. Se esta afirmacao
+// ficar vermelha, alguem apontou PASTA_PUBLICA de volta para "atacado" e as
+// fotografias das candidatas voltaram a ser legiveis sem sessao.
+// O `as string` existe porque o tipo de PASTA_PUBLICA e o literal, e o
+// compilador recusa a comparacao como "sem sobreposicao" (TS2367). A afirmacao
+// e de RUNTIME de proposito: ela tem de ficar vermelha se o valor mudar.
+check("a pasta publica nao e a dos leads", (PASTA_PUBLICA as string) === "atacado", false);
 
 const ruins: [string, unknown][] = [
   ["fora da pasta publica", "comprovantes/2026/10/nota.webp"],
-  ["travessia com .. no meio", "atacado/../comprovantes/x.webp"],
-  ["travessia no fim", "atacado/okey/../../x.webp"],
-  ["segmento vazio", "atacado//x.webp"],
-  ["ponto como segmento", "atacado/./x.webp"],
-  ["absoluto", "/atacado/okey/x.webp"],
-  ["barra invertida (Windows)", "atacado\\okey\\x.webp"],
-  ["byte nulo", "atacado/okey/x.webp\0.png"],
-  ["extensao nao servida", "atacado/okey/x.pdf"],
-  ["sem extensao", "atacado/okey/x"],
-  ["pdf disfarcado no nome", "atacado/okey/x.webp.pdf"],
-  ["prefixo parecido", "atacadox/okey/x.webp"],
+  // As duas fotos que wholesale-apply.ts grava, na forma exata em que grava:
+  // <folder>/<ano>/<mes>/<nome>_<uuid>.webp com folder "atacado".
+  ["foto de loja de candidata", "atacado/2026/10/loja_11111111-2222-3333-4444-555555555555.webp"],
+  ["print de instagram de candidata", "atacado/2026/10/instagram_11111111-2222-3333-4444-555555555555.webp"],
+  ["pasta antiga da marca", "atacado/okey/2026/10/hero_7b1c.webp"],
+  ["travessia com .. no meio", "lp-publico/../comprovantes/x.webp"],
+  ["travessia no fim", "lp-publico/okey/../../x.webp"],
+  ["segmento vazio", "lp-publico//x.webp"],
+  ["ponto como segmento", "lp-publico/./x.webp"],
+  ["absoluto", "/lp-publico/okey/x.webp"],
+  ["barra invertida (Windows)", "lp-publico\\okey\\x.webp"],
+  ["byte nulo", "lp-publico/okey/x.webp\0.png"],
+  ["extensao nao servida", "lp-publico/okey/x.pdf"],
+  ["sem extensao", "lp-publico/okey/x"],
+  ["pdf disfarcado no nome", "lp-publico/okey/x.webp.pdf"],
+  ["prefixo parecido", "lp-publicox/okey/x.webp"],
   ["vazio", ""],
   ["nao string", 42],
   ["nulo", null],
-  ["longo demais", `atacado/okey/${"a".repeat(400)}.webp`],
+  ["longo demais", `lp-publico/okey/${"a".repeat(400)}.webp`],
 ];
 for (const [nome, valor] of ruins) {
   check(`caminho recusado: ${nome}`, ehCaminhoDeImagemDaLp(valor), false);
@@ -65,15 +86,15 @@ for (const [nome, valor] of ruins) {
 // --- canonicalizacao: a segunda barreira -----------------------------------
 // MEDIDO, nao afirmado: desligando a camada de TEXTO (o filtro de segmento em
 // ehCaminhoDeImagemDaLp) e rodando esta checagem, as travessias de verdade
-// ("atacado/../comprovantes/x.webp" e "atacado/okey/../../x.webp") continuaram
-// recusadas aqui — so "atacado//x.webp" e "atacado/./x.webp" passaram, e esses
-// dois resolvem para dentro da propria pasta publica. Ou seja: as duas camadas
-// sao de fato independentes, e a de baixo pega o caso que importa.
+// ("lp-publico/../comprovantes/x.webp" e "lp-publico/okey/../../x.webp")
+// continuaram recusadas aqui — so "lp-publico//x.webp" e "lp-publico/./x.webp"
+// passaram, e esses dois resolvem para dentro da propria pasta publica. Ou seja:
+// as duas camadas sao de fato independentes, e a de baixo pega o caso que importa.
 const absoluto = caminhoAbsolutoDaLp(bom);
 check("caminho valido resolve para dentro da pasta publica", typeof absoluto === "string", true);
 if (absoluto) {
-  const raiz = path.resolve(process.env.UPLOAD_DIR ?? "./uploads", "atacado");
-  check("o absoluto fica sob <UPLOAD_DIR>/atacado", absoluto.startsWith(raiz + path.sep), true);
+  const raiz = path.resolve(process.env.UPLOAD_DIR ?? "./uploads", PASTA_PUBLICA);
+  check("o absoluto fica sob <UPLOAD_DIR>/lp-publico", absoluto.startsWith(raiz + path.sep), true);
 }
 for (const [nome, valor] of ruins) {
   if (typeof valor !== "string") continue;
@@ -114,7 +135,7 @@ check(
   "entrada boa sobrevive ao lado de entrada ruim",
   normalizarManifesto({
     hero: { arquivo: bom, alt: "ok" },
-    "motivo-1": { arquivo: "atacado/../x.webp", alt: "mau" },
+    "motivo-1": { arquivo: "lp-publico/../x.webp", alt: "mau" },
   }),
   { hero: { arquivo: bom, alt: "ok" } },
 );

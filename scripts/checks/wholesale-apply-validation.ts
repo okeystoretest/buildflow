@@ -5,7 +5,13 @@
 // Tudo que passa daqui vira linha no banco e arquivo no disco. Campo
 // obrigatório que escapa produz cadastro incompleto para a analista; "Outro"
 // sem texto produz resposta que não informa nada.
-import { validateApplyPayload, UF_LIST } from "../../src/lib/wholesale-apply-validation";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import {
+  validateApplyPayload,
+  UF_LIST,
+  ROTULOS_DE_CAMPO,
+} from "../../src/lib/wholesale-apply-validation";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -155,6 +161,82 @@ for (const [nome, entrada] of [
   }
   check(`payload ${nome}: não lança`, lancou, false);
   check(`payload ${nome}: recusa`, typeof r === "object" && r !== null && "error" in r, true);
+}
+
+// --- Instagram: gramatica real, e a URL que a lojista cola de verdade -------
+// Antes o campo tinha teto de tamanho e remocao do "@", e nada mais: "minhaloja/"
+// e uma quebra de linha eram gravados como se fossem handle. Sem XSS hoje (os
+// dois renders sao texto JSX, que o React escapa), mas a exposicao e a proxima
+// pessoa que montar `https://instagram.com/${lead.instagram}` e herdar barra,
+// "?" ou newline. A gramatica fecha isso — e a normalizacao existe para que
+// fechar nao transforme "Copiar link do perfil" (o que o celular entrega) numa
+// recusa para quem fez o certo.
+for (const [nome, entrada, esperado] of [
+  ["handle puro", "lojadaana", "lojadaana"],
+  ["com arroba", "@lojadaana", "lojadaana"],
+  ["URL completa com barra final", "https://www.instagram.com/lojadaana/", "lojadaana"],
+  ["URL sem www", "https://instagram.com/lojadaana", "lojadaana"],
+  ["URL sem esquema", "instagram.com/lojadaana/", "lojadaana"],
+  ["URL com query", "https://www.instagram.com/lojadaana/?hl=pt-br", "lojadaana"],
+  ["ponto e sublinhado sao validos", "loja.da_ana", "loja.da_ana"],
+] as const) {
+  const r = validateApplyPayload({ ...valido, instagram: entrada });
+  check(`instagram aceito (${nome})`, "ok" in r, true);
+  if ("ok" in r) check(`instagram normalizado (${nome})`, r.clean.instagram, esperado);
+}
+
+for (const [nome, entrada] of [
+  ["so a arroba", "@"],
+  ["vazio depois de normalizar", "https://www.instagram.com/"],
+  ["com espaco", "loja da ana"],
+  ["com barra no meio", "loja/ana"],
+  ["com newline", "lojadaana\nmais"],
+  ["com caractere de marcacao", "<script>"],
+  ["acima de 30 caracteres", "a".repeat(31)],
+] as const) {
+  const r = validateApplyPayload({ ...valido, instagram: entrada });
+  check(`instagram recusado (${nome})`, "error" in r, true);
+}
+
+// --- o rotulo do erro existe na TELA ---------------------------------------
+// Por que ler o TSX como texto: o servidor recusa campo por campo e NOMEIA o
+// campo na mensagem. Enquanto os nomes eram internos ("Nome completo", "Tempo de
+// mercado"), a lojista lia uma instrucao para preencher um campo que a pagina
+// nao tem — a tela pergunta "Como podemos te chamar?". Nenhum tipo pega isso: as
+// duas pontas sao strings e compilam divergentes. Entao a checagem le o
+// `rotulo=` de cada campo no formulario e compara.
+//
+// Normalizacao: a tela acrescenta afordancia visual que nao e nome do campo —
+// dois-pontos no fim e o "(@)" do Instagram. Os dois lados passam pela MESMA
+// normalizacao, senao a checagem estaria testando pontuacao.
+const formulario = readFileSync(
+  path.resolve(__dirname, "../../src/app/atacado/[marca]/apply-form.tsx"),
+  "utf8",
+);
+
+function normalizarRotulo(s: string): string {
+  return s.replace(/\s*\(@\)\s*$/, "").replace(/\s*:\s*$/, "").trim();
+}
+
+// Procedural, e nao um regex unico: com alternancia, o motor casa na posicao
+// mais A ESQUERDA que satisfaz QUALQUER alternativa, entao `rotulo=...campo="X"`
+// casava o rotulo do bloco ANTERIOR e a checagem acusava divergencia falsa.
+// Aqui o campo e ancora e a busca nao atravessa outro `campo="`.
+function rotuloNaTela(campo: string): string | null {
+  const ancora = formulario.indexOf(`campo="${campo}"`);
+  if (ancora < 0) return null;
+  const inicio = ancora + `campo="${campo}"`.length;
+  // Só até o próximo `campo="`, para nunca pegar o rótulo do bloco seguinte.
+  const proximo = formulario.indexOf('campo="', inicio);
+  const fim = proximo < 0 ? formulario.length : proximo;
+  const achado = /rotulo="([^"]*)"/.exec(formulario.slice(inicio, fim));
+  return achado ? normalizarRotulo(achado[1]) : null;
+}
+
+for (const [campo, rotulo] of Object.entries(ROTULOS_DE_CAMPO)) {
+  const naTela = rotuloNaTela(campo);
+  check(`rotulo de ${campo} existe no formulario`, naTela !== null, true);
+  check(`rotulo de ${campo} casa com a tela`, naTela, normalizarRotulo(rotulo));
 }
 
 if (falhas > 0) {

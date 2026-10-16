@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getBrandContent } from "@/lib/wholesale-content";
 import { getSession } from "@/lib/auth";
-import { lerManifesto } from "@/lib/lp-assets";
+import { lerManifesto } from "@/lib/lp-assets-server";
 import { ModoEdicaoProvider } from "./modo-edicao";
 import { ApplyForm } from "./apply-form";
 import { Abertura, Cabecalho, Metricas, Motivos, Perguntas, Rodape, Vantagens } from "./sections";
@@ -24,7 +24,10 @@ export function generateMetadata({ params }: { params: { marca: string } }): Met
     // Descrição por marca: o preview do WhatsApp — único canal por onde este
     // link circula — herdava a do dashboard e anunciava a marca da lojista como
     // "Logística e controle de vendas".
-    description: `Revenda ${nome} na sua loja: margem de até 100%, tecidos da Linha Italiana Premium e exclusividade territorial por região.`,
+    // Do módulo travado pelo digest, não escrita aqui: é a afirmação comercial
+    // MAIS exposta da página (o preview do WhatsApp é a primeira coisa que a
+    // lojista lê) e era a única que omitia a condição da margem.
+    description: marca.content.metaDescription,
     openGraph: {
       title: `Seja revendedora | ${nome}`,
       description: `Cadastro de lojista para revender ${nome}.`,
@@ -70,8 +73,8 @@ export default async function MarcaPage({
     <ModoEdicaoProvider podeEditar={podeEditar} marcaSlug={params.marca}>
       <Cabecalho brandName={nome} />
       <main>
-        <Abertura brandName={nome} assets={assets} />
-        <Metricas />
+        <Abertura brandName={nome} assets={assets} highlights={marca.content.highlights} />
+        <Metricas celulas={marca.content.metrics} />
         <Motivos reasons={marca.content.reasons} brandName={nome} assets={assets} />
         <Vantagens advantages={marca.content.advantages} />
         <Perguntas faq={marca.content.faq} />

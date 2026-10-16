@@ -1,29 +1,41 @@
-import { mkdir, readFile, rename, writeFile } from "fs/promises";
-import path from "path";
-import { randomUUID } from "node:crypto";
-
 /**
- * Imagens da LP pública de atacado, trocáveis pelo dono sem deploy.
+ * Imagens da LP pública de atacado, trocáveis pelo dono sem deploy — a parte
+ * PURA: constantes, tipos e as guardas de caminho.
+ *
+ * POR QUE ESTE ARQUIVO NÃO TOCA O SISTEMA DE ARQUIVOS
+ * `modo-edicao.tsx` é client component e precisa de `MAX_ALT` e do tipo
+ * `LugarDeImagem`. Enquanto a leitura e a escrita do manifesto viviam aqui, esse
+ * import arrastava `fs/promises` para o bundle do navegador, o webpack não
+ * resolvia o módulo e a COMPILAÇÃO INTEIRA morria — 500 em toda rota do app,
+ * inclusive `/login`. O I/O mora em `lp-assets-server.ts`; aqui não entra nada
+ * que só exista no Node, e é isso que impede a regressão.
  *
  * POR QUE UM JSON NO VOLUME E NÃO UMA TABELA
  * Decisão registrada em docs/superpowers/specs/2026-10-16-lp-atacado-editor-imagens-design.md.
- * Em resumo: `prisma/schema.prisma` carrega 216 linhas não comitadas da feature
- * Select, então acrescentar um model ali e comitar arrastaria o Select para esta
- * branch; e `migrate diff` contra este banco emite hoje três ALTER COLUMN de
- * drift pré-existente do Select, que entrariam em qualquer migration que eu
- * gerasse — e um `migrate deploy` desta branch sozinha tentaria alterar tabelas
- * que o schema comitado não tem, impedindo o servidor de subir (o Dockerfile faz
- * `migrate deploy && exec node server.js`). O dado são quatro lugares com nome
- * de arquivo e texto alternativo, e mora ao lado das imagens que descreve.
+ * Em resumo: `migrate diff` contra este banco emite hoje três ALTER COLUMN de
+ * drift pré-existente do Select, que entrariam em qualquer migration gerada
+ * aqui — e um `migrate deploy` desta branch sozinha tentaria alterar tabelas que
+ * nenhuma migration comitada cria, impedindo o servidor de subir (o Dockerfile
+ * faz `migrate deploy && exec node server.js`). O dado são quatro lugares com
+ * nome de arquivo e texto alternativo, e mora ao lado das imagens que descreve.
  *
  * Custo aceito: sem transação. A escrita é atômica por arquivo temporário mais
  * rename, e existe um editor só.
  */
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "./uploads";
-
-/** Pasta, dentro de uploads, que a rota de leitura pública serve. Só ela. */
-export const PASTA_PUBLICA = "atacado";
+/**
+ * Pasta, dentro de uploads, que a rota de leitura pública serve. Só ela.
+ *
+ * NÃO PODE SER "atacado". `actions/wholesale-apply.ts` grava as duas fotografias
+ * de cada candidata a revenda em `<UPLOAD_DIR>/atacado/<ano>/<mês>/`, com a
+ * MESMA extensão `.webp` — e essas exigem sessão, porque são a foto do
+ * estabelecimento físico e o print da loja de alguém que não é cliente. Com os
+ * dois usando o nome `atacado`, um `GET /api/lp/atacado/2026/10/loja_<uuid>.webp`
+ * devolvia a foto da lojista sem cookie nenhum, e com `Cache-Control: public,
+ * immutable` de um ano. Pasta pública e pasta de dado pessoal não podem ter o
+ * mesmo nome: a allow-list de extensão não as distingue.
+ */
+export const PASTA_PUBLICA = "lp-publico";
 
 /** Base da rota de leitura pública. */
 export const BASE_PUBLICA = "/api/lp";
@@ -39,7 +51,7 @@ export const LUGARES_DE_IMAGEM = ["hero", "motivo-1", "motivo-2", "motivo-3"] as
 export type LugarDeImagem = (typeof LUGARES_DE_IMAGEM)[number];
 
 export interface ImagemDaLp {
-  /** Caminho relativo DENTRO de uploads, sempre começando por "atacado/". */
+  /** Caminho relativo DENTRO de uploads, sempre começando por `PASTA_PUBLICA`. */
   arquivo: string;
   /** Texto alternativo. Vazio = decorativa. */
   alt: string;
@@ -50,6 +62,9 @@ export type ManifestoDaLp = Partial<Record<LugarDeImagem, ImagemDaLp>>;
 /** Teto do texto alternativo: é texto de página pública, com dono único. */
 export const MAX_ALT = 160;
 
+/** Alfabeto do slug de marca, que vira nome de pasta. */
+export const SLUG_DE_MARCA = /^[a-z0-9-]{1,40}$/;
+
 export function ehLugarDeImagem(valor: unknown): valor is LugarDeImagem {
   return typeof valor === "string" && (LUGARES_DE_IMAGEM as readonly string[]).includes(valor);
 }
@@ -58,8 +73,9 @@ export function ehLugarDeImagem(valor: unknown): valor is LugarDeImagem {
  * O caminho é servível pela rota pública?
  *
  * Três exigências, e as três existem por um motivo diferente:
- * - começa por "atacado/": a rota pública serve UMA pasta, e nenhuma outra —
- *   comprovante de pagamento e nota fiscal seguem exigindo sessão;
+ * - começa por `PASTA_PUBLICA`: a rota pública serve UMA pasta, e nenhuma outra.
+ *   Comprovante de pagamento, nota fiscal e as FOTOGRAFIAS DAS CANDIDATAS (que
+ *   `wholesale-apply.ts` grava em `atacado/<ano>/`) seguem exigindo sessão;
  * - termina em ".webp": é o único formato que `processAndSaveImage` escreve, e
  *   lista fechada de extensão é mais barata que adivinhar tipo por conteúdo;
  * - não contém segmento "..", barra invertida, nem começa por "/": travessia de
@@ -78,19 +94,6 @@ export function ehCaminhoDeImagemDaLp(arquivo: unknown): arquivo is string {
 /** URL por onde o navegador busca a imagem. */
 export function urlPublicaDaImagem(arquivo: string): string {
   return `${BASE_PUBLICA}/${arquivo}`;
-}
-
-/**
- * Caminho absoluto no disco, ou null quando o resultado escaparia da pasta
- * pública. Segunda barreira: o texto já foi conferido, aqui o sistema de
- * arquivos decide.
- */
-export function caminhoAbsolutoDaLp(arquivo: string): string | null {
-  if (!ehCaminhoDeImagemDaLp(arquivo)) return null;
-  const raiz = path.resolve(UPLOAD_DIR, PASTA_PUBLICA);
-  const absoluto = path.resolve(path.resolve(UPLOAD_DIR), arquivo);
-  if (absoluto !== raiz && !absoluto.startsWith(raiz + path.sep)) return null;
-  return absoluto;
 }
 
 /**
@@ -117,35 +120,4 @@ export function normalizarManifesto(cru: unknown): ManifestoDaLp {
     };
   }
   return limpo;
-}
-
-function caminhoDoManifesto(marcaSlug: string): string {
-  // O slug vem da rota e já passou por `getBrandContent`; ainda assim só o
-  // alfabeto do slug é aceito, porque este valor virou nome de pasta.
-  const seguro = marcaSlug.replace(/[^a-z0-9-]/g, "");
-  return path.resolve(UPLOAD_DIR, PASTA_PUBLICA, seguro, "manifest.json");
-}
-
-export async function lerManifesto(marcaSlug: string): Promise<ManifestoDaLp> {
-  try {
-    const cru = await readFile(caminhoDoManifesto(marcaSlug), "utf8");
-    return normalizarManifesto(JSON.parse(cru));
-  } catch {
-    // Ausente, ilegível ou JSON inválido: a página mostra os espaços
-    // reservados, que é o estado correto de "ainda não há foto".
-    return {};
-  }
-}
-
-export async function escreverManifesto(
-  marcaSlug: string,
-  manifesto: ManifestoDaLp,
-): Promise<void> {
-  const destino = caminhoDoManifesto(marcaSlug);
-  await mkdir(path.dirname(destino), { recursive: true });
-  // Temporário + rename: no mesmo volume o rename é atômico, então ninguém lê
-  // meio manifesto. Escrever direto no destino deixaria essa janela aberta.
-  const temporario = `${destino}.${randomUUID()}.tmp`;
-  await writeFile(temporario, `${JSON.stringify(manifesto, null, 2)}\n`, "utf8");
-  await rename(temporario, destino);
 }

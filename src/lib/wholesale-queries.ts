@@ -73,7 +73,16 @@ export function classifyDuplicateMatch(args: {
   const porCnpj = args.cnpjDigits.length === 14 && args.candidate.cnpj === args.cnpjDigits;
   const porTelefone = args.phoneKeys.includes(args.candidate.phone);
   if (porCnpj && porTelefone) return "ambos";
-  return porCnpj ? "cnpj" : "telefone";
+  if (porCnpj) return "cnpj";
+  // `telefone` só quando a chave de telefone de fato casou. Antes era o `else`
+  // de tudo, então "nada casou" era rotulado "telefone": inalcançável dos dois
+  // chamadores de hoje, mas a função é exportada e o seu próprio docstring diz
+  // que rótulo errado é pior que rótulo nenhum — e este rótulo vira o aviso que
+  // a analista lê para decidir.
+  if (porTelefone) return "telefone";
+  throw new Error(
+    "classifyDuplicateMatch chamada com candidato que não casa por CNPJ nem por telefone.",
+  );
 }
 
 export interface DuplicateAlert {
