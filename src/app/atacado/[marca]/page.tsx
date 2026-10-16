@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getBrandContent } from "@/lib/wholesale-content";
+import { getSession } from "@/lib/auth";
+import { lerManifesto } from "@/lib/lp-assets";
+import { ModoEdicaoProvider } from "./modo-edicao";
 import { ApplyForm } from "./apply-form";
 import { Abertura, Cabecalho, Metricas, Motivos, Perguntas, Rodape, Vantagens } from "./sections";
 
@@ -30,7 +33,7 @@ export function generateMetadata({ params }: { params: { marca: string } }): Met
   };
 }
 
-export default function MarcaPage({
+export default async function MarcaPage({
   params,
   searchParams,
 }: {
@@ -47,18 +50,29 @@ export default function MarcaPage({
   // cadastro entra sem dono e fica com a Gestão.
   const r = Array.isArray(searchParams.r) ? searchParams.r[0] : searchParams.r;
 
+  // As imagens trocáveis pelo dono (spec de 16/10). Lugar sem entrada cai no
+  // espaço reservado — é o que mantém a página correta antes de qualquer upload
+  // e se o manifesto for apagado.
+  const assets = await lerManifesto(params.marca);
+
+  // Quem pode editar. A LP é pública: sem cookie de sessão isto é null sem
+  // tocar o banco, então o visitante comum não paga consulta nenhuma. E este
+  // booleano não autoriza nada — a Server Action reconfere o papel no servidor.
+  const session = await getSession();
+  const podeEditar = session?.role === "GESTAO";
+
   // Ordem: abertura → condições → por que revender → por que escolher →
   // perguntas → cadastro. As perguntas vêm ANTES do cadastro de propósito,
   // seguindo a referência do dono: responder a objeção antes de pedir 18 campos
   // converte melhor que pedir primeiro e explicar depois. É divergência da
   // ordem original da spec, registrada para emenda.
   return (
-    <>
+    <ModoEdicaoProvider podeEditar={podeEditar} marcaSlug={params.marca}>
       <Cabecalho brandName={nome} />
       <main>
-        <Abertura brandName={nome} />
+        <Abertura brandName={nome} assets={assets} />
         <Metricas />
-        <Motivos reasons={marca.content.reasons} brandName={nome} />
+        <Motivos reasons={marca.content.reasons} brandName={nome} assets={assets} />
         <Vantagens advantages={marca.content.advantages} />
         <Perguntas faq={marca.content.faq} />
 
@@ -86,6 +100,6 @@ export default function MarcaPage({
         </section>
       </main>
       <Rodape brandName={nome} />
-    </>
+    </ModoEdicaoProvider>
   );
 }

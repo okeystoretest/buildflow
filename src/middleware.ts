@@ -18,7 +18,20 @@ import { getAuthSecret } from "@/lib/auth-secret";
 // e cliente. UM unico segmento serve as duas marcas (/atacado/okey e
 // /atacado/lov-club) — por isso a marca nao fica no primeiro nivel: um so
 // item aqui libera as duas, e uma marca nova nao exige mexer neste arquivo.
-const PUBLIC_PATHS = ["/login", "/api/health", "/acompanhar", "/api/integracao", "/api/cron", "/atacado"];
+// /api/lp serve as IMAGENS dessa LP, e so elas: a lojista nao tem sessao, e
+// /api/uploads exige uma de proposito, porque serve comprovante de pagamento,
+// nota fiscal e comprovante de entrega. A rota propria confina a leitura a
+// <UPLOAD_DIR>/atacado por canonicalizacao e aceita so .webp (ver
+// src/lib/lp-assets.ts). Liberar aqui nao alcanca o resto do volume.
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/health",
+  "/acompanhar",
+  "/api/integracao",
+  "/api/cron",
+  "/atacado",
+  "/api/lp",
+];
 
 // Arquivos publicos servidos de /public que NAO exigem sessao. Sem esta
 // liberacao o middleware redirecionava manifest/icones/service worker para

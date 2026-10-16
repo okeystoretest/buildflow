@@ -1,4 +1,6 @@
 import type { BrandContent } from "@/lib/wholesale-content";
+import { urlPublicaDaImagem, type LugarDeImagem, type ManifestoDaLp } from "@/lib/lp-assets";
+import { EditorDeImagem, GatilhoOculto } from "./modo-edicao";
 
 /* ============================================================================
    Seções institucionais da LP de atacado
@@ -47,21 +49,37 @@ function LugarImagem({
   marca,
   className,
   legenda,
+  lugar,
+  assets,
 }: {
   marca: string;
   className?: string;
   legenda?: string;
+  lugar: LugarDeImagem;
+  assets: ManifestoDaLp;
 }) {
+  const imagem = assets[lugar];
   return (
     <div className={`lugar-imagem ${className ?? ""}`}>
-      <span className="monograma" aria-hidden="true">
-        {marca.charAt(0)}
-      </span>
-      {legenda ? (
-        <span className="legenda-vazio rotulo-micro" aria-hidden="true">
-          {legenda}
-        </span>
-      ) : null}
+      {imagem ? (
+        // Sem next/image: `images.unoptimized` esta ligado no projeto, entao o
+        // componente nao otimizaria nada e so acrescentaria JS. A imagem ja sai
+        // do servidor como webp de 1600 px.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={urlPublicaDaImagem(imagem.arquivo)} alt={imagem.alt} loading="lazy" />
+      ) : (
+        <>
+          <span className="monograma" aria-hidden="true">
+            {marca.charAt(0)}
+          </span>
+          {legenda ? (
+            <span className="legenda-vazio rotulo-micro" aria-hidden="true">
+              {legenda}
+            </span>
+          ) : null}
+        </>
+      )}
+      <EditorDeImagem lugar={lugar} altAtual={imagem?.alt ?? ""} />
     </div>
   );
 }
@@ -97,7 +115,7 @@ export function Cabecalho({ brandName }: { brandName: string }) {
   );
 }
 
-export function Abertura({ brandName }: { brandName: string }) {
+export function Abertura({ brandName, assets }: { brandName: string; assets: ManifestoDaLp }) {
   return (
     <section id="abertura" className="faixa" aria-labelledby="abertura-titulo">
       <div className="interno grid items-center gap-10 pb-16 pt-10 lg:grid-cols-2 lg:gap-14 lg:pb-24 lg:pt-16">
@@ -149,6 +167,8 @@ export function Abertura({ brandName }: { brandName: string }) {
           marca={brandName}
           className="h-[22rem] w-full sm:h-[30rem] lg:h-[40rem]"
           legenda="Imagem da coleção"
+          lugar="hero"
+          assets={assets}
         />
       </div>
     </section>
@@ -202,9 +222,11 @@ export function Metricas() {
 export function Motivos({
   reasons,
   brandName,
+  assets,
 }: {
   reasons: BrandContent["reasons"];
   brandName: string;
+  assets: ManifestoDaLp;
 }) {
   return (
     <section id="motivos" className="faixa" aria-labelledby="motivos-titulo">
@@ -220,6 +242,8 @@ export function Motivos({
               <LugarImagem
                 marca={brandName}
                 className={`h-[18rem] w-full sm:h-[26rem] ${i % 2 === 1 ? "lg:order-2" : ""}`}
+                lugar={`motivo-${i + 1}` as LugarDeImagem}
+                assets={assets}
               />
               <div className={i % 2 === 1 ? "lg:order-1" : ""}>
                 {/* O número carrega informação: a planilha ordena os três
@@ -331,7 +355,12 @@ export function Rodape({ brandName }: { brandName: string }) {
     <footer className="rodape" aria-label="Rodapé">
       <div className="interno flex flex-col gap-8 py-12 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="marca-nome">{brandName}</p>
+          {/* O nome da marca aqui e o gatilho oculto do modo de edicao:
+              pressionar e segurar 800 ms. Nao desenha nada, e nao faz nada para
+              quem nao tem sessao de GESTAO. */}
+          <GatilhoOculto>
+            <p className="marca-nome">{brandName}</p>
+          </GatilhoOculto>
           <p className="rotulo-micro mt-1">Atacado</p>
           {/* Finalidade declarada do tratamento, em uma linha. Não é a política
               de privacidade: o aviso completo precisa de controlador, prazo de
