@@ -36,6 +36,13 @@ const config: Config = {
         brand: {
           DEFAULT: "#3498db", soft: "#e8f3fb", fg: "#ffffff",
         },
+        // Select (venda de SERVICO). Nao e um setor: e uma natureza de venda
+        // que aparece dentro de Vendas e do Financeiro. Token proprio, e nao
+        // reuso do verde de "motorista", porque a paleta e lida por setor —
+        // um botao "motorista" no meio de Vendas leria como engano.
+        servico: {
+          DEFAULT: "#27ae60", soft: "#e6f6ed", fg: "#ffffff",
+        },
         // ---- Tokens shadcn/ui ----
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

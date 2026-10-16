@@ -21,7 +21,7 @@ export default async function GestaoPage({
   const goalMonth = gm >= 1 && gm <= 12 ? gm : curMonth;
   const goalYear = gy > 2000 && gy < 3000 ? gy : curYear;
 
-  const [users, stores, orderTypes, operations, shippingMethods, goals, campaigns, customers, stageLimits, originStores] =
+  const [users, stores, orderTypes, operations, shippingMethods, goals, campaigns, customers, stageLimits, originStores, selectPlans] =
     await Promise.all([
       prisma.user.findMany({ orderBy: { name: "asc" }, include: { originStores: { select: { id: true } } } }),
       prisma.store.findMany({ orderBy: { name: "asc" } }),
@@ -39,6 +39,17 @@ export default async function GestaoPage({
       prisma.customer.findMany({ orderBy: { name: "asc" }, take: 20 }),
       prisma.stageTimeLimit.findMany(),
       prisma.originStore.findMany({ orderBy: { name: "asc" } }),
+      // Planos do Select. Vem TODOS (inclusive inativos): esta e a tela que
+      // reativa um plano retirado de circulacao. A contagem de contratos
+      // acompanha porque e ela que diz se o plano pode ser excluido — e que
+      // avisa quem edita que contrato vendido nao se reescreve.
+      prisma.selectPlan.findMany({
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        include: {
+          benefits: { orderBy: { sortOrder: "asc" }, select: { text: true } },
+          _count: { select: { contracts: true } },
+        },
+      }),
     ]);
 
   const activeCampaigns = campaigns.filter((c) => c.active);
@@ -72,6 +83,17 @@ export default async function GestaoPage({
         goalPeriodYear={goalYear}
         isCurrentGoalPeriod={isCurrentPeriod}
         stageLimits={stageLimits.map((s) => ({ status: s.status, limitMinutes: s.limitMinutes }))}
+        selectPlans={selectPlans.map((p) => ({
+          id: p.id,
+          name: p.name,
+          validityMonths: p.validityMonths,
+          monthlyAmount: p.monthlyAmount == null ? null : Number(p.monthlyAmount),
+          minMonthlyPurchase: p.minMonthlyPurchase == null ? null : Number(p.minMonthlyPurchase),
+          editableValues: p.editableValues,
+          active: p.active,
+          benefits: p.benefits.map((b) => b.text),
+          contractCount: p._count.contracts,
+        }))}
       />
     </div>
   );

@@ -11,7 +11,21 @@ import { getSession } from "@/lib/auth";
 // ACESSO: VENDAS, GESTAO e FINANCEIRO. O Financeiro passou a poder criar
 // pedidos (paridade com Vendas), entao precisa selecionar clientes no combobox.
 //
-// Uso: /api/customers/search?q=merc
+// Uso: /api/customers/search?q=merc&limit=5
+//
+// LIMIT: opcional, e o chamador pede no maximo MAX_LIMIT. Cada tela escolhe
+// quantas sugestoes quer (a adesao do Select mostra 5; o Novo Pedido, 20), mas
+// o numero chega pelo NAVEGADOR — por isso e um teto que se aperta, nunca uma
+// ordem: `?limit=100000` continua devolvendo 20.
+const MAX_LIMIT = 20;
+const DEFAULT_LIMIT = 20;
+
+function parseLimit(raw: string | null): number {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) return DEFAULT_LIMIT;
+  return Math.min(n, MAX_LIMIT);
+}
+
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session || !["VENDAS", "GESTAO", "FINANCEIRO"].includes(session.role)) {
@@ -20,6 +34,7 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") ?? "").trim();
+  const limit = parseLimit(searchParams.get("limit"));
 
   // Sem termo: devolve os primeiros (por nome) apenas para popular a lista
   // inicial. Nunca a base inteira.
@@ -35,7 +50,7 @@ export async function GET(req: Request) {
   const customers = await prisma.customer.findMany({
     where,
     orderBy: { name: "asc" },
-    take: 20, // teto rigido: protege o servidor e o cliente
+    take: limit, // ja limitado a MAX_LIMIT: protege o servidor e o cliente
     select: {
       id: true, code: true, name: true,
       cep: true, street: true, district: true, city: true, state: true, contact: true,
