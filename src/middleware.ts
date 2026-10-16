@@ -26,6 +26,12 @@ import { getAuthSecret } from "@/lib/auth-secret";
 // duas fotos de cada candidata, com a mesma extensao .webp, e apontar esta
 // rota para la deixava a foto da loja de uma nao-cliente legivel sem sessao.
 // Liberar aqui nao alcanca o resto do volume.
+// /fonts sao as fontes AUTO-HOSPEDADAS da LP (public/fonts/atacado/*.woff2).
+// Sem esta liberacao o middleware respondia 307 para /login no .woff2, o
+// @font-face ficava com status "error" e a pagina — cujo mundo visual inteiro
+// mora em Playfair e Manrope — renderizava em Georgia. Com font-display: swap
+// nada quebra visivelmente, o que e justamente por que passou por tsc limpo,
+// 26 checks verdes e quatro rotas conferidas por codigo HTTP.
 const PUBLIC_PATHS = [
   "/login",
   "/api/health",
@@ -34,6 +40,7 @@ const PUBLIC_PATHS = [
   "/api/cron",
   "/atacado",
   "/api/lp",
+  "/fonts",
 ];
 
 // Arquivos publicos servidos de /public que NAO exigem sessao. Sem esta
