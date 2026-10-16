@@ -94,3 +94,18 @@ export function nextCampaignId(ids: string[], currentId: string): string {
   if (i === -1) return ids[0];
   return ids[(i + 1) % ids.length];
 }
+
+/**
+ * Apara um texto livre e o corta num teto, devolvendo null quando sobra vazio.
+ *
+ * Existe porque as colunas de observacao, motivo e nome sao TEXT no Postgres:
+ * sem teto, `nota.trim()` aceita megabytes, e um Ctrl+V distraido entra no
+ * banco sem ninguem reclamar. O corte e silencioso de proposito — recusar o
+ * lancamento inteiro por causa do tamanho de uma observacao seria pior que
+ * guardar os primeiros N caracteres dela.
+ */
+export function limitText(raw: string | null | undefined, max: number): string | null {
+  if (raw == null) return null;
+  const limpo = raw.trim().slice(0, max);
+  return limpo || null;
+}

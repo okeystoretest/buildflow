@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, Users, ListTodo, History, Plus, BarChart3, MapPin } from "lucide-react";
+import { AlertTriangle, Users, ListTodo, History, Plus, BarChart3, MapPin, ClipboardCheck } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { formatBRL } from "@/lib/utils";
 import { EXCEPTION_STATUSES } from "@/lib/order-flow";
 import { VendaRowActions } from "./row-actions";
 import { VendasBusca } from "./busca-client";
+import { CopiarLinkAtacado } from "./copiar-link-atacado";
+import { canUseWholesaleTool } from "@/lib/wholesale-permissions";
 import type { Prisma } from "@prisma/client";
 
 const PAGE_SIZE = 10; // exibe apenas as ultimas 10 vendas por pagina
@@ -21,6 +23,22 @@ export default async function VendasPage({
   const session = await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
   // GESTAO e FINANCEIRO veem TODOS os pedidos; VENDAS ve apenas os proprios.
   const veTudo = session.role === "GESTAO" || session.role === "FINANCEIRO";
+
+  // O papel sozinho não separa Atacado de Varejo: as duas equipes são VENDAS.
+  // O `salesModel` vem do banco (não do cookie, que pode estar defasado). Sem
+  // `!`: usuário sumido vira "sem acesso", não um 500.
+  const ator = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, role: true, salesModel: true },
+  });
+  // Copiar link: só VENDAS + ATACADO. Gestão usa a ferramenta, mas não é
+  // destino de indicação (a candidatura precisa de uma vendedora como dona).
+  const vendedoraAtacado = ator?.role === "VENDAS" && ator.salesModel === "ATACADO";
+  // Atalho da Análise de Clientes: VENDAS+ATACADO ou GESTAO (decisões 15-17);
+  // FINANCEIRO fica de fora.
+  const podeAnalisar = ator
+    ? canUseWholesaleTool({ userId: ator.id, role: ator.role, salesModel: ator.salesModel })
+    : false;
 
   const busca = searchParams?.busca?.trim() || "";
   const page = Math.max(1, Number(searchParams?.page) || 1);
@@ -71,11 +89,23 @@ export default async function VendasPage({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-vendas">Vendas</h1>
         <div className="flex gap-2">
+          {/* Captação de revendedor: só a equipe de Atacado (decisão 15). O botão
+              some para VAREJO; a action confere de novo no servidor. */}
+          {vendedoraAtacado && <CopiarLinkAtacado />}
+          {podeAnalisar && (
+            <Button asChild variant="outline"><Link href="/vendas/analise-clientes"><ClipboardCheck className="h-4 w-4" /> Análise de Clientes</Link></Button>
+          )}
           <Button asChild variant="outline"><Link href="/vendas/clientes"><Users className="h-4 w-4" /> Cadastrar Cliente</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/excursoes"><MapPin className="h-4 w-4" /> Cadastrar Excursão</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/tarefas"><ListTodo className="h-4 w-4" /> Tarefas Diárias</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/relatorio-campanha"><BarChart3 className="h-4 w-4" /> Relatório de Campanha</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/historico"><History className="h-4 w-4" /> Histórico de Vendas</Link></Button>
+          {/* Novo Select: atalho só da Gestão. A tela em si aceita VENDAS e
+              FINANCEIRO (eles chegam por link direto) — esconder o botão não
+              decide nada, a action confere o papel no servidor. */}
+          {session.role === "GESTAO" && (
+            <Button asChild variant="servico"><Link href="/vendas/novo-select"><Plus className="h-4 w-4" /> Novo Select</Link></Button>
+          )}
           <Button asChild variant="vendas"><Link href="/vendas/novo"><Plus className="h-4 w-4" /> Novo pedido</Link></Button>
         </div>
       </div>

@@ -38,10 +38,11 @@ export async function shrinkImageToBase64(
 
   try {
     const dataUrl = await readAsDataUrl(file);
-    // HEIC/HEIF muitas vezes não desenham em canvas; nesse caso envia o original.
-    if (file.type === "image/heic" || file.type === "image/heif") {
-      return { base64: dataUrl };
-    }
+    // HEIC/HEIF NÃO têm desvio: tentam o canvas como qualquer imagem. Invariante:
+    // nunca enviar arquivo maior que o necessário; o original só segue quando a
+    // decodificação REALMENTE falhou (o `catch` abaixo). Navegador que decodifica
+    // HEIC (a hipótese é o Safari do iPhone, não medida) comprime de verdade; o
+    // que não decodifica paga uma carga de imagem falha e cai no original.
 
     const img = await loadImage(dataUrl);
     let { width, height } = img;

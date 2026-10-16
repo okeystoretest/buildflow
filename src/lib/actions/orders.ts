@@ -14,7 +14,7 @@ import {
   normalizeOrderNumber,
   mensagemPedidoDuplicado,
 } from "@/lib/validations/order";
-import { processAndSaveImage, saveDocument, isPdfDataUrl } from "@/lib/image";
+import { processAndSaveImage, saveDocument, isPdfDataUrl, validateUploadDataUrl } from "@/lib/image";
 import { newTrackingToken } from "@/lib/tracking-auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { emitOrderCreated, emitOrderUpdated } from "@/lib/realtime/emit";
@@ -228,6 +228,10 @@ export async function createOrder(
         const base64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
         const buffer = Buffer.from(base64, "base64");
         if (buffer.length === 0) continue;
+        // Formato conferido por magic bytes antes do sharp (lib/image). O
+        // comprovante invalido e PULADO, nao derruba o pedido: e a mesma
+        // escolha que o catch deste laco ja faz para erro de processamento.
+        if (validateUploadDataUrl(dataUrl, buffer)) continue;
         // Comprovante aceita imagem OU PDF. PDF vai direto ao disco (sem sharp);
         // imagem passa pelo pipeline .webp. No banco, so o caminho.
         const processed = isPdfDataUrl(dataUrl)
@@ -568,6 +572,10 @@ export async function updateOrder(args: {
           const base64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
           const buffer = Buffer.from(base64, "base64");
           if (buffer.length === 0) continue;
+          // Formato conferido por magic bytes antes do sharp (lib/image). O
+          // comprovante invalido e PULADO, nao derruba o pedido: e a mesma
+          // escolha que o catch deste laco ja faz para erro de processamento.
+          if (validateUploadDataUrl(dataUrl, buffer)) continue;
           // Comprovante aceita imagem OU PDF (mesma regra da criacao).
           const processed = isPdfDataUrl(dataUrl)
             ? await saveDocument(buffer, {

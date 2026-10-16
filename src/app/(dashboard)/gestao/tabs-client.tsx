@@ -19,6 +19,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CrudTable, type CrudRow } from "@/components/shared/crud-table";
+import { PlanosPanel, type PlanAdminRow } from "./planos-panel";
 import { CsvImport } from "@/components/shared/csv-import";
 import { ClientesManager, type ClienteRow } from "@/app/(dashboard)/vendas/clientes/manager-client";
 import { importUsersCsv, importOperationsCsv, importCustomersCsv } from "@/lib/actions/import";
@@ -40,7 +41,7 @@ interface StageLimitRow { status: OrderStatus; limitMinutes: number; }
 
 type SimpleEntity = "store" | "orderType" | "shippingMethod";
 
-const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Etapas", "Lojas", "Lojas de Origem", "Tipos de Pedido", "Operações", "Formas de Envio"] as const;
+const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Planos", "Etapas", "Lojas", "Lojas de Origem", "Tipos de Pedido", "Operações", "Formas de Envio"] as const;
 
 export function GestaoTabs(props: {
   users: UserRow[]; stores: Row[]; originStores: OriginStoreRow[]; orderTypes: Row[]; operations: OpRow[]; shippingMethods: Row[];
@@ -50,6 +51,7 @@ export function GestaoTabs(props: {
   // Periodo das metas exibidas (pode ser um mes passado no modo historico).
   goalPeriodMonth: number; goalPeriodYear: number; isCurrentGoalPeriod: boolean;
   stageLimits: StageLimitRow[];
+  selectPlans: PlanAdminRow[];
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Usuários");
 
@@ -68,6 +70,7 @@ export function GestaoTabs(props: {
       {tab === "Clientes" && <CustomersPanel customers={props.customers} />}
       {tab === "Metas" && <GoalsPanel sellers={props.sellers} goals={props.goals} activeCampaigns={props.activeCampaigns} month={props.currentMonth} year={props.currentYear} periodMonth={props.goalPeriodMonth} periodYear={props.goalPeriodYear} isCurrentPeriod={props.isCurrentGoalPeriod} />}
       {tab === "Campanhas" && <CampaignsPanel campaigns={props.campaigns} />}
+      {tab === "Planos" && <PlanosPanel plans={props.selectPlans} />}
       {tab === "Etapas" && <EtapasPanel stageLimits={props.stageLimits} />}
       {tab === "Lojas" && <SimplePanel entity="store" rows={props.stores} label="loja" />}
       {tab === "Lojas de Origem" && <OriginStoresPanel rows={props.originStores} />}

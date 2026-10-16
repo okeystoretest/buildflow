@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { canUseWholesaleTool } from "@/lib/wholesale-permissions";
 
 // Este handler serve os arquivos de /uploads SOMENTE para usuários autenticados.
 // Antes, o Nginx expunha /uploads publicamente — qualquer um com a URL de um
@@ -32,8 +34,36 @@ export async function GET(
     return new NextResponse("Não autorizado.", { status: 401 });
   }
 
-  // 2) Monta o caminho absoluto e CONFIRMA que fica dentro de ROOT.
+  // 1b) A pasta `atacado` guarda as DUAS FOTOGRAFIAS de cada candidata a
+  // revenda: o espaço físico e o print da loja online, de alguém que não é
+  // cliente e pode nunca ser. "Tem sessão?" era autorização errada para isso —
+  // a fila de triagem é devidamente escopada (`canUseWholesaleTool`, WHERE em
+  // `listLeadsFor`), então uma vendedora de VAREJO corretamente recusada na fila
+  // não era recusada no ARQUIVO se obtivesse o caminho. O `randomUUID()` no nome
+  // torna isso difícil, não impossível, e "difícil de adivinhar" não é controle
+  // de acesso. Aqui a porta passa a fazer a mesma pergunta que a fila.
+  //
+  // Escopado só a esta pasta de propósito: comprovantes, notas fiscais e
+  // comprovantes de entrega têm outras regras de quem pode ver, e alargar esta
+  // checagem para eles trancaria gente que hoje precisa dos arquivos.
   const segments = params.path ?? [];
+  if (segments[0] === "atacado") {
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { role: true, salesModel: true, active: true },
+    });
+    if (
+      !user ||
+      !user.active ||
+      !canUseWholesaleTool({ userId: session.userId, role: user.role, salesModel: user.salesModel })
+    ) {
+      // Mesma resposta de "não autorizado": quem não pode ver o lead também não
+      // precisa descobrir que o arquivo existe.
+      return new NextResponse("Não autorizado.", { status: 401 });
+    }
+  }
+
+  // 2) Monta o caminho absoluto e CONFIRMA que fica dentro de ROOT.
   const relative = segments.join("/");
   const absolute = path.resolve(ROOT, relative);
   if (absolute !== ROOT && !absolute.startsWith(ROOT + path.sep)) {

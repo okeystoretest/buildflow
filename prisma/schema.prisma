@@ -61,6 +61,11 @@ model User {
   // o numero for consumido por um envio automatico.
   // Opcional; so faz sentido para o perfil MOTORISTA (validado na action).
   phone     String?
+  // Código opaco de indicação da vendedora de ATACADO. NÃO é o id: um
+  // ?v=<userId> vazaria ids internos, seria enumerável e deixaria qualquer
+  // pessoa apontar submissões para qualquer vendedora (decisão 13). Opaco e
+  // único para poder ser rotacionado se vazar.
+  referralCode String? @unique
   active    Boolean  @default(true)
   // Versão da sessão. O JWT carrega este número; qualquer incremento invalida
   // TODOS os tokens já emitidos (logout server-side real, expulsão de usuário
@@ -82,6 +87,10 @@ model User {
   pushSubscriptions PushSubscription[]
   driverPayments   DriverPayment[] @relation("DriverPaymentDriver")
   transportRequests TransportRequest[] @relation("TransportDriver")
+  selectContracts   SelectContract[]   @relation("SelectResponsible")
+  wholesaleLeads        WholesaleLead[]      @relation("WholesaleLeadSeller")
+  wholesaleLeadsDecided WholesaleLead[]      @relation("WholesaleLeadDecider")
+  wholesaleLeadEvents   WholesaleLeadEvent[] @relation("WholesaleLeadEventActor")
 
   @@index([role])
 }
@@ -167,6 +176,7 @@ model PaymentMethod {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   orders    Order[]
+  selectPayments SelectPayment[]
 }
 
 model Bank {
@@ -176,6 +186,7 @@ model Bank {
   createdAt DateTime @default(now())
 
   orders Order[]
+  selectPayments SelectPayment[]
 }
 
 // CNPJ da empresa (cadastro do Financeiro). Vinculado ao pedido na analise.
@@ -190,6 +201,7 @@ model Cnpj {
   updatedAt DateTime @updatedAt
 
   orders Order[]
+  selectPayments SelectPayment[]
 
   @@index([active])
 }
@@ -228,7 +240,8 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orders Order[]
+  orders          Order[]
+  selectContracts SelectContract[]
 
   @@index([name])
 }
@@ -431,6 +444,13 @@ model Order {
   financeIssueAt         DateTime?
   financeIssueResolvedAt DateTime?
 
+  // Carimbo da APROVACAO do Financeiro (auditOrder -> AGUARDANDO_IMPRESSAO, ou
+  // markOrderPaid -> PAGO no fluxo simplificado). Existe para o acompanhamento
+  // do minimo de compras do Select: so o pedido aprovado conta, e conta no
+  // ciclo em que a aprovacao aconteceu, nao no da criacao.
+  // Null = nunca aprovado (em analise, estornado, cancelado).
+  financeApprovedAt DateTime?
+
   items         OrderItem[]
   campaignItems CampaignItem[]
   paymentProofs OrderPaymentProof[]
@@ -453,6 +473,7 @@ model Order {
   @@index([campaignId])
   @@index([cnpjId])
   @@index([excursaoId])
+  @@index([financeApprovedAt])
 }
 
 model OrderItem {
@@ -1002,4 +1023,352 @@ model OrderReturnItem {
   value     Decimal @db.Decimal(10, 2)
 
   @@index([returnId])
+}
+
+// ===========================================================================
+// SELECT — venda de SERVICO (adesao de uma cliente a um plano)
+// ===========================================================================
+//
+// O Select nao e um pedido. E contrato proprio: tem validade, mensalidade e um
+// minimo de compras mensal esperado da cliente. Nao depende do modulo de
+// pedidos para existir — so o consulta para acompanhar o minimo de compras.
+//
+// TRES ESTADOS SAO DERIVADOS, NUNCA GRAVADOS:
+//   - parcela VENCIDA  = PENDENTE e dueDate < hoje
+//   - parcela PARCIAL  = 0 < paidAmount < amount
+//   - contrato ENCERRADO por data = hoje >= fim efetivo
+// Derivar em vez de gravar tira a verdade dos dados da dependencia de um
+// agendador. O agendador (/api/cron/selects) so NOTIFICA; se ele parar de
+// rodar, nenhuma tela mente — apenas o aviso deixa de chegar.
+
+enum SelectContractStatus {
+  ATIVO
+  CANCELADO
+  ENCERRADO
+}
+
+enum SelectInstallmentStatus {
+  PENDENTE
+  PAGA
+  CANCELADA
+}
+
+// Plano de servico (Estrela, Rubi, Diamante, Diamante Wincon).
+// Os valores daqui sao COPIADOS para o contrato na adesao: reajustar um plano
+// nao pode alterar Selects ja vendidos.
+model SelectPlan {
+  id        String @id @default(cuid())
+  name      String
+  sortOrder Int    @default(0)
+
+  validityMonths Int @default(12)
+  // Mensalidade BASE do plano, SEM o Build.Sales. A mensalidade que a cliente
+  // paga e esta mais BUILD_SALES_MONTHLY (lib/select-contract.ts), somado pelo
+  // servidor na adesao. Quem ler esta coluna direto ve 597, nao 664.
+  //
+  // Nulos quando editableValues = true (plano negociado): nao ha valor de
+  // tabela, cada adesao combina o seu — e o Build.Sales entra sobre ele igual.
+  monthlyAmount      Decimal? @db.Decimal(10, 2)
+  minMonthlyPurchase Decimal? @db.Decimal(10, 2)
+  // true: validade, mensalidade e minimo sao digitados na adesao.
+  editableValues     Boolean  @default(false)
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  benefits  SelectPlanBenefit[]
+  contracts SelectContract[]
+
+  @@index([active, sortOrder])
+}
+
+model SelectPlanBenefit {
+  id     String     @id @default(cuid())
+  plan   SelectPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId String
+
+  sortOrder Int    @default(0)
+  text      String
+
+  @@index([planId, sortOrder])
+}
+
+// A adesao propriamente dita.
+model SelectContract {
+  id String @id @default(cuid())
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId String
+  plan       SelectPlan @relation(fields: [planId], references: [id])
+  planId     String
+  // Responsavel pela venda. FK real (e coluna de filtro da tela do Financeiro),
+  // ao contrario dos campos de auditoria abaixo.
+  responsible   User   @relation("SelectResponsible", fields: [responsibleId], references: [id])
+  responsibleId String
+
+  // Datas puras (sem hora): o contrato e por dia, e hora nenhuma faria o
+  // "comeca no fim do anterior" bater.
+  startDate DateTime  @db.Date
+  endDate   DateTime  @db.Date
+  // Encerramento antecipado por TROCA. Fim efetivo = closedAt ?? endDate.
+  closedAt  DateTime? @db.Date
+
+  // Vinculo 1:1 da troca: este contrato foi substituido por aquele.
+  replacedBy   SelectContract?  @relation("SelectReplacement", fields: [replacedById], references: [id])
+  replacedById String?          @unique
+  replaces     SelectContract?  @relation("SelectReplacement")
+
+  // ----- SNAPSHOT: copia dos valores no momento da adesao -----
+  validityMonths     Int
+  monthlyAmount      Decimal @db.Decimal(10, 2)
+  // mensalidade x validade. E o VALOR DO CONTRATO, que com inicio retroativo
+  // NAO e a soma das parcelas geradas (ver SelectInstallment).
+  totalAmount        Decimal @db.Decimal(10, 2)
+  minMonthlyPurchase Decimal @db.Decimal(10, 2)
+  // Nome do plano no momento da adesao: renomear o plano nao reescreve o
+  // historico de quem ja comprou.
+  planNameSnapshot   String
+
+  status       SelectContractStatus @default(ATIVO)
+  canceledAt   DateTime?
+  canceledById String?
+  cancelReason String?
+
+  // Auditoria. Os *ById NAO tem FK, pelo mesmo motivo de OrderReturn: apagar
+  // um usuario nao pode apagar (nem travar) o registro de um contrato.
+  createdAt   DateTime @default(now())
+  createdById String
+  // So se move em cancelamento e encerramento: contrato nao se sobrescreve.
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  installments SelectInstallment[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([startDate])
+  @@index([responsibleId])
+}
+
+// Parcela mensal. Geradas na adesao, uma por mes de validade — EXCETO as de
+// vencimento ja passado, que nao sao geradas (contrato retroativo nao nasce
+// cobrando o passado). Por isso `number` preserva a numeracao do contrato:
+// um Select de 12 meses iniciado ha 9 gera as parcelas 10, 11 e 12 de 12.
+model SelectInstallment {
+  id         String         @id @default(cuid())
+  contract   SelectContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contractId String
+
+  number  Int
+  dueDate DateTime @db.Date
+  amount  Decimal  @db.Decimal(10, 2)
+  // Soma dos pagamentos NAO revertidos. Denormalizado e reescrito dentro da
+  // mesma transacao de todo pagamento/reversao: os indicadores do painel somam
+  // esta coluna em vez de varrer SelectPayment a cada leitura.
+  paidAmount Decimal @db.Decimal(10, 2) @default(0)
+
+  status    SelectInstallmentStatus @default(PENDENTE)
+  // Quando paidAmount alcancou amount.
+  settledAt DateTime?
+  note      String?
+
+  createdAt   DateTime @default(now())
+  createdById String?
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  payments SelectPayment[]
+
+  @@unique([contractId, number])
+  @@index([status, dueDate])
+  @@index([dueDate])
+}
+
+// Um pagamento de uma parcela. Varios por parcela: pagamento parcial e a
+// regra, nao a excecao. Reverter NAO apaga a linha — marca reversedAt, para a
+// auditoria enxergar o engano e a correcao.
+model SelectPayment {
+  id            String            @id @default(cuid())
+  installment   SelectInstallment @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+  installmentId String
+
+  paidAt DateTime @db.Date
+  amount Decimal  @db.Decimal(10, 2)
+
+  // Os mesmos cadastros que o Financeiro ja administra em Ferramentas.
+  paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  paymentMethodId String?
+  bank            Bank?          @relation(fields: [bankId], references: [id])
+  bankId          String?
+  cnpj            Cnpj?          @relation(fields: [cnpjId], references: [id])
+  cnpjId          String?
+
+  proofPath String?
+  note      String?
+
+  // UM pagamento real da cliente pode cobrir mais de uma parcela: quem paga
+  // R$ 700 numa mensalidade de R$ 500 adianta R$ 200 da seguinte. Isso vira
+  // duas linhas (uma por parcela), e o batchId as liga de volta ao lancamento
+  // unico que as originou. Sem ele, a auditoria leria dois pagamentos que
+  // nunca aconteceram separados — e reverter um deixaria o outro orfao.
+  // Null nos pagamentos que couberam numa parcela so.
+  batchId String?
+
+  reversedAt     DateTime?
+  reversedById   String?
+  reversalReason String?
+
+  createdAt   DateTime @default(now())
+  createdById String
+
+  @@index([installmentId])
+  @@index([paidAt])
+  @@index([batchId])
+}
+
+// ===========================================================================
+// ATACADO — captação de revendedor (LP pública + Análise de Clientes)
+// ===========================================================================
+
+enum WholesaleBrand {
+  OKEY
+  LOV_CLUB
+}
+
+// Quatro status, da aba "Modal com as respostas" da planilha. NÃO existe
+// "solicitar ajustes" (decisão 6): a especificação escrita citava esse estado,
+// a planilha não — e é a planilha que manda no conteúdo.
+enum WholesaleLeadStatus {
+  EM_ANALISE
+  APROVADO
+  REPROVADO
+  // Sinal de risco/fraude, com justificativa obrigatória (decisão 8).
+  CUIDADO
+}
+
+enum WholesaleServiceModel {
+  LOJA_FISICA
+  LOJA_ONLINE
+  FISICA_E_ONLINE
+  OUTRO
+}
+
+enum WholesaleFoundUs {
+  INSTAGRAM
+  SITE
+  INDICACAO
+  OUTRO
+}
+
+enum WholesaleInvestmentBand {
+  ATE_3K
+  DE_3_A_5K
+  DE_5_A_10K
+  ACIMA_10K
+}
+
+// Qual imagem foi PEDIDA no segundo upload (decisão 21). Loja só online não
+// tem espaço físico para fotografar; o campo segue obrigatório, muda o que se
+// pede. Guardar qual foi pedida é o que permite a análise saber o que olha.
+enum WholesaleStoreImageKind {
+  ESPACO_FISICO
+  LOJA_ONLINE
+}
+
+/// Uma candidatura a revendedor, vinda da LP pública.
+/// NÃO é uma Customer (decisão 4): aprovar aqui não cria cliente (decisão 5).
+model WholesaleLead {
+  id     String              @id @default(cuid())
+  brand  WholesaleBrand
+  status WholesaleLeadStatus @default(EM_ANALISE)
+
+  // Dono do lead. NULO = chegou sem código de indicação válido e espera a
+  // Gestão distribuir (decisão 14). Não descartamos o cadastro: perder uma
+  // lojista real porque o parâmetro se perdeu é pior que uma fila de triagem.
+  sellerId String?
+  seller   User?   @relation("WholesaleLeadSeller", fields: [sellerId], references: [id])
+
+  // --- Seção 1: Boas-vindas e Identificação ---
+  contactName String
+  email       String
+  /// Só dígitos, com DDD e sem código de país — como User.phone. É a chave do
+  /// aviso de repetição (decisão 9); formatação divergente faria o mesmo
+  /// número não casar consigo mesmo.
+  phone       String
+  story       String
+
+  // --- Seção 2: Sobre o Seu Negócio ---
+  /// UF de 2 letras (decisão 23).
+  state             String
+  city              String
+  serviceModel      WholesaleServiceModel
+  serviceModelOther String?
+  /// Handle sem o "@".
+  instagram         String
+  instagramImagePath String
+  storeImagePath     String
+  storeImageKind     WholesaleStoreImageKind
+  marketTime         String
+  teamSize           String
+
+  // --- Seção 3: Conectividade e Parceria Comercial ---
+  brandsCarried  String
+  foundUs        WholesaleFoundUs
+  foundUsOther   String?
+  followTime     String
+  investmentBand WholesaleInvestmentBand
+  wantsVisit     Boolean
+
+  // --- Seção 4: Validação Cadastro ---
+  /// Só dígitos (14). SEM @unique: a repetição é informação, não erro — é ela
+  /// que alimenta o aviso da decisão 9.
+  cnpj String
+
+  // --- Decisão ---
+  /// "Atendente" da planilha: quem aprovou/reprovou.
+  decidedById String?
+  decidedBy   User?     @relation("WholesaleLeadDecider", fields: [decidedById], references: [id])
+  decidedAt   DateTime?
+  /// Um dos 34 de wholesale-rejection-codes.ts. Obrigatório em REPROVADO.
+  rejectionCode String?
+  /// Obrigatório em CUIDADO (decisão 8).
+  cautionReason String?
+  /// Texto livre, exibido em maiúsculas (decisão 19).
+  assistantName String?
+
+  /// IP do envio: rate limit e o código 34 (tentativa de burlar cadastro).
+  submittedIp String?
+
+  events WholesaleLeadEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([brand, status])
+  @@index([sellerId, status])
+  @@index([cnpj])
+  @@index([phone])
+}
+
+/// Diário de mudanças de status (decisão 12). Sem ele os campos de decisão
+/// seriam sobrescritos e a Gestão só poderia analisar o veredito final — não
+/// reversões, não acerto do CUIDADO, não tempo até a decisão.
+/// Precedente no projeto: OrderStatusHistory.
+model WholesaleLeadEvent {
+  id     String        @id @default(cuid())
+  leadId String
+  lead   WholesaleLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  fromStatus    WholesaleLeadStatus
+  toStatus      WholesaleLeadStatus
+  rejectionCode String?
+  note          String?
+
+  actorId String
+  actor   User   @relation("WholesaleLeadEventActor", fields: [actorId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
 }

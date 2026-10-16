@@ -1,0 +1,821 @@
+/* ============================================================================
+   Mundo visual da LP de atacado — /atacado/[marca]
+   ============================================================================
+
+   POR QUE ESTE ARQUIVO EXISTE SEPARADO DO globals.css
+   A LP é pública e não veste a cara do dashboard (decisão 30). Este CSS só
+   carrega nesta rota, então tudo aqui pode ser escopado em
+   [data-world="atacado"] sem risco de vazar para as 20+ telas internas. O
+   globals.css e o tailwind.config.ts NÃO mudam por causa desta página — a
+   isolação foi provada servindo as duas e comparando, e o que a preserva é
+   usar os MESMOS NOMES de token com valores diferentes.
+
+   DIREÇÃO
+   Fixada pelo dono através de um HTML de referência: osso e taupe, bronze como
+   único acento, Playfair Display nos títulos e Manrope no corpo, réguas de 1px
+   em vez de cartões com sombra. Editorial de alfaiataria, não SaaS.
+
+   AS TRÊS ARMADILHAS DESTE MUNDO, documentadas porque custaram rodadas:
+   1. O @import/@font-face precisa vir antes de qualquer regra, ou o CSS
+      descarta em silêncio. Aqui as fontes são AUTO-HOSPEDADAS (public/fonts),
+      não puxadas do CDN do Google: a auditoria de 15/10 mostrou que o import
+      em runtime entrega o IP de cada visitante a um terceiro (transferência
+      internacional sob a LGPD) e custa três idas e voltas em série antes do
+      nome da marca pintar — numa página que a lojista abre em dados móveis.
+   2. O <body> é pintado pelo globals.css a partir do --background resolvido
+      contra html.dark. O wrapper só pinta a si mesmo, então o overscroll do
+      iOS revela o fundo escuro do dashboard por baixo. Daí o body:has().
+   3. color-scheme: light. O globals.css declara "light dark" no <html> e a
+      classe .dark vive no <html>, então sem isto a barra de rolagem, os
+      controles de formulário e o autofill desta página seguem o tema do
+      dashboard — numa página cujo conteúdo principal é um cadastro.
+   ========================================================================= */
+
+@font-face {
+  font-family: "Playfair LP";
+  /* Três entradas para o MESMO arquivo, e a ordem importa. `woff2-variations` é
+     descritor legado (Safari 10–13), removido de CSS Fonts 4 em favor de
+     `format("woff2") tech(variations)`. O UA PULA a entrada cujo format() ele
+     não reconhece — e com uma entrada só, não reconhecer significava @font-face
+     sem fonte usável: com font-display: swap ninguém vê erro, a página
+     simplesmente aparece em Georgia, e toda a direção visual mora nestas duas
+     famílias. Fallback final sem tech() para quem não entende nenhum dos dois. */
+  src:
+    url("/fonts/atacado/playfair-latin.woff2") format("woff2") tech(variations),
+    url("/fonts/atacado/playfair-latin.woff2") format("woff2-variations"),
+    url("/fonts/atacado/playfair-latin.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  /* Só latin: o pt-BR inteiro (ã, ç, õ, ê) cabe em U+0000-00FF. Carregar
+     latin-ext seria peso por acentuação que esta página nunca escreve. */
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC, U+2122;
+}
+
+@font-face {
+  font-family: "Manrope LP";
+  /* Mesma razão do @font-face acima. */
+  src:
+    url("/fonts/atacado/manrope-latin.woff2") format("woff2") tech(variations),
+    url("/fonts/atacado/manrope-latin.woff2") format("woff2-variations"),
+    url("/fonts/atacado/manrope-latin.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC, U+2122;
+}
+
+/* ---------------------------------------------------------------------------
+   1. TOKENS DO MUNDO
+   Mesmos nomes do globals.css, valores da marca. Os doze que antes herdavam
+   valor escuro (popover, secondary, muted, accent, destructive, input, ring e
+   seus foregrounds) estão TODOS redeclarados: o formulário usa
+   text-muted-foreground, bg-secondary, border-input, ring-* e text-destructive,
+   e sem isto cada um renderiza um azul de dashboard dentro de uma página clara.
+   ------------------------------------------------------------------------ */
+
+[data-world="atacado"] {
+  /* Osso e taupe */
+  --background: 36 38% 97%; /* #fbf9f6 */
+  --foreground: 90 4% 11%; /* #1b1c1a tinta */
+  --card: 0 0% 100%; /* placa branca sobre o osso */
+  --card-foreground: 90 4% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 90 4% 11%;
+
+  /* Quase-preto da referência: a ação primária é tinta, não cor de marca */
+  --primary: 30 33% 4%; /* #040302 */
+  --primary-foreground: 36 38% 97%;
+
+  --secondary: 37 32% 92%; /* #F1ECE4 superfície alternada */
+  --secondary-foreground: 33 8% 27%;
+  --muted: 37 32% 92%;
+  --muted-foreground: 33 8% 27%; /* #4b4640 — 7,4:1 sobre o osso */
+
+  /* Bronze: o único acento saturado. Em réguas, pontos e numerais grandes. */
+  --accent: 36 30% 51%; /* #A88B5E — 3,07:1 sobre osso: NUNCA em texto pequeno */
+  --accent-foreground: 30 33% 6%; /* texto escuro sobre bronze, como o âmbar da casa */
+
+  /* Bronze de TEXTO, escurecido até 4,87:1 sobre o osso. Os micro-rótulos em
+     caixa alta da referência são 11px — com o bronze claro eles falhariam em
+     todo critério de contraste, e micro-rótulo ilegível é ornamento. */
+  --accent-text: 36 36% 39%; /* #86693F */
+
+  --destructive: 0 75% 42%; /* #ba1a1a */
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 37 20% 83%; /* #DCD5CA taupe */
+  --input: 37 20% 83%;
+  --ring: 36 30% 51%;
+
+  --radius: 0.25rem;
+
+  --font-sans: "Manrope LP", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Playfair LP", ui-serif, Georgia, serif;
+
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  color-scheme: light;
+  min-height: 100dvh;
+  /* dvh e não vh: com vh o wrapper fica mais alto que a viewport do celular
+     quando a barra do navegador recolhe, e sobra uma faixa do fundo. */
+}
+
+/* Armadilha 2: o body pertence ao globals.css, e o overscroll do iOS mostra o
+   que está atrás do wrapper. :has() é seguro aqui porque este arquivo só
+   carrega nesta rota. */
+body:has([data-world="atacado"]) {
+  background-color: hsl(36 38% 97%);
+}
+
+/* ---------------------------------------------------------------------------
+   2. SUPERFÍCIES DO NAVEGADOR
+   O que não desenhamos também carrega a direção. Seleção, cursor de texto,
+   barra de rolagem e anel de foco vêm com padrão de navegador, que não
+   pertence a sistema de design nenhum.
+   ------------------------------------------------------------------------ */
+
+[data-world="atacado"] ::selection {
+  background-color: hsl(37 32% 88%);
+  color: hsl(var(--primary));
+}
+
+[data-world="atacado"] input,
+[data-world="atacado"] textarea {
+  caret-color: hsl(var(--accent-text));
+}
+
+[data-world="atacado"] ::placeholder {
+  color: hsl(33 8% 52%); /* 4,6:1 sobre a placa branca */
+  opacity: 1; /* Firefox aplica opacity .54 por padrão e apaga o placeholder */
+}
+
+[data-world="atacado"] :focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  [data-world="atacado"] ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  [data-world="atacado"] ::-webkit-scrollbar-track {
+    background: hsl(37 32% 92%);
+  }
+  [data-world="atacado"] ::-webkit-scrollbar-thumb {
+    background: hsl(37 20% 74%);
+    border: 2px solid hsl(37 32% 92%);
+  }
+  [data-world="atacado"] ::-webkit-scrollbar-thumb:hover {
+    background: hsl(36 30% 51%);
+  }
+}
+
+[data-world="atacado"] [id] {
+  scroll-margin-top: 5.5rem; /* altura do header fixo + respiro */
+}
+
+/* ---------------------------------------------------------------------------
+   3. ESCALA TIPOGRÁFICA
+   Cada classe é dona do pacote inteiro (família, tamanho, peso, entrelinha,
+   tracking, caixa). Quem usa estas classes NÃO põe text-* do Tailwind no mesmo
+   elemento: foi exatamente essa disputa de especificidade que fez utilitário
+   perder em silêncio na rodada anterior.
+   ------------------------------------------------------------------------ */
+
+[data-world="atacado"] .display-heroi {
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 7vw, 3.5rem);
+  line-height: 1.07;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+[data-world="atacado"] .titulo-secao {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+  line-height: 1.15;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+[data-world="atacado"] .titulo-bloco {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 3vw, 1.75rem);
+  line-height: 1.25;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+[data-world="atacado"] .titulo-item {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+[data-world="atacado"] .numeral {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+[data-world="atacado"] .corpo {
+  font-size: 0.975rem;
+  line-height: 1.65;
+  font-weight: 400;
+  max-width: 68ch; /* medida de leitura: 65–75ch */
+}
+
+[data-world="atacado"] .corpo-grande {
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  font-weight: 400;
+  max-width: 44ch;
+}
+
+[data-world="atacado"] .corpo-pequeno {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  font-weight: 400;
+}
+
+/* Micro-rótulo: a voz da referência. Caixa alta, 11px, tracking largo.
+   SEMPRE no bronze escurecido — ver o comentário do --accent-text. */
+[data-world="atacado"] .rotulo-micro {
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: hsl(var(--accent-text));
+}
+
+[data-world="atacado"] .rotulo-campo {
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+[data-world="atacado"] .marca-nome {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------
+   4. AÇÕES
+   Duas únicas formas: tinta cheia (primária) e contorno (secundária). Sem
+   sombra, sem gradiente, sem raio grande — a referência é impressa.
+   ------------------------------------------------------------------------ */
+
+[data-world="atacado"] .acao,
+[data-world="atacado"] .acao-vazia {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: 1rem 2rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border-radius: 0;
+  border: 1px solid hsl(var(--primary));
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+  text-align: center;
+}
+
+[data-world="atacado"] .acao {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+[data-world="atacado"] .acao:hover {
+  background-color: hsl(30 10% 22%);
+}
+
+[data-world="atacado"] .acao-vazia {
+  background-color: transparent;
+  color: hsl(var(--primary));
+}
+
+[data-world="atacado"] .acao-vazia:hover {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+[data-world="atacado"] .acao:disabled,
+[data-world="atacado"] .acao-vazia:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+/* Link de texto com régua: a terceira ação, dentro dos blocos */
+[data-world="atacado"] .acao-linha {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid hsl(var(--primary));
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+  transition: color 150ms ease-out, border-color 150ms ease-out;
+}
+
+[data-world="atacado"] .acao-linha:hover {
+  color: hsl(var(--accent-text));
+  border-bottom-color: hsl(var(--accent-text));
+}
+
+/* ---------------------------------------------------------------------------
+   5. ESTRUTURA
+   ------------------------------------------------------------------------ */
+
+[data-world="atacado"] .faixa {
+  width: 100%;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+[data-world="atacado"] .interno {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+  /* 16px de respiro no celular é o piso; o clamp sobe até 4rem no desktop. */
+  padding-inline: clamp(1rem, 4vw, 4rem);
+}
+
+[data-world="atacado"] .cabecalho {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background-color: hsl(36 38% 97% / 0.95);
+  backdrop-filter: saturate(180%) blur(8px);
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+[data-world="atacado"] .nav-ancora {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  transition: color 150ms ease-out;
+}
+
+[data-world="atacado"] .nav-ancora:hover {
+  color: hsl(var(--primary));
+}
+
+/* Lugar de imagem. A referência é guiada por fotografia editorial e o dono
+   ainda não mandou as dele, então o vazio precisa ser dignamente vazio: campo
+   taupe com a inicial da marca em Playfair e uma régua. Não é "quebrado", é
+   um espaço reservado que parece intencional — e quando a foto entrar, o
+   mesmo contêiner a recebe sem mudar o layout. */
+[data-world="atacado"] .lugar-imagem {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(37 32% 92%);
+  display: grid;
+  place-items: center;
+}
+
+[data-world="atacado"] .lugar-imagem img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(12%) contrast(103%);
+}
+
+[data-world="atacado"] .lugar-imagem .monograma {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 12vw, 6rem);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: hsl(37 18% 72%);
+  user-select: none;
+}
+
+[data-world="atacado"] .lugar-imagem .legenda-vazio {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  right: 1rem;
+  text-align: center;
+}
+
+/* A "ficha sobreposta" da referência (a tarja "Atelier Fortaleza") foi RETIRADA
+   daqui: nenhum TSX emitia `.ficha-imagem`, então eram sete declarações
+   descrevendo um elemento que a página não tem. Ela só existe quando o dono
+   mandar os fatos dele — endereço, ano, prazo — e hoje a instrução é ignorar os
+   fatos da referência. Regra sem emissor é como CSS morto volta a ser editado
+   por engano. */
+
+/* ---------------------------------------------------------------------------
+   6. FAIXA DE MÉTRICAS
+   Quatro células divididas por régua de 1px. Cada afirmação é rastreável à
+   planilha — nenhum número foi inventado para preencher a faixa.
+   ------------------------------------------------------------------------ */
+
+[data-world="atacado"] .grade-metricas {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  border-top: 1px solid hsl(var(--border));
+}
+
+[data-world="atacado"] .grade-metricas > * {
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 1.5rem 0;
+}
+
+@media (min-width: 640px) {
+  [data-world="atacado"] .grade-metricas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  [data-world="atacado"] .grade-metricas > * {
+    padding: 1.75rem 1.75rem;
+    border-right: 1px solid hsl(var(--border));
+  }
+  [data-world="atacado"] .grade-metricas > *:nth-child(2n) {
+    border-right: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-world="atacado"] .grade-metricas {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  [data-world="atacado"] .grade-metricas > * {
+    border-right: 1px solid hsl(var(--border));
+    border-bottom: 0;
+  }
+  [data-world="atacado"] .grade-metricas > *:last-child {
+    border-right: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   7. VANTAGENS — grade de réguas, não cartões
+   Seis unidades idênticas lidas varrendo a coluna. A régua de 1px faz a
+   divisão; não há sombra, nem raio, nem fundo por unidade, porque a unidade
+   não é um objeto flutuante: é uma célula de uma tabela de atributos.
+   ------------------------------------------------------------------------ */
+
+[data-world="atacado"] .grade-vantagens {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  border-top: 1px solid hsl(var(--border));
+  border-left: 1px solid hsl(var(--border));
+}
+
+[data-world="atacado"] .vantagem {
+  border-right: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 2rem clamp(1.25rem, 3vw, 2.5rem);
+  background-color: hsl(var(--card));
+  transition: background-color 150ms ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-world="atacado"] .vantagem:hover {
+  background-color: hsl(37 32% 96%);
+}
+
+@media (min-width: 768px) {
+  [data-world="atacado"] .grade-vantagens {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-world="atacado"] .grade-vantagens {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   8. FAQ — <details> nativo
+   Acordeão acessível sem uma linha de JavaScript: teclado, leitor de tela e
+   busca do navegador funcionam de graça, e a página pública fica leve.
+   ------------------------------------------------------------------------ */
+
+[data-world="atacado"] .pergunta {
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+[data-world="atacado"] .pergunta > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.15rem 0;
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  line-height: 1.35;
+  font-weight: 500;
+  color: hsl(var(--primary));
+  transition: color 150ms ease-out;
+  user-select: none;
+}
+
+[data-world="atacado"] .pergunta > summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-world="atacado"] .pergunta > summary:hover {
+  color: hsl(var(--accent-text));
+}
+
+/* O sinal é desenhado em CSS (uma cruz que vira traço), não um glifo de fonte
+   de ícone: um arquivo de fonte inteiro para seis símbolos é peso que a
+   lojista paga em dados móveis. */
+[data-world="atacado"] .pergunta .sinal {
+  position: relative;
+  flex: 0 0 auto;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+[data-world="atacado"] .pergunta .sinal::before,
+[data-world="atacado"] .pergunta .sinal::after {
+  content: "";
+  position: absolute;
+  background-color: hsl(var(--accent-text));
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease-out;
+}
+
+[data-world="atacado"] .pergunta .sinal::before {
+  inset: calc(50% - 0.5px) 0 auto 0;
+  height: 1px;
+}
+
+[data-world="atacado"] .pergunta .sinal::after {
+  inset: 0 calc(50% - 0.5px) 0 auto;
+  width: 1px;
+}
+
+[data-world="atacado"] .pergunta[open] .sinal::after {
+  transform: scaleY(0);
+  opacity: 0;
+}
+
+[data-world="atacado"] .pergunta .resposta {
+  padding: 0 2.5rem 1.4rem 0;
+}
+
+/* ---------------------------------------------------------------------------
+   9. CADASTRO EM QUATRO ETAPAS
+   ------------------------------------------------------------------------ */
+
+[data-world="atacado"] .placa-form {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  padding: clamp(1.25rem, 4vw, 3.5rem);
+}
+
+[data-world="atacado"] .trilha {
+  width: 100%;
+  height: 2px;
+  background-color: hsl(37 32% 90%);
+  overflow: hidden;
+}
+
+[data-world="atacado"] .trilha > span {
+  display: block;
+  height: 2px;
+  background-color: hsl(var(--primary));
+  transition: width 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-world="atacado"] .trilha[data-completo="true"] > span {
+  background-color: hsl(var(--accent));
+}
+
+/* Fieldset tem min-inline-size: min-content de fábrica, que estoura a grade em
+   telas estreitas. E o estouro aqui é INVISÍVEL: o globals.css põe
+   overflow-x: hidden no html e no body, então não aparece barra de rolagem —
+   o campo simplesmente é cortado. A conferência certa é comparar scrollWidth
+   com clientWidth do próprio fieldset, nunca procurar barra. */
+[data-world="atacado"] .etapa,
+[data-world="atacado"] .grupo-opcoes {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/* O <legend> nativo vem com padding lateral e comportamento de caixa próprio
+   (ele interrompe a borda do fieldset). Com a borda removida acima, o que resta
+   é o padding — que desalinharia a pergunta em relação aos campos. */
+[data-world="atacado"] .grupo-opcoes > legend {
+  display: block;
+  padding: 0;
+  width: 100%;
+}
+
+[data-world="atacado"] .campo-regua {
+  width: 100%;
+  background-color: transparent;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--input));
+  border-radius: 0;
+  padding: 0.75rem 0;
+  font-family: var(--font-sans);
+  font-size: 0.975rem;
+  color: hsl(var(--foreground));
+  transition: border-color 150ms ease-out;
+}
+
+[data-world="atacado"] select.campo-regua {
+  /* Fundo explícito: um <select> transparente é a origem clássica de lista de
+     opções ilegível no Firefox e em alguns WebView de Android. */
+  background-color: hsl(var(--card));
+  padding-inline-end: 0.5rem;
+}
+
+[data-world="atacado"] textarea.campo-regua {
+  border: 1px solid hsl(var(--input));
+  padding: 0.75rem;
+  resize: vertical;
+  min-height: 6rem;
+}
+
+[data-world="atacado"] .campo-regua:focus {
+  border-color: hsl(var(--primary));
+  outline: none;
+}
+
+[data-world="atacado"] .campo-regua[aria-invalid="true"] {
+  border-color: hsl(var(--destructive));
+}
+
+/* Opção como placa clicável: alvo de toque generoso no celular, e a borda
+   inteira responde — não só o círculo do radio. */
+[data-world="atacado"] .opcao {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.875rem;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--background));
+  cursor: pointer;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out;
+  min-height: 2.75rem;
+}
+
+[data-world="atacado"] .opcao:hover {
+  border-color: hsl(var(--primary));
+}
+
+[data-world="atacado"] .opcao:has(input:checked) {
+  border-color: hsl(var(--primary));
+  background-color: hsl(37 32% 94%);
+}
+
+[data-world="atacado"] .opcao input[type="radio"] {
+  accent-color: hsl(var(--primary));
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+/* Área de anexo */
+[data-world="atacado"] .area-anexo {
+  border: 1px dashed hsl(var(--border));
+  background-color: hsl(var(--background));
+  padding: 1.25rem;
+  text-align: center;
+}
+
+[data-world="atacado"] input[type="file"] {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+  max-width: 100%;
+}
+
+[data-world="atacado"] input[type="file"]::file-selector-button {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.6rem 0.875rem;
+  margin-right: 0.75rem;
+  border: 1px solid hsl(var(--primary));
+  background-color: transparent;
+  color: hsl(var(--primary));
+  cursor: pointer;
+  border-radius: 0;
+}
+
+[data-world="atacado"] input[type="file"]::file-selector-button:hover {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+[data-world="atacado"] .aviso-erro {
+  color: hsl(var(--destructive));
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* Honeypot: fora da tela e fora da árvore de acessibilidade. Não usa
+   display:none porque alguns preenchedores automáticos ignoram campo oculto
+   assim, e o campo existe justamente para ser preenchido por robô. */
+[data-world="atacado"] .isca {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   10. RODAPÉ
+   ------------------------------------------------------------------------ */
+
+[data-world="atacado"] .rodape {
+  background-color: hsl(37 32% 92%);
+  border-top: 1px solid hsl(var(--border));
+}
+
+/* ---------------------------------------------------------------------------
+   11. MOVIMENTO
+   Um momento autoral, não efeito espalhado: o primeiro quadro assenta uma vez
+   (régua que corre, nome que sobe), e nada mais na página anima à entrada.
+   Curva exponencial a partir de um estado JÁ VISÍVEL — se o JavaScript ou a
+   animação falharem, o conteúdo está lá.
+   ------------------------------------------------------------------------ */
+
+@keyframes regua-corre {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes assenta {
+  from {
+    transform: translateY(0.5rem);
+    opacity: 0.001;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+[data-world="atacado"] .regua-heroi {
+  height: 1px;
+  background-color: hsl(var(--accent));
+  transform-origin: left center;
+  animation: regua-corre 820ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+[data-world="atacado"] .assenta-1 {
+  animation: assenta 620ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+}
+
+[data-world="atacado"] .assenta-2 {
+  animation: assenta 620ms cubic-bezier(0.16, 1, 0.3, 1) 220ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-world="atacado"] .regua-heroi,
+  [data-world="atacado"] .assenta-1,
+  [data-world="atacado"] .assenta-2,
+  [data-world="atacado"] .trilha > span,
+  [data-world="atacado"] .pergunta .sinal::before,
+  [data-world="atacado"] .pergunta .sinal::after {
+    animation: none;
+    transition: none;
+    transform: none;
+    opacity: 1;
+  }
+}

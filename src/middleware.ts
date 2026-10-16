@@ -10,7 +10,31 @@ import { getAuthSecret } from "@/lib/auth-secret";
 // grava um cookie proprio (bf_track), restrito a este path.
 // /api/integracao e maquina-a-maquina (Build.Connect): autentica por token de
 // servico dentro de cada rota, nao por cookie de sessao.
-const PUBLIC_PATHS = ["/login", "/api/health", "/acompanhar", "/api/integracao"];
+// /api/cron e o mesmo caso: chamada por um agendador externo, que nao tem
+// cookie nenhum. A rota confere o Bearer dela propria e, sem o segredo
+// configurado, responde 401 a tudo — liberar aqui nao abre nada.
+// /atacado e a LP PUBLICA de captacao de revendedor (link que a vendedora
+// compartilha). Nao usa sessao: e pagina de marca, aberta por quem ainda nao
+// e cliente. UM unico segmento serve as duas marcas (/atacado/okey e
+// /atacado/lov-club) — por isso a marca nao fica no primeiro nivel: um so
+// item aqui libera as duas, e uma marca nova nao exige mexer neste arquivo.
+// /api/lp serve as IMAGENS dessa LP, e so elas: a lojista nao tem sessao, e
+// /api/uploads exige uma de proposito, porque serve comprovante de pagamento,
+// nota fiscal e comprovante de entrega. A rota propria confina a leitura a
+// <UPLOAD_DIR>/lp-publico por canonicalizacao e aceita so .webp (ver
+// src/lib/lp-assets.ts). NAO e <UPLOAD_DIR>/atacado: aquela pasta guarda as
+// duas fotos de cada candidata, com a mesma extensao .webp, e apontar esta
+// rota para la deixava a foto da loja de uma nao-cliente legivel sem sessao.
+// Liberar aqui nao alcanca o resto do volume.
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/health",
+  "/acompanhar",
+  "/api/integracao",
+  "/api/cron",
+  "/atacado",
+  "/api/lp",
+];
 
 // Arquivos publicos servidos de /public que NAO exigem sessao. Sem esta
 // liberacao o middleware redirecionava manifest/icones/service worker para
@@ -32,8 +56,13 @@ export async function middleware(req: NextRequest) {
 
   // Libera estáticos e rotas públicas. Nota: /uploads NÃO é mais liberado aqui;
   // agora é servido pela rota autenticada /api/uploads (ver route handler).
+  //
+  // O casamento é pelo caminho EXATO ou por um segmento abaixo dele, nunca por
+  // prefixo de texto: `startsWith("/api/cron")` sozinho liberaria também
+  // /api/cronx e qualquer rota cujo nome só comece igual — uma rota futura
+  // nasceria sem sessão sem ninguém ter decidido isso.
   if (
-    PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
     PUBLIC_FILES.includes(pathname) ||
     pathname.startsWith("/_next")
   ) {

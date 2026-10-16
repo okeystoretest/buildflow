@@ -19,6 +19,7 @@ const buttonVariants = cva(
         distribuicao: "bg-distribuicao text-distribuicao-fg hover:bg-distribuicao/90 shadow-sm",
         motorista: "bg-motorista text-motorista-fg hover:bg-motorista/90 shadow-sm",
         brand: "bg-brand text-brand-fg hover:bg-brand/90 shadow-sm",
+        servico: "bg-servico text-servico-fg hover:bg-servico/90 shadow-sm",
       },
       size: {
         default: "h-10 px-4 py-2",

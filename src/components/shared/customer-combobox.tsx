@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, X, Check } from "lucide-react";
+import { Search, X, Check, Plus } from "lucide-react";
 import { Label } from "@/components/ui/label";
 
 export interface CustomerOpt {
@@ -22,14 +22,17 @@ export interface CustomerOpt {
  * Por que existe: a base tem dezenas de milhares de clientes. Um <select>
  * comum renderizaria todos como <option>, gerando um HTML enorme e travando
  * o navegador (principalmente no celular da vendedora). Aqui a lista so
- * carrega o que a busca retorna (maximo 20 por vez).
+ * carrega o que a busca retorna — `limit` por vez, no maximo 20 (teto da
+ * rota). O Novo Pedido usa o padrao; a adesao do Select pede 5.
  */
 export function CustomerCombobox({
   label,
   value,
   onChange,
   onSelect,
+  onCreateNew,
   initialSelected,
+  limit = 20,
   placeholder = "Busque por nome ou código...",
 }: {
   label: string;
@@ -38,7 +41,17 @@ export function CustomerCombobox({
   // Opcional: recebe o cliente completo ao escolher (ou null ao limpar).
   // Usado para autopreencher o Endereço de Entrega no Novo Pedido.
   onSelect?: (customer: CustomerOpt | null) => void;
+  // Opcional — e OPT-IN de proposito. Quando presente, a busca sem resultado
+  // oferece "+ Novo cliente", recebendo o termo digitado para quem abrir o
+  // cadastro ja aproveitar o que foi escrito. Quem NAO passa a prop (o Novo
+  // Pedido) nao ganha o botao: este componente e compartilhado, e acrescentar
+  // um caminho de criacao a uma tela que nao pediu seria efeito colateral.
+  onCreateNew?: (query: string) => void;
   initialSelected?: CustomerOpt | null; // preenche o campo ao editar um pedido
+  // Quantas sugestões a lista mostra. A rota tem o teto real (20); aqui se
+  // pede menos quando a tela quer uma lista curta. O padrão mantém as telas
+  // que não passam nada — Novo Pedido e edição de pedido — como estavam.
+  limit?: number;
   placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -64,7 +77,9 @@ export function CustomerCombobox({
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/customers/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(
+          `/api/customers/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+        );
         const data = await res.json();
         setResults(data.customers ?? []);
       } catch {
@@ -136,6 +151,22 @@ export function CustomerCombobox({
                 </p>
               )}
 
+              {/* Só com termo digitado: oferecer cadastro para busca vazia
+                  convidaria a criar cliente sem antes procurar a existente. */}
+              {!loading && results.length === 0 && query.trim() !== "" && onCreateNew && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onCreateNew(query.trim());
+                  }}
+                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm font-medium text-vendas transition-colors hover:bg-secondary"
+                >
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  Novo cliente
+                </button>
+              )}
+
               {!loading && results.map((c) => (
                 <button
                   key={c.id}
@@ -149,10 +180,13 @@ export function CustomerCombobox({
                 </button>
               ))}
 
-              {/* Aviso de teto: a busca devolve no maximo 20 resultados. */}
-              {!loading && results.length === 20 && (
+              {/* Aviso de teto. Importa mais quanto MENOR for a lista: com 5
+                  sugestões, uma cliente que existe pode não aparecer, e é este
+                  aviso que impede alguém de concluir que ela não está
+                  cadastrada e criar uma duplicata. */}
+              {!loading && results.length === limit && (
                 <p className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
-                  Mostrando os 20 primeiros. Refine a busca.
+                  Mostrando {limit === 1 ? "o primeiro" : `os ${limit} primeiros`}. Refine a busca.
                 </p>
               )}
             </div>

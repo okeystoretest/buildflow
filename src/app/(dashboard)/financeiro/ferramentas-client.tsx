@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Check, X, History, Truck, CreditCard, Landmark, Tag, Building2 } from "lucide-react";
+import { Pencil, Trash2, Check, X, History, Truck, CreditCard, Landmark, Tag, Building2, Star } from "lucide-react";
 import { CrudTable, type CrudRow } from "@/components/shared/crud-table";
 import type { PaymentDisposition } from "@prisma/client";
 
@@ -62,6 +62,12 @@ export function FinanceiroFerramentas({
         {/* Pagamentos de Motoristas: entregas efetuadas + pagamento ao motorista. */}
         <Button variant="outline" size="sm" onClick={() => router.push("/financeiro/entregas")}>
           <Truck className="h-4 w-4" /> Pagamentos de Motoristas
+        </Button>
+        {/* Select: venda de SERVICO. Rota propria porque nao e cadastro de
+            apoio como os paineis acima — e uma tela de acompanhamento com
+            filtros, indicadores e detalhe por contrato. */}
+        <Button variant="outline" size="sm" onClick={() => router.push("/financeiro/select")}>
+          <Star className="h-4 w-4" /> Select
         </Button>
       </div>
 

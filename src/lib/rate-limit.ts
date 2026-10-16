@@ -14,17 +14,35 @@ const MAX_ATTEMPTS = 8; // tentativas permitidas na janela
 
 interface Bucket {
   hits: number[]; // timestamps (ms) das tentativas recentes
+  /**
+   * A MAIOR janela já declarada por quem usa esta chave.
+   *
+   * INVARIANTE: um balde nunca pode ser removido antes da janela mais longa
+   * que o seu chamador declarou — se for, o teto daquele chamador multiplica
+   * em silêncio. Era o que acontecia: o `sweep` usava o WINDOW_MS do módulo
+   * (15 min) e ignorava o `windowMs` recebido, então quem pedia uma janela de
+   * 1 hora ganhava balde novo após 15 minutos de pausa e, na prática, um teto
+   * quatro vezes maior que o pedido.
+   *
+   * Guardada com `Math.max` a cada chamada, e não só na criação: se a mesma
+   * chave for usada com janelas diferentes, a mais longa manda. O custo de
+   * errar para cima é memória (um balde ocioso vive mais); para baixo, é a
+   * contenção não existir.
+   */
+  windowMs: number;
 }
 
 const buckets = new Map<string, Bucket>();
 
 // Limpeza preguiçosa: remove chaves ociosas para não vazar memória.
+// A CADÊNCIA da varredura segue a do módulo (roda no máximo a cada WINDOW_MS);
+// o que mudou é o critério de remoção, que agora é a janela do próprio balde.
 let lastSweep = Date.now();
 function sweep(now: number): void {
   if (now - lastSweep < WINDOW_MS) return;
   lastSweep = now;
   for (const [key, b] of buckets) {
-    if (b.hits.length === 0 || now - b.hits[b.hits.length - 1] > WINDOW_MS) {
+    if (b.hits.length === 0 || now - b.hits[b.hits.length - 1] > b.windowMs) {
       buckets.delete(key);
     }
   }
@@ -53,7 +71,10 @@ export function checkRate(
   const now = Date.now();
   sweep(now);
 
-  const bucket = buckets.get(key) ?? { hits: [] };
+  const bucket = buckets.get(key) ?? { hits: [], windowMs };
+  // O balde passa a lembrar a maior janela já pedida para esta chave, para que
+  // o `sweep` não o apague antes dela (ver a invariante em `Bucket.windowMs`).
+  bucket.windowMs = Math.max(bucket.windowMs, windowMs);
   // Descarta tentativas fora da janela.
   bucket.hits = bucket.hits.filter((t) => now - t < windowMs);
 
