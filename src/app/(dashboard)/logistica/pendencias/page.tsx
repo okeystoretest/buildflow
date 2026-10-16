@@ -30,11 +30,12 @@ const PER_PAGE = 20;
  * compartilhadas com a exportação em PDF (/api/logistica/pendencias/pdf) para
  * que o arquivo gerado nunca divirja do que está na tela.
  */
-export default async function RelatorioPendenciasPage({
-  searchParams,
-}: {
-  searchParams?: PendenciasSearchParams;
-}) {
+export default async function RelatorioPendenciasPage(
+  props: {
+    searchParams?: Promise<PendenciasSearchParams>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["LOGISTICA", "GESTAO"]);
 
   const filtros = parsePendenciasFiltros(searchParams);

@@ -15,7 +15,8 @@ import { Abertura, Cabecalho, Metricas, Motivos, Perguntas, Rodape, Vantagens } 
 // nada aqui; não o recoloque esperando isso). Slug inválido vira 404 por
 // `getBrandContent` + `notFound()`.
 
-export function generateMetadata({ params }: { params: { marca: string } }): Metadata {
+export async function generateMetadata(props: { params: Promise<{ marca: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const marca = getBrandContent(params.marca);
   if (!marca) return {};
   const nome = marca.content.brandName;
@@ -36,13 +37,14 @@ export function generateMetadata({ params }: { params: { marca: string } }): Met
   };
 }
 
-export default async function MarcaPage({
-  params,
-  searchParams,
-}: {
-  params: { marca: string };
-  searchParams: { r?: string | string[] };
-}) {
+export default async function MarcaPage(
+  props: {
+    params: Promise<{ marca: string }>;
+    searchParams: Promise<{ r?: string | string[] }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const marca = getBrandContent(params.marca);
   if (!marca) notFound();
 

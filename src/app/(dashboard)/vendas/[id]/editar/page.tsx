@@ -9,7 +9,8 @@ import { EditarPedidoForm } from "./form";
 // Edição de pedido — mesmo formulário do Novo Pedido (completo).
 // - GESTAO e FINANCEIRO: editam qualquer pedido.
 // - VENDAS: edita apenas os PROPRIOS pedidos (escopo verificado abaixo).
-export default async function EditarPedidoPage({ params }: { params: { id: string } }) {
+export default async function EditarPedidoPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await requireRole(["GESTAO", "VENDAS", "FINANCEIRO"]);
 
   const [order, stores, orderTypes, operations, paymentMethods, shippingMethods, banks, campaigns, me, allOriginStores, excursoes] =

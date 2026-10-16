@@ -35,8 +35,9 @@ const CONTENT_TYPES: Record<string, string> = {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { token: string; proofId: string } },
+  props: { params: Promise<{ token: string; proofId: string }> }
 ) {
+  const params = await props.params;
   // 1) O visitante validou o Código de Cliente deste link?
   if (!(await hasTrackingAccess(params.token))) {
     return new NextResponse("Não autorizado.", { status: 401 });

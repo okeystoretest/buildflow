@@ -12,11 +12,12 @@ import type { Prisma } from "@prisma/client";
 // Histórico só cresce → paginado no banco.
 const PER_PAGE = 20;
 
-export default async function LogisticaEntregasPage({
-  searchParams,
-}: {
-  searchParams: { busca?: string; de?: string; ate?: string; page?: string };
-}) {
+export default async function LogisticaEntregasPage(
+  props: {
+    searchParams: Promise<{ busca?: string; de?: string; ate?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["LOGISTICA", "GESTAO"]);
 
   const busca = searchParams.busca?.trim() || "";

@@ -24,10 +24,8 @@ const CONTENT_TYPES: Record<string, string> = {
   ".pdf": "application/pdf",
 };
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: { path: string[] } },
-) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ path: string[] }> }) {
+  const params = await props.params;
   // 1) Exige sessão válida (inclui checagem de revogação em getSession).
   const session = await getSession();
   if (!session) {

@@ -10,11 +10,12 @@ import { formatBRL } from "@/lib/utils";
 // Fluxo de pedidos GLOBAL: Gestão, Vendas e Financeiro.
 // Logística NÃO tem acesso ao fluxo global — usa apenas o painel restrito
 // em /logistica (com as operações específicas do setor).
-export default async function FluxoPage({
-  searchParams,
-}: {
-  searchParams?: { loja?: string };
-}) {
+export default async function FluxoPage(
+  props: {
+    searchParams?: Promise<{ loja?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await requireRole(["GESTAO", "VENDAS", "FINANCEIRO"]);
 
   const loja = searchParams?.loja;

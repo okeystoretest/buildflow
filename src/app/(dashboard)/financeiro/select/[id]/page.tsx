@@ -9,7 +9,8 @@ import { SelectDetailClient } from "./detail-client";
  * Detalhe de um Select: o contrato, o vínculo de troca, as parcelas com os
  * pagamentos e o acompanhamento do mínimo de compras ciclo a ciclo.
  */
-export default async function SelectDetailPage({ params }: { params: { id: string } }) {
+export default async function SelectDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await requireRole(["FINANCEIRO", "GESTAO"]);
 
   const [detail, paymentMethods, banks, cnpjs] = await Promise.all([

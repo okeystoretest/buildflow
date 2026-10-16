@@ -30,14 +30,15 @@ const BADGE: Record<ContractState, string> = {
  * parcelas geradas). Eles divergem sempre que um Select é cadastrado com
  * início retroativo, porque as parcelas de meses já passados não são geradas.
  */
-export default async function FinanceiroSelectPage({
-  searchParams,
-}: {
-  searchParams?: {
-    q?: string; plano?: string; estado?: string; responsavel?: string;
-    de?: string; ate?: string; financeiro?: string; page?: string;
-  };
-}) {
+export default async function FinanceiroSelectPage(
+  props: {
+    searchParams?: Promise<{
+      q?: string; plano?: string; estado?: string; responsavel?: string;
+      de?: string; ate?: string; financeiro?: string; page?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["FINANCEIRO", "GESTAO"]);
 
   const estado = ESTADOS.includes(searchParams?.estado as ContractState)

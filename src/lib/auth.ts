@@ -37,7 +37,7 @@ export async function createSession(payload: SessionPayload): Promise<void> {
     .setExpirationTime("7d")
     .sign(getAuthSecret());
 
-  cookies().set(COOKIE_NAME, token, {
+  (await cookies()).set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -54,7 +54,7 @@ export async function createSession(payload: SessionPayload): Promise<void> {
  * usado por páginas e Server Actions.
  */
 export async function getSession(): Promise<SessionPayload | null> {
-  const token = cookies().get(COOKIE_NAME)?.value;
+  const token = (await cookies()).get(COOKIE_NAME)?.value;
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, getAuthSecret());
@@ -83,7 +83,7 @@ export async function getSession(): Promise<SessionPayload | null> {
  * tokenVersion (invalida os JWT já emitidos) e apaga o cookie local.
  */
 export async function destroySession(): Promise<void> {
-  const token = cookies().get(COOKIE_NAME)?.value;
+  const token = (await cookies()).get(COOKIE_NAME)?.value;
   if (token) {
     try {
       const { payload } = await jwtVerify(token, getAuthSecret());
@@ -98,7 +98,7 @@ export async function destroySession(): Promise<void> {
       // Token inválido/expirado: nada a revogar, só limpar o cookie.
     }
   }
-  cookies().delete(COOKIE_NAME);
+  (await cookies()).delete(COOKIE_NAME);
 }
 
 /**

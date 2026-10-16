@@ -9,10 +9,8 @@ import { resolveUploadedFilePath } from "@/lib/image";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  req: Request,
-  { params }: { params: { connectId: string } },
-): Promise<Response> {
+export async function GET(req: Request, props: { params: Promise<{ connectId: string }> }): Promise<Response> {
+  const params = await props.params;
   const denied = requireConnectToken(req);
   if (denied) return denied;
 

@@ -1,6 +1,6 @@
 import { randomBytes, hkdfSync } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
-import { cookies } from "next/headers";
+import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import { getAuthSecret } from "@/lib/auth-secret";
 
 /**
@@ -70,7 +70,7 @@ export async function createTrackingSession(orderToken: string): Promise<void> {
     .setExpirationTime(`${MAX_AGE_SEC}s`)
     .sign(getTrackingSecret());
 
-  cookies().set(COOKIE_NAME, jwt, {
+  (await cookies()).set(COOKIE_NAME, jwt, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -83,7 +83,7 @@ export async function createTrackingSession(orderToken: string): Promise<void> {
 
 /** true se o visitante já validou o código DESTE pedido. */
 export async function hasTrackingAccess(orderToken: string): Promise<boolean> {
-  const jwt = cookies().get(COOKIE_NAME)?.value;
+  const jwt = (await cookies()).get(COOKIE_NAME)?.value;
   if (!jwt) return false;
   try {
     const { payload } = await jwtVerify(jwt, getTrackingSecret(), {
@@ -99,7 +99,7 @@ export async function hasTrackingAccess(orderToken: string): Promise<boolean> {
 export function destroyTrackingSession(): void {
   // Expira no lugar de `delete()`: o cookie foi gravado com path
   // "/acompanhar" e a remoção só surte efeito com o MESMO path.
-  cookies().set(COOKIE_NAME, "", {
+  (cookies() as unknown as UnsafeUnwrappedCookies).set(COOKIE_NAME, "", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

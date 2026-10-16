@@ -19,11 +19,12 @@ export const dynamic = "force-dynamic";
  * Recorte padrão: últimos 30 dias pela data de CRIAÇÃO do pedido. Sem recorte,
  * a média carregaria o histórico inteiro e deixaria de refletir a operação atual.
  */
-export default async function MetricasPage({
-  searchParams,
-}: {
-  searchParams?: { de?: string; ate?: string; loja?: string };
-}) {
+export default async function MetricasPage(
+  props: {
+    searchParams?: Promise<{ de?: string; ate?: string; loja?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["LOGISTICA", "GESTAO"]);
 
   const hoje = new Date();

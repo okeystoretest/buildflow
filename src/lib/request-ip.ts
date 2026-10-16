@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+import { headers, type UnsafeUnwrappedHeaders } from "next/headers";
 import { isIP } from "node:net";
 
 /**
@@ -46,7 +46,7 @@ import { isIP } from "node:net";
  * heurística de fraude comparando leads precisa para não mentir.
  */
 export function getClientIp(): string {
-  const h = headers();
+  const h = (headers() as unknown as UnsafeUnwrappedHeaders);
 
   const xff = (h.get("x-forwarded-for") ?? "")
     .split(",")

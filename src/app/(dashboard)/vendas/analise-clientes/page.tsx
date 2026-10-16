@@ -55,11 +55,12 @@ const dataHora = (d: Date) =>
     minute: "2-digit",
   });
 
-export default async function AnaliseClientesPage({
-  searchParams,
-}: {
-  searchParams?: { status?: string; brand?: string; page?: string };
-}) {
+export default async function AnaliseClientesPage(
+  props: {
+    searchParams?: Promise<{ status?: string; brand?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await requireRole(["VENDAS", "GESTAO"]);
 
   // Sem `!`: se o usuário da sessão não existe mais (desativado, removido), o

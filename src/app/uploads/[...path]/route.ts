@@ -21,10 +21,8 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 export const dynamic = "force-dynamic";
 
-export function GET(
-  req: NextRequest,
-  { params }: { params: { path: string[] } },
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ path: string[] }> }) {
+  const params = await props.params;
   // Os segmentos chegam ja decodificados e voltam a compor uma URL, entao
   // precisam ser reencodados (nome de arquivo com espaco ou acento).
   const rel = (params.path ?? []).map(encodeURIComponent).join("/");

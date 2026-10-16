@@ -22,11 +22,12 @@ function todayStr(): string {
 
 // Histórico de entregas do motorista: todos os pedidos CONCLUÍDOS entregues por
 // ele (delivery.driverId == usuário). Gestão vê o histórico de todos.
-export default async function MotoristaHistoricoPage({
-  searchParams,
-}: {
-  searchParams: { busca?: string; de?: string; ate?: string; page?: string };
-}) {
+export default async function MotoristaHistoricoPage(
+  props: {
+    searchParams: Promise<{ busca?: string; de?: string; ate?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await requireRole(["MOTORISTA", "GESTAO"]);
 
   const de = searchParams.de || firstDayOfMonth();

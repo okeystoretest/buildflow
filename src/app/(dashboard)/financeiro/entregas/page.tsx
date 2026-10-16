@@ -14,11 +14,12 @@ const PER_PAGE = 20;
 // Submódulo "Entregas" do Financeiro: lista todas as entregas efetuadas por
 // usuários com perfil MOTORISTA.
 // RBAC: estritamente FINANCEIRO e GESTAO.
-export default async function FinanceiroEntregasPage({
-  searchParams,
-}: {
-  searchParams: { busca?: string; driver?: string; de?: string; ate?: string; situacao?: string; page?: string };
-}) {
+export default async function FinanceiroEntregasPage(
+  props: {
+    searchParams: Promise<{ busca?: string; driver?: string; de?: string; ate?: string; situacao?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["FINANCEIRO", "GESTAO"]);
 
   const busca = searchParams.busca?.trim() || "";

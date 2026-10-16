@@ -3,11 +3,12 @@ import { requireRole } from "@/lib/auth";
 import { GestaoTabs } from "./tabs-client";
 import { sortOperationsByCode } from "@/lib/utils";
 
-export default async function GestaoPage({
-  searchParams,
-}: {
-  searchParams?: { goalMonth?: string; goalYear?: string };
-}) {
+export default async function GestaoPage(
+  props: {
+    searchParams?: Promise<{ goalMonth?: string; goalYear?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["GESTAO"]);
 
   const now = new Date();

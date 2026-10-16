@@ -31,7 +31,8 @@ function doisPrimeirosNomes(nomeCompleto: string): string {
   return partes.slice(0, 2).join(" ");
 }
 
-export default async function EtiquetaPage({ params }: { params: { id: string } }) {
+export default async function EtiquetaPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // Somente papéis que operam vendas/logística podem imprimir.
   await requireRole(["GESTAO", "VENDAS", "FINANCEIRO", "LOGISTICA"]);
 

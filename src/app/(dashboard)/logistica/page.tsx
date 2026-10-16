@@ -16,11 +16,12 @@ const DEFAULT_STORE_NAME = "OKEY Store (Fábrica)";
 
 // Dashboard de Logística: visual e estrutura iguais ao Fluxo de Pedidos,
 // porém com a permissão de AVANÇAR manualmente o status dos pedidos.
-export default async function LogisticaPage({
-  searchParams,
-}: {
-  searchParams?: { loja?: string };
-}) {
+export default async function LogisticaPage(
+  props: {
+    searchParams?: Promise<{ loja?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await requireRole();
 
   // ------------------------------------------------------------------

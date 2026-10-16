@@ -13,11 +13,12 @@ import type { Prisma } from "@prisma/client";
 // entao a consulta e paginada no banco em vez de trazer tudo.
 const PER_PAGE = 20;
 
-export default async function HistoricoPage({
-  searchParams,
-}: {
-  searchParams: { comanda?: string; de?: string; ate?: string; page?: string };
-}) {
+export default async function HistoricoPage(
+  props: {
+    searchParams: Promise<{ comanda?: string; de?: string; ate?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
   // IMPORTANTE (correcao 2.1): NAO ha mais filtro de data padrao. Antes o

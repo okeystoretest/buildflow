@@ -29,11 +29,12 @@ const PER_PAGE = 20;
  * compartilhadas com a exportação em PDF (/api/logistica/atrasos/pdf) para que
  * o arquivo gerado nunca divirja do que está na tela.
  */
-export default async function RelatorioAtrasosPage({
-  searchParams,
-}: {
-  searchParams?: AtrasosSearchParams;
-}) {
+export default async function RelatorioAtrasosPage(
+  props: {
+    searchParams?: Promise<AtrasosSearchParams>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["LOGISTICA", "GESTAO"]);
 
   const filtros = parseAtrasosFiltros(searchParams);

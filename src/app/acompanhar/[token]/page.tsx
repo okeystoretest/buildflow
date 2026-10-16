@@ -75,11 +75,12 @@ function resumoItens(o: ResumoFonte): { label: string; quantity: number }[] {
   return o.pieceCount > 0 ? [{ label: "Peças do pedido", quantity: o.pieceCount }] : [];
 }
 
-export default async function AcompanharPedidoPage({
-  params,
-}: {
-  params: { token: string };
-}) {
+export default async function AcompanharPedidoPage(
+  props: {
+    params: Promise<{ token: string }>;
+  }
+) {
+  const params = await props.params;
   const order = await prisma.order.findUnique({
     where: { trackingToken: params.token },
     select: {

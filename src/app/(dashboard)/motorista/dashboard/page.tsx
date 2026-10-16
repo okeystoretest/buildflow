@@ -120,11 +120,12 @@ function Lista({ fatias, total }: { fatias: Fatia[]; total: number }) {
 // transporte (o que antes morava no Connect). O recorte por motorista vem da
 // URL (?motorista=<id>) e atravessa TUDO: os KPIs, o tempo medio, a
 // quilometragem e as tres distribuicoes.
-export default async function MotoristaDashboardPage({
-  searchParams,
-}: {
-  searchParams?: { motorista?: string };
-}) {
+export default async function MotoristaDashboardPage(
+  props: {
+    searchParams?: Promise<{ motorista?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["LOGISTICA", "GESTAO"]);
 
   const drivers = await getTransportDrivers();

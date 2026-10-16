@@ -22,11 +22,12 @@ const PER_PAGE = 20;
 // RBAC:
 //  - VENDAS: vê apenas os itens dos SEUS pedidos (escopo forçado no servidor).
 //  - GESTÃO/FINANCEIRO: veem tudo + filtro por vendedora.
-export default async function RelatorioCampanhaPage({
-  searchParams,
-}: {
-  searchParams: { campanha?: string; vendedora?: string; de?: string; ate?: string; page?: string };
-}) {
+export default async function RelatorioCampanhaPage(
+  props: {
+    searchParams: Promise<{ campanha?: string; vendedora?: string; de?: string; ate?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
   const veTudo = session.role === "GESTAO" || session.role === "FINANCEIRO";
 

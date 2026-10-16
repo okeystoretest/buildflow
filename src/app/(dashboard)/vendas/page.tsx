@@ -15,11 +15,12 @@ import type { Prisma } from "@prisma/client";
 
 const PAGE_SIZE = 10; // exibe apenas as ultimas 10 vendas por pagina
 
-export default async function VendasPage({
-  searchParams,
-}: {
-  searchParams?: { busca?: string; page?: string };
-}) {
+export default async function VendasPage(
+  props: {
+    searchParams?: Promise<{ busca?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
   // GESTAO e FINANCEIRO veem TODOS os pedidos; VENDAS ve apenas os proprios.
   const veTudo = session.role === "GESTAO" || session.role === "FINANCEIRO";

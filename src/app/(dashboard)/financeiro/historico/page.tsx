@@ -27,11 +27,12 @@ function outcomeOf(status: OrderStatus): FinHistItem["outcome"] {
   return "INTERROMPIDO";
 }
 
-export default async function FinanceiroHistoricoPage({
-  searchParams,
-}: {
-  searchParams: { busca?: string; de?: string; ate?: string; page?: string };
-}) {
+export default async function FinanceiroHistoricoPage(
+  props: {
+    searchParams: Promise<{ busca?: string; de?: string; ate?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["FINANCEIRO", "GESTAO"]);
 
   // Correcao 2.1: sem periodo padrao. Sem "de"/"ate" na URL, exibe TODOS os

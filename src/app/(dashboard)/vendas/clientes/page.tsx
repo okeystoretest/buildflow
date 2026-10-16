@@ -9,11 +9,12 @@ import { ClientesManager, type ClienteRow } from "./manager-client";
 // carregamos todos: a consulta e paginada e a busca acontece no banco.
 const PER_PAGE = 20;
 
-export default async function ClientesPage({
-  searchParams,
-}: {
-  searchParams: { page?: string; q?: string };
-}) {
+export default async function ClientesPage(
+  props: {
+    searchParams: Promise<{ page?: string; q?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
   const page = Math.max(1, Number(searchParams.page ?? 1) || 1);

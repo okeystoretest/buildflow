@@ -9,11 +9,12 @@ const PER_PAGE = 20;
 
 // Cadastro de Excursões (Vendas). Segue o padrão do Cadastro de Clientes:
 // busca no servidor (?q=) e paginação no banco.
-export default async function ExcursoesPage({
-  searchParams,
-}: {
-  searchParams: { page?: string; q?: string };
-}) {
+export default async function ExcursoesPage(
+  props: {
+    searchParams: Promise<{ page?: string; q?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
   const page = Math.max(1, Number(searchParams.page ?? 1) || 1);
