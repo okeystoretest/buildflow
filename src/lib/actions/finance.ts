@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
-import { processAndSaveImage, saveDocument, isPdfDataUrl, deleteUploadedFile } from "@/lib/image";
+import {
+  processAndSaveImage,
+  saveDocument,
+  isPdfDataUrl,
+  deleteUploadedFile,
+  validateUploadDataUrl,
+} from "@/lib/image";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/finance-constants";
 import { emitOrderUpdated } from "@/lib/realtime/emit";
@@ -80,9 +86,10 @@ export async function uploadSecondPaymentProof(args: {
       const raw = dataUrl.replace(/^data:[^;]+;base64,/, "");
       const buffer = Buffer.from(raw, "base64");
       if (buffer.length === 0) continue;
-      if (buffer.length > 15 * 1024 * 1024) {
-        return actionError("Arquivo muito grande (máx. 15MB).");
-      }
+      // Tamanho, MIME declarado e magic bytes, antes de o arquivo alcancar o
+      // sharp — ver validateUploadDataUrl em lib/image.
+      const invalido = validateUploadDataUrl(dataUrl, buffer);
+      if (invalido) return actionError(invalido);
       // Comprovante de pagamento aceita imagem OU PDF. PDF vai direto ao disco
       // (sem sharp); imagem passa pelo pipeline .webp. No banco, so o caminho.
       const processed = isPdfDataUrl(dataUrl)
@@ -267,6 +274,10 @@ export async function auditOrder(args: {
           data: {
             comandaNumber: args.comandaNumber,
             status: "AGUARDANDO_IMPRESSAO",
+            // Carimbo da aprovacao (consumido pelo minimo de compras do
+            // Select). Doacao recebe o carimbo como qualquer aprovacao; quem
+            // decide que ela nao conta como compra e a consulta do Select.
+            financeApprovedAt: new Date(),
           },
         });
         await tx.orderStatusHistory.create({
@@ -329,6 +340,7 @@ export async function auditOrder(args: {
           comandaNumber: args.comandaNumber,
           paymentStatusId: args.paymentStatusId,
           status: "AGUARDANDO_IMPRESSAO",
+          financeApprovedAt: new Date(),
         },
       });
       await tx.orderStatusHistory.create({
@@ -385,7 +397,10 @@ export async function markOrderPaid(orderId: string): Promise<ActionResult<{ sta
 
       await tx.order.update({
         where: { id: order.id },
-        data: { status: "PAGO" },
+        // "Pago" e a aprovacao do Financeiro no fluxo simplificado: carimba
+        // junto, senao as compras das lojas simplificadas nao contariam no
+        // minimo de compras do Select.
+        data: { status: "PAGO", financeApprovedAt: new Date() },
       });
       await tx.orderStatusHistory.create({
         data: { orderId: order.id, status: "PAGO", changedBy: session.userId, note: "Pago (fluxo simplificado)" },

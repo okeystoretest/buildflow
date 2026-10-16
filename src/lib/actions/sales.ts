@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
-import { processAndSaveImage, saveDocument, isPdfDataUrl, validateUpload, deleteUploadedFile } from "@/lib/image";
+import {
+  processAndSaveImage,
+  saveDocument,
+  isPdfDataUrl,
+  validateUpload,
+  validateUploadDataUrl,
+  deleteUploadedFile,
+} from "@/lib/image";
 import {
   createCustomerSchema,
   updateCustomerSchema,
@@ -253,7 +260,9 @@ export async function uploadInvoiceBase64(args: {
     const raw = args.base64.replace(/^data:[^;]+;base64,/, "");
     const buffer = Buffer.from(raw, "base64");
     if (buffer.length === 0) return actionError("Arquivo inválido.");
-    if (buffer.length > 15 * 1024 * 1024) return actionError("Arquivo muito grande (máx. 15MB).");
+    // Tamanho, MIME declarado e magic bytes antes do sharp (lib/image).
+    const invalido = validateUploadDataUrl(args.base64, buffer);
+    if (invalido) return actionError(invalido);
 
     const fileName = `${order.id}_invoicePath_${Date.now()}`;
     const processed = ehPdf

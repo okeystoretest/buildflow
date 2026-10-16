@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import {
+  validateUploadDataUrl,
   processAndSaveImage,
   deleteUploadedFile,
   type ProcessedImage,
@@ -12,9 +13,6 @@ import { actionOk, actionError, type ActionResult } from "@/types/action";
 
 // Teto de fotos por entrega (mesmo limite da conclusão pelo motorista).
 const MAX_PHOTOS = 3;
-// Tamanho máximo por imagem recebida em base64 (~15MB no arquivo original).
-const MAX_BYTES = 15 * 1024 * 1024;
-
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 
 /**
@@ -82,7 +80,11 @@ export async function updateDeliveryProofs(input: {
     for (let i = 0; i < addBase64.length; i++) {
       const buffer = decodeImageDataUrl(addBase64[i]);
       if (!buffer) return actionError("Uma das imagens é inválida. Envie apenas fotos (JPG/PNG/HEIC/WebP).");
-      if (buffer.length > MAX_BYTES) return actionError("Imagem muito grande. Limite: 15MB.");
+      // decodeImageDataUrl barra o MIME DECLARADO; esta conferencia olha os
+      // magic bytes. Sem ela, um SVG anunciado como image/png segue para o
+      // sharp e de la para o librsvg.
+      const invalido = validateUploadDataUrl(addBase64[i], buffer);
+      if (invalido) return actionError(invalido);
       const processed = await processAndSaveImage(buffer, {
         folder: "comprovantes",
         fileName: `${deliveryId}_edit_${Date.now()}_${i}`,
