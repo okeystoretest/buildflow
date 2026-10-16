@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PackageCheck, AlertTriangle, Shirt, Timer } from "lucide-react";
+import { PackageCheck, AlertTriangle, Shirt, Timer, Clock } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
@@ -162,6 +162,11 @@ export default async function LogisticaPage({
             <Button asChild variant="outline">
               <Link href="/logistica/pendencias">
                 <AlertTriangle className="h-4 w-4" /> Relatório de Pendências
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/logistica/atrasos">
+                <Clock className="h-4 w-4" /> Relatório de Atrasos
               </Link>
             </Button>
             <Button asChild variant="outline">
