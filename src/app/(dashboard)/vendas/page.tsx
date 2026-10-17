@@ -88,7 +88,7 @@ export default async function VendasPage(
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-vendas">Vendas</h1>
+        <h1 className="text-2xl font-bold text-vendas-text">Vendas</h1>
         <div className="flex gap-2">
           {/* Captação de revendedor: só a equipe de Atacado (decisão 15). O botão
               some para VAREJO; a action confere de novo no servidor. */}

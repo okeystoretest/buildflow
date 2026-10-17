@@ -148,7 +148,7 @@ function Opcao({
       className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
     >
       <span className="truncate">{label}</span>
-      {ativo && <Check className="h-4 w-4 shrink-0 text-motorista" aria-hidden />}
+      {ativo && <Check className="h-4 w-4 shrink-0 text-motorista-text" aria-hidden />}
     </button>
   );
 }

@@ -290,7 +290,7 @@ export function EditarPedidoForm({
               ].filter(Boolean).join(" · ");
               return (
                 <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-                  <p><span className="font-semibold text-vendas">Endereço (etiqueta):</span> {ex.address}</p>
+                  <p><span className="font-semibold text-vendas-text">Endereço (etiqueta):</span> {ex.address}</p>
                   {detalhes && <p>{detalhes}</p>}
                 </div>
               );
@@ -324,7 +324,7 @@ export function EditarPedidoForm({
       {/* Endereço de entrega — só quando a forma de envio exige (Excursão). */}
       {requiresAddress && (
         <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-4">
-          <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Cliente)</p>
+          <p className="mb-3 text-sm font-semibold text-vendas-text">Endereço de Entrega (Cliente)</p>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <div className="space-y-1.5 lg:col-span-2">
@@ -402,7 +402,7 @@ export function EditarPedidoForm({
           <ul className="space-y-1">
             {existing.map((p, i) => (
               <li key={p.id} className="flex items-center justify-between rounded-lg border border-border bg-secondary/40 px-3 py-1.5 text-sm">
-                <a href={p.filePath} target="_blank" rel="noreferrer" className="truncate text-brand underline">
+                <a href={p.filePath} target="_blank" rel="noreferrer" className="truncate text-brand-text underline">
                   <span className="font-data mr-2 text-xs text-muted-foreground">{i + 1}.</span>
                   Comprovante atual {i + 1}
                 </a>
@@ -416,7 +416,7 @@ export function EditarPedidoForm({
             {newProofs.map((p, i) => (
               <li key={`new-${i}`} className="flex items-center justify-between rounded-lg border border-vendas/40 bg-vendas/5 px-3 py-1.5 text-sm">
                 <span className="truncate">
-                  <span className="font-data mr-2 text-xs text-vendas">novo</span>{p.name}
+                  <span className="font-data mr-2 text-xs text-vendas-text">novo</span>{p.name}
                 </span>
                 <button type="button" onClick={() => removeNew(i)}
                   className="ml-2 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-background hover:text-destructive"
@@ -459,7 +459,7 @@ export function EditarPedidoForm({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-        <span className="text-lg font-bold text-vendas">Total: {formatBRL(total)}</span>
+        <span className="text-lg font-bold text-vendas-text">Total: {formatBRL(total)}</span>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.back()} disabled={pending}>Cancelar</Button>
           <Button variant="vendas" onClick={save} disabled={pending || !podeSalvar}>

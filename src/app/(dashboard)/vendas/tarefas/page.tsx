@@ -31,7 +31,7 @@ export default async function TarefasPage() {
     <div className="space-y-4">
       <div>
         <BackButton href="/vendas" />
-        <h1 className="text-2xl font-bold text-vendas">Tarefas Diárias</h1>
+        <h1 className="text-2xl font-bold text-vendas-text">Tarefas Diárias</h1>
         <p className="text-sm text-muted-foreground">
           {isGestao
             ? "Quadro de tarefas de todas as vendedoras."

@@ -106,7 +106,7 @@ export default async function LogisticaEntregasPage(
   return (
     <div className="space-y-6">
       <BackButton href="/logistica" />
-      <h1 className="text-2xl font-bold text-distribuicao">Histórico de Entregas</h1>
+      <h1 className="text-2xl font-bold text-distribuicao-text">Histórico de Entregas</h1>
       <p className="text-sm text-muted-foreground">
         Pedidos concluídos (entregues). Clique em uma comanda para abrir a ficha completa da venda e da entrega.
       </p>

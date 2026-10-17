@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { autorizadoPorSegredoDeCron } from "@/lib/cron-auth";
 import { expurgarCandidaturasVencidas, RETENCAO_DIAS } from "@/lib/wholesale-retention";
+import { expurgarTentativasVelhas } from "@/lib/rate-limit";
 
 /**
  * EXPURGO DIÁRIO DAS CANDIDATURAS DE ATACADO (LGPD Art. 16).
@@ -32,10 +33,16 @@ export async function POST(req: Request) {
 
   const { apagados, arquivosApagados } = await expurgarCandidaturasVencidas();
 
+  // Higiene da tabela do rate limit, de carona na mesma rotina diaria. A
+  // checagem ja limpa a janela da chave que ela verifica; o que sobra sao as
+  // chaves que nunca voltam, e e isso que esta linha recolhe.
+  const tentativasApagadas = await expurgarTentativasVelhas();
+
   return NextResponse.json({
     ok: true,
     retencaoDias: RETENCAO_DIAS,
     candidaturasApagadas: apagados,
     arquivosApagados,
+    tentativasDeRateLimitApagadas: tentativasApagadas,
   });
 }

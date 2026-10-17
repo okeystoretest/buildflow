@@ -470,7 +470,7 @@ export function NovoSelectForm({
           <ul className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
             {plan.benefits.map((b, i) => (
               <li key={i} className="flex gap-2 text-sm text-muted-foreground">
-                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-servico" />
+                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-servico-text" />
                 <span>{b}</span>
               </li>
             ))}
@@ -505,7 +505,7 @@ export function NovoSelectForm({
           </>
         )}
         {msg && (
-          <span className={`text-sm ${msg.ok ? "text-servico" : "text-destructive"}`}>{msg.text}</span>
+          <span className={`text-sm ${msg.ok ? "text-servico-text" : "text-destructive"}`}>{msg.text}</span>
         )}
       </div>
     </div>

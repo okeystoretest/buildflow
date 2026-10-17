@@ -86,7 +86,7 @@ export async function verifyTrackingCode(
   // Freio de força bruta: o Código de Cliente é curto, então sem isto um link
   // vazado permitiria varrer o espaço de códigos. Janela por (IP + link).
   const ip = getClientIp();
-  const gate = checkLoginRate(`track:${ip}:${token}`);
+  const gate = await checkLoginRate(`track:${ip}:${token}`);
   if (!gate.allowed) {
     return actionError(
       `Muitas tentativas. Tente novamente em ${gate.retryAfterSec}s.`,
@@ -98,7 +98,7 @@ export async function verifyTrackingCode(
   // atacante com vários IPs (ou botnet) varreria o espaço de códigos mesmo com
   // o limite por IP intacto. Teto mais alto porque o link é legitimamente
   // compartilhado — a cliente pode abrir de mais de um aparelho.
-  const linkGate = checkRate(`track:link:${token}`, { max: 20 });
+  const linkGate = await checkRate(`track:link:${token}`, { max: 20 });
   if (!linkGate.allowed) {
     return actionError(
       `Muitas tentativas para este link. Tente novamente em ${linkGate.retryAfterSec}s.`,
@@ -120,8 +120,8 @@ export async function verifyTrackingCode(
     order.customer.code.trim().toLowerCase() === informado.toLowerCase();
   if (!ok) return actionError("Código de cliente inválido para este pedido.");
 
-  clearLoginRate(`track:${ip}:${token}`);
-  clearLoginRate(`track:link:${token}`);
+  await clearLoginRate(`track:${ip}:${token}`);
+  await clearLoginRate(`track:link:${token}`);
   await createTrackingSession(token);
   return actionOk(undefined);
 }

@@ -55,7 +55,7 @@ export default async function ExcursoesPage(
   return (
     <div className="mx-auto max-w-5xl">
       <BackButton href="/vendas" />
-      <h1 className="mb-4 text-2xl font-bold text-vendas">Cadastrar Excursão</h1>
+      <h1 className="mb-4 text-2xl font-bold text-vendas-text">Cadastrar Excursão</h1>
 
       <div className="mb-4">
         <SearchBox placeholder="Buscar por nome ou endereço..." className="max-w-sm" />

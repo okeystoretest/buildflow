@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 const NUMERO: Record<TransportStatus, string> = {
   ABERTO: "text-amber-600 dark:text-amber-400",
   ATRIBUIDO: "text-sky-700 dark:text-sky-300",
-  EM_ROTA: "text-motorista",
+  EM_ROTA: "text-motorista-text",
   CONCLUIDO: "text-emerald-700 dark:text-emerald-300",
   CANCELADO: "text-destructive",
 };
@@ -141,7 +141,7 @@ export default async function MotoristaDashboardPage(
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-motorista">Dashboard de chamados</h1>
+          <h1 className="text-2xl font-bold text-motorista-text">Dashboard de chamados</h1>
           <p className="text-sm text-muted-foreground">
             {selecionado
               ? `Chamados de transporte de ${selecionado.name}.`
@@ -203,9 +203,9 @@ export default async function MotoristaDashboardPage(
         />
         <Kpi
           icon={<Route className="h-5 w-5" />}
-          chip="bg-motorista/15 text-motorista"
+          chip="bg-motorista/15 text-motorista-text"
           valor={`${d.totalKm} km`}
-          corValor="text-motorista"
+          corValor="text-motorista-text"
           label="Quilometragem total"
           hint={`média de ${d.avgKmPerTrip} km por corrida`}
         />

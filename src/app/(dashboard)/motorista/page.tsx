@@ -125,7 +125,7 @@ export default async function MotoristaPage() {
     <div className="mx-auto max-w-md space-y-6 pb-8 sm:max-w-6xl">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-motorista">Minhas entregas</h1>
+          <h1 className="text-2xl font-bold text-motorista-text">Minhas entregas</h1>
           <p className="text-sm text-muted-foreground">
             Pronto → Em Rota → Entregue. Pedido sem dono é seu ao tocar em “Iniciar”.
           </p>

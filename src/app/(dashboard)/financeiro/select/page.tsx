@@ -16,8 +16,8 @@ const ESTADOS: ContractState[] = ["ATIVO", "AGENDADO", "ENCERRADO", "CANCELADO"]
 const FINANCEIROS: FinancialSituation[] = ["EM_DIA", "VENCIDAS", "QUITADO"];
 
 const BADGE: Record<ContractState, string> = {
-  ATIVO: "bg-servico/15 text-servico",
-  AGENDADO: "bg-brand/15 text-brand",
+  ATIVO: "bg-servico/15 text-servico-text",
+  AGENDADO: "bg-brand/15 text-brand-text",
   ENCERRADO: "bg-secondary text-muted-foreground",
   CANCELADO: "bg-destructive/15 text-destructive",
 };
@@ -88,7 +88,7 @@ export default async function FinanceiroSelectPage(
       <BackButton href="/financeiro" />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-servico">
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-servico-text">
           <Star className="h-6 w-6" /> Select
         </h1>
         <Button asChild variant="servico">
@@ -99,7 +99,7 @@ export default async function FinanceiroSelectPage(
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Indicador rotulo="Valor dos contratos" valor={indicators.contractedAmount} dica={`${indicators.count} Select(s) no filtro`} />
         <Indicador rotulo="A cobrar" valor={indicators.billableAmount} dica="soma das parcelas geradas" />
-        <Indicador rotulo="Recebido" valor={indicators.receivedAmount} tom="text-servico" />
+        <Indicador rotulo="Recebido" valor={indicators.receivedAmount} tom="text-servico-text" />
         <Indicador rotulo="Em aberto" valor={indicators.openAmount} />
         <Indicador rotulo="Vencido" valor={indicators.overdueAmount} tom={indicators.overdueAmount > 0 ? "text-destructive" : undefined} />
       </div>

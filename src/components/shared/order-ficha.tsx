@@ -311,7 +311,7 @@ export function OrderFicha({
       {deliveryDeadline && (
         <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
           isFinal
-            ? "border-motorista/40 bg-motorista/10 text-motorista"
+            ? "border-motorista/40 bg-motorista/10 text-motorista-text"
             : isLate
               ? "border-destructive/50 bg-destructive/15 text-destructive"
               : "border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-300"
@@ -356,7 +356,7 @@ export function OrderFicha({
       {!driverMode && order.shippingMethod.requiresAddress && (
         <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-vendas">
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-vendas-text">
               <MapPin className="h-4 w-4" /> Endereço de Entrega
             </h3>
             <a
@@ -383,7 +383,7 @@ export function OrderFicha({
       {/* Observações. No modo motorista ficam em DESTAQUE (leitura rápida
           durante a entrega): fonte maior, borda e fundo realçados. */}
       <div>
-        <h3 className={`mb-1 font-semibold ${driverMode ? "text-motorista" : ""}`}>Observações de Envio</h3>
+        <h3 className={`mb-1 font-semibold ${driverMode ? "text-motorista-text" : ""}`}>Observações de Envio</h3>
         <div className={
           driverMode
             ? "rounded-lg border-2 border-motorista/50 bg-motorista/10 p-4 text-base font-medium leading-relaxed whitespace-pre-wrap"
@@ -505,7 +505,7 @@ export function OrderFicha({
             <>
               <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-1.5">
                 <a href={order.invoicePath} target="_blank" rel="noreferrer"
-                  className="truncate text-sm font-medium text-motorista underline">
+                  className="truncate text-sm font-medium text-motorista-text underline">
                   ✓ Nota Fiscal anexada.
                 </a>
                 <button type="button" onClick={onRemoveInvoice} disabled={nfBusy}
@@ -515,7 +515,7 @@ export function OrderFicha({
                 </button>
               </div>
               {nfBusy && <p className="mt-1 text-xs text-muted-foreground">Removendo...</p>}
-              {nfMsg && <p className={`mt-1 text-sm ${nfMsg.ok ? "text-motorista" : "text-destructive"}`}>{nfMsg.text}</p>}
+              {nfMsg && <p className={`mt-1 text-sm ${nfMsg.ok ? "text-motorista-text" : "text-destructive"}`}>{nfMsg.text}</p>}
             </>
           ) : (
             <>
@@ -530,7 +530,7 @@ export function OrderFicha({
               <p className="mt-1 text-xs text-muted-foreground">
                 Clique para anexar a Nota Fiscal (imagem ou PDF).{nfBusy && " Enviando..."}
               </p>
-              {nfMsg && <p className={`mt-1 text-sm ${nfMsg.ok ? "text-motorista" : "text-destructive"}`}>{nfMsg.text}</p>}
+              {nfMsg && <p className={`mt-1 text-sm ${nfMsg.ok ? "text-motorista-text" : "text-destructive"}`}>{nfMsg.text}</p>}
             </>
           )}
         </div>
@@ -1014,7 +1014,7 @@ function FileLink({ label, path }: { label: string; path: string | null }) {
   // A Nota Fiscal pode ser PDF; sinaliza para o usuario saber o que vai abrir.
   const ehPdf = path.toLowerCase().endsWith(".pdf");
   return (
-    <a href={path} target="_blank" rel="noreferrer" className="text-brand underline">
+    <a href={path} target="_blank" rel="noreferrer" className="text-brand-text underline">
       {label}{ehPdf && " (PDF)"}
     </a>
   );

@@ -29,7 +29,7 @@ export default async function ChamadosHistoricoPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-motorista">Histórico de chamados</h1>
+          <h1 className="text-2xl font-bold text-motorista-text">Histórico de chamados</h1>
           <p className="text-sm text-muted-foreground">Concluídos e cancelados, mais recentes primeiro.</p>
         </div>
         <Link

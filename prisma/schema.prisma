@@ -1372,3 +1372,17 @@ model WholesaleLeadEvent {
 
   @@index([leadId, createdAt])
 }
+
+/// Tentativas contadas pelo rate limit, compartilhadas entre instancias.
+///
+/// Uma linha por tentativa (janela deslizante). O expurgo das linhas fora de
+/// qualquer janela acontece na propria checagem e em /api/cron/leads — ver
+/// src/lib/rate-limit.ts.
+model RateLimitHit {
+  id  BigInt   @id @default(autoincrement())
+  key String
+  at  DateTime @default(now())
+
+  @@index([key, at])
+  @@index([at])
+}

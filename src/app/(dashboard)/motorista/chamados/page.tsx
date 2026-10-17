@@ -17,7 +17,7 @@ export default async function ChamadosPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-motorista">Chamados</h1>
+        <h1 className="text-2xl font-bold text-motorista-text">Chamados</h1>
         <p className="text-sm text-muted-foreground">Em Aberto → Atribuído → Em Rota → Concluído</p>
       </div>
       <TransportBoard items={items} role={session.role} userId={session.userId} drivers={drivers} />

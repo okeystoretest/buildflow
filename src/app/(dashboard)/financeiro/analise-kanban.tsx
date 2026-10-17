@@ -446,7 +446,7 @@ function PendingCard({ card, onOpen, onFlag }: { card: FinanceCard; onOpen: () =
               day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
             })}
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-financeiro/15 px-2 py-0.5 text-[11px] font-medium text-financeiro">
+          <span className="inline-flex items-center gap-1 rounded-full bg-financeiro/15 px-2 py-0.5 text-[11px] font-medium text-financeiro-text">
             Analisar <ChevronDown className="h-3 w-3" />
           </span>
         </div>
@@ -548,7 +548,7 @@ function ProofsModal({ rotulo, proofs, onClose }: {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.filePath} alt={`Comprovante ${i + 1}`} className="h-24 w-full rounded object-cover" />
                   )}
-                  <span className="font-medium text-financeiro underline">
+                  <span className="font-medium text-financeiro-text underline">
                     Comprovante {i + 1}{ehPdf && " (PDF)"}
                   </span>
                 </a>
@@ -596,7 +596,7 @@ function SimplifiedPaidPanel({ orderId, proofs, onDone }: {
             {proofs.map((p, i) => (
               <li key={p.id} className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">{i + 1}.</span>
-                <a href={p.filePath} target="_blank" rel="noreferrer" className="truncate text-financeiro underline">
+                <a href={p.filePath} target="_blank" rel="noreferrer" className="truncate text-financeiro-text underline">
                   Ver comprovante {i + 1}
                 </a>
               </li>
@@ -747,7 +747,7 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
       )}
 
       {err && <p className="mt-2 text-[11px] text-destructive">{err}</p>}
-      {okMsg && <p className="mt-2 text-[11px] text-motorista">{okMsg}</p>}
+      {okMsg && <p className="mt-2 text-[11px] text-motorista-text">{okMsg}</p>}
 
       <Button
         type="button"

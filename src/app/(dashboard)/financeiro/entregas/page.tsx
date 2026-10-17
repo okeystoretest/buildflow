@@ -97,7 +97,7 @@ export default async function FinanceiroEntregasPage(
   return (
     <div className="space-y-6">
       <BackButton href="/financeiro" />
-      <h1 className="text-2xl font-bold text-financeiro">Pagamentos de Motoristas</h1>
+      <h1 className="text-2xl font-bold text-financeiro-text">Pagamentos de Motoristas</h1>
       <p className="text-sm text-muted-foreground">
         Entregas efetuadas pelos motoristas. Clique em uma para ver a ficha completa e registrar o pagamento da entrega.
       </p>

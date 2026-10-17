@@ -275,7 +275,7 @@ function TaskItem({
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button onClick={onRight} disabled={pending || !onRight} title="Avançar etapa"
-            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-vendas/15 text-vendas hover:bg-vendas/25 disabled:opacity-30">
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-vendas/15 text-vendas-text hover:bg-vendas/25 disabled:opacity-30">
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>

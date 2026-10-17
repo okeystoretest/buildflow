@@ -195,7 +195,7 @@ export async function submitWholesaleApplication(
   // modo. Se o número estiver errado para cima, custa até quinze candidaturas
   // de lixo por hora na fila da analista, que ela apaga; errado para baixo,
   // custa uma revendedora real, calada.
-  const rate = checkRate(`atacado:${ip}`, { max: 15, windowMs: 60 * 60 * 1000 });
+  const rate = await checkRate(`atacado:${ip}`, { max: 15, windowMs: 60 * 60 * 1000 });
   if (!rate.allowed) return actionError(GENERICO);
 
   // 2. Marca pelo caminho, nunca pelo payload. `BRANDS` vem do enum do Prisma

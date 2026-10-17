@@ -88,7 +88,7 @@ export function CrudTable({
                 <div className="flex justify-end gap-1">
                   {editId === r.id ? (
                     <>
-                      <Button variant="ghost" size="icon" onClick={() => saveEdit(r.id)} disabled={pending} aria-label="Salvar"><Check className="h-4 w-4 text-motorista" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => saveEdit(r.id)} disabled={pending} aria-label="Salvar"><Check className="h-4 w-4 text-motorista-text" /></Button>
                       <Button variant="ghost" size="icon" onClick={cancelEdit} aria-label="Cancelar"><X className="h-4 w-4" /></Button>
                     </>
                   ) : (

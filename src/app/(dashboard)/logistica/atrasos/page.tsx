@@ -51,7 +51,7 @@ export default async function RelatorioAtrasosPage(
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-distribuicao">Relatório de Atrasos</h1>
+          <h1 className="text-2xl font-bold text-distribuicao-text">Relatório de Atrasos</h1>
           <p className="text-sm text-muted-foreground">
             Todas as justificativas de atraso registradas no quadro, por pedido/comanda, com a
             etapa em que o pedido parou, quanto tempo atrasou e quem justificou.

@@ -78,7 +78,7 @@ export function RouteController({
   return (
     <div
       className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-        problema ? "bg-destructive/10 text-destructive" : "bg-motorista/10 text-motorista"
+        problema ? "bg-destructive/10 text-destructive" : "bg-motorista/10 text-motorista-text"
       }`}
     >
       {problema ? <AlertTriangle className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5" />}

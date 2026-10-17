@@ -85,9 +85,9 @@ export function CsvImport({ title, description, columns, sample, action }: Props
       {error && <p className="text-sm text-destructive">{error}</p>}
       {result && (
         <div className="text-sm">
-          <p className="text-motorista">{result.created} cadastrado(s) com sucesso.</p>
+          <p className="text-motorista-text">{result.created} cadastrado(s) com sucesso.</p>
           {typeof result.updated === "number" && result.updated > 0 && (
-            <p className="text-brand">{result.updated} atualizado(s).</p>
+            <p className="text-brand-text">{result.updated} atualizado(s).</p>
           )}
           {result.skipped > 0 && <p className="text-muted-foreground">{result.skipped} linha(s) ignorada(s).</p>}
           {result.errors.length > 0 && (

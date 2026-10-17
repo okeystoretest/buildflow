@@ -22,26 +22,26 @@ const config: Config = {
       colors: {
         // ---- Paleta Build.Flow: cor por setor (DEFAULT) + tom claro (soft) ----
         vendas: {
-          DEFAULT: "#9b59b6", soft: "#f3eafa", fg: "#ffffff",
+          DEFAULT: "#9b59b6", soft: "#f3eafa", text: "hsl(var(--vendas-text))", fg: "#ffffff",
         },
         financeiro: {
-          DEFAULT: "#e74c8b", soft: "#fceaf2", fg: "#ffffff",
+          DEFAULT: "#e74c8b", soft: "#fceaf2", text: "hsl(var(--financeiro-text))", fg: "#ffffff",
         },
         distribuicao: {
-          DEFAULT: "#f39c12", soft: "#fdf2e0", fg: "#3a2a00",
+          DEFAULT: "#f39c12", soft: "#fdf2e0", text: "hsl(var(--distribuicao-text))", fg: "#3a2a00",
         },
         motorista: {
-          DEFAULT: "#27ae60", soft: "#e6f6ed", fg: "#ffffff",
+          DEFAULT: "#27ae60", soft: "#e6f6ed", text: "hsl(var(--motorista-text))", fg: "#ffffff",
         },
         brand: {
-          DEFAULT: "#3498db", soft: "#e8f3fb", fg: "#ffffff",
+          DEFAULT: "#3498db", soft: "#e8f3fb", text: "hsl(var(--brand-text))", fg: "#ffffff",
         },
         // Select (venda de SERVICO). Nao e um setor: e uma natureza de venda
         // que aparece dentro de Vendas e do Financeiro. Token proprio, e nao
         // reuso do verde de "motorista", porque a paleta e lida por setor —
         // um botao "motorista" no meio de Vendas leria como engano.
         servico: {
-          DEFAULT: "#27ae60", soft: "#e6f6ed", fg: "#ffffff",
+          DEFAULT: "#27ae60", soft: "#e6f6ed", text: "hsl(var(--servico-text))", fg: "#ffffff",
         },
         // ---- Tokens shadcn/ui ----
         border: "hsl(var(--border))",

@@ -77,7 +77,7 @@ export default async function AnaliseClientesPage(
   if (!actor || !canUseWholesaleTool(actor)) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-vendas">Análise de Clientes</h1>
+        <h1 className="text-2xl font-bold text-vendas-text">Análise de Clientes</h1>
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
             A Análise de Clientes é da equipe de Atacado.
@@ -295,9 +295,9 @@ export default async function AnaliseClientesPage(
 
   return (
     <div className="space-y-6">
-      {/* Título em `text-vendas`: a tela é de Vendas. Os CHIPS de status, não —
+      {/* Título em `text-vendas-text`: a tela é de Vendas. Os CHIPS de status, não —
           estado não é setor (ver `lead-status-chip.tsx`). */}
-      <h1 className="text-2xl font-bold text-vendas">Análise de Clientes</h1>
+      <h1 className="text-2xl font-bold text-vendas-text">Análise de Clientes</h1>
 
       {ehGestao && semDono.length > 0 && (
         <Card>

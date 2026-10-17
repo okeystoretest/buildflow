@@ -241,7 +241,7 @@ function Signal({
   const cls = active
     ? filled
       ? "signal-filled-active bg-emerald-500 text-white"
-      : "bg-motorista/15 text-motorista"
+      : "bg-motorista/15 text-motorista-text"
     : filled
       ? overdue
         ? "border border-white/40 text-white/80"

@@ -92,14 +92,14 @@ export function ExcursoesManager({ excursoes }: { excursoes: ExcursaoRow[] }) {
                 {pending ? "Salvando..." : editing ? "Salvar alterações" : "Cadastrar"}
               </Button>
               <Button variant="outline" onClick={cancel}>Cancelar</Button>
-              {msg && <span className={`text-sm ${msg.ok ? "text-motorista" : "text-destructive"}`}>{msg.text}</span>}
+              {msg && <span className={`text-sm ${msg.ok ? "text-motorista-text" : "text-destructive"}`}>{msg.text}</span>}
             </div>
           </CardContent>
         </Card>
       )}
 
       {msg && !showForm && (
-        <p className={`text-sm ${msg.ok ? "text-motorista" : "text-destructive"}`}>{msg.text}</p>
+        <p className={`text-sm ${msg.ok ? "text-motorista-text" : "text-destructive"}`}>{msg.text}</p>
       )}
 
       <Card>

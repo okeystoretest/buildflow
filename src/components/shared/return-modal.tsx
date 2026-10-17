@@ -132,7 +132,7 @@ export function ReturnModal({
       >
         <div className="mb-1 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <PackageMinus className="h-5 w-5 text-vendas" />
+            <PackageMinus className="h-5 w-5 text-vendas-text" />
             <h2 id="return-modal-title" className="text-lg font-bold">Registrar devolução</h2>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} disabled={saving} aria-label="Fechar">

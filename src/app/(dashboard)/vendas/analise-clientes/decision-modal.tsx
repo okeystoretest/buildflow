@@ -352,7 +352,7 @@ export function DecisionModal({
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-vendas/15 text-vendas">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-vendas/15 text-vendas-text">
               <ClipboardCheck className="h-5 w-5" />
             </span>
             <div>
@@ -518,7 +518,7 @@ export function DecisionModal({
           {/* CAMPOS INTERNOS. Separados por borda tingida de Vendas: o que
               está daqui para baixo é o que a equipe escreve, não a lojista. */}
           <section className="rounded-xl border border-vendas/40 p-4">
-            <h4 className="mb-3 text-sm font-semibold text-vendas">Decisão</h4>
+            <h4 className="mb-3 text-sm font-semibold text-vendas-text">Decisão</h4>
 
             <div className="space-y-3">
               {/* "Atendente" (decisão 18): puxado de quem decidiu, nunca

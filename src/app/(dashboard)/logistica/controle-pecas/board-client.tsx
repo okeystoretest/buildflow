@@ -249,7 +249,7 @@ function PieceArrow({
       className={
         forward
           ? "inline-flex h-7 w-7 items-center justify-center rounded-full bg-distribuicao text-distribuicao-fg shadow-sm transition-transform hover:scale-105 disabled:opacity-50"
-          : "inline-flex h-7 w-7 items-center justify-center rounded-full border border-distribuicao/50 bg-background text-distribuicao shadow-sm transition-transform hover:scale-105 disabled:opacity-50"
+          : "inline-flex h-7 w-7 items-center justify-center rounded-full border border-distribuicao/50 bg-background text-distribuicao-text shadow-sm transition-transform hover:scale-105 disabled:opacity-50"
       }
     >
       {forward ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}

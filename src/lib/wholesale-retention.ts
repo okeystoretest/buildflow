@@ -14,12 +14,15 @@
  * tipo de divergência que ninguém percebe porque as duas metades parecem certas
  * lidas em separado.
  *
- * CONSEQUÊNCIA QUE O DONO PRECISA SABER: uma candidatura APROVADA no dia 85
- * também é apagada no dia 90. A aprovação não cria Customer (decisão da spec),
- * então o contato da lojista vive só na candidatura. Se a janela de
- * onboarding for maior que isso, o conserto não é esticar o prazo — é a
- * aprovação passar a gravar o que o negócio precisa guardar, com finalidade
- * própria declarada.
+ * shortcut: candidatura APROVADA também é apagada no dia 90 contado do envio —
+ * aprovada no dia 85, o contato da lojista desaparece em 5 dias, porque a
+ * aprovação não cria Customer (decisão da spec) e o contato vive só aqui.
+ * Upgrade quando a aprovação for mexida: ela passa a gravar o que o negócio
+ * precisa guardar, numa tabela com finalidade própria declarada, e aí ESTE
+ * prazo não precisa esticar. Caminho escolhido pelo dono em 16/10/2026 (opção
+ * C): o prazo fica, o conserto é na aprovação, e fica para depois. Esticar os
+ * 90 dias seria o conserto errado — guardaria todo mundo mais tempo para
+ * resolver o caso de quem foi aprovado.
  */
 import { prisma } from "@/lib/prisma";
 import { deleteUploadedFile } from "@/lib/image";

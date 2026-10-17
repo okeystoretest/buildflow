@@ -145,9 +145,9 @@ export function EntregasList({
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <Badge className="bg-motorista/15 text-motorista">Entregue</Badge>
+                <Badge className="bg-motorista/15 text-motorista-text">Entregue</Badge>
                 {enablePayment && o.paid && (
-                  <Badge className="bg-financeiro/15 text-financeiro">Pago</Badge>
+                  <Badge className="bg-financeiro/15 text-financeiro-text">Pago</Badge>
                 )}
                 <span className="font-data text-sm font-medium">{o.total}</span>
                 <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />

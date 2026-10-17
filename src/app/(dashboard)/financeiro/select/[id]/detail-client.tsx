@@ -25,15 +25,15 @@ import {
 import type { SelectDetail, SelectInstallmentRow } from "@/lib/select-queries";
 
 const CONTRACT_BADGE: Record<ContractState, string> = {
-  ATIVO: "bg-servico/15 text-servico",
-  AGENDADO: "bg-brand/15 text-brand",
+  ATIVO: "bg-servico/15 text-servico-text",
+  AGENDADO: "bg-brand/15 text-brand-text",
   ENCERRADO: "bg-secondary text-muted-foreground",
   CANCELADO: "bg-destructive/15 text-destructive",
 };
 
 const INSTALLMENT_BADGE: Record<InstallmentState, string> = {
-  PAGA: "bg-servico/15 text-servico",
-  PARCIAL: "bg-brand/15 text-brand",
+  PAGA: "bg-servico/15 text-servico-text",
+  PARCIAL: "bg-brand/15 text-brand-text",
   VENCIDA: "bg-destructive/15 text-destructive",
   PENDENTE: "bg-secondary text-muted-foreground",
   CANCELADA: "bg-secondary text-muted-foreground line-through",
@@ -78,7 +78,7 @@ export function SelectDetailClient({
       {/* ------------------------------------------------ cabeçalho -- */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-servico">
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-servico-text">
             <Star className="h-6 w-6" /> {detail.customerName}
           </h1>
           <p className="font-data text-sm text-muted-foreground">{detail.customerCode}</p>
@@ -154,7 +154,7 @@ export function SelectDetailClient({
               {detail.replaces && (
                 <p>
                   Substituiu o Select{" "}
-                  <Link href={`/financeiro/select/${detail.replaces.id}`} className="font-medium text-brand hover:underline">
+                  <Link href={`/financeiro/select/${detail.replaces.id}`} className="font-medium text-brand-text hover:underline">
                     {detail.replaces.planName} (início {d(detail.replaces.startDate)})
                   </Link>
                 </p>
@@ -162,7 +162,7 @@ export function SelectDetailClient({
               {detail.replacedBy && (
                 <p>
                   Substituído pelo Select{" "}
-                  <Link href={`/financeiro/select/${detail.replacedBy.id}`} className="font-medium text-brand hover:underline">
+                  <Link href={`/financeiro/select/${detail.replacedBy.id}`} className="font-medium text-brand-text hover:underline">
                     {detail.replacedBy.planName} (início {d(detail.replacedBy.startDate)})
                   </Link>
                 </p>
@@ -224,12 +224,12 @@ export function SelectDetailClient({
                   <div key={c.index} className={`rounded-lg border p-3 ${c.current ? "border-servico/40 bg-servico/5" : "border-border"}`}>
                     <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2 text-sm">
                       <span className="font-medium">
-                        Ciclo {c.index} · {d(c.from)} a {d(c.to)} {c.current && <span className="text-servico">(atual)</span>}
+                        Ciclo {c.index} · {d(c.from)} a {d(c.to)} {c.current && <span className="text-servico-text">(atual)</span>}
                       </span>
                       <span className="font-data">
                         {formatBRL(c.purchased)} <span className="text-muted-foreground">de {formatBRL(c.minimum)}</span>
                         {" · "}
-                        <span className={pct >= 100 ? "text-servico" : "text-muted-foreground"}>{Math.round(pct)}%</span>
+                        <span className={pct >= 100 ? "text-servico-text" : "text-muted-foreground"}>{Math.round(pct)}%</span>
                       </span>
                     </div>
                     <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
@@ -398,7 +398,7 @@ function Parcela({
       {aberta && (
         <div className="space-y-4 border-t border-border p-3">
           {erro && <p className="text-sm text-destructive">{erro}</p>}
-          {aviso && <p className="text-sm text-servico">{aviso}</p>}
+          {aviso && <p className="text-sm text-servico-text">{aviso}</p>}
 
           {/* pagamentos já registrados */}
           {inst.payments.length > 0 && (
@@ -416,13 +416,13 @@ function Parcela({
                   {p.bankName && <span className="text-muted-foreground">{p.bankName}</span>}
                   {p.cnpjName && <span className="text-muted-foreground">{p.cnpjName}</span>}
                   {p.proofPath && (
-                    <a href={p.proofPath} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-brand hover:underline">
+                    <a href={p.proofPath} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-brand-text hover:underline">
                       <FileText className="h-3.5 w-3.5" /> comprovante
                     </a>
                   )}
                   {p.note && <span className="text-muted-foreground">“{p.note}”</span>}
                   {p.batchId && (
-                    <span className="rounded-full bg-brand/15 px-2 py-0.5 text-xs text-brand">
+                    <span className="rounded-full bg-brand/15 px-2 py-0.5 text-xs text-brand-text">
                       parte de um pagamento que cobriu várias parcelas
                     </span>
                   )}

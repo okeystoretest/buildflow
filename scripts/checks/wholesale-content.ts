@@ -110,8 +110,9 @@ check("slug desconhecido devolve null", getBrandContent("nike"), null);
 // nesta data: os TRES motivos ganharam `body` — a planilha nunca trouxe esses
 // paragrafos, e cada frase deles reaproveita afirmacao que a planilha ja
 // aprovou em outro lugar da pagina, nenhuma nova; e `privacidade` e `contato`
-// nasceram e entraram no conjunto coberto.
-const DIGEST_ESPERADO = "09d5102a34e9f3e91fe65c72cb57e3a8af79ee97f5234e6de4ca34797d95a657";
+// nasceram e entraram no conjunto coberto. Mudou de novo no mesmo dia quando o
+// dono confirmou os nove digitos do WhatsApp e o `wa.me` deixou de ser null.
+const DIGEST_ESPERADO = "1a8260eada5e42be817e7c7e9c21d6e5d10cca8e36b657b475a008695841498b";
 // `metrics` e `highlights` entram no digest porque sao AFIRMACAO COMERCIAL —
 // margem, tecido, atendimento, exclusividade. Viviam em texto fixo no TSX, fora
 // de qualquer trava, enquanto o cabecalho de sections.tsx declarava que

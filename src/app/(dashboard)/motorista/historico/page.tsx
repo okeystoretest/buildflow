@@ -98,7 +98,7 @@ export default async function MotoristaHistoricoPage(
   return (
     <div className="space-y-6">
       <BackButton href="/motorista" />
-      <h1 className="text-2xl font-bold text-motorista">Histórico de Entregas</h1>
+      <h1 className="text-2xl font-bold text-motorista-text">Histórico de Entregas</h1>
 
       <HistoricoFiltros defaultDe={de} defaultAte={ate} defaultBusca={busca} />
 

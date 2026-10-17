@@ -130,7 +130,7 @@ export default async function FinanceiroHistoricoPage(
   return (
     <div className="space-y-6">
       <BackButton href="/financeiro" />
-      <h1 className="text-2xl font-bold text-financeiro">Histórico do Financeiro</h1>
+      <h1 className="text-2xl font-bold text-financeiro-text">Histórico do Financeiro</h1>
       <p className="text-sm text-muted-foreground">
         Todos os pedidos já processados (aprovados, pagos ou interrompidos), com as informações completas.
       </p>

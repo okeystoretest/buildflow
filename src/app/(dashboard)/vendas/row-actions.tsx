@@ -139,13 +139,13 @@ export function VendaRowActions({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 border-brand/40 text-brand hover:bg-brand-soft hover:text-brand dark:hover:bg-brand/15"
+          className="h-8 border-brand/40 text-brand-text hover:bg-brand-soft hover:text-brand-text dark:hover:bg-brand/15"
           title="Copiar link"
           onClick={copyLink}
           disabled={pending}
         >
           {copied ? (
-            <Check className="mr-1 h-4 w-4 text-brand" />
+            <Check className="mr-1 h-4 w-4 text-brand-text" />
           ) : (
             <Link2 className="mr-1 h-4 w-4" />
           )}

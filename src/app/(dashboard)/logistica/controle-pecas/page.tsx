@@ -54,7 +54,7 @@ export default async function ControlePecasPage() {
     return (
       <div className="space-y-6">
         <BackButton href="/logistica" />
-        <h1 className="text-2xl font-bold text-distribuicao">Controle de Peças</h1>
+        <h1 className="text-2xl font-bold text-distribuicao-text">Controle de Peças</h1>
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
             Nenhum Tipo de Pedido chamado <span className="font-semibold">&quot;{TIPO_PECAS_BLOGUEIRA}&quot;</span> está
@@ -214,7 +214,7 @@ export default async function ControlePecasPage() {
     <div className="space-y-4">
       <BackButton href="/logistica" />
       <div>
-        <h1 className="text-2xl font-bold text-distribuicao">Controle de Peças</h1>
+        <h1 className="text-2xl font-bold text-distribuicao-text">Controle de Peças</h1>
         <p className="text-sm text-muted-foreground">
           Pedidos do tipo <span className="font-semibold">&quot;{TIPO_PECAS_BLOGUEIRA}&quot;</span>. A peça só entra em
           &quot;Em Uso&quot; após o registro de entrega do pedido.

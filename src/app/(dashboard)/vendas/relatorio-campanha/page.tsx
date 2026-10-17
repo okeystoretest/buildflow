@@ -100,7 +100,7 @@ export default async function RelatorioCampanhaPage(
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <BackButton href="/vendas" />
-      <h1 className="text-2xl font-bold text-vendas">Relatório de Campanha</h1>
+      <h1 className="text-2xl font-bold text-vendas-text">Relatório de Campanha</h1>
 
       <RelatorioCampanhaFiltros
         campaigns={campaigns}
@@ -116,19 +116,19 @@ export default async function RelatorioCampanhaPage(
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card><CardContent className="pt-5">
           <p className="text-xs text-muted-foreground">Itens</p>
-          <p className="font-data text-2xl font-bold text-vendas">{total}</p>
+          <p className="font-data text-2xl font-bold text-vendas-text">{total}</p>
         </CardContent></Card>
         <Card><CardContent className="pt-5">
           <p className="text-xs text-muted-foreground">Peças (quantidade)</p>
-          <p className="font-data text-2xl font-bold text-vendas">{totalQtd}</p>
+          <p className="font-data text-2xl font-bold text-vendas-text">{totalQtd}</p>
         </CardContent></Card>
         <Card><CardContent className="pt-5">
           <p className="text-xs text-muted-foreground">Valor total</p>
-          <p className="font-data text-2xl font-bold text-vendas">{formatBRL(totalValor)}</p>
+          <p className="font-data text-2xl font-bold text-vendas-text">{formatBRL(totalValor)}</p>
         </CardContent></Card>
         <Card><CardContent className="pt-5">
           <p className="text-xs text-muted-foreground">Premiação total</p>
-          <p className="font-data text-2xl font-bold text-vendas">{formatBRL(totalPremiacao)}</p>
+          <p className="font-data text-2xl font-bold text-vendas-text">{formatBRL(totalPremiacao)}</p>
         </CardContent></Card>
       </div>
 
@@ -183,7 +183,7 @@ export default async function RelatorioCampanhaPage(
                     <td className="py-2 pr-4 font-data">{totalQtd}</td>
                     <td className="py-2 pr-4 font-data">{formatBRL(totalValor)}</td>
                     <td className="py-2 pr-4">—</td>
-                    <td className="py-2 pr-4 font-data text-vendas">{formatBRL(totalPremiacao)}</td>
+                    <td className="py-2 pr-4 font-data text-vendas-text">{formatBRL(totalPremiacao)}</td>
                     <td className="py-2 pr-4" colSpan={veTudo ? 3 : 2}></td>
                   </tr>
                 </tfoot>

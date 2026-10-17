@@ -74,7 +74,7 @@ export default async function MetricasPage(
     <div className="space-y-6">
       <BackButton href="/logistica" />
       <div>
-        <h1 className="text-2xl font-bold text-distribuicao">Métricas</h1>
+        <h1 className="text-2xl font-bold text-distribuicao-text">Métricas</h1>
         <p className="text-sm text-muted-foreground">
           Tempo médio de permanência dos pedidos em cada etapa até a conclusão. Calculado a partir do
           histórico de mudanças de status.
@@ -179,7 +179,7 @@ function Resumo({ titulo, valor, rodape }: { titulo: string; valor: string; roda
     <Card>
       <CardContent className="pt-5">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
-        <p className="font-data mt-1 text-2xl font-bold text-distribuicao">{valor}</p>
+        <p className="font-data mt-1 text-2xl font-bold text-distribuicao-text">{valor}</p>
         {rodape && <p className="mt-0.5 text-xs text-muted-foreground">{rodape}</p>}
       </CardContent>
     </Card>

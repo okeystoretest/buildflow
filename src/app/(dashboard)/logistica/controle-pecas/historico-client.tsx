@@ -86,7 +86,7 @@ export function HistoricoPecas({
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
               <h2 className="flex items-center gap-2 text-lg font-bold">
-                <History className="h-5 w-5 text-distribuicao" /> Histórico de Peças
+                <History className="h-5 w-5 text-distribuicao-text" /> Histórico de Peças
               </h2>
               <p className="text-sm text-muted-foreground">
                 Pedidos que chegaram em &quot;Finalizado&quot;, incluindo os já arquivados.
@@ -197,7 +197,7 @@ export function HistoricoPecas({
                       <button
                         type="button"
                         onClick={() => setDetalheId(item.orderId)}
-                        className="mt-2 text-xs font-medium text-distribuicao underline"
+                        className="mt-2 text-xs font-medium text-distribuicao-text underline"
                       >
                         Ver detalhes do pedido
                       </button>

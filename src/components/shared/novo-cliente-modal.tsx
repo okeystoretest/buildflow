@@ -92,7 +92,7 @@ export function NovoClienteModal({
       <div className="w-full max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-vendas/15 text-vendas">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-vendas/15 text-vendas-text">
               <UserPlus className="h-5 w-5" />
             </span>
             <div>

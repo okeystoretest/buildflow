@@ -32,7 +32,7 @@ export interface TransportStatusStyle {
 export const TRANSPORT_STATUS_STYLE: Record<TransportStatus, TransportStatusStyle> = {
   ABERTO:    { label: "Em Aberto",  badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400", dot: "bg-amber-600",  header: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40" },
   ATRIBUIDO: { label: "Atribuído",  badge: "bg-sky-400/15 text-sky-700 dark:text-sky-300",       dot: "bg-sky-400",    header: "bg-sky-400/15 text-sky-700 dark:text-sky-300 border-sky-400/40" },
-  EM_ROTA:   { label: "Em Rota",    badge: "bg-motorista/15 text-motorista",                     dot: "bg-motorista",  header: "bg-motorista/15 text-motorista border-motorista/40" },
+  EM_ROTA:   { label: "Em Rota",    badge: "bg-motorista/15 text-motorista-text",                     dot: "bg-motorista",  header: "bg-motorista/15 text-motorista-text border-motorista/40" },
   CONCLUIDO: { label: "Concluído",  badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-600", header: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40" },
   CANCELADO: { label: "Cancelado",  badge: "bg-destructive/15 text-destructive",                 dot: "bg-destructive", header: "bg-destructive/15 text-destructive border-destructive/40" },
 };

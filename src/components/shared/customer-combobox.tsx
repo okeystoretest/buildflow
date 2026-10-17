@@ -160,7 +160,7 @@ export function CustomerCombobox({
                     setOpen(false);
                     onCreateNew(query.trim());
                   }}
-                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm font-medium text-vendas transition-colors hover:bg-secondary"
+                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm font-medium text-vendas-text transition-colors hover:bg-secondary"
                 >
                   <Plus className="h-3.5 w-3.5 shrink-0" />
                   Novo cliente
@@ -174,7 +174,7 @@ export function CustomerCombobox({
                   onClick={() => pick(c)}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
                 >
-                  {value === c.id && <Check className="h-3.5 w-3.5 shrink-0 text-vendas" />}
+                  {value === c.id && <Check className="h-3.5 w-3.5 shrink-0 text-vendas-text" />}
                   <span className="font-data shrink-0 text-xs text-muted-foreground">{c.code}</span>
                   <span className="truncate">{c.name}</span>
                 </button>

@@ -35,7 +35,7 @@ export async function login(
   // O IP vem de getClientIp (lê o X-Forwarded-For a partir do salto confiável);
   // pegar o primeiro elemento do header deixava o balde à escolha do atacante.
   const ip = getClientIp();
-  const gate = checkLoginRate(`${ip}:${loginKey}`);
+  const gate = await checkLoginRate(`${ip}:${loginKey}`);
   if (!gate.allowed) {
     return actionError(
       `Muitas tentativas. Tente novamente em ${gate.retryAfterSec}s.`,
@@ -65,7 +65,7 @@ export async function login(
   }
 
   // Sucesso: zera o contador daquela chave.
-  clearLoginRate(`${ip}:${loginKey}`);
+  await clearLoginRate(`${ip}:${loginKey}`);
 
   await createSession({
     userId: user.id,

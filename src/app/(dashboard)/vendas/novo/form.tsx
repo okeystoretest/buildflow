@@ -288,7 +288,7 @@ export function NovoPedidoForm({
               ].filter(Boolean).join(" · ");
               return (
                 <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-                  <p><span className="font-semibold text-vendas">Endereço (etiqueta):</span> {ex.address}</p>
+                  <p><span className="font-semibold text-vendas-text">Endereço (etiqueta):</span> {ex.address}</p>
                   {detalhes && <p>{detalhes}</p>}
                 </div>
               );
@@ -308,7 +308,7 @@ export function NovoPedidoForm({
           <Label>Valor Total do Pedido {valorDispensavel ? "(opcional)" : "*"}</Label>
           <Input type="number" min={0} step="0.01" value={orderValue || ""} onChange={(e) => setOrderValue(Number(e.target.value))} placeholder="0,00" />
           {trocaVaiParaFinanceiro && (
-            <p className="text-xs text-financeiro">
+            <p className="text-xs text-financeiro-text">
               Troca com valor passa pela aprovação do Financeiro antes de seguir.
             </p>
           )}
@@ -323,7 +323,7 @@ export function NovoPedidoForm({
           (ex.: "1 - Excursão"). Todos os campos são obrigatórios. */}
       {requiresAddress && (
         <div className="rounded-lg border border-vendas/40 bg-vendas/5 p-4">
-          <p className="mb-3 text-sm font-semibold text-vendas">Endereço de Entrega (Cliente)</p>
+          <p className="mb-3 text-sm font-semibold text-vendas-text">Endereço de Entrega (Cliente)</p>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <div className="space-y-1.5 lg:col-span-2">
@@ -439,7 +439,7 @@ export function NovoPedidoForm({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-        <span className="text-lg font-bold text-vendas">Total: {formatBRL(total)}</span>
+        <span className="text-lg font-bold text-vendas-text">Total: {formatBRL(total)}</span>
         <Button variant="vendas" size="lg" onClick={onSubmit} disabled={pending || !podeEnviar}>
           {pending ? "Salvando..." : "Criar pedido"}
         </Button>

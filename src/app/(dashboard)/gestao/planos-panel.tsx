@@ -238,7 +238,7 @@ export function PlanosPanel({ plans }: { plans: PlanAdminRow[] }) {
                   {mensalFinal != null ? (
                     <>
                       A cliente pagará{" "}
-                      <strong className="text-servico">{formatBRL(mensalFinal)}</strong>/mês
+                      <strong className="text-servico-text">{formatBRL(mensalFinal)}</strong>/mês
                       (base + {formatBRL(BUILD_SALES_MONTHLY)}).
                     </>
                   ) : (
@@ -357,7 +357,7 @@ export function PlanosPanel({ plans }: { plans: PlanAdminRow[] }) {
                 <td className="py-2 pr-4 font-data">{p.contractCount}</td>
                 <td className="py-2 pr-4">
                   {p.active ? (
-                    <span className="text-servico">Ativo</span>
+                    <span className="text-servico-text">Ativo</span>
                   ) : (
                     <span className="text-muted-foreground">Inativo</span>
                   )}

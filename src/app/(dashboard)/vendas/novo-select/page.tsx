@@ -46,7 +46,7 @@ export default async function NovoSelectPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <BackButton href="/vendas" />
-      <h1 className="mb-4 text-2xl font-bold text-servico">Novo Select</h1>
+      <h1 className="mb-4 text-2xl font-bold text-servico-text">Novo Select</h1>
       <Card>
         <CardHeader><CardTitle>Dados do serviço</CardTitle></CardHeader>
         <CardContent>

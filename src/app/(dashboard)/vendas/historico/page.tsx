@@ -111,7 +111,7 @@ export default async function HistoricoPage(
   return (
     <div className="space-y-6">
       <BackButton href="/vendas" />
-      <h1 className="text-2xl font-bold text-vendas">Histórico de Pedidos</h1>
+      <h1 className="text-2xl font-bold text-vendas-text">Histórico de Pedidos</h1>
 
       <HistoricoFiltros defaultDe={de} defaultAte={ate} defaultComanda={comanda} />
 

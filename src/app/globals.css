@@ -25,6 +25,30 @@
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
 
+    /* ---- Cor de setor EM TEXTO ----------------------------------------
+       O hex de cada setor (vendas #9b59b6, financeiro #e74c8b, ...) foi
+       escolhido para FUNDO de botao, com texto branco por cima. Usado como
+       COR DE TEXTO sobre a superficie da pagina, nenhum deles passava: medido
+       contra o fundo claro (220 24% 95%), iam de 2,11:1 (distribuicao) a
+       4,5:1 (vendas) — reprovados para 14px, que pede 4,5:1.
+
+       Mesma HUE e mesma SATURACAO do token solido; so a LUMINOSIDADE muda. A
+       marca continua a mesma, o texto fica legivel. E por tema, porque o
+       problema se inverte: no claro precisa escurecer, no escuro clarear.
+
+       Medido contra a superficie MAIS DIFICIL de cada tema: no claro o fundo
+       da pagina (95%), mais escuro que o card (98,5%); no escuro o card (13%),
+       mais claro que o fundo (9%). Passar na mais dificil passa nas duas.
+       scripts/checks/cor-de-setor.ts recalcula isto a cada rodada.
+
+       `bg-<setor>` continua lendo o hex solido: este token e so para texto. */
+    --vendas-text: 283 39% 50%;
+    --financeiro-text: 336 76% 46%;
+    --distribuicao-text: 37 90% 31%;
+    --motorista-text: 145 63% 29.5%;
+    --brand-text: 204 70% 39%;
+    --servico-text: 145 63% 29.5%;
+
     --border: 220 16% 85%;
     --input: 220 16% 85%;
     --ring: 204 68% 50%;
@@ -53,6 +77,15 @@
     --accent-foreground: 204 75% 80%;
     --destructive: 0 65% 55%;
     --destructive-foreground: 0 0% 100%;
+
+    /* Cor de setor em texto, lado escuro: clareia. Ver o comentario no :root.
+       Medido contra o card (222 24% 13%), a superficie mais clara deste tema. */
+    --vendas-text: 283 39% 60%;
+    --financeiro-text: 336 76% 60.5%;
+    --distribuicao-text: 37 90% 50%;
+    --motorista-text: 145 63% 50%;
+    --brand-text: 204 70% 50%;
+    --servico-text: 145 63% 50%;
 
     --border: 222 16% 22%;
     --input: 222 16% 22%;

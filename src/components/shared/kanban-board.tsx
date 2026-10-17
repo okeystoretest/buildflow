@@ -68,7 +68,7 @@ export function KanbanBoard({
 }) {
   // Classe de cor do sufixo do breadcrumb (item 3: cor distinta do "branco").
   const titleAccentClass =
-    titleAccent === "distribuicao" ? "text-distribuicao" : "text-amber-400";
+    titleAccent === "distribuicao" ? "text-distribuicao-text" : "text-amber-400";
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
   // Busca rápida por comanda, nº do pedido, cliente ou vendedor.
@@ -642,7 +642,7 @@ export function KanbanBoard({
             type="button"
             onClick={openForDrivers}
             disabled={pending}
-            className="mb-4 w-full rounded-lg border border-dashed border-distribuicao/60 bg-distribuicao/5 px-3 py-2 text-sm font-medium text-distribuicao transition-colors hover:bg-distribuicao/10 disabled:opacity-50"
+            className="mb-4 w-full rounded-lg border border-dashed border-distribuicao/60 bg-distribuicao/5 px-3 py-2 text-sm font-medium text-distribuicao-text transition-colors hover:bg-distribuicao/10 disabled:opacity-50"
           >
             {pending ? "..." : "Deixar em aberto (qualquer motorista pega)"}
           </button>
@@ -683,7 +683,7 @@ function StageBar({ label, className = "" }: { label: string; className?: string
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <span className="h-px flex-1 bg-distribuicao/40" />
-      <span className="rounded-full bg-distribuicao/15 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-distribuicao">
+      <span className="rounded-full bg-distribuicao/15 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-distribuicao-text">
         {label}
       </span>
       <span className="h-px flex-1 bg-distribuicao/40" />

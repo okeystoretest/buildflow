@@ -202,7 +202,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
       {/* Barra de filtro de periodo */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h1 className="mr-1 text-xl font-extrabold uppercase tracking-tight text-vendas sm:text-2xl lg:text-3xl">Ranking de Vendas</h1>
+          <h1 className="mr-1 text-xl font-extrabold uppercase tracking-tight text-vendas-text sm:text-2xl lg:text-3xl">Ranking de Vendas</h1>
           <CalendarClock className="h-4 w-4 text-muted-foreground" />
           <select className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
             value={selMonth} onChange={(e) => changePeriod(Number(e.target.value), selYear)}>
@@ -240,7 +240,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
                 onClick={() => { setEditMode((v) => !v); setEditErro(null); }}
                 className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
                   editMode
-                    ? "border-vendas bg-vendas/10 text-vendas"
+                    ? "border-vendas bg-vendas/10 text-vendas-text"
                     : "border-border bg-card text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -295,7 +295,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
       <div className="grid shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-4">
         <MetaGeralKpi meta={data.metaGeral} realizado={data.realizadoGeral} pct={data.metaGeralPct} />
         <Kpi icon={<TrendingUp className="h-5 w-5" />} iconClass="text-emerald-500" label={data.isCurrent ? "Maior Venda Semanal" : "Maior Venda no Mês"}
-          value={data.maiorSemana ? formatBRL(data.maiorSemana.total) : "—"} sub={data.maiorSemana?.nome ?? `${String(data.month).padStart(2,"0")}/${data.year}`} subClass="text-vendas" />
+          value={data.maiorSemana ? formatBRL(data.maiorSemana.total) : "—"} sub={data.maiorSemana?.nome ?? `${String(data.month).padStart(2,"0")}/${data.year}`} subClass="text-vendas-text" />
         <Kpi icon={<BarChart3 className="h-5 w-5" />} iconClass="text-sky-500" label="Maior Venda Mensal"
           value={data.maiorMes ? formatBRL(data.maiorMes.total) : "—"} sub={data.maiorMes?.nome ?? "—"} />
         <Kpi icon={<Flame className="h-5 w-5" />} iconClass="text-orange-500" label={`Total por Campanha${campTotalVol ? " · " + campTotalVol.name : ""}`}
@@ -360,7 +360,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
                   }
                   className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors ${
                     campRotating
-                      ? "border-vendas/40 bg-vendas/10 text-vendas hover:bg-vendas/20"
+                      ? "border-vendas/40 bg-vendas/10 text-vendas-text hover:bg-vendas/20"
                       : "border-input text-muted-foreground hover:bg-secondary"
                   }`}
                 >
@@ -387,7 +387,7 @@ function MetaGeralKpi({ meta, realizado, pct }: { meta: number; realizado: numbe
         <div className="min-w-0">
           <p className="truncate text-sm text-muted-foreground">Meta Geral</p>
           <p className="font-data mt-1 truncate text-2xl font-bold">{formatBRL(meta)}</p>
-          <p className="font-data truncate text-sm text-vendas">{formatBRL(realizado)} no mês</p>
+          <p className="font-data truncate text-sm text-vendas-text">{formatBRL(realizado)} no mês</p>
         </div>
         <span className="shrink-0 text-primary"><Target className="h-5 w-5" /></span>
       </div>
@@ -591,7 +591,7 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
               <td className="py-1 pr-2 text-right font-data">{r.meta > 0 ? r.meta : "—"}</td>
               <td className="py-1 pr-2 text-center font-data">{r.qtd}</td>
               {/* Coluna "Valor" removida a pedido do produto. */}
-              <td className="py-1 pr-2 text-right font-data text-vendas">{formatBRL(r.premiacao)}</td>
+              <td className="py-1 pr-2 text-right font-data text-vendas-text">{formatBRL(r.premiacao)}</td>
               <td className="py-1 pl-2">
                 <div className="flex items-center gap-2">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">

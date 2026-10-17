@@ -218,17 +218,20 @@ const PRIVACIDADE = {
  * (16/10/2026): a LP é de captação, não de visita, e endereço convida a
  * aparecer na loja. O telefone da fábrica fica fora pelo mesmo motivo.
  *
- * `whatsappLink` é null DE PROPÓSITO, e não um `wa.me` montado: o site publica
- * "(85) 9605.4844", que são oito dígitos, e celular brasileiro tem nove. Faltar
- * um dígito significa que ou o nono dígito não foi publicado, ou é um fixo. As
- * duas hipóteses acabam no mesmo lugar — montar o link exigiria eu escolher um
- * dígito, e um dígito escolhido manda a lojista para o WhatsApp de um estranho.
- * Enquanto for null o número aparece como texto, que é verdadeiro. Preencher
- * quando o dono confirmar os nove dígitos.
+ * O NÚMERO VEIO DO DONO, não do site. O site publica "(85) 9605.4844" — oito
+ * dígitos, e celular brasileiro tem nove. O nono dígito não estava publicado, e
+ * montar o `wa.me` a partir do que o site mostra exigiria escolher um dígito:
+ * um dígito escolhido manda a lojista para o WhatsApp de um estranho. O dono
+ * confirmou +55 85 99605-4844 em 16/10/2026, e é de lá que sai o link.
+ *
+ * `whatsappLink` é o número em dígitos puros com código do país, a forma que o
+ * wa.me exige; `whatsapp` é a forma que a lojista lê. Os dois saem da mesma
+ * decisão, e `scripts/checks/wholesale-content.ts` confere que o link tem os 13
+ * dígitos de um celular brasileiro (55 + DDD + 9) — ou é null, e nada no meio.
  */
 const CONTATO = {
-  whatsapp: "(85) 9605.4844",
-  whatsappLink: null as string | null,
+  whatsapp: "(85) 99605-4844",
+  whatsappLink: "https://wa.me/5585996054844" as string | null,
   email: "contato@okeystore.com.br",
 } as const;
 

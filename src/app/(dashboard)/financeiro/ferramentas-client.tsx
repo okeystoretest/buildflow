@@ -275,7 +275,7 @@ function CnpjPanel({ rows }: { rows: CnpjRow[] }) {
                     <td className="px-3 py-2">{r.name}</td>
                     <td className="px-3 py-2 font-data">{fmtCnpj(r.document)}</td>
                     <td className="px-3 py-2">
-                      <Badge className={r.active ? "bg-motorista/15 text-motorista" : "bg-muted text-muted-foreground"}>
+                      <Badge className={r.active ? "bg-motorista/15 text-motorista-text" : "bg-muted text-muted-foreground"}>
                         {r.active ? "Ativo" : "Inativo"}
                       </Badge>
                     </td>

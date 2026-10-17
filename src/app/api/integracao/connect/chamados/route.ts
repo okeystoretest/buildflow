@@ -15,7 +15,7 @@ export async function POST(req: Request): Promise<Response> {
 
   // Teto generoso: e uma maquina falando, mas um loop de reenvio com bug nao
   // pode afogar o banco.
-  const rate = checkRate(`integracao:${getClientIp()}`, { max: 120, windowMs: 60_000 });
+  const rate = await checkRate(`integracao:${getClientIp()}`, { max: 120, windowMs: 60_000 });
   if (!rate.allowed) {
     return NextResponse.json({ error: "Muitas requisições." }, { status: 429 });
   }

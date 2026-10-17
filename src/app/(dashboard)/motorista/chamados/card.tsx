@@ -74,7 +74,7 @@ export function TransportCard(p: TransportCardProps) {
       {item.driverName && (
         <p className="mt-1 text-xs">
           <span className="text-muted-foreground">Responsável:</span> {item.driverName}
-          {isMine && <span className="text-motorista"> (você)</span>}
+          {isMine && <span className="text-motorista-text"> (você)</span>}
         </p>
       )}
 
@@ -139,7 +139,7 @@ export function TransportCard(p: TransportCardProps) {
         )}
 
         {status === "CONCLUIDO" && (
-          <div className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-motorista/10 text-sm font-medium text-motorista">
+          <div className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-motorista/10 text-sm font-medium text-motorista-text">
             <CheckCircle2 className="h-4 w-4" />
             <span className="truncate">Concluído{item.distanceKm ? ` · ${item.distanceKm} km` : ""}</span>
           </div>

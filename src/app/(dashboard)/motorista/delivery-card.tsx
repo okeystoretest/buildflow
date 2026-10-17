@@ -111,7 +111,7 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
           entrega são as da excursão. */}
       {order.excursao ? (
         <div className="mt-3 rounded-lg border-2 border-motorista/50 bg-motorista/10 p-3 text-sm leading-relaxed">
-          <p className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-motorista">
+          <p className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-motorista-text">
             <MapPin className="h-3.5 w-3.5" /> Excursão
           </p>
           <p className="font-semibold">{order.excursao.name}</p>
@@ -125,7 +125,7 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
         // o motorista tem para portão, horário ou ponto de referência.
         order.notes?.trim() && (
           <div className="mt-3 rounded-lg border-2 border-motorista/50 bg-motorista/10 p-3 text-sm font-medium leading-relaxed">
-            <p className="mb-0.5 text-xs font-bold uppercase tracking-wide text-motorista">Observação</p>
+            <p className="mb-0.5 text-xs font-bold uppercase tracking-wide text-motorista-text">Observação</p>
             {order.notes}
           </div>
         )
@@ -179,7 +179,7 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
         )}
 
         {entregue && (
-          <div className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-motorista/10 text-sm font-medium text-motorista">
+          <div className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-motorista/10 text-sm font-medium text-motorista-text">
             <CheckCircle2 className="h-4 w-4" /> Entregue
           </div>
         )}

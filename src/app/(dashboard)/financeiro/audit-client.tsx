@@ -226,7 +226,7 @@ export function AuditarPedido({
           disabled={pending || !payMethodId || !bankId || !pagamentoAlterado}>
           {pagamentoOk && !pagamentoAlterado ? "Pagamento salvo" : "Salvar pagamento"}
         </Button>
-        {payMsg && <span className="text-xs text-motorista">{payMsg}</span>}
+        {payMsg && <span className="text-xs text-motorista-text">{payMsg}</span>}
       </div>
 
       {/* Comprovantes do Financeiro (ate 5; ao menos 1 obrigatorio p/ aprovar). */}
@@ -238,7 +238,7 @@ export function AuditarPedido({
           <ul className="space-y-1">
             {proofs.map((p, i) => (
               <li key={p.id} className="flex items-center justify-between rounded-lg border border-border bg-secondary/40 px-3 py-1.5 text-xs">
-                <a href={p.filePath} target="_blank" rel="noreferrer" className="truncate text-financeiro underline">
+                <a href={p.filePath} target="_blank" rel="noreferrer" className="truncate text-financeiro-text underline">
                   <span className="font-data mr-2 text-muted-foreground">{i + 1}.</span>
                   Comprovante {i + 1}
                 </a>
@@ -259,7 +259,7 @@ export function AuditarPedido({
         )}
         <p className="text-[11px] text-muted-foreground">{proof2Total}/{MAX_PROOF2} anexados.</p>
         {proofBusy && <span className="text-xs text-muted-foreground">Enviando...</span>}
-        {proofMsg && <span className="text-xs text-motorista">{proofMsg}</span>}
+        {proofMsg && <span className="text-xs text-motorista-text">{proofMsg}</span>}
       </div>
 
       {/* Vinculo de CNPJ: deve ser feito ANTES do "Pago". */}
@@ -278,7 +278,7 @@ export function AuditarPedido({
           disabled={pending || !cnpjId || cnpjId === linkedCnpjId}>
           {cnpjId === linkedCnpjId && cnpjOk ? "CNPJ vinculado" : "Vincular CNPJ"}
         </Button>
-        {cnpjMsg && <span className="text-xs text-motorista">{cnpjMsg}</span>}
+        {cnpjMsg && <span className="text-xs text-motorista-text">{cnpjMsg}</span>}
       </div>
 
       {/* Comanda + status + acao. */}

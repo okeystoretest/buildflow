@@ -16,10 +16,17 @@ import { MAX_ALT, type LugarDeImagem } from "@/lib/lp-assets";
  * revela os botões e não consegue salvar nada.
  *
  * O GATILHO: pressionar e segurar por 800 ms o nome da marca no rodapé. Não é
- * atalho de teclado (seria capturado por leitor de tela e por extensão), não é
- * parâmetro na URL (vazaria por histórico, print e WhatsApp) e não é clique
- * múltiplo (dispara sem querer em celular ao rolar). Funciona com mouse e com
- * toque pelo mesmo evento de ponteiro.
+ * atalho de teclado GLOBAL (seria capturado por leitor de tela e por extensão),
+ * não é parâmetro na URL (vazaria por histórico, print e WhatsApp) e não é
+ * clique múltiplo (dispara sem querer em celular ao rolar). Funciona com mouse e
+ * com toque pelo mesmo evento de ponteiro.
+ *
+ * E funciona por TECLADO, segurando Enter ou Espaço com o foco no alvo — que é
+ * focável só quando `podeEditar`. Isso não reabre a porta que o parágrafo acima
+ * fecha: a recusa é do atalho global, disputado antes de a página ver a tecla;
+ * com o foco já no alvo, ninguém disputa. Sem este caminho, uma Gestão que
+ * navega por teclado não alcançava o editor de jeito nenhum, e este é o único
+ * caminho de entrada da feature.
  */
 
 const DURACAO_DO_GATILHO_MS = 800;
@@ -135,6 +142,28 @@ export function GatilhoOculto({ children }: { children: React.ReactNode }) {
   // zoom; não desliga seleção nem callout. Este é o único caminho de entrada da
   // feature, então o gesto falhar é a feature inteira falhar.
   //
+  // CAMINHO DE TECLADO. Segurar Enter ou Espaço COM O FOCO NESTE ALVO, pelos
+  // mesmos 800 ms. Não contradiz a recusa do atalho de teclado no cabeçalho:
+  // aquela é contra um atalho GLOBAL (que leitor de tela e extensão capturam
+  // antes de a página ver). Aqui o alvo já tem o foco, então ninguém disputa a
+  // tecla — é o mesmo gesto, pela tecla em vez do ponteiro.
+  //
+  // `tabIndex` e `role` só existem quando `podeEditar`: sem sessão de GESTÃO o
+  // rodapé continua sem nada focável, e o gatilho segue invisível para quem não
+  // sabe que existe. Com sessão, a Gestão que navega por teclado alcança o
+  // editor — antes não alcançava de jeito nenhum, e este é o único caminho de
+  // entrada da feature.
+  //
+  // `e.repeat` é descartado: segurar Enter emite keydown repetido, e sem a
+  // guarda cada repetição reiniciava o timer e os 800 ms nunca fechavam.
+  // `preventDefault` no Espaço impede a página de rolar enquanto se segura.
+  function teclaDesce(e: React.KeyboardEvent) {
+    if (!podeEditar || e.repeat) return;
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    comecar();
+  }
+
   // `<div>` e não `<span>`: o filho é um `<p>`, e bloco dentro de inline é HTML
   // inválido — o parser do navegador (que vê este HTML no SSR) reestrutura a
   // caixa e isso arrisca divergência de hidratação.
@@ -144,6 +173,16 @@ export function GatilhoOculto({ children }: { children: React.ReactNode }) {
       onPointerUp={limpar}
       onPointerLeave={limpar}
       onPointerCancel={limpar}
+      onKeyDown={teclaDesce}
+      onKeyUp={limpar}
+      // Perder o foco com a tecla pressionada não emite keyup aqui: sem isto o
+      // timer sobreviveria à saída do foco e o modo abriria sozinho depois.
+      onBlur={limpar}
+      tabIndex={podeEditar ? 0 : undefined}
+      role={podeEditar ? "button" : undefined}
+      aria-label={
+        podeEditar ? "Abrir o modo de edição de imagens: pressione e segure Enter" : undefined
+      }
       style={{
         touchAction: "manipulation",
         userSelect: "none",

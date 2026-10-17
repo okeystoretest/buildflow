@@ -48,7 +48,7 @@ export function ClienteForm() {
       </div>
       <div className="flex items-center gap-3">
         <Button variant="vendas" onClick={onSubmit} disabled={pending || !f.name || !f.code}>{pending ? "Salvando..." : "Cadastrar"}</Button>
-        {msg && <span className={`text-sm ${msg.ok ? "text-motorista" : "text-destructive"}`}>{msg.text}</span>}
+        {msg && <span className={`text-sm ${msg.ok ? "text-motorista-text" : "text-destructive"}`}>{msg.text}</span>}
       </div>
     </div>
   );

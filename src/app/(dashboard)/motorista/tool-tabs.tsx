@@ -39,7 +39,7 @@ export function ToolTabs({ tabs }: { tabs: ToolTab[] }) {
             className={cn(
               "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
               isActive
-                ? "border-motorista bg-motorista/15 text-motorista"
+                ? "border-motorista bg-motorista/15 text-motorista-text"
                 : "border-border bg-card text-muted-foreground hover:text-foreground",
             )}
           >

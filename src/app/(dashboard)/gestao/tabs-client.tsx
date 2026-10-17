@@ -176,7 +176,7 @@ function OperationPanel({ rows }: { rows: OpRow[] }) {
                 <div className="flex justify-end gap-1">
                   {editId === r.id ? (
                     <>
-                      <Button variant="ghost" size="icon" onClick={() => saveEdit(r.id)} disabled={pending}><Check className="h-4 w-4 text-motorista" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => saveEdit(r.id)} disabled={pending}><Check className="h-4 w-4 text-motorista-text" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => setEditId(null)}><X className="h-4 w-4" /></Button>
                     </>
                   ) : (
@@ -437,7 +437,7 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
           </Button>
           {!editando && <FieldHint>Cria um único usuário. Para vários de uma vez, use a importação abaixo.</FieldHint>}
         </div>
-        {msg && <p className="text-sm text-motorista">{msg}</p>}
+        {msg && <p className="text-sm text-motorista-text">{msg}</p>}
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 
@@ -850,7 +850,7 @@ function CampaignsPanel({ campaigns }: { campaigns: CampaignRow[] }) {
                 <div className="flex justify-end gap-1">
                   {editId === c.id ? (
                     <>
-                      <Button variant="ghost" size="icon" onClick={saveEdit} disabled={pending || !editName.trim()}><Check className="h-4 w-4 text-vendas" /></Button>
+                      <Button variant="ghost" size="icon" onClick={saveEdit} disabled={pending || !editName.trim()}><Check className="h-4 w-4 text-vendas-text" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => setEditId(null)}><X className="h-4 w-4" /></Button>
                     </>
                   ) : (
@@ -951,7 +951,7 @@ function EtapasPanel({ stageLimits }: { stageLimits: StageLimitRow[] }) {
                 onClick={() => save(status)}
                 disabled={pending}
               >
-                {savedStatus === status && !pending ? <Check className="h-4 w-4 text-motorista" /> : "Salvar"}
+                {savedStatus === status && !pending ? <Check className="h-4 w-4 text-motorista-text" /> : "Salvar"}
               </Button>
             </div>
           );

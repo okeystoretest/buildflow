@@ -25,13 +25,13 @@ const ICON: Record<string, React.ReactNode> = {
 
 // Cor de destaque (pílula + faixa superior) por seção. A chave é o href base.
 const ACCENT: Record<string, { bar: string; pill: string; text: string }> = {
-  "/dashboard":  { bar: "border-t-vendas",       pill: "bg-vendas text-vendas-fg",             text: "text-vendas" },
+  "/dashboard":  { bar: "border-t-vendas",       pill: "bg-vendas text-vendas-fg",             text: "text-vendas-text" },
   "/fluxo":      { bar: "border-t-white",         pill: "bg-white text-slate-900",             text: "text-white" },
-  "/vendas":     { bar: "border-t-vendas",        pill: "bg-vendas text-vendas-fg",             text: "text-vendas" },
-  "/financeiro": { bar: "border-t-financeiro",    pill: "bg-financeiro text-financeiro-fg",     text: "text-financeiro" },
-  "/logistica":  { bar: "border-t-distribuicao",  pill: "bg-distribuicao text-distribuicao-fg", text: "text-distribuicao" },
-  "/motorista":  { bar: "border-t-motorista",     pill: "bg-motorista text-motorista-fg",       text: "text-motorista" },
-  "/gestao":     { bar: "border-t-brand",         pill: "bg-brand text-brand-fg",               text: "text-brand" },
+  "/vendas":     { bar: "border-t-vendas",        pill: "bg-vendas text-vendas-fg",             text: "text-vendas-text" },
+  "/financeiro": { bar: "border-t-financeiro",    pill: "bg-financeiro text-financeiro-fg",     text: "text-financeiro-text" },
+  "/logistica":  { bar: "border-t-distribuicao",  pill: "bg-distribuicao text-distribuicao-fg", text: "text-distribuicao-text" },
+  "/motorista":  { bar: "border-t-motorista",     pill: "bg-motorista text-motorista-fg",       text: "text-motorista-text" },
+  "/gestao":     { bar: "border-t-brand",         pill: "bg-brand text-brand-fg",               text: "text-brand-text" },
 };
 
 const DEFAULT_ACCENT = { bar: "border-t-transparent", pill: "bg-primary text-primary-foreground", text: "text-primary" };

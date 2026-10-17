@@ -54,7 +54,7 @@ export default async function NovoPedidoPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <BackButton href="/vendas" />
-      <h1 className="mb-4 text-2xl font-bold text-vendas">Novo pedido</h1>
+      <h1 className="mb-4 text-2xl font-bold text-vendas-text">Novo pedido</h1>
       <Card>
         <CardHeader><CardTitle>Dados do pedido</CardTitle></CardHeader>
         <CardContent>
