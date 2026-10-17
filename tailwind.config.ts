@@ -21,27 +21,40 @@ const config: Config = {
       },
       colors: {
         // ---- Paleta Build.Flow: cor por setor (DEFAULT) + tom claro (soft) ----
+        //
+        // DEFAULT e FUNDO (botao, borda, acento), com `fg` por cima. NAO use
+        // como cor de texto sobre a pagina: para isso existe `text`, que e
+        // token por tema em globals.css — ver o comentario de --vendas-text.
+        //
+        // A luminosidade de financeiro, brand, motorista e servico foi
+        // ESCURECIDA em 16/10/2026 porque o texto branco por cima reprovava em
+        // WCAG AA (2,87:1 no verde, 3,15:1 no azul, 3,62:1 no rosa, onde 14px
+        // pede 4,5:1). Hue e saturacao intactas: a marca e a mesma, o botao e
+        // legivel. Os quatro agora dao ~4,7:1, e distribuicao (que usa texto
+        // escuro) seguia passando com 6,34:1.
+        //
+        // scripts/checks/cor-de-setor.ts recalcula os dois pares a cada rodada.
         vendas: {
           DEFAULT: "#9b59b6", soft: "#f3eafa", text: "hsl(var(--vendas-text))", fg: "#ffffff",
         },
         financeiro: {
-          DEFAULT: "#e74c8b", soft: "#fceaf2", text: "hsl(var(--financeiro-text))", fg: "#ffffff",
+          DEFAULT: "#dc1e6b", soft: "#fceaf2", text: "hsl(var(--financeiro-text))", fg: "#ffffff",
         },
         distribuicao: {
           DEFAULT: "#f39c12", soft: "#fdf2e0", text: "hsl(var(--distribuicao-text))", fg: "#3a2a00",
         },
         motorista: {
-          DEFAULT: "#27ae60", soft: "#e6f6ed", text: "hsl(var(--motorista-text))", fg: "#ffffff",
+          DEFAULT: "#1e8449", soft: "#e6f6ed", text: "hsl(var(--motorista-text))", fg: "#ffffff",
         },
         brand: {
-          DEFAULT: "#3498db", soft: "#e8f3fb", text: "hsl(var(--brand-text))", fg: "#ffffff",
+          DEFAULT: "#2079b4", soft: "#e8f3fb", text: "hsl(var(--brand-text))", fg: "#ffffff",
         },
         // Select (venda de SERVICO). Nao e um setor: e uma natureza de venda
         // que aparece dentro de Vendas e do Financeiro. Token proprio, e nao
         // reuso do verde de "motorista", porque a paleta e lida por setor —
         // um botao "motorista" no meio de Vendas leria como engano.
         servico: {
-          DEFAULT: "#27ae60", soft: "#e6f6ed", text: "hsl(var(--servico-text))", fg: "#ffffff",
+          DEFAULT: "#1e8449", soft: "#e6f6ed", text: "hsl(var(--servico-text))", fg: "#ffffff",
         },
         // ---- Tokens shadcn/ui ----
         border: "hsl(var(--border))",

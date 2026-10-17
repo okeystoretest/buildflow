@@ -86,27 +86,11 @@ check("leu o card do tema escuro", cardEscuro !== null, true);
 const SETORES = ["vendas", "financeiro", "distribuicao", "motorista", "brand", "servico"] as const;
 const MINIMO = 4.5; // WCAG AA para texto abaixo de 18,66px negrito / 24px normal
 
-/**
- * shortcut: o texto BRANCO dos botões sólidos reprova em quatro setores, e a
- * dívida fica registrada com o número exato de hoje em vez de consertada.
- * Upgrade quando o dono escolher entre as duas saídas medidas em 16/10/2026:
- * escurecer o fundo mantendo o branco (motorista/servico #27ae60 -> #1e874b,
- * brand #3498db -> #217bb8, financeiro #e74c8b -> #ca1b62) ou trocar por texto
- * escuro sobre o fundo de hoje (o padrão que `distribuicao` já usa, e que passa
- * com 6,34:1). As duas passam; a diferença é de aparência do elemento mais
- * visível do app, e isso é decisão da marca, não de implementação.
- *
- * Por que com o NÚMERO e não com um `skip`: um skip apaga a dívida da tela e
- * deixa a cor livre para piorar. Assim, qualquer mexida na paleta trip esta
- * linha — inclusive uma que melhore, e aí é só atualizar o número ou mover o
- * setor para a checagem de verdade.
- */
-const BOTAO_REPROVADO: Partial<Record<(typeof SETORES)[number], number>> = {
-  financeiro: 3.62,
-  motorista: 2.87,
-  brand: 3.15,
-  servico: 2.87,
-};
+// Nenhuma divida aqui: os quatro setores que reprovavam no botao (financeiro
+// 3,62 / brand 3,15 / motorista e servico 2,87) foram escurecidos em
+// 16/10/2026 e os seis passam. O mapa de divida que existia neste lugar saiu
+// junto com a divida — a checagem do botao vale para todos agora.
+const BOTAO_REPROVADO: Partial<Record<(typeof SETORES)[number], number>> = {};
 
 for (const setor of SETORES) {
   const claro = hslDoCss(blocoClaro, `${setor}-text`);
