@@ -193,6 +193,11 @@ const HIGHLIGHTS = [
  * saiba QUEM trata, PARA QUÊ, POR QUANTO TEMPO e COMO exercer os direitos do
  * Art. 18 — a página tinha só a finalidade, numa linha.
  *
+ * `email` é o canal do Art. 18 e foi trocado em 17/10/2026, a pedido do dono,
+ * de `contato@okeystore.com.br` (o endereço publicado no site da marca) para
+ * `okeytecnologia@gmail.com`. O que o Art. 9 exige é um canal que FUNCIONE e
+ * seja atendido — o domínio do endereço não importa; quem responde, sim.
+ *
  * `controlador` é a RAZÃO SOCIAL, não o nome comercial: "Okey Store Handmade" é
  * marca, e o Art. 9 pede o agente de tratamento. CNPJ e e-mail conferidos na
  * política de privacidade do próprio site da marca (okeystore.com.br) em
@@ -209,7 +214,7 @@ const HIGHLIGHTS = [
 const PRIVACIDADE = {
   controlador: "Deliane Araujo Trajano Confecções",
   cnpj: "35.293.039/0001-29",
-  email: "contato@okeystore.com.br",
+  email: "okeytecnologia@gmail.com",
   retencaoDias: 90,
 } as const;
 
@@ -232,7 +237,7 @@ const PRIVACIDADE = {
 const CONTATO = {
   whatsapp: "(85) 99605-4844",
   whatsappLink: "https://wa.me/5585996054844" as string | null,
-  email: "contato@okeystore.com.br",
+  email: "okeytecnologia@gmail.com",
 } as const;
 
 const META_DESCRIPTION =
