@@ -56,6 +56,20 @@ const config: Config = {
         servico: {
           DEFAULT: "#1e8449", soft: "#e6f6ed", text: "hsl(var(--servico-text))", fg: "#ffffff",
         },
+        // ---- Cor de MARCA (nao e setor) ----
+        //
+        // O creme da OKEY, escolhido pelo dono em 17/10/2026 para o botao do
+        // formulario dela em /vendas. Nao entra na paleta de setor: setor diz
+        // em que MODULO a pessoa esta, marca diz de qual LP e o link.
+        //
+        // `fg` e escuro e FIXO nos dois temas, e nao o --foreground: sobre este
+        // creme, o texto branco da 1,27:1 e o --foreground do tema escuro da
+        // 1,03:1 — ilegivel nos dois casos. Com o escuro fixo sao 10,98:1. E o
+        // mesmo arranjo que `distribuicao` ja usa com o ambar.
+        okey: {
+          DEFAULT: "#f0e6a8", hover: "#e8dc92", fg: "#3a2a00",
+        },
+
         // ---- Tokens shadcn/ui ----
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

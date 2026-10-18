@@ -9,7 +9,7 @@ import { formatBRL } from "@/lib/utils";
 import { EXCEPTION_STATUSES } from "@/lib/order-flow";
 import { VendaRowActions } from "./row-actions";
 import { VendasBusca } from "./busca-client";
-import { CopiarLinkAtacado } from "./copiar-link-atacado";
+import { CopiarLinkAtacado, CopiarLinkGeral } from "./copiar-link-atacado";
 import { canUseWholesaleTool } from "@/lib/wholesale-permissions";
 import type { Prisma } from "@prisma/client";
 
@@ -94,6 +94,10 @@ export default async function VendasPage(
               DOIS botões, um por marca (OKEY e Lov), que somem para VAREJO; a
               action confere o papel de novo no servidor. */}
           {vendedoraAtacado && <CopiarLinkAtacado />}
+          {/* O link GERAL é da Gestão: quem chega por ele não tem vendedora de
+              origem e entra no rodízio. A vendedora segue com o link dela, que
+              credita a candidatura a ela — os dois caminhos convivem. */}
+          {session.role === "GESTAO" && <CopiarLinkGeral />}
           {podeAnalisar && (
             <Button asChild variant="outline"><Link href="/vendas/analise-clientes"><ClipboardCheck className="h-4 w-4" /> Análise de Clientes</Link></Button>
           )}

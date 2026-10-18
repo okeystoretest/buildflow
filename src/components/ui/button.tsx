@@ -20,6 +20,9 @@ const buttonVariants = cva(
         motorista: "bg-motorista text-motorista-fg hover:bg-motorista/90 shadow-sm",
         brand: "bg-brand text-brand-fg hover:bg-brand/90 shadow-sm",
         servico: "bg-servico text-servico-fg hover:bg-servico/90 shadow-sm",
+        // Marca, nao setor. O hover e um tom proprio e nao `/90`: opacidade
+        // sobre um creme claro clareia ainda mais e o botao some do fundo.
+        okey: "bg-okey text-okey-fg hover:bg-okey-hover shadow-sm",
       },
       size: {
         default: "h-10 px-4 py-2",

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, WholesaleBrand, WholesaleLeadStatus } from "@prisma/client";
 import { normalizeCnpj, phoneMatchKeys } from "@/lib/wholesale-identity";
+import { donaDoRodizio, voltasDoRodizio } from "@/lib/wholesale-rodizio";
 import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permissions";
 
 /**
@@ -169,6 +170,70 @@ export interface LeadRow {
  * lançaria erro de validação e derrubaria a página por causa de uma URL
  * digitada errada. Ignorar não alarga o acesso: o escopo do ator vem antes.
  */
+/**
+ * Põe em dia a dona das candidaturas que estão no rodízio.
+ *
+ * O `sellerId` fica GRAVADO porque `listLeadsFor` filtra por ele dentro do SQL
+ * e pagina no banco — dona calculada em JavaScript obrigaria a carregar todas
+ * as pendentes para filtrar na memória, trocando uma consulta indexada por uma
+ * varredura que cresce com o negócio. Então a verdade é a conta
+ * (`wholesale-rodizio.ts`) e o banco é a cópia que a leitura atualiza. Mesmo
+ * padrão do Select, onde o estado é derivado e a leitura reconcilia.
+ *
+ * NA LEITURA, e não num agendador: o prazo é de um dia e a rotina diária roda
+ * uma vez só, então "1 dia" viraria "até 2 dias". Aqui a fila nunca mostra uma
+ * dona vencida, mesmo que nenhum cron rode nunca — e se o banco estiver fora, a
+ * exceção é engolida e a fila ainda abre com o que estiver gravado. Fila que
+ * não abre é pior que fila um pouco atrasada.
+ *
+ * Só mexe em quem tem `rodizioIndice` (veio pelo link geral) e ainda não foi
+ * avaliada: candidatura decidida não roda mais, e candidatura de vendedora
+ * nunca rodou.
+ */
+async function reconciliarRodizio(agora = new Date()): Promise<void> {
+  try {
+    const [pendentes, ativas] = await Promise.all([
+      prisma.wholesaleLead.findMany({
+        where: { rodizioIndice: { not: null }, decidedAt: null },
+        select: { id: true, rodizioIndice: true, createdAt: true, sellerId: true },
+      }),
+      // Ordem ESTÁVEL por id. Por nome, uma vendedora que casa e troca o
+      // sobrenome reembaralharia a fila inteira de candidaturas abertas.
+      prisma.user.findMany({
+        where: { role: "VENDAS", salesModel: "ATACADO", active: true },
+        select: { id: true },
+        orderBy: { id: "asc" },
+      }),
+    ]);
+    if (pendentes.length === 0 || ativas.length === 0) return;
+
+    // Agrupa por destino para escrever um UPDATE por vendedora, e não um por
+    // candidatura: com a fila cheia, a diferença é entre uma consulta e
+    // centenas.
+    const porDestino = new Map<string, string[]>();
+    for (const lead of pendentes) {
+      const dona = donaDoRodizio(lead.rodizioIndice as number, voltasDoRodizio(lead.createdAt, agora), ativas);
+      if (!dona || dona.id === lead.sellerId) continue;
+      const lista = porDestino.get(dona.id) ?? [];
+      lista.push(lead.id);
+      porDestino.set(dona.id, lista);
+    }
+
+    for (const [sellerId, ids] of porDestino) {
+      await prisma.wholesaleLead.updateMany({
+        // `decidedAt: null` de novo no WHERE, e não só na leitura acima: entre
+        // ler e escrever, alguém pode ter avaliado a candidatura. Sem isto, o
+        // rodízio tiraria das mãos de quem acabou de decidir.
+        where: { id: { in: ids }, decidedAt: null },
+        data: { sellerId },
+      });
+    }
+  } catch (err) {
+    // Reconciliação é higiene, não verdade: a fila abre com o que está gravado.
+    console.error("[atacado] falha ao reconciliar o rodizio:", err);
+  }
+}
+
 export async function listLeadsFor(
   actor: WholesaleActor,
   opts: { brand?: string; status?: string; page?: number } = {},
@@ -182,6 +247,10 @@ export async function listLeadsFor(
   if (actor.role !== "GESTAO" && !actor.userId) {
     return { leads: [], total: 0, totalPages: 1 };
   }
+
+  // Antes de consultar: a dona de quem está no rodízio pode ter vencido desde a
+  // última vez que alguém abriu esta tela.
+  await reconciliarRodizio();
 
   const brand = (Object.values(WholesaleBrand) as string[]).includes(opts.brand ?? "")
     ? (opts.brand as WholesaleBrand)

@@ -9,7 +9,7 @@ import { formatCnpj, normalizeCnpj, phoneMatchKeys } from "@/lib/wholesale-ident
 import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permissions";
 import { classifyDuplicateMatch, listLeadsFor } from "@/lib/wholesale-queries";
 import { LeadStatusChip } from "./lead-status-chip";
-import { DistribuirLeadSelect, LeadRowActions } from "./lead-row-actions";
+import { LeadRowActions } from "./lead-row-actions";
 import type { DuplicateAlertView, LeadAnswers } from "./decision-modal";
 
 /**
@@ -269,16 +269,6 @@ export default async function AnaliseClientesPage(
       })
     : [];
 
-  // Destino da distribuição: vendedoras de atacado ATIVAS. A action reconfere
-  // cada uma dessas três coisas no banco antes de gravar.
-  const vendedoras = semDono.length
-    ? await prisma.user.findMany({
-        where: { role: "VENDAS", salesModel: "ATACADO", active: true },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
-      })
-    : [];
-
   // Preserva os filtros ao paginar.
   const pageHref = (p: number) => {
     const sp = new URLSearchParams();
@@ -308,11 +298,17 @@ export default async function AnaliseClientesPage(
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* A distribuição manual saiu em 17/10/2026: quem chega pelo link
+                geral entra no rodízio e ganha dona sozinha. Esta lista deixou de
+                ser uma fila de trabalho e virou um AVISO — candidatura aqui
+                significa que não havia nenhuma vendedora de Atacado ativa para
+                recebê-la. Some sozinha na próxima leitura depois de alguém ser
+                ativada; o que resolve é ativar uma vendedora, não distribuir. */}
             <p className="mb-3 text-sm text-muted-foreground">
-              Chegaram sem código de indicação válido e ainda não foram decididas.
-              Enquanto não têm dona, só a Gestão vê — distribua para a candidatura
-              entrar na fila de alguém, ou decida direto. As já decididas ficam na
-              tabela abaixo.
+              Chegaram pelo link geral e ainda não têm dona, porque não havia
+              nenhuma vendedora de Atacado ativa no momento em que entraram.
+              Ative uma vendedora e elas são atribuídas sozinhas na próxima vez
+              que esta tela abrir — ou decida direto, aqui mesmo.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -326,7 +322,6 @@ export default async function AnaliseClientesPage(
                     <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
                       CNPJ
                     </th>
-                    <th className="py-2 pl-4 pr-4 text-right">Distribuir para</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -344,9 +339,6 @@ export default async function AnaliseClientesPage(
                       </td>
                       <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4 font-data">
                         {formatCnpj(l.cnpj)}
-                      </td>
-                      <td className="py-2 pl-4 pr-4">
-                        <DistribuirLeadSelect leadId={l.id} vendedoras={vendedoras} />
                       </td>
                     </tr>
                   ))}

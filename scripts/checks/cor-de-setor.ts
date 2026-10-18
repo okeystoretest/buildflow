@@ -125,6 +125,34 @@ for (const setor of SETORES) {
   }
 }
 
+// --- cores de MARCA (nao sao setor) ----------------------------------------
+// O creme da OKEY e fundo de botao com texto escuro FIXO nos dois temas. Sobre
+// ele, branco da 1,27:1 e o --foreground do tema escuro da 1,03:1 — e por isso
+// que `fg` aqui e um hex escuro e nao um token de tema. Esta checagem existe
+// para que trocar a cor da marca nao reintroduza isso sem ninguem perceber.
+// Regex LITERAL e nao `new RegExp` com template: num template literal do
+// JavaScript, `\s` perde a barra (escapes desconhecidos caem), e a regex vira
+// `s*` — casa zero vezes a letra "s" e nunca acha o bloco. O erro e silencioso:
+// a checagem passaria a nao encontrar nada e ninguem saberia.
+const MARCAS_DE_BOTAO = [
+  { nome: "okey", re: /okey:\s*\{[^}]*DEFAULT:\s*"(#[0-9a-fA-F]{6})"[^}]*hover:\s*"(#[0-9a-fA-F]{6})"[^}]*fg:\s*"(#[0-9a-fA-F]{6})"/s },
+] as const;
+
+for (const marca of MARCAS_DE_BOTAO) {
+  const bloco = marca.re.exec(conf);
+  check(`${marca.nome}: tem DEFAULT, hover e fg no tailwind.config`, bloco !== null, true);
+  if (!bloco) continue;
+  const rParado = razao(hexParaRgb(bloco[1]), hexParaRgb(bloco[3]));
+  const rHover = razao(hexParaRgb(bloco[2]), hexParaRgb(bloco[3]));
+  check(`${marca.nome}: texto sobre o botao parado >= ${MINIMO} (${rParado})`, rParado >= MINIMO, true);
+  check(`${marca.nome}: texto sobre o botao em hover >= ${MINIMO} (${rHover})`, rHover >= MINIMO, true);
+  // O hover tem de ser VISIVEL: quase igual ao parado, o botao nao responde ao
+  // mouse e ninguem sabe que ele e clicavel.
+  const dParado = razao(hexParaRgb(bloco[1]), [255, 255, 255]);
+  const dHover = razao(hexParaRgb(bloco[2]), [255, 255, 255]);
+  check(`${marca.nome}: o hover muda o suficiente para ser notado`, Math.abs(dParado - dHover) >= 0.05, true);
+}
+
 // Nenhum arquivo deve ter voltado a usar a cor sólida como cor de texto: é a
 // regressão exata que este passe conserta, e ela é invisível na tela.
 const { execSync } = require("node:child_process") as typeof import("node:child_process");

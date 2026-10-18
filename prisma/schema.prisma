@@ -1340,6 +1340,11 @@ model WholesaleLead {
   /// IP do envio: rate limit e o código 34 (tentativa de burlar cadastro).
   submittedIp String?
 
+  /// Posicao no rodizio do link geral. NULL = veio pelo link de uma vendedora
+  /// (dona fixa). Numero = veio pelo link geral e passa para a seguinte a cada
+  /// dia sem avaliacao. Ver src/lib/wholesale-rodizio.ts.
+  rodizioIndice Int?
+
   events WholesaleLeadEvent[]
 
   createdAt DateTime @default(now())
@@ -1349,6 +1354,7 @@ model WholesaleLead {
   @@index([sellerId, status])
   @@index([cnpj])
   @@index([phone])
+  @@index([rodizioIndice])
 }
 
 /// Diário de mudanças de status (decisão 12). Sem ele os campos de decisão

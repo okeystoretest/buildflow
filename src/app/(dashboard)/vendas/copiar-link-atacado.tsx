@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Check, Cherry } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ensureMyReferralLink } from "@/lib/actions/wholesale-referral";
+import { ensureMyReferralLink, linkGeralDoAtacado } from "@/lib/actions/wholesale-referral";
 
 /**
  * Botões de link de indicação da vendedora de Atacado — um por marca.
@@ -41,14 +41,14 @@ import { ensureMyReferralLink } from "@/lib/actions/wholesale-referral";
  * marcas, e a action não foi tocada.
  */
 const MARCAS = [
-  { brand: "OKEY", rotulo: "OKEY - Form", Icone: Cherry },
+  { brand: "OKEY", rotulo: "OKEY - Form", Icone: Cherry, variante: "okey" },
 ] as const;
 
 export function CopiarLinkAtacado() {
   return (
     <>
       {MARCAS.map((m) => (
-        <BotaoDaMarca key={m.brand} brand={m.brand} rotulo={m.rotulo} Icone={m.Icone} />
+        <BotaoDaMarca key={m.brand} brand={m.brand} rotulo={m.rotulo} Icone={m.Icone} variante={m.variante} />
       ))}
     </>
   );
@@ -58,10 +58,12 @@ function BotaoDaMarca({
   brand,
   rotulo,
   Icone,
+  variante,
 }: {
   brand: (typeof MARCAS)[number]["brand"];
   rotulo: string;
   Icone: typeof Cherry;
+  variante: "okey";
 }) {
   const [pending, startTransition] = useTransition();
   const [copiado, setCopiado] = useState(false);
@@ -110,13 +112,86 @@ function BotaoDaMarca({
           tela, que não tem o contexto visual dos dois juntos. */}
       <Button
         type="button"
-        variant="outline"
+        variant={variante}
         onClick={copiar}
         disabled={pending}
         aria-label={`Copiar link de indicação da ${rotulo}`}
       >
         {copiado ? <Check className="h-4 w-4" /> : <Icone className="h-4 w-4" />}
         {copiado ? "Link copiado" : rotulo}
+      </Button>
+      {erro && (
+        <span role="alert" className="self-center text-sm text-destructive">
+          {erro}
+        </span>
+      )}
+    </>
+  );
+}
+
+/**
+ * O link GERAL, para a Gestão.
+ *
+ * É a MESMA página da OKEY, sem o código de indicação: quem chega por aqui não
+ * tem vendedora de origem e entra no rodízio — a candidatura ganha dona sozinha
+ * e passa adiante a cada dia sem avaliação (ver `src/lib/wholesale-rodizio.ts`).
+ *
+ * Por que uma action própria e não montar a URL no navegador: a base vem de
+ * `APP_BASE_URL`, que é variável de SERVIDOR lida em tempo de execução. Montar
+ * aqui exigiria um `NEXT_PUBLIC_`, que o Next embute no BUILD — e este projeto
+ * compila dentro da imagem Docker, então um valor definido só no runtime do
+ * EasyPanel nunca chegaria. É a mesma decisão 35 que vale para o link por
+ * vendedora.
+ *
+ * Não há botão de marca aqui: a Lov saiu e, quando voltar, volta com a dela.
+ */
+export function CopiarLinkGeral() {
+  const [pending, startTransition] = useTransition();
+  const [copiado, setCopiado] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  function copiar() {
+    setErro(null);
+    startTransition(async () => {
+      let link: string;
+      try {
+        const res = await linkGeralDoAtacado();
+        if (!res.ok) {
+          setErro(res.error);
+          return;
+        }
+        link = res.data.link;
+      } catch {
+        setErro("Não foi possível obter o link agora. Recarregue a página e tente novamente.");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(link);
+      } catch {
+        setCopiado(false);
+        setErro("Não foi possível copiar o link. Verifique a permissão da área de transferência.");
+        return;
+      }
+      setCopiado(true);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopiado(false), 2000);
+    });
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="okey"
+        onClick={copiar}
+        disabled={pending}
+        aria-label="Copiar o link geral do formulário da OKEY, que distribui as candidaturas entre as vendedoras"
+      >
+        {copiado ? <Check className="h-4 w-4" /> : <Cherry className="h-4 w-4" />}
+        {copiado ? "Link copiado" : "OKEY - Form (geral)"}
       </Button>
       {erro && (
         <span role="alert" className="self-center text-sm text-destructive">

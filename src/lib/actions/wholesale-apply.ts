@@ -12,6 +12,7 @@ import {
   type ProcessedImage,
 } from "@/lib/image";
 import { resolveReferral, brandSlug } from "@/lib/wholesale-referral";
+import { donaDoRodizio } from "@/lib/wholesale-rodizio";
 import { validateApplyPayload } from "@/lib/wholesale-apply-validation";
 
 /**
@@ -220,13 +221,40 @@ export async function submitWholesaleApplication(
   // A consulta também vai em try/catch: banco indisponível aqui lançaria, e o
   // 500 cairia na página pública depois de a lojista já ter preenchido tudo.
   // Mesma mensagem genérica — não há nada que ela possa corrigir.
+  //
+  // DUAS PORTAS, DOIS COMPORTAMENTOS. Com `?r=<codigo>` valido, a dona e fixa:
+  // a vendedora que mandou o link. SEM codigo — o link geral, que a Gestao
+  // compartilha —, a candidatura entra no RODIZIO e passa adiante a cada dia
+  // sem avaliacao (ver src/lib/wholesale-rodizio.ts).
+  //
+  // O indice vem de uma SEQUENCE do Postgres, e e ela que elimina a corrida:
+  // ler "qual foi a ultima" e somar um perde quando duas lojistas enviam no
+  // mesmo segundo, e as duas caem na mesma vendedora. Com formulario publico
+  // isso acontece sempre que a vendedora joga o link num grupo de WhatsApp.
   let sellerId: string | null;
+  let rodizioIndice: number | null = null;
   try {
     const candidatos = await prisma.user.findMany({
       where: { role: "VENDAS", salesModel: "ATACADO" },
       select: { id: true, referralCode: true, role: true, salesModel: true, active: true },
     });
     sellerId = resolveReferral(input.referralCode, candidatos);
+
+    if (sellerId === null) {
+      const [linha] = await prisma.$queryRaw<{ indice: number }[]>`
+        SELECT nextval('wholesale_rodizio_seq')::int AS indice
+      `;
+      rodizioIndice = linha?.indice ?? null;
+      if (rodizioIndice !== null) {
+        // Ordem ESTAVEL por id: nome muda, e ordem instavel faria a mesma conta
+        // dar donas diferentes em duas leituras seguidas.
+        const ativas = candidatos
+          .filter((c) => c.active && c.role === "VENDAS" && c.salesModel === "ATACADO")
+          .sort((a, b) => a.id.localeCompare(b.id));
+        // voltas = 0: a candidatura esta chegando agora.
+        sellerId = donaDoRodizio(rodizioIndice, 0, ativas)?.id ?? null;
+      }
+    }
   } catch (err) {
     console.error("[atacado] falha ao carregar as vendedoras candidatas:", err);
     return actionError(GENERICO);
@@ -276,6 +304,7 @@ export async function submitWholesaleApplication(
       data: {
         brand,
         sellerId,
+        rodizioIndice,
         ...v.clean,
         instagramImagePath: imgInsta.filePath,
         storeImagePath: imgLoja.filePath,

@@ -4,7 +4,63 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
-import { generateReferralCode, buildReferralLink } from "@/lib/wholesale-referral";
+import { generateReferralCode, buildReferralLink, brandSlug } from "@/lib/wholesale-referral";
+
+/**
+ * A base pública, conferida. Compartilhada pelo link por vendedora e pelo link
+ * geral — validação duplicada é validação que diverge na primeira correção, e
+ * esta existe justamente para link quebrado não chegar ao celular da lojista.
+ *
+ * `new URL` sozinho não basta, por dois motivos:
+ * - ele APARA espaço antes de parsear, então "https://app.com " passa — e
+ *   `buildReferralLink` só remove barra final, não espaço, produzindo um link
+ *   com espaço no meio;
+ * - ele aceita qualquer coisa com cara de esquema: "localhost:3000" parseia com
+ *   protocolo "localhost:" e gera link que nenhum celular abre.
+ *
+ * Falhar aqui é melhor que entregar link quebrado: o erro de um Host inferido
+ * só apareceria no celular da lojista, dias depois. Por isso não há valor
+ * padrão nem inferência a partir da requisição (decisão 35).
+ */
+function baseValidada(): ActionResult<string> {
+  const base = process.env.APP_BASE_URL;
+  if (!base) return actionError("APP_BASE_URL não configurada no servidor.");
+  if (base !== base.trim()) {
+    return actionError("APP_BASE_URL inválida no servidor (espaço em volta do valor).");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(base);
+  } catch {
+    return actionError("APP_BASE_URL inválida no servidor (precisa incluir https://).");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return actionError("APP_BASE_URL inválida no servidor (precisa incluir https://).");
+  }
+  return actionOk(base);
+}
+
+/**
+ * O link GERAL do formulário de atacado — sem código de indicação.
+ *
+ * Só GESTAO. Não é restrição de segurança da página (a LP é pública por
+ * natureza): é escopo de quem distribui esse caminho, que por decisão do dono é
+ * da Gestão. Quem recebe o link não precisa de sessão nenhuma.
+ *
+ * Quem chega por aqui não tem vendedora de origem, então entra no RODÍZIO: a
+ * candidatura ganha dona na chegada e passa adiante a cada dia sem avaliação
+ * (ver `src/lib/wholesale-rodizio.ts`).
+ *
+ * É a mesma página do link por vendedora, sem o `?r=`. Não existe LP separada:
+ * criar uma duplicaria a copy, as imagens e o digest da trava de conteúdo, e as
+ * duas divergiriam na primeira edição.
+ */
+export async function linkGeralDoAtacado(): Promise<ActionResult<{ link: string }>> {
+  await requireRoleAction(["GESTAO"]);
+  const baseOk = baseValidada();
+  if (!baseOk.ok) return baseOk;
+  return actionOk({ link: `${baseOk.data.replace(/\/+$/, "")}/atacado/${brandSlug("OKEY")}` });
+}
 
 /**
  * Devolve o link de indicação da vendedora, criando o código na primeira vez.
@@ -42,28 +98,9 @@ export async function ensureMyReferralLink(
   // Falhar aqui e melhor que entregar link quebrado: o erro de um Host
   // inferido so apareceria no celular da lojista, dias depois. Por isso nao ha
   // valor padrao nem inferencia a partir da requisicao.
-  const base = process.env.APP_BASE_URL;
-  if (!base) return actionError("APP_BASE_URL não configurada no servidor.");
-  // `new URL` sozinho nao basta, e por dois motivos:
-  // - ele APARA espaco antes de parsear, entao "https://app.com " passa — e
-  //   `buildReferralLink` so remove barra final, nao espaco, produzindo um link
-  //   com espaco no meio;
-  // - ele aceita qualquer coisa com cara de esquema: "localhost:3000" parseia
-  //   com protocolo "localhost:" e gera link que nenhum celular abre.
-  // Como a razao desta validacao e justamente nao deixar link quebrado chegar
-  // ao celular da lojista (decisao 35), a guarda confere as duas coisas.
-  if (base !== base.trim()) {
-    return actionError("APP_BASE_URL inválida no servidor (espaço em volta do valor).");
-  }
-  let parsed: URL;
-  try {
-    parsed = new URL(base);
-  } catch {
-    return actionError("APP_BASE_URL inválida no servidor (precisa incluir https://).");
-  }
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    return actionError("APP_BASE_URL inválida no servidor (precisa incluir https://).");
-  }
+  const baseOk = baseValidada();
+  if (!baseOk.ok) return baseOk;
+  const base = baseOk.data;
 
   let code = user.referralCode;
   if (!code) {
