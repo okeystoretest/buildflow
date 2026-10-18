@@ -289,6 +289,28 @@ optou por olhar isso depois.**
 
 ---
 
+## 3b. Escopo pedido e ainda não implementado
+
+Em 17/10/2026 o dono passou um escopo novo, capturado em
+`docs/superpowers/specs/2026-10-17-lp-geral-round-robin-escopo.md`:
+
+1. **Desativar a LP da Lov** (diverge do estilo da OKEY; o redesenho vem depois).
+2. **LP geral sem identificador na URL**, com **distribuição round-robin** dos
+   cadastros entre a equipe de Atacado.
+3. O botão de copiar o link dela em `/vendas`.
+
+**Nada foi implementado.** O documento separa o que o dono decidiu do que está
+em aberto — são seis perguntas cujas respostas mudam a implementação, e a mais
+cara delas é o que "desativar" significa para os links da Lov que já estão
+circulando em WhatsApp de lojista.
+
+O documento também registra a armadilha técnica: round-robin ingênuo é
+read-then-write, e duas lojistas enviando no mesmo segundo caem na mesma
+vendedora. É o mesmo defeito que `assignLeadSeller` tinha e que foi corrigido
+em 16/10 — a correção está lá como referência.
+
+---
+
 ## 4. O que NÃO foi verificado
 
 - **As telas do dashboard depois da troca de cor.** 140 classes renomeadas e 4
