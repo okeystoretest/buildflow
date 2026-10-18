@@ -90,8 +90,9 @@ export default async function VendasPage(
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-vendas-text">Vendas</h1>
         <div className="flex gap-2">
-          {/* Captação de revendedor: só a equipe de Atacado (decisão 15). O botão
-              some para VAREJO; a action confere de novo no servidor. */}
+          {/* Captação de revendedor: só a equipe de Atacado (decisão 15). São
+              DOIS botões, um por marca (OKEY e Lov), que somem para VAREJO; a
+              action confere o papel de novo no servidor. */}
           {vendedoraAtacado && <CopiarLinkAtacado />}
           {podeAnalisar && (
             <Button asChild variant="outline"><Link href="/vendas/analise-clientes"><ClipboardCheck className="h-4 w-4" /> Análise de Clientes</Link></Button>
