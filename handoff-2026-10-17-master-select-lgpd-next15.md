@@ -251,6 +251,12 @@ Nenhuma delas tem código pendente. É tudo configuração ou conteúdo.
    não trocar por enquanto. Trocar o `AUTH_SECRET` desloga todos e é o único jeito
    de fechar isso. A senha do Postgres de produção é, além disso, **a mesma** do
    `.env` local.
+
+   **O dono marcou 19/10/2026 para trocar o `AUTH_SECRET`** (pedido feito em
+   17/10). Se esta data passar sem a troca, a exposição continua valendo: não é
+   algo que expira sozinho. Os outros segredos seguem pendentes depois dele —
+   os `CONNECT_*` precisam ser combinados com o Build.Connect, que é o outro
+   lado da integração.
 7. **Painel do EasyPanel sem HTTPS.** O caminho sem SSH é pôr um subdomínio
    (`painel.buildflowapp.com.br`) apontando para o IP e configurar o domínio do
    painel, que emite o certificado sozinho.
