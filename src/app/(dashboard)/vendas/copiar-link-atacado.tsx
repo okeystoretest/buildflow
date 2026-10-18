@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Check, Cherry, Heart } from "lucide-react";
+import { Check, Cherry } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ensureMyReferralLink } from "@/lib/actions/wholesale-referral";
 
@@ -24,10 +24,24 @@ import { ensureMyReferralLink } from "@/lib/actions/wholesale-referral";
  * transferência. Então a rejeição vira mensagem na tela.
  */
 
-/** As marcas na ordem em que aparecem na tela, com o rótulo e o ícone de cada. */
+/**
+ * As marcas na ordem em que aparecem na tela, com o rótulo e o ícone de cada.
+ *
+ * A LOV_CLUB saiu daqui em 17/10/2026, a pedido do dono: a LP dela diverge do
+ * estilo visual da OKEY e vai ser redesenhada. Tirar o BOTÃO e não a ROTA é o
+ * que distingue esta decisão de desativar a página — `/atacado/lov-club`
+ * continua respondendo 200, então o link que alguma vendedora já mandou para o
+ * WhatsApp de uma lojista continua funcionando e a candidatura dela ainda
+ * entra. O que para é a criação de links NOVOS.
+ *
+ * Para trazer de volta depois do redesenho: reimportar `Heart` do lucide-react
+ * e devolver a linha
+ *   { brand: "LOV_CLUB", rotulo: "Lov - Form", Icone: Heart },
+ * Nada mais precisa mudar — `ensureMyReferralLink` sempre aceitou as duas
+ * marcas, e a action não foi tocada.
+ */
 const MARCAS = [
   { brand: "OKEY", rotulo: "OKEY - Form", Icone: Cherry },
-  { brand: "LOV_CLUB", rotulo: "Lov - Form", Icone: Heart },
 ] as const;
 
 export function CopiarLinkAtacado() {
