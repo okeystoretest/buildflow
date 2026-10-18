@@ -61,77 +61,93 @@ de cereja) e **Lov - Form** (ícone de coração).
 
 ---
 
-## 3. EM ABERTO — precisa do dono antes de implementar
+## 3. RESPONDIDO pelo dono em 17/10/2026
 
-### Pergunta 1 — "desativar" a LP da Lov é o quê?
-
-As opções têm consequências diferentes e nenhuma é obviamente certa:
-
-| Opção | O que a lojista vê | Efeito em link já compartilhado |
+| # | Pergunta | Resposta |
 |---|---|---|
-| **404** | página de erro | link que a vendedora já mandou morre |
-| **Redireciona para a da OKEY** | a LP da OKEY | candidatura entra como OKEY, trocando a marca sem avisar ninguém |
-| **Redireciona para a LP geral** | a LP geral | entra sem marca, e cai no round-robin |
-| **Página "em breve"** | aviso | ninguém se cadastra, mas o link não quebra |
+| 1 | O que é "desativar" a Lov | **Tirar o botão de copiar link, não a rota.** FEITO (commit `5a53f5f`): `/atacado/lov-club` segue em 200, o link já compartilhado continua funcionando, e o que para é a criação de links novos |
+| 2 | Conteúdo da LP geral | **Exatamente a da OKEY**, só que sem vendedora específica |
+| 3 | "Acessível Gestão" | **O link e os botões, para usuários de GESTÃO.** A página segue pública |
+| 4 | Lead parado | **Passa para outra vendedora após 1 dia**, e segue passando **até alguém avaliar** (sem teto) |
+| 5 | "Aqueles mesmos botões" | Os mesmos de copiar link, **agora para a Gestão** — não um terceiro botão em `/vendas` |
+| 6 | Link por vendedora | **Continua.** O da Gestão é o caminho geral e democrático, que permite mais entradas |
+| — | Prazo de 1 dia conta de quando | **Da CHEGADA do lead** |
+| — | Mecanismo | Delegado: *"da forma mais eficaz possível"* |
 
-**O que importa decidir junto:** já existe link da Lov circulando em WhatsApp de
-lojista? Se existir, 404 é a opção que mais machuca.
+### A consequência da resposta 4 que o dono precisa saber
 
-**E os leads da Lov já cadastrados?** Eles continuam no banco com
-`brand: LOV_CLUB`. A ferramenta de Análise de Clientes filtra por marca —
-desativar a LP não pode esconder as candidaturas que já chegaram.
+Sem teto, um lead que ninguém avaliar **roda para sempre**: depois de passar por
+todas as vendedoras, recomeça. A dona muda sozinha todo dia sem ninguém agir.
 
-### Pergunta 2 — qual conteúdo e qual visual a LP geral usa?
+Isso atende ao pedido literal, mas não resolve o problema de fundo — lead que
+ninguém avalia não precisa de mais rodízio, precisa de **visibilidade**. A fila
+da Gestão já existe e é o lugar natural para isso. Fica registrado como algo a
+revisitar, não como algo a mudar agora.
 
-Hoje o conteúdo é por marca e a LP geral, por definição, não tem marca.
+---
 
-- Usa a copy e o visual da OKEY, sem o nome da marca?
-- Usa uma identidade neutra ("Build.Flow Atacado")?
-- Usa a copy da planilha, que já fala "nossa marca" e nunca diz OKEY — e nesse
-  caso ela quase já serve?
+## 3b. O desenho escolhido (o "mais eficaz" delegado ao implementador)
 
-A terceira é a mais barata e provavelmente a certa, mas é decisão de marca.
+**Gravado no banco, reconciliado na leitura.** Não derivado puro.
 
-### Pergunta 3 — "acessível Gestão" quer dizer o quê?
+A razão é concreta: `listLeadsFor` filtra por `sellerId` **dentro do SQL**
+(`where: { sellerId: actor.userId }`) e pagina no banco. Dona derivada em
+JavaScript obrigaria a carregar todas as candidaturas pendentes para então
+filtrar e paginar na memória — troca uma consulta indexada por uma varredura
+que cresce com o negócio.
 
-A LP de captação é **pública por natureza** — a lojista que se cadastra não tem
-login. Então "acessível Gestão" só pode significar uma destas:
+É o mesmo padrão que o Select já usa neste repositório: o valor é derivável, a
+leitura reconcilia, e nenhuma tela mente se a reconciliação atrasar.
 
-- **(a)** O LINK dela é gerado/copiado só por quem é GESTÃO (a página em si
-  continua pública para quem recebe o link).
-- **(b)** A página inteira exige sessão de GESTÃO — o que a tornaria inútil como
-  página de captação.
+### Peças
 
-Quase certamente **(a)**. Confirmar.
+1. **`CREATE SEQUENCE` no Postgres** para o número de ordem do rodízio.
+   `nextval()` é atômico por natureza — não existe read-then-write, não existe
+   corrida, e não precisa de tabela de contador nem de `UPDATE ... RETURNING`.
+   É o que torna este o caminho mais eficaz, e não só o mais simples.
 
-### Pergunta 4 — quem entra no rodízio, e o que acontece quando muda?
+2. **Coluna `rodizioIndice Int?`** em `WholesaleLead`.
+   - `null` → a candidatura veio pelo link de uma vendedora (`?r=`). **Não roda.**
+   - número → veio pelo link geral. É a posição dela na fila do rodízio.
 
-- Todas as `VENDAS` + `salesModel: ATACADO` **ativas**? (É o conjunto que o
-  sistema já usa para o link de indicação.)
-- Uma vendedora desativada sai do rodízio **na hora**, ou só na próxima volta?
-- Vendedora nova entra no fim da fila ou na posição seguinte à atual?
-- A Gestão pode tirar alguém do rodízio sem desativar a conta dela?
-- **E se não houver nenhuma vendedora de Atacado ativa?** A candidatura vira
-  sem-dona (fila da Gestão) ou é recusada? (Recusar perde o lead; sem-dona é o
-  comportamento que já existe hoje e parece o certo.)
+   Uma coluna só, e ela carrega as duas informações: se roda, e de onde parte.
 
-### Pergunta 5 — "aqueles mesmos botões" são quais?
+3. **Na chegada** (`actions/wholesale-apply.ts`), sem `?r=`:
+   `rodizioIndice = nextval()`, e `sellerId = ativas[rodizioIndice % ativas.length]`.
+   Sem nenhuma vendedora ativa: `sellerId = null` e o índice gravado mesmo
+   assim — a reconciliação atribui quando alguém for ativada, em vez de perder
+   a candidatura.
 
-Duas leituras possíveis:
+4. **Dona esperada, a qualquer instante:**
+   ```
+   dias  = dias inteiros entre createdAt e agora
+   dona  = ativas[(rodizioIndice + dias) % ativas.length]
+   ```
+   Determinística, sem relógio e sem estado extra. Dia 0 é da primeira, dia 1
+   passa para a seguinte.
 
-- **(a)** Em `/vendas` nasce um terceiro botão, "Geral - Form", ao lado de
-  "OKEY - Form" — e o da Lov sai junto com a LP dela.
-- **(b)** A LP geral tem, dentro dela, os mesmos elementos da LP da OKEY.
+5. **Reconciliação na leitura de `listLeadsFor`:** antes de consultar, um
+   `UPDATE` põe `sellerId` em dia para as candidaturas com `rodizioIndice`
+   não-nulo e `decidedAt` nulo. Candidatura **decidida não roda mais** — é o
+   "até alguém avaliar" da resposta 4.
 
-A leitura (a) é a que casa com "botões previamente implementados", que foram os
-de copiar link. Confirmar — e, se for (a), decidir **quem** vê esse botão: só
-GESTÃO (coerente com o item 4 do DECIDIDO) ou também as vendedoras.
+6. **Ordem estável das vendedoras.** `ativas` ordenada por `id`, não por nome
+   nem por data: nome muda, e ordem instável faria a mesma conta dar donas
+   diferentes em leituras seguidas.
 
-### Pergunta 6 — o link por vendedora continua existindo?
+7. **O botão da Gestão** copia `/atacado/okey` **sem `?r=`**. Não há página
+   nova: a LP geral é a mesma da OKEY sem o código de indicação, que é
+   exatamente o que a resposta 2 descreve.
 
-O round-robin e o link individual resolvem coisas diferentes: um distribui
-quem chega sem dona, o outro credita quem a vendedora trouxe. Os dois podem
-conviver, e provavelmente devem. Confirmar que não é para substituir.
+### O que isto NÃO muda
+
+- O link por vendedora e o `resolveReferral` continuam como estão (resposta 6).
+- Quem chega com `?r=` válido tem `rodizioIndice = null` e dona fixa.
+- `assignLeadSeller` (a Gestão distribuindo à mão) continua. **Decidir o que
+  acontece quando a Gestão atribui à mão um lead que está no rodízio** é um
+  ponto a resolver na implementação: o mais coerente é a atribuição manual
+  tirar do rodízio (`rodizioIndice = null`), senão o rodízio desfaz no dia
+  seguinte o que a Gestão decidiu.
 
 ---
 
