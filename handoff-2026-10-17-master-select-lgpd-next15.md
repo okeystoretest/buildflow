@@ -203,24 +203,37 @@ também no escuro (3,57:1).
 
 Nenhuma delas tem código pendente. É tudo configuração ou conteúdo.
 
-1. **`APP_BASE_URL` não está no ambiente de produção.** Confirmado por print da
-   tela de Vendas: o botão "Copiar link de indicação" responde
-   *"APP_BASE_URL não configurada no servidor."* No EasyPanel: `web` →
-   `Ambiente` → acrescentar `APP_BASE_URL=https://buildflowapp.com.br` (raiz do
-   domínio, **sem** `/login`, sem barra no fim) → Salvar → Implantar.
-2. **`SELECT_CRON_SECRET` não está no ambiente de produção.** Por isso as duas
-   rotas de cron respondem **401 a tudo** lá fora — falham fechadas, como
-   desenhadas. Gerar com `openssl rand -base64 32`.
-3. **Nenhum agendador chama as duas rotinas.** Isso já era verdade antes desta
-   sessão (a do Select nunca foi agendada). A versão do EasyPanel em uso **não
-   tem cron**: o menu do serviço `web` vai até `Avançado` e não há "Scheduled".
-   Caminhos: `crontab` da VPS (precisa de SSH, que o dono não tem no momento) ou
-   um agendador externo (cron-job.org) com segredo exclusivo.
+1. ~~`APP_BASE_URL` no ambiente de produção~~ — **FEITO em 17/10/2026.**
+2. ~~`SELECT_CRON_SECRET` no ambiente de produção~~ — **FEITO em 17/10/2026.**
+   Valor de 64 caracteres em hexadecimal (sem `+`, `/` ou `=`, que são fonte de
+   erro difícil de achar dentro de um header e de uma linha de `curl`).
+3. ~~Agendador~~ — **FEITO em 17/10/2026.** `crontab` do root na VPS:
+
    ```cron
-   10 3 * * * curl -fsS -X POST https://<host>/api/cron/selects -H "Authorization: Bearer $SEGREDO"
-   20 3 * * * curl -fsS -X POST https://<host>/api/cron/leads   -H "Authorization: Bearer $SEGREDO"
+   10 4 * * * curl -fsS -X POST https://buildflowapp.com.br/api/cron/selects -H "Authorization: Bearer <segredo>" >/dev/null 2>&1
+   20 4 * * * curl -fsS -X POST https://buildflowapp.com.br/api/cron/leads   -H "Authorization: Bearer <segredo>" >/dev/null 2>&1
    ```
-   **Enquanto isso, o rodapé da LP promete apagar em 90 dias e nada apaga.**
+
+   **04:10 e 04:20, e não 03:10/03:20 como eu tinha proposto:** a VPS roda outro
+   sistema (`/root/trajano`) cujo backup estava agendado para 03:17, e backup é
+   pesado de disco. Ver a nota sobre a VPS compartilhada na seção 3.
+
+   Provado na hora, com o segredo lido de dentro do próprio crontab (e não da
+   variável de ambiente da sessão, que podia estar certa com o crontab errado):
+
+   ```bash
+   curl -s -X POST https://buildflowapp.com.br/api/cron/leads      -H "$(crontab -l | grep leads | grep -o 'Authorization: Bearer [^\"]*')"
+   ```
+
+   Resposta: `{"ok":true,"retencaoDias":90,"candidaturasApagadas":0,...}`.
+   Os zeros são o resultado certo — a LP é nova e nenhuma candidatura chegou
+   aos 90 dias.
+
+   **Como conferir que segue rodando:** EasyPanel → `web` → Logs, procurar
+   `POST /api/cron/leads 200`. Duas linhas por dia. A saída vai para
+   `/dev/null`, então uma falha de autorização seria **silenciosa** — este log
+   é o único lugar onde ela apareceria.
+
 4. **As 4 imagens da LP em produção.** O volume de produção nasce vazio — as
    fotos que existem são as do ambiente local. Entrar como `GESTAO`, abrir
    `/atacado/okey`, **pressionar e segurar 800 ms o nome da marca no rodapé**,
@@ -248,6 +261,20 @@ Nenhuma delas tem código pendente. É tudo configuração ou conteúdo.
 
 | Achado | Onde | Por que ficou |
 |---|---|---|
+**A VPS é compartilhada.** `187.127.10.50` roda o buildflow (em Docker, pelo
+EasyPanel) **e** um segundo sistema em `/root/trajano` — banco próprio, volume
+`trajano-imagens`, e um backup diário por script (`roles + db + imagens`, com
+rotação de 14 dias). São independentes, mas dividem CPU, disco e o `crontab` do
+root. Quem agendar qualquer coisa nessa máquina precisa olhar o que já está lá
+antes: foi por isso que as rotinas do buildflow ficaram às 04:10/04:20.
+
+**O buildflow aparentemente não tem backup.** O trajano tem; o buildflow, até
+onde esta sessão viu, não — nem do Postgres nem do volume de uploads. O volume
+é o mais grave, porque comprovante de pagamento, foto de entrega e as imagens
+da LP vivem em disco e não saem num dump do banco. Onde verificar: EasyPanel →
+serviço `db` → `Cópias de segurança`. **Perder o banco é irreversível; o dono
+optou por olhar isso depois.**
+
 | **Candidatura aprovada também é apagada no dia 90** | `src/lib/wholesale-retention.ts` | Registrado como `shortcut:` no módulo. Aprovada no dia 85, o contato some em 5 dias, porque a aprovação não cria Customer e o contato vive só na candidatura. O dono escolheu a opção C: o conserto é a **aprovação** passar a gravar o que o negócio precisa, com finalidade própria — não esticar o prazo de todo mundo |
 | **8 advisories *high* na cadeia do Tailwind 3** | `package.json` | Só zeram com Tailwind 4, que reescreve o design system |
 | **`next` em *moderate*** | `package.json` | Só zera com Next 16, que quebra a aplicação hoje |
