@@ -10,6 +10,7 @@ import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permis
 import { classifyDuplicateMatch, listLeadsFor } from "@/lib/wholesale-queries";
 import { LeadStatusChip } from "./lead-status-chip";
 import { LeadRowActions } from "./lead-row-actions";
+import { AnaliseClientesFiltros } from "./filtros-client";
 import type { DuplicateAlertView, LeadAnswers } from "./decision-modal";
 
 /**
@@ -57,7 +58,14 @@ const dataHora = (d: Date) =>
 
 export default async function AnaliseClientesPage(
   props: {
-    searchParams?: Promise<{ status?: string; brand?: string; page?: string }>;
+    searchParams?: Promise<{
+      status?: string;
+      brand?: string;
+      page?: string;
+      busca?: string;
+      auxiliar?: string;
+      vendedora?: string;
+    }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -96,9 +104,22 @@ export default async function AnaliseClientesPage(
   // pessoa de volta para a lista inteira na segunda página.
   const status = searchParams?.status?.trim() || "";
   const brand = searchParams?.brand?.trim() || "";
+  const busca = searchParams?.busca?.trim() || "";
+  const auxiliar = searchParams?.auxiliar?.trim() || "";
+  // Lido da URL por qualquer papel, mas `listLeadsFor` só o aplica para a
+  // GESTAO: para quem é de Vendas o escopo já fixa o `sellerId` no próprio id,
+  // e um `?vendedora=<outro>` na barra de endereços não alarga nada.
+  const vendedora = searchParams?.vendedora?.trim() || "";
   const page = Math.max(1, Number(searchParams?.page) || 1);
 
-  const { leads, total, totalPages } = await listLeadsFor(actor, { status, brand, page });
+  const { leads, total, totalPages } = await listLeadsFor(actor, {
+    status,
+    brand,
+    page,
+    busca,
+    auxiliar,
+    vendedora,
+  });
   const pageSafe = Math.min(page, totalPages);
 
   // As 18 respostas não vêm na listagem (`LeadRow` é o que a TABELA mostra), e
@@ -269,11 +290,45 @@ export default async function AnaliseClientesPage(
       })
     : [];
 
+  // OPÇÕES DOS FILTROS.
+  //
+  // Auxiliar é texto livre: as opções são os valores que de fato existem, e
+  // DENTRO DO ESCOPO de quem está olhando — oferecer à vendedora o nome de um
+  // auxiliar que só aparece em candidatura de outra pessoa contaria algo que
+  // ela não deveria ver, mesmo que o filtro depois não devolvesse nada.
+  const auxiliares = (
+    await prisma.wholesaleLead.findMany({
+      where: {
+        assistantName: { not: null },
+        ...(ehGestao ? {} : { sellerId: actor.userId }),
+      },
+      distinct: ["assistantName"],
+      select: { assistantName: true },
+      orderBy: { assistantName: "asc" },
+    })
+  )
+    .map((l) => l.assistantName)
+    .filter((n): n is string => Boolean(n && n.trim()));
+
+  // Vendedoras: só a Gestão escolhe, então a consulta só acontece para ela.
+  // Inclui as INATIVAS de propósito — candidatura antiga continua apontando
+  // para quem saiu da equipe, e sem o nome na lista ela ficaria inalcançável.
+  const vendedoras = ehGestao
+    ? await prisma.user.findMany({
+        where: { role: "VENDAS", salesModel: "ATACADO" },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      })
+    : [];
+
   // Preserva os filtros ao paginar.
   const pageHref = (p: number) => {
     const sp = new URLSearchParams();
     if (status) sp.set("status", status);
     if (brand) sp.set("brand", brand);
+    if (busca) sp.set("busca", busca);
+    if (auxiliar) sp.set("auxiliar", auxiliar);
+    if (vendedora) sp.set("vendedora", vendedora);
     if (p > 1) sp.set("page", String(p));
     const qs = sp.toString();
     return qs ? `/vendas/analise-clientes?${qs}` : "/vendas/analise-clientes";
@@ -281,13 +336,20 @@ export default async function AnaliseClientesPage(
 
   // Colunas: 8 para a vendedora, 9 para a Gestão (ela também vê "Vendedora").
   const colunas = ehGestao ? 9 : 8;
-  const temFiltro = Boolean(status || brand);
+  const temFiltro = Boolean(status || brand || busca || auxiliar || vendedora);
 
   return (
     <div className="space-y-6">
       {/* Título em `text-vendas-text`: a tela é de Vendas. Os CHIPS de status, não —
           estado não é setor (ver `lead-status-chip.tsx`). */}
       <h1 className="text-2xl font-bold text-vendas-text">Análise de Clientes</h1>
+
+      <AnaliseClientesFiltros
+        defaults={{ busca, status, auxiliar, vendedora }}
+        auxiliares={auxiliares}
+        vendedoras={vendedoras}
+        ehGestao={ehGestao}
+      />
 
       {ehGestao && semDono.length > 0 && (
         <Card>

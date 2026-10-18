@@ -236,7 +236,17 @@ async function reconciliarRodizio(agora = new Date()): Promise<void> {
 
 export async function listLeadsFor(
   actor: WholesaleActor,
-  opts: { brand?: string; status?: string; page?: number } = {},
+  opts: {
+    brand?: string;
+    status?: string;
+    page?: number;
+    /** Busca por NOME da candidata. Parcial e sem diferenciar maiúsculas. */
+    busca?: string;
+    /** Nome do auxiliar, como gravado em `assistantName`. */
+    auxiliar?: string;
+    /** Id da vendedora dona. Só a Gestão escolhe — ver abaixo. */
+    vendedora?: string;
+  } = {},
 ): Promise<{ leads: LeadRow[]; total: number; totalPages: number }> {
   if (!canUseWholesaleTool(actor)) return { leads: [], total: 0, totalPages: 1 };
 
@@ -259,10 +269,31 @@ export async function listLeadsFor(
     ? (opts.status as WholesaleLeadStatus)
     : undefined;
 
+  const busca = (opts.busca ?? "").trim();
+  const auxiliar = (opts.auxiliar ?? "").trim();
+  const vendedora = (opts.vendedora ?? "").trim();
+
   const where: Prisma.WholesaleLeadWhereInput = {
-    ...(actor.role === "GESTAO" ? {} : { sellerId: actor.userId }),
+    // O ESCOPO VEM PRIMEIRO e o filtro de vendedora só se aplica DEPOIS dele.
+    // Para quem não é Gestão, `sellerId` já está fixado no próprio id: um
+    // `?vendedora=<outro id>` na barra de endereços não alarga o que ela vê,
+    // porque a chave seguinte sobrescreveria o escopo. Por isso o filtro de
+    // vendedora só existe para GESTAO — é a diferença entre um filtro e um
+    // vazamento.
+    ...(actor.role === "GESTAO"
+      ? vendedora
+        ? { sellerId: vendedora }
+        : {}
+      : { sellerId: actor.userId }),
     ...(brand ? { brand } : {}),
     ...(status ? { status } : {}),
+    // Busca parcial no nome, sem diferenciar maiúsculas: é o nome que a
+    // vendedora tem na cabeça quando a lojista liga, não o id.
+    ...(busca ? { contactName: { contains: busca, mode: "insensitive" as const } } : {}),
+    // Auxiliar é texto livre gravado por `setAssistantName`, e o filtro compara
+    // o valor exato que a tela ofereceu — a lista de opções sai dos valores que
+    // existem no banco, então não há como pedir um que ninguém usou.
+    ...(auxiliar ? { assistantName: auxiliar } : {}),
   };
 
   const total = await prisma.wholesaleLead.count({ where });
