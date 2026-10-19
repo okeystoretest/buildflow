@@ -37,10 +37,25 @@ export interface CampaignPerfRow {
   premiacao: number; // R$ de premiação (peças × R$ 5,00)
   pct: number;    // % da meta de itens (qtd / meta)
 }
+/** Uma venda de Select na campanha homônima. Os três campos que o bloco mostra. */
+export interface SelectVendaRow {
+  cliente: string;
+  plano: string;
+  /** Valor TOTAL do contrato (mensalidade x validade), decidido pelo dono. */
+  valor: number;
+}
 export interface CampaignPerf {
   id: string;
   name: string;
   rows: CampaignPerfRow[];
+  /**
+   * Presente SÓ na campanha Select. Quando vem, o bloco troca a tabela por
+   * vendedora pela lista de contratos: um Select é uma venda nominal (cliente,
+   * plano, valor), não um punhado de peças de um pedido.
+   */
+  selects?: SelectVendaRow[];
+  /** Meta de Selects a vender no mês — o cabeçalho do bloco. */
+  metaSelects?: number;
 }
 export interface RankData {
   month: number;
@@ -180,6 +195,36 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   // o corte zerava e o valor digitado passava a SOMAR sobre o mes inteiro em
   // vez de substitui-lo — realizado dobrado. `corteLegado` devolve, fora da
   // janela, a semantica original do ajuste legado. Ver rank-window.ts.
+  // VENDAS DE SELECT DO MES.
+  //
+  // Um Select e uma venda de SERVICO: nao passa pelo fluxo de pedidos, nao tem
+  // comanda e nunca apareceria em `faturados`. Mas e venda atribuida a uma
+  // vendedora, e o dono decidiu que soma na meta INDIVIDUAL dela e na meta
+  // GERAL — por isso entra na mesma conta, logo abaixo, em vez de virar um
+  // numero paralelo que ninguem reconcilia.
+  //
+  // O VALOR e o TOTAL DO CONTRATO (mensalidade x validade), nao a mensalidade:
+  // decisao do dono em 19/10/2026. E o snapshot gravado na adesao, entao
+  // reajustar o plano depois nao reescreve o mes ja fechado.
+  //
+  // Conta no mes da ADESAO (`createdAt`), como todo pedido conta no mes em que
+  // foi criado. Cancelado fica de fora pelo mesmo motivo de ESTORNO/CANCELADO
+  // ficarem de fora do FATURADO_WHERE: a venda foi desfeita.
+  const selectsDoMes = await prisma.selectContract.findMany({
+    where: {
+      createdAt: { gte: inicioMes, lt: fimMes },
+      status: { not: "CANCELADO" },
+    },
+    select: {
+      responsibleId: true,
+      totalAmount: true,
+      createdAt: true,
+      planNameSnapshot: true,
+      brand: true,
+      customer: { select: { name: true } },
+    },
+  });
+
   const ajustes = await prisma.rankAdjustment.findMany({ where: { month, year } });
   const ajustePorUser = new Map(
     ajustes.map((a) => [
@@ -256,12 +301,28 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   //
   // maiorSemana / maiorMes NAO sao ajustados de proposito: sao recordes de UM
   // pedido especifico, e um ajuste agregado nao diz qual pedido teria mudado.
+  // Os Selects entram AQUI, na mesma lista dos pedidos, e nao numa soma a
+  // parte: `computeRealizado` e o unico lugar que alimenta ao mesmo tempo o
+  // realizado geral e o realizado por vendedora. Somado em separado, o KPI da
+  // Meta Geral e a soma das linhas da tabela deixariam de fechar — que e
+  // exatamente o defeito que o comentario de POPULACAO DO QUADRO ja descreve.
+  //
+  // O ajuste manual continua valendo por cima: se a vendedora tem ajuste, o
+  // Select anterior ao corte ja esta respondido pelo valor digitado, e o
+  // posterior soma — mesma regra dos pedidos, sem excecao para servico.
   const { ajusteManualTotal, realizadoGeral, porVendedor } = computeRealizado({
-    pedidos: doMes.map((o) => ({
-      sellerId: o.sellerId,
-      orderValue: receita(o),
-      createdAt: new Date(o.createdAt),
-    })),
+    pedidos: [
+      ...doMes.map((o) => ({
+        sellerId: o.sellerId,
+        orderValue: receita(o),
+        createdAt: new Date(o.createdAt),
+      })),
+      ...selectsDoMes.map((c) => ({
+        sellerId: c.responsibleId,
+        orderValue: Number(c.totalAmount),
+        createdAt: new Date(c.createdAt),
+      })),
+    ],
     comMeta,
     ajustes: ajustePorUser,
   });
@@ -379,6 +440,33 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
         return { nome: v.nome, meta: v.meta, qtd: v.qtd, valor: v.valor, premiacao: v.premiacao, pct };
       })
       .sort((a, b) => b.pct - a.pct || b.qtd - a.qtd);
+    // A CAMPANHA SELECT mostra outra coisa: a lista de contratos vendidos, nao
+    // a tabela de pecas por vendedora. Um Select nao tem "quantidade de pecas";
+    // o que se confere e quem comprou, que plano e por quanto.
+    //
+    // A ATRIBUICAO E PELA MARCA (`Campaign.selectBrand`), nao pelo nome: a
+    // venda declara a marca na adesao e cai na campanha daquela marca. Com o
+    // nome, renomear a campanha no cadastro parava a atribuicao em silencio.
+    if (c.selectBrand) {
+      return {
+        id: c.id,
+        name: c.name,
+        rows,
+        // Os TRES campos pedidos, e so eles. Vendedora nao entra: esta lista
+        // responde "o que foi vendido", e quem vendeu ja esta no ranking.
+        selects: selectsDoMes
+          .filter((v) => v.brand === c.selectBrand)
+          .map((v) => ({
+            cliente: v.customer.name,
+            plano: v.planNameSnapshot,
+            valor: Number(v.totalAmount),
+          })),
+        // Meta de Selects do mes: a soma das metas de itens vinculadas a esta
+        // campanha. E o mesmo campo (`targetItems`) que as outras campanhas
+        // usam para "pecas" — aqui um item e um Select.
+        metaSelects: c.goals.reduce((a: number, g: any) => a + (g.targetItems ?? 0), 0),
+      };
+    }
     return { id: c.id, name: c.name, rows };
   });
 

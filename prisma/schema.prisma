@@ -859,6 +859,18 @@ model Campaign {
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
 
+  // CAMPANHA DE SELECT: preenchido = esta campanha acompanha a venda do
+  // servico Select de UMA marca, e as vendas entram nela pela marca escolhida
+  // na adesao. Nulo = campanha comum, de pecas.
+  //
+  // UNIQUE: duas campanhas de Select da mesma marca dividiriam a atribuicao
+  // sem criterio — a venda cairia na primeira que a consulta devolvesse. O
+  // Postgres permite varios NULL, entao campanha comum nao e limitada.
+  //
+  // Substitui o reconhecimento por NOME (o `shortcut:` de rank-data.ts):
+  // renomear a campanha deixava de atribuir as vendas, em silencio.
+  selectBrand WholesaleBrand? @unique
+
   orders Order[]
   goals  SalesGoal[]
   items  CampaignItem[]
@@ -1134,6 +1146,14 @@ model SelectContract {
   // Nome do plano no momento da adesao: renomear o plano nao reescreve o
   // historico de quem ja comprou.
   planNameSnapshot   String
+
+  // Marca da contratacao, escolhida na adesao. E ela que leva a venda para a
+  // campanha de Select correspondente (Campaign.selectBrand).
+  //
+  // Opcional no banco por causa dos contratos criados antes deste campo; o
+  // formulario de adesao exige. Contrato sem marca nao entra em campanha
+  // nenhuma, e continua somando normalmente no ranking e nas metas.
+  brand WholesaleBrand?
 
   status       SelectContractStatus @default(ATIVO)
   canceledAt   DateTime?

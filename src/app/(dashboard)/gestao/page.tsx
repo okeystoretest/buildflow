@@ -74,7 +74,7 @@ export default async function GestaoPage(
         shippingMethods={shippingMethods.map((s) => ({ id: s.id, name: s.name, active: s.active }))}
         sellers={sellers.map((u) => ({ id: u.id, name: u.name, salesModel: u.salesModel }))}
         goals={goals.map((g) => ({ id: g.id, userName: g.user.name, amount: Number(g.amount), targetItems: g.targetItems, month: g.month, year: g.year, scope: g.scope, campaignName: g.campaign?.name ?? null }))}
-        campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, active: c.active }))}
+        campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, active: c.active, selectBrand: c.selectBrand }))}
         activeCampaigns={activeCampaigns.map((c) => ({ id: c.id, name: c.name }))}
         customers={customers.map((c) => ({
           id: c.id, code: c.code, name: c.name,

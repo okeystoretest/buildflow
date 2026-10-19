@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { WholesaleBrand } from "@prisma/client";
+import { SELECT_BRAND_LABEL } from "@/lib/select-brand";
 import { requireRoleAction } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import type { SalesModel } from "@prisma/client";
@@ -125,6 +127,50 @@ export async function createCampaign(args: { name: string }): Promise<ActionResu
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao criar campanha.");
+  }
+}
+
+/**
+ * CAMPANHA DE SELECT — uma por marca, criada pelo botao proprio.
+ *
+ * Existe separada de `createCampaign` porque nao e a mesma coisa: campanha
+ * comum acompanha PECAS vendidas em pedidos; esta acompanha CONTRATOS de
+ * servico de uma marca, e o vinculo com a marca e o que leva a venda ate ela.
+ * Criada a mao como campanha comum, nao atribuiria venda nenhuma — era o que
+ * acontecia quando o reconhecimento era pelo nome.
+ *
+ * O nome sai da marca e nao e digitado: o que identifica a campanha e a marca,
+ * e dois nomes diferentes para a mesma marca so confundiriam quem le o painel.
+ *
+ * UMA POR MARCA, garantido pelo UNIQUE da coluna. A recusa e traduzida aqui
+ * porque "Unique constraint failed on the fields: (`selectBrand`)" nao diz a
+ * ninguem que ja existe a campanha daquela marca.
+ */
+export async function createSelectCampaign(args: {
+  brand: string;
+}): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+
+    const brand = (args?.brand ?? "").trim();
+    if (!(Object.values(WholesaleBrand) as string[]).includes(brand)) {
+      return actionError("Escolha a marca da campanha.");
+    }
+    const marca = brand as WholesaleBrand;
+
+    const existente = await prisma.campaign.findUnique({ where: { selectBrand: marca } });
+    if (existente) {
+      return actionError(`Já existe a campanha de Select da marca ${SELECT_BRAND_LABEL[marca]}.`);
+    }
+
+    await prisma.campaign.create({
+      data: { name: `Select ${SELECT_BRAND_LABEL[marca]}`, selectBrand: marca },
+    });
+    revalidatePath("/gestao");
+    revalidatePath("/dashboard");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao criar a campanha de Select.");
   }
 }
 

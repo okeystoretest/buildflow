@@ -11,7 +11,7 @@ import {
 } from "@/lib/actions/management";
 import {
   createSalesGoal, deleteSalesGoal,
-  createCampaign, renameCampaign, toggleCampaign, deleteCampaign,
+  createCampaign, createSelectCampaign, renameCampaign, toggleCampaign, deleteCampaign,
 } from "@/lib/actions/goals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,11 +19,13 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CrudTable, type CrudRow } from "@/components/shared/crud-table";
+import { Modal } from "@/components/shared/modal";
+import { SELECT_BRANDS, SELECT_BRAND_LABEL } from "@/lib/select-brand";
 import { PlanosPanel, type PlanAdminRow } from "./planos-panel";
 import { CsvImport } from "@/components/shared/csv-import";
 import { ClientesManager, type ClienteRow } from "@/app/(dashboard)/vendas/clientes/manager-client";
 import { importUsersCsv, importOperationsCsv, importCustomersCsv } from "@/lib/actions/import";
-import { Pencil, Trash2, Check, X } from "lucide-react";
+import { Pencil, Trash2, Check, X, Star } from "lucide-react";
 import { formatBRL } from "@/lib/utils";
 import { formatPhone } from "@/lib/phone";
 import { DASHBOARD_COLUMNS, STATUS_LABEL, STATUS_STYLE } from "@/lib/order-flow";
@@ -35,7 +37,7 @@ interface UserRow { id: string; name: string; email: string; role: Role; active:
 interface OriginStoreRow { id: string; name: string; active: boolean; simplifiedFlow: boolean; }
 interface SellerOpt { id: string; name: string; salesModel: SalesModel | null; }
 interface GoalRow { id: string; userName: string; amount: number; targetItems: number | null; month: number; year: number; scope: SalesModel; campaignName: string | null; }
-interface CampaignRow { id: string; name: string; active: boolean; }
+interface CampaignRow { id: string; name: string; active: boolean; selectBrand: string | null; }
 interface CampaignOpt { id: string; name: string; }
 interface StageLimitRow { status: OrderStatus; limitMinutes: number; }
 
@@ -791,12 +793,23 @@ function CampaignsPanel({ campaigns }: { campaigns: CampaignRow[] }) {
   const [error, setError] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  // Modal do "Criar Select": so a marca, porque so a marca e escolhida — o
+  // nome da campanha sai dela.
+  const [marcaSelect, setMarcaSelect] = useState<string | null>(null);
 
   function create() {
     setError(null);
     start(async () => {
       const res = await createCampaign({ name });
       if (res.ok) { setName(""); router.refresh(); } else setError(res.error);
+    });
+  }
+
+  function criarSelect(brand: string) {
+    setError(null);
+    start(async () => {
+      const res = await createSelectCampaign({ brand });
+      if (res.ok) { setMarcaSelect(null); router.refresh(); } else setError(res.error);
     });
   }
   function startEdit(c: CampaignRow) { setEditId(c.id); setEditName(c.name); }
@@ -826,12 +839,25 @@ function CampaignsPanel({ campaigns }: { campaigns: CampaignRow[] }) {
         <p className="font-medium">Nova campanha</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Input placeholder="Nome da campanha" value={name} onChange={(e) => setName(e.target.value)} />
-          <div>
+          <div className="flex flex-wrap gap-2">
             <Button variant="brand" onClick={create} disabled={pending || !name.trim()}>Criar campanha</Button>
+            {/* Criar Select nao usa o campo de nome ao lado: a campanha de
+                Select e identificada pela MARCA, e o nome sai dela. */}
+            <Button variant="servico" onClick={() => setMarcaSelect("")} disabled={pending}>
+              <Star className="h-4 w-4" /> Criar Select
+            </Button>
           </div>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
+
+      {marcaSelect !== null && (
+        <MarcaSelectModal
+          pending={pending}
+          onClose={() => setMarcaSelect(null)}
+          onConfirm={criarSelect}
+        />
+      )}
 
       <table className="w-full text-sm">
         <thead className="border-b border-border text-left text-muted-foreground">
@@ -958,5 +984,60 @@ function EtapasPanel({ stageLimits }: { stageLimits: StageLimitRow[] }) {
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * Modal do "Criar Select": escolhe a marca e nada mais.
+ *
+ * Compacto de proposito — a unica decisao e a marca. Um formulario com nome,
+ * datas e descricao faria parecer que ha mais a configurar, e nao ha: o resto
+ * da campanha de Select sai da marca e das metas (aba Metas).
+ */
+function MarcaSelectModal({
+  pending,
+  onClose,
+  onConfirm,
+}: {
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: (brand: string) => void;
+}) {
+  const [brand, setBrand] = useState("");
+  return (
+    <Modal onClose={() => !pending && onClose()} largura="max-w-sm">
+      <h2 className="mb-1 text-lg font-bold">Criar campanha de Select</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Escolha a marca. As vendas de Select feitas com essa marca passam a
+        contar nesta campanha, e o nome dela sai daqui.
+      </p>
+
+      <div className="mb-4 space-y-2">
+        {SELECT_BRANDS.map((b) => (
+          <button
+            key={b}
+            type="button"
+            onClick={() => setBrand(b)}
+            aria-pressed={brand === b}
+            className={
+              "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors " +
+              (brand === b
+                ? "border-servico bg-servico/10 font-medium text-servico-text"
+                : "border-border hover:bg-secondary")
+            }
+          >
+            {SELECT_BRAND_LABEL[b]}
+            {brand === b && <Check className="h-4 w-4" />}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose} disabled={pending}>Cancelar</Button>
+        <Button variant="servico" onClick={() => onConfirm(brand)} disabled={pending || !brand}>
+          {pending ? "Criando..." : "Criar"}
+        </Button>
+      </div>
+    </Modal>
   );
 }

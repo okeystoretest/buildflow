@@ -94,6 +94,9 @@ export function NovoSelectForm({
   const [customer, setCustomer] = useState<CustomerState>({ kind: "VAZIO" });
   // Termo digitado quando a busca não achou nada: abre o modal e vira o nome.
   const [novoClienteTermo, setNovoClienteTermo] = useState<string | null>(null);
+  // Marca da contratacao. E ela que leva a venda para a campanha de Select
+  // correspondente (Gestao > Campanhas > Criar Select).
+  const [brand, setBrand] = useState("");
 
   // Vendedor a quem a venda pertence. Só Gestão e Financeiro escolhem; para
   // Vendas fica vazio e o servidor usa o próprio usuário da sessão.
@@ -217,7 +220,7 @@ export function NovoSelectForm({
     setMsg(null);
     start(async () => {
       const res = await previewSelectContract({
-        code, planId, startDate,
+        code, planId, startDate, brand,
         monthlyAmount, minMonthlyPurchase: minPurchase, validityMonths,
       });
       if (res.ok) {
@@ -234,7 +237,7 @@ export function NovoSelectForm({
     setMsg(null);
     start(async () => {
       const res = await createSelectContract({
-        code, planId, startDate,
+        code, planId, startDate, brand,
         monthlyAmount, minMonthlyPurchase: minPurchase, validityMonths,
         confirmTroca,
         responsibleId: canChooseResponsible ? responsibleId : undefined,
@@ -267,6 +270,9 @@ export function NovoSelectForm({
     code.trim() !== "" &&
     planId !== "" &&
     startDate !== "" &&
+    // A marca entra no mesmo lugar que o responsavel, e pelo mesmo motivo: a
+    // falta dela aparece ANTES de preencher o resto, nao no botao de salvar.
+    brand !== "" &&
     (!canChooseResponsible || responsibleId !== "") &&
     customer.kind === "ENCONTRADA" &&
     (!editavel || (monthlyAmount.trim() !== "" && minPurchase.trim() !== ""));
@@ -277,7 +283,7 @@ export function NovoSelectForm({
       {/* Mesma busca do Novo Pedido: sugestões do servidor por nome ou código.
           O `key` faz o campo refletir a cliente escolhida — inclusive a que
           acaba de ser criada no modal, que já chega selecionada. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="sm:col-span-2">
           <CustomerCombobox
             key={selecionada?.id ?? "vazio"}
@@ -290,6 +296,22 @@ export function NovoSelectForm({
             limit={5}
             placeholder="Busque por nome ou código..."
           />
+        </div>
+        {/* Ao lado do nome da cliente: a marca e parte da identificacao da
+            venda, nao um detalhe de valores. */}
+        <div className="space-y-1.5">
+          <Label htmlFor="select-marca">Marca *</Label>
+          <select
+            id="select-marca"
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            disabled={pending}
+            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          >
+            <option value="">Selecione...</option>
+            <option value="OKEY">OKEY</option>
+            <option value="LOV_CLUB">LOV CLUB</option>
+          </select>
         </div>
       </div>
 

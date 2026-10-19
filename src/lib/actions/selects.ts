@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+import { Prisma, WholesaleBrand } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
@@ -189,6 +189,9 @@ export interface SelectFormInput {
   monthlyAmount?: string;
   minMonthlyPurchase?: string;
   validityMonths?: string;
+  /** Marca da contratacao: "OKEY" ou "LOV_CLUB". E ela que leva a venda para a
+   *  campanha de Select correspondente. */
+  brand?: string;
 }
 
 interface Resolved {
@@ -202,6 +205,21 @@ interface Resolved {
   totalAmount: number;
   start: Date;
   end: Date;
+}
+
+/**
+ * A marca escolhida na adesao, validada contra o enum.
+ *
+ * LIMITE DE CONFIANCA: chega o que o navegador mandou. Valor fora do enum vira
+ * `null` em vez de derrubar a adesao — a marca decide em qual campanha a venda
+ * entra, nao se a venda existe. Recusar um contrato inteiro por causa de um
+ * campo de atribuicao seria perder a venda para consertar um relatorio.
+ */
+function marcaDaAdesao(bruto?: string): WholesaleBrand | null {
+  const v = (bruto ?? "").trim();
+  return (Object.values(WholesaleBrand) as string[]).includes(v)
+    ? (v as WholesaleBrand)
+    : null;
 }
 
 /** Relê o plano no banco e monta os valores definitivos. Nunca confia no que veio da tela. */
@@ -522,6 +540,7 @@ export async function createSelectContract(
           totalAmount: new Prisma.Decimal(resolved.totalAmount),
           minMonthlyPurchase: new Prisma.Decimal(resolved.minMonthlyPurchase),
           planNameSnapshot: resolved.plan.name,
+          brand: marcaDaAdesao(input.brand),
           status: "ATIVO",
           createdById: session.userId,
         },

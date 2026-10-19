@@ -372,9 +372,116 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
               )}
             </div>
           </div>
+          {/* Cabecalho da campanha Select: quantos Selects a equipe precisa
+              vender no mes, e quantos ja sairam. A outra campanha nao tem
+              numero equivalente — a meta dela e por vendedora, na tabela. */}
+          {campPerf?.selects && (
+            <SelectMetaHeader
+              vendidos={campPerf.selects.length}
+              meta={campPerf.metaSelects ?? 0}
+            />
+          )}
           <PerfTable perf={campPerf} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Cabeçalho da campanha Select: quantos foram vendidos, a meta e a barra.
+ *
+ * A BARRA USA A MESMA RÉGUA DE COR da Meta Geral (`tierColor`/`tierText`): as
+ * duas respondem "quanto da meta já foi" e, com cores próprias, verde num
+ * lugar significaria uma coisa e noutro outra.
+ *
+ * A largura trava em 100%, o NÚMERO não: bateu 130% da meta, a barra fica
+ * cheia e o texto diz 130%. Travar o número esconderia justamente o mês bom.
+ *
+ * Sem meta cadastrada não há barra — percentual de uma meta zero não existe, e
+ * uma barra vazia leria como "nada vendido". Nesse caso o texto diz onde
+ * cadastrar, que é a ação que resolve.
+ */
+function SelectMetaHeader({ vendidos, meta }: { vendidos: number; meta: number }) {
+  if (meta <= 0) {
+    return (
+      <p className="mb-2 shrink-0 text-sm text-muted-foreground">
+        <span className="font-data font-semibold text-foreground">{vendidos}</span> Selects
+        vendidos no mês · sem meta cadastrada em Gestão &gt; Metas
+      </p>
+    );
+  }
+
+  const pct = Math.round((vendidos / meta) * 100);
+  return (
+    <div className="mb-2 flex shrink-0 items-center gap-3">
+      <p className="shrink-0 text-sm text-muted-foreground">
+        <span className="font-data font-semibold text-foreground">{vendidos}</span>
+        {" de "}
+        <span className="font-data font-semibold text-foreground">{meta}</span>
+        {" Selects"}
+      </p>
+      <div
+        className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-secondary"
+        // A barra é decorativa: o "X de Y" ao lado e o percentual à direita já
+        // dizem tudo a quem não a enxerga.
+        aria-hidden
+      >
+        <div
+          className={`h-full rounded-full ${tierColor(pct)}`}
+          style={{ width: `${Math.min(pct, 100)}%`, transition: "width .5s ease" }}
+        />
+      </div>
+      <span className={`font-data shrink-0 text-sm font-bold ${tierText(pct)}`}>{pct}%</span>
+    </div>
+  );
+}
+
+/**
+ * A lista da campanha Select: cliente, plano e valor, e nada mais.
+ *
+ * Os tres campos sao o escopo que o dono definiu. Vendedora nao entra de
+ * proposito: esta lista responde "o que foi vendido", e quem vendeu ja esta no
+ * ranking ao lado — onde o valor do Select tambem soma.
+ */
+function SelectTable({ perf }: { perf: CampaignPerf }) {
+  const selects = perf.selects ?? [];
+  if (selects.length === 0) {
+    return (
+      <p className="m-auto text-sm text-muted-foreground">
+        Nenhum Select vendido neste mês.
+      </p>
+    );
+  }
+  const total = selects.reduce((a, s) => a + s.valor, 0);
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-card text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <tr>
+            <th className="pb-1 pr-2">Cliente</th>
+            <th className="pb-1 pr-2">Plano</th>
+            <th className="pb-1 text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {selects.map((s, i) => (
+            <tr key={`${s.cliente}-${i}`} className="border-t border-border/60">
+              <td className="truncate py-1 pr-2" title={s.cliente}>{s.cliente}</td>
+              <td className="truncate py-1 pr-2 text-muted-foreground" title={s.plano}>{s.plano}</td>
+              <td className="py-1 text-right font-data font-semibold">{formatBRL(s.valor)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-border">
+            <td className="py-1 pr-2 text-xs text-muted-foreground" colSpan={2}>
+              Total no mês
+            </td>
+            <td className="py-1 text-right font-data font-bold">{formatBRL(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
 }
@@ -560,6 +667,10 @@ function RankTrophy({ pos }: { pos: number }) {
 }
 
 function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
+  // A campanha Select mostra a lista de contratos, nao a tabela de pecas por
+  // vendedora: um Select e uma venda nominal. `selects` so vem preenchido nela.
+  if (perf?.selects) return <SelectTable perf={perf} />;
+
   if (!perf || perf.rows.length === 0) {
     return <p className="m-auto text-sm text-muted-foreground">Nenhuma campanha ativa ou sem metas vinculadas.</p>;
   }
