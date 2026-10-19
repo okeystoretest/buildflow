@@ -9,7 +9,7 @@ import { FinHistoricoList, type FinHistItem } from "./historico-list";
 import type { OrderStatus, Prisma } from "@prisma/client";
 
 // O historico so cresce, entao paginamos no banco.
-const PER_PAGE = 9;
+const PER_PAGE = 6;
 
 // Status que representam a SAIDA do EM_ANALISE, ou seja, o pedido "processado"
 // pelo Financeiro (aprovado no padrao/simplificado ou interrompido).

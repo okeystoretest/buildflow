@@ -9,7 +9,7 @@ import { EntregasFinFiltros } from "./filtros-client";
 import type { Prisma } from "@prisma/client";
 
 // Histórico só cresce → paginado no banco.
-const PER_PAGE = 20;
+const PER_PAGE = 6;
 
 // Submódulo "Entregas" do Financeiro: lista todas as entregas efetuadas por
 // usuários com perfil MOTORISTA.

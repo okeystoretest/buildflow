@@ -13,7 +13,7 @@ import { ExportarAtrasosPdf } from "./exportar-pdf-client";
 
 export const dynamic = "force-dynamic";
 
-const PER_PAGE = 20;
+const PER_PAGE = 6;
 
 /**
  * LOGÍSTICA > Relatório de Atrasos

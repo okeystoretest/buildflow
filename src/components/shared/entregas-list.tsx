@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ExternalLink, Wallet } from "lucide-react";
+import { ExternalLink, Wallet, X } from "lucide-react";
+import { Modal } from "@/components/shared/modal";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -123,39 +124,74 @@ export function EntregasList({
     });
   }
 
+  const aberto = orders.find((o) => o.id === openId) ?? null;
+
   return (
-    <div className="space-y-3">
-      {orders.map((o) => {
-        const open = openId === o.id;
-        return (
+    <>
+      {/* Grade de cards com o detalhe em modal — mesmo mecanismo dos
+          historicos e do Fluxo de Pedidos. A expansao para baixo empurrava as
+          entregas seguintes tela abaixo, e com uma aberta nao dava para
+          comparar com nenhuma outra. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {orders.map((o) => (
           <Card key={o.id} className="overflow-hidden animate-fade-in-up">
             <button
               type="button"
-              onClick={() => setOpenId(open ? null : o.id)}
-              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary/50"
+              onClick={() => setOpenId(o.id)}
+              className="flex w-full flex-col gap-2 p-4 text-left transition-colors hover:bg-secondary/50"
             >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">
+              <div className="flex items-start justify-between gap-2">
+                <p className="min-w-0 truncate text-sm font-semibold">
                   Pedido {o.orderNumber}
-                  {o.comandaNumber && <span className="text-muted-foreground"> · Comanda {o.comandaNumber}</span>}
+                  {o.comandaNumber && (
+                    <span className="text-muted-foreground"> · {o.comandaNumber}</span>
+                  )}
                 </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {o.customerName} · Vendedora: {o.sellerName}
-                  {o.driverName ? ` · Motorista: ${o.driverName}` : ""}
-                </p>
+                <div className="flex shrink-0 gap-1">
+                  <Badge className="bg-motorista/15 text-motorista-text">Entregue</Badge>
+                  {enablePayment && o.paid && (
+                    <Badge className="bg-financeiro/15 text-financeiro-text">Pago</Badge>
+                  )}
+                </div>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <Badge className="bg-motorista/15 text-motorista-text">Entregue</Badge>
-                {enablePayment && o.paid && (
-                  <Badge className="bg-financeiro/15 text-financeiro-text">Pago</Badge>
-                )}
-                <span className="font-data text-sm font-medium">{o.total}</span>
-                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
-              </div>
+              <p className="truncate text-xs text-muted-foreground">
+                {o.customerName}
+                {o.driverName ? ` · ${o.driverName}` : ""}
+              </p>
+              <span className="font-data text-sm font-semibold">{o.total}</span>
             </button>
+          </Card>
+        ))}
+      </div>
 
-            {open && (
-              <div className="space-y-4 border-t border-border px-4 py-4 text-sm animate-fade-in">
+      {aberto && (
+        <Modal onClose={() => setOpenId(null)} largura="max-w-2xl">
+          {(() => {
+            const o = aberto;
+            return (
+              <div className="space-y-4 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-semibold">
+                      Pedido {o.orderNumber}
+                      {o.comandaNumber && (
+                        <span className="text-muted-foreground"> · Comanda {o.comandaNumber}</span>
+                      )}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {o.customerName} · Vendedora: {o.sellerName}
+                      {o.driverName ? ` · Motorista: ${o.driverName}` : ""}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setOpenId(null)}
+                    aria-label="Fechar"
+                    className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
                 <Section title="Cliente">
                   <Info label="Código" value={o.customerCode ?? "—"} />
                   <Info label="Nome" value={o.customerName} />
@@ -250,14 +286,14 @@ export function EntregasList({
                   </div>
                 )}
               </div>
-            )}
-          </Card>
-        );
-      })}
+            );
+          })()}
+        </Modal>
+      )}
 
       {/* Modal 1: exibe a Chave PIX do motorista e o campo "Valor da Entrega". */}
       {payOrder && !confirming && (
-        <Modal onClose={closePay}>
+        <Modal onClose={closePay} largura="max-w-sm">
           <h2 className="mb-1 text-lg font-bold">Pagar entrega</h2>
           <p className="mb-4 text-sm text-muted-foreground">
             Pedido {payOrder.orderNumber}
@@ -305,7 +341,7 @@ export function EntregasList({
 
       {/* Modal 2: verificação final. */}
       {payOrder && confirming && (
-        <Modal onClose={() => setConfirming(false)}>
+        <Modal onClose={() => setConfirming(false)} largura="max-w-sm">
           <h2 className="mb-1 text-lg font-bold">Tem certeza de que deseja realizar esta ação?</h2>
           <p className="mb-4 text-sm text-muted-foreground">
             Pagamento da entrega do pedido {payOrder.orderNumber}
@@ -320,17 +356,7 @@ export function EntregasList({
           </div>
         </Modal>
       )}
-    </div>
-  );
-}
-
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
-        {children}
-      </div>
-    </div>
+    </>
   );
 }
 

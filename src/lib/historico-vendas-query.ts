@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { HISTORY_STATUSES } from "@/lib/order-flow";
 
 /**
  * FILTROS DO HISTÓRICO DE PEDIDOS — lidos uma vez, usados na tela e no PDF.
@@ -70,7 +71,9 @@ export function buildHistoricoWhere(
   const temPeriodo = f.de !== "" || f.ate !== "";
 
   return {
-    status: "CONCLUIDO",
+    // Todo pedido que ja saiu do quadro, nao so os CONCLUIDO: quem parava em
+    // ENTREGUE sem ser concluido sumia das duas pontas (ver HISTORY_STATUSES).
+    status: { in: HISTORY_STATUSES },
     ...(escopo.sellerId ? { sellerId: escopo.sellerId } : {}),
     ...(temPeriodo ? { updatedAt } : {}),
     ...(f.comanda ? { comandaNumber: { contains: f.comanda, mode: "insensitive" } } : {}),

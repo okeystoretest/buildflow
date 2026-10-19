@@ -30,6 +30,29 @@ export const DASHBOARD_COLUMNS: OrderStatus[] = ORDER_FLOW.filter(
   (s) => s !== "CONCLUIDO",
 );
 
+/**
+ * Status que colocam o pedido NO HISTORICO — ou seja, tudo que ja saiu do
+ * quadro de trabalho.
+ *
+ * Os historicos filtravam `status: "CONCLUIDO"` e so. Com isso, pedido que
+ * para em ENTREGUE e nunca e concluido some das DUAS pontas: o quadro esconde
+ * ENTREGUE 15 minutos depois da entrega, e o historico nunca o recebe. O mesmo
+ * vale para estorno, estorno parcial e cancelado, que nao tinham lugar nenhum
+ * no sistema depois de acontecerem. Nao e uma classe de pedido que sumia: e
+ * todo pedido cujo fim nao foi exatamente CONCLUIDO.
+ *
+ * ENTREGUE entra de proposito mesmo aparecendo no quadro por 15 minutos: e
+ * melhor um pedido visivel nos dois lugares por um quarto de hora do que um
+ * pedido invisivel para sempre.
+ */
+export const HISTORY_STATUSES: OrderStatus[] = [
+  "ENTREGUE",
+  "CONCLUIDO",
+  "ESTORNO",
+  "ESTORNO_PARCIAL",
+  "CANCELADO",
+];
+
 export const EXCEPTION_STATUSES: OrderStatus[] = [
   "ESTORNO",
   "ESTORNO_PARCIAL",

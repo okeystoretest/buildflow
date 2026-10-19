@@ -101,9 +101,10 @@ export default async function FluxoPage(
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">
-          Fluxo de Pedidos → Fábrica (VENDAS)
-        </h1>
+        {/* O titulo diz QUAL loja esta sendo vista. Fixo em "Fabrica", ele
+            mentia em toda loja que nao fosse a Fabrica — e esta tela existe
+            justamente porque a visao e sempre escopada por loja. */}
+        <h1 className="text-2xl font-bold">Fluxo de Pedidos → {store.name}</h1>
         <p className="text-sm text-muted-foreground">Acompanhamento de todos os pedidos por status.</p>
       </div>
       <KanbanBoard
@@ -111,7 +112,7 @@ export default async function FluxoPage(
         columns={columnsForFlow(simplified)}
         canManage={session.role === "GESTAO"}
         userRole={session.role}
-        boardModule="Fluxo de Pedidos → Fábrica (VENDAS)"
+        boardModule={`Fluxo de Pedidos → ${store.name}`}
         stageLimits={stageLimits}
         simplified={simplified}
       />

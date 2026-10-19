@@ -15,7 +15,7 @@ import { RelatorioDeVendas } from "./exportar-pdf-client";
 
 // Itens por pagina. O historico so cresce (todo pedido concluido fica aqui),
 // entao a consulta e paginada no banco em vez de trazer tudo.
-const PER_PAGE = 9;
+const PER_PAGE = 6;
 
 export default async function HistoricoPage(
   props: {

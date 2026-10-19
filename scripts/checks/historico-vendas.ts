@@ -56,8 +56,22 @@ const restrito = buildHistoricoWhere(parseHistoricoFiltros({}), { sellerId: "u1"
 
 check("Gestão/Financeiro não filtram por vendedora", "sellerId" in amplo, false);
 check("Vendas é presa ao próprio id", restrito.sellerId, "u1");
-// Se isto cair, o relatório passa a trazer pedido em rascunho ou cancelado.
-check("só pedido CONCLUIDO entra", amplo.status, "CONCLUIDO");
+// O histórico mostra tudo que JÁ SAIU do quadro, não só o CONCLUIDO: pedido
+// que parava em ENTREGUE sem ser concluído sumia das duas pontas, porque o
+// quadro esconde ENTREGUE 15 min depois da entrega. Se esta lista encolher
+// para "CONCLUIDO" de novo, aquele buraco volta — e volta em silêncio.
+check("todo pedido encerrado entra", amplo.status, {
+  in: ["ENTREGUE", "CONCLUIDO", "ESTORNO", "ESTORNO_PARCIAL", "CANCELADO"],
+});
+// O que NÃO pode entrar é pedido ainda em andamento: um EM_ANALISE no
+// relatório de vendas seria uma venda que ainda não aconteceu.
+check(
+  "pedido em andamento fica de fora",
+  (amplo.status as { in: string[] }).in.some((s) =>
+    ["EM_ANALISE", "SEPARANDO", "EMBALANDO", "PROCESSANDO", "ENVIADO", "EM_ROTA"].includes(s),
+  ),
+  false,
+);
 
 // Sem período na URL não existe filtro de data (correção 2.1): cair no "mês
 // atual" ocultava silenciosamente todo o histórico anterior.

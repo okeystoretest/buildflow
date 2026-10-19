@@ -10,7 +10,7 @@ import { isAnexoDispensavel } from "@/lib/validations/order";
 import type { Prisma } from "@prisma/client";
 
 // Histórico só cresce → paginado no banco.
-const PER_PAGE = 20;
+const PER_PAGE = 6;
 
 export default async function LogisticaEntregasPage(
   props: {

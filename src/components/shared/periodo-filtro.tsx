@@ -97,7 +97,9 @@ export function PeriodoFiltro({
         aria-haspopup="dialog"
         onClick={() => setAberto((v) => !v)}
         className={cn(
-          "flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors",
+          // `pr-4` maior que o `pl-3`: a seta e o ultimo elemento da linha e
+          // encostava na borda do botao. O respiro extra vai so do lado dela.
+          "flex h-10 items-center gap-2 rounded-lg border pl-3 pr-4 text-sm font-medium transition-colors",
           tem
             ? ATIVO[setor]
             : "border-input bg-background text-muted-foreground hover:bg-secondary hover:text-foreground",

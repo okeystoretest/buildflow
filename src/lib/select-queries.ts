@@ -35,7 +35,7 @@ export interface SelectListFilters {
   page?: number;
 }
 
-export const SELECT_PAGE_SIZE = 10;
+export const SELECT_PAGE_SIZE = 6;
 
 /**
  * Traduz o estado DERIVADO para condições de banco.

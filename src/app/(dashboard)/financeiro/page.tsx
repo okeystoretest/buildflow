@@ -172,12 +172,9 @@ export default async function FinanceiroPage() {
         <p className="text-sm text-muted-foreground">Auditoria, faturamento e liberação de pedidos.</p>
       </div>
 
-      <FinanceiroFerramentas
-        paymentMethods={paymentMethods.map((p) => ({ id: p.id, name: p.name, active: p.active }))}
-        banks={banks.map((b) => ({ id: b.id, name: b.name, active: b.active }))}
-        payStatuses={payStatuses.map((p) => ({ id: p.id, name: p.name, active: p.active, disposition: p.disposition }))}
-        cnpjs={cnpjs.map((c) => ({ id: c.id, name: c.name, document: c.document, active: c.active }))}
-      />
+      {/* Cada ferramenta tem rota propria: os paineis deixaram de abrir inline
+          empurrando o Kanban tela abaixo. */}
+      <FinanceiroFerramentas />
 
       <AnaliseKanban
         pendentes={pendentes}

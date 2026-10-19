@@ -8,9 +8,10 @@ import { ComandaList, type ComandaListItem } from "@/components/shared/comanda-l
 import { isAnexoDispensavel } from "@/lib/validations/order";
 import { Pagination } from "@/components/shared/pagination";
 import type { Prisma } from "@prisma/client";
+import { HISTORY_STATUSES } from "@/lib/order-flow";
 
 // Itens por pagina. O historico so cresce, entao paginamos no banco.
-const PER_PAGE = 9;
+const PER_PAGE = 6;
 
 function firstDayOfMonth(): string {
   const d = new Date();
@@ -39,9 +40,11 @@ export default async function MotoristaHistoricoPage(
   const dataFim = new Date(ate + "T23:59:59");
 
   const where: Prisma.OrderWhereInput = {
-    status: "CONCLUIDO",
+    // Toda entrega que ja saiu do quadro, nao so as CONCLUIDO (HISTORY_STATUSES):
+    // a que parava em ENTREGUE nao aparecia em lugar nenhum depois de 15 min.
+    status: { in: HISTORY_STATUSES },
     updatedAt: { gte: dataInicio, lte: dataFim },
-    // Motorista vê só as próprias entregas; Gestão vê todas as concluídas.
+    // Motorista vê só as próprias entregas; Gestão vê todas.
     delivery: session.role === "GESTAO" ? { isNot: null } : { driverId: session.userId },
     ...(busca
       ? {

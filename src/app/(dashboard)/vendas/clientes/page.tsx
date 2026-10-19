@@ -7,7 +7,7 @@ import { ClientesManager, type ClienteRow } from "./manager-client";
 
 // Itens por pagina. A base tem dezenas de milhares de clientes, entao NUNCA
 // carregamos todos: a consulta e paginada e a busca acontece no banco.
-const PER_PAGE = 20;
+const PER_PAGE = 6;
 
 export default async function ClientesPage(
   props: {
