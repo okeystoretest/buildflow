@@ -206,7 +206,32 @@ export async function deleteCampaign(id: string): Promise<ActionResult<void>> {
     if (linked > 0) {
       return actionError(`Não é possível excluir: ${linked} pedido(s) vinculado(s). Desative a campanha.`);
     }
-    // Metas vinculadas viram Geral (onDelete: SetNull no schema).
+
+    // METAS VINCULADAS BARRAM A EXCLUSÃO, como os pedidos.
+    //
+    // O schema tem `onDelete: SetNull` no `campaignId` da meta, então apagar a
+    // campanha deixava as metas dela com campaignId nulo — isto é, virando META
+    // GERAL. Duas coisas davam errado aí, e a segunda é pior que a primeira:
+    //
+    //  1. Com a vendedora já tendo meta geral naquele mês/ano/escopo, as duas
+    //     colidem em `salesgoal_geral_unique` e o delete falha com um erro de
+    //     constraint do Prisma, que não diz a ninguém o que aconteceu.
+    //  2. Quando NÃO colide, a conversão acontece em silêncio — e meta de
+    //     campanha é medida em QUANTIDADE DE ITENS (`targetItems`), não em R$.
+    //     Ela entrava na Meta Geral do dashboard com o `amount` que estivesse
+    //     gravado, como um valor que ninguém cadastrou.
+    //
+    // Recusar, e não apagar as metas junto: meta é histórico de performance. O
+    // ranking de um mês fechado lê as metas daquele mês, e apagá-las reescreve
+    // o passado para fechar uma campanha do presente.
+    const metas = await prisma.salesGoal.count({ where: { campaignId: id } });
+    if (metas > 0) {
+      return actionError(
+        `Não é possível excluir: ${metas} meta(s) vinculada(s) a esta campanha. ` +
+          `Remova as metas na aba Metas, ou desative a campanha.`,
+      );
+    }
+
     await prisma.campaign.delete({ where: { id } });
     revalidatePath("/gestao");
     revalidatePath("/dashboard");
