@@ -15,6 +15,19 @@ import { Label } from "@/components/ui/label";
 import { formatBRL } from "@/lib/utils";
 import { BUILD_SALES_MONTHLY, parseMoney } from "@/lib/select-contract";
 
+/**
+ * Um benefício do plano. `executable` decide se ele vira etapa do roadmap de
+ * entrega do contrato (ver `src/lib/select-roadmap.ts`): entregável tem marco
+ * de conclusão e conta progresso; casual/contínuo não tem e fica fora da régua.
+ */
+export interface BenefitRow {
+  text: string;
+  executable: boolean;
+}
+
+/** Linha nova nasce entrando na régua: entregável é o caso comum. */
+const NOVO_BENEFICIO: BenefitRow = { text: "", executable: true };
+
 export interface PlanAdminRow {
   id: string;
   name: string;
@@ -24,7 +37,7 @@ export interface PlanAdminRow {
   minMonthlyPurchase: number | null;
   editableValues: boolean;
   active: boolean;
-  benefits: string[];
+  benefits: BenefitRow[];
   /** Quantos contratos já foram vendidos neste plano. */
   contractCount: number;
 }
@@ -35,7 +48,7 @@ const VAZIO = {
   monthlyAmount: "",
   minMonthlyPurchase: "",
   editableValues: false,
-  benefits: [""] as string[],
+  benefits: [NOVO_BENEFICIO] as BenefitRow[],
 };
 
 type FormState = typeof VAZIO;
@@ -47,7 +60,7 @@ function paraForm(p: PlanAdminRow): FormState {
     monthlyAmount: p.monthlyAmount == null ? "" : String(p.monthlyAmount),
     minMonthlyPurchase: p.minMonthlyPurchase == null ? "" : String(p.minMonthlyPurchase),
     editableValues: p.editableValues,
-    benefits: p.benefits.length > 0 ? [...p.benefits] : [""],
+    benefits: p.benefits.length > 0 ? [...p.benefits] : [NOVO_BENEFICIO],
   };
 }
 
@@ -97,22 +110,22 @@ export function PlanosPanel({ plans }: { plans: PlanAdminRow[] }) {
     setErro(null);
   }
 
-  function setBeneficio(i: number, v: string) {
+  function setBeneficio(i: number, patch: Partial<BenefitRow>) {
     setF((p) => {
       const b = [...p.benefits];
-      b[i] = v;
+      b[i] = { ...b[i], ...patch };
       return { ...p, benefits: b };
     });
   }
 
   function adicionarBeneficio() {
-    setF((p) => ({ ...p, benefits: [...p.benefits, ""] }));
+    setF((p) => ({ ...p, benefits: [...p.benefits, NOVO_BENEFICIO] }));
   }
 
   function removerBeneficio(i: number) {
     setF((p) => {
       const b = p.benefits.filter((_, j) => j !== i);
-      return { ...p, benefits: b.length > 0 ? b : [""] };
+      return { ...p, benefits: b.length > 0 ? b : [NOVO_BENEFICIO] };
     });
   }
 
@@ -264,20 +277,40 @@ export function PlanosPanel({ plans }: { plans: PlanAdminRow[] }) {
             <Label>Benefícios</Label>
             <div className="space-y-2">
               {f.benefits.map((b, i) => (
-                <div key={i} className="flex gap-2">
-                  <Input
-                    value={b}
-                    onChange={(e) => setBeneficio(i, e.target.value)}
-                    placeholder={`Benefício ${i + 1}`}
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => removerBeneficio(i)}
-                    aria-label={`Remover benefício ${i + 1}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                <div key={i} className="space-y-1">
+                  <div className="flex gap-2">
+                    <Input
+                      value={b.text}
+                      onChange={(e) => setBeneficio(i, { text: e.target.value })}
+                      placeholder={`Benefício ${i + 1}`}
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => removerBeneficio(i)}
+                      aria-label={`Remover benefício ${i + 1}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {/* `htmlFor`/`id` em vez de aninhar o input no label: o texto
+                      do benefício muda de posição quando linhas são removidas,
+                      e o id por índice mantém o par clicável estável. */}
+                  <div className="flex items-center gap-2 pl-1">
+                    <input
+                      type="checkbox"
+                      id={`beneficio-roadmap-${i}`}
+                      checked={b.executable}
+                      onChange={(e) => setBeneficio(i, { executable: e.target.checked })}
+                      className="h-4 w-4 rounded border-input accent-servico"
+                    />
+                    <Label
+                      htmlFor={`beneficio-roadmap-${i}`}
+                      className="text-xs font-normal text-muted-foreground"
+                    >
+                      Entra no roadmap de entrega
+                    </Label>
+                  </div>
                 </div>
               ))}
             </div>
@@ -286,7 +319,10 @@ export function PlanosPanel({ plans }: { plans: PlanAdminRow[] }) {
             </Button>
             <p className="text-xs text-muted-foreground">
               Aparecem na ordem desta lista, na tela de adesão. Linha em branco é
-              descartada.
+              descartada. Marcados viram etapas do roadmap de entrega do
+              contrato e contam o progresso; desmarque os que não têm conclusão
+              (suporte sob demanda, atendimento recorrente) — eles continuam
+              aparecendo no plano, só ficam fora da régua.
             </p>
           </div>
 

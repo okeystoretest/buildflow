@@ -293,6 +293,16 @@ export interface SelectDetail {
   paidBeyondClosure: number;
   installments: SelectInstallmentRow[];
   cycles: PurchaseCycle[];
+  /** Régua de entrega dos benefícios, em ordem. Ver `src/lib/select-roadmap.ts`. */
+  steps: SelectStepRow[];
+}
+
+export interface SelectStepRow {
+  id: string;
+  sortOrder: number;
+  label: string;
+  done: boolean;
+  doneAtLabel: string | null;
 }
 
 export async function getSelectDetail(id: string): Promise<SelectDetail | null> {
@@ -304,6 +314,7 @@ export async function getSelectDetail(id: string): Promise<SelectDetail | null> 
       responsible: { select: { name: true } },
       replaces: { select: { id: true, planNameSnapshot: true, startDate: true } },
       replacedBy: { select: { id: true, planNameSnapshot: true, startDate: true } },
+      steps: { orderBy: { sortOrder: "asc" } },
       installments: {
         orderBy: { number: "asc" },
         include: {
@@ -389,6 +400,24 @@ export async function getSelectDetail(id: string): Promise<SelectDetail | null> 
     paidBeyondClosure,
     installments,
     cycles: await purchaseCycles(c, hoje),
+    // `doneAt` é instante (o clique), não data pura como as do contrato, então
+    // desce FORMATADO do servidor. Formatar no navegador usaria o fuso de quem
+    // está olhando, e a divergência com o servidor aparece como erro de
+    // hidratação — mesmo motivo documentado na Análise de Clientes.
+    steps: c.steps.map((e) => ({
+      id: e.id,
+      sortOrder: e.sortOrder,
+      label: e.label,
+      done: e.doneAt != null,
+      doneAtLabel: e.doneAt
+        ? e.doneAt.toLocaleDateString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            timeZone: "America/Sao_Paulo",
+          })
+        : null,
+    })),
   };
 }
 

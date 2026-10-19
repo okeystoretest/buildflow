@@ -1090,6 +1090,11 @@ model SelectPlanBenefit {
 
   sortOrder Int    @default(0)
   text      String
+  // Entra na regua do roadmap (beneficio EXECUTAVEL: tem marco de entrega) ou
+  // fica fora dela (casual/continuo, tipo "suporte sob demanda", que nao tem
+  // conclusao e por isso nao pode contar percentual). Default true: o
+  // beneficio comum e entregavel, e quem cadastra desmarca a excecao.
+  executable Boolean @default(true)
 
   @@index([planId, sortOrder])
 }
@@ -1144,11 +1149,42 @@ model SelectContract {
   updatedById String?
 
   installments SelectInstallment[]
+  steps        SelectContractStep[]
 
   @@index([customerId])
   @@index([status])
   @@index([startDate])
   @@index([responsibleId])
+}
+
+// ETAPA DO ROADMAP de UM contrato: as etapas previas (apresentacao e
+// negociacao) e depois uma por beneficio executavel do plano. Geradas na
+// adesao, dentro da mesma transacao do contrato.
+//
+// `label` e SNAPSHOT, pelo mesmo motivo de `planNameSnapshot`: `updateSelectPlan`
+// apaga e recria TODOS os SelectPlanBenefit a cada salvamento do plano, entao
+// id de beneficio nao sobrevive a uma edicao. Apontar para ele deixaria o
+// roadmap de todo cliente orfao na primeira correcao de virgula no plano.
+//
+// Sem coluna de percentual: progresso e concluidas/total, contado na leitura.
+// Gravado seria um numero a mais para dessincronizar.
+model SelectContractStep {
+  id         String         @id @default(cuid())
+  contract   SelectContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contractId String
+
+  sortOrder Int
+  label     String
+
+  // Concluida quando tem data. Os *ById sem FK, como no resto do Select:
+  // apagar um usuario nao pode apagar nem travar o registro da entrega.
+  doneAt   DateTime?
+  doneById String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([contractId, sortOrder])
+  @@index([contractId, sortOrder])
 }
 
 // Parcela mensal. Geradas na adesao, uma por mes de validade — EXCETO as de

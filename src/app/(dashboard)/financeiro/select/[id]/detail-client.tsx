@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle, Ban, ChevronDown, ChevronRight, FileText, Paperclip, RotateCcw, Star,
+  AlertTriangle, Ban, Check, ChevronDown, ChevronRight, FileText, Paperclip, RotateCcw, Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,8 @@ import {
   registerSelectPayment, reverseSelectPayment, cancelSelectInstallment, setSelectInstallmentNote,
 } from "@/lib/actions/select-finance";
 import { cancelSelectContract } from "@/lib/actions/selects";
+import { setSelectStepDone } from "@/lib/actions/select-roadmap";
+import { canCompleteStep, canUndoStep, roadmapProgress } from "@/lib/select-roadmap";
 import {
   formatDayBR, toInputDate, dayUTC,
   CONTRACT_STATE_LABEL, INSTALLMENT_STATE_LABEL,
@@ -118,6 +120,13 @@ export function SelectDetailClient({
       {msg && !msg.ok && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{msg.text}</div>
       )}
+
+      {/* ----------------------------------------- roadmap de entrega -- */}
+      <RoadmapCard
+        steps={detail.steps}
+        bloqueado={detail.state === "CANCELADO"}
+        onErro={(t) => setMsg({ ok: false, text: t })}
+      />
 
       {/* --------------------------------------------- dados do contrato -- */}
       <Card>
@@ -518,5 +527,137 @@ function Parcela({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * ROADMAP DE ENTREGA — a régua do contrato, avançada por clique.
+ *
+ * Vertical, numerada, com a linha ligando as etapas: é o mesmo desenho da
+ * `Timeline` que a cliente já vê em `/acompanhar/[token]`, e numa tela estreita
+ * a régua horizontal da referência vira texto ilegível ou rolagem lateral.
+ *
+ * O botão só fica ativo na etapa que a ORDEM libera: a próxima pendente, ou a
+ * última concluída (para desfazer). Isso é conveniência — a guarda está em
+ * `setSelectStepDone`, no servidor.
+ *
+ * `aria-label` diz o nome da etapa, não só "Concluir": com dez botões iguais,
+ * quem usa leitor de tela ouviria "Concluir" dez vezes sem saber o quê.
+ */
+function RoadmapCard({
+  steps, bloqueado, onErro,
+}: {
+  steps: SelectDetail["steps"];
+  bloqueado: boolean;
+  onErro: (texto: string) => void;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  const estados = steps.map((e) => ({ sortOrder: e.sortOrder, done: e.done }));
+  const { done, total, percent } = roadmapProgress(estados);
+
+  function alternar(stepId: string, novoDone: boolean) {
+    start(async () => {
+      const res = await setSelectStepDone({ stepId, done: novoDone });
+      if (res.ok) router.refresh();
+      else onErro(res.error);
+    });
+  }
+
+  if (total === 0) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Roadmap de entrega</CardTitle></CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          {/* Só acontece em contrato anterior ao roadmap. Dizer o que fazer
+              vale mais que um vazio mudo. */}
+          Este Select não tem régua de entrega. Ela é gerada na adesão, a partir
+          dos benefícios do plano marcados como entregáveis.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+          <span>Roadmap de entrega</span>
+          <span className="font-data text-sm font-normal text-muted-foreground">
+            {done} de {total} · {percent}%
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Barra decorativa: o número ao lado já diz o progresso a quem não a
+            enxerga, por isso ela sai da árvore de acessibilidade. */}
+        <div className="h-2 w-full overflow-hidden rounded-full bg-secondary" aria-hidden>
+          <div
+            className="h-full rounded-full bg-servico transition-all"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+
+        <ol className="space-y-0">
+          {steps.map((e, i) => {
+            const podeConcluir = canCompleteStep(estados, e.sortOrder);
+            const podeDesfazer = canUndoStep(estados, e.sortOrder);
+            const ultima = i === steps.length - 1;
+            return (
+              <li key={e.id} className="flex gap-3">
+                {/* Marcador + o fio que liga ao próximo. O fio é do item de
+                    cima, então o último não desenha nenhum. */}
+                <div className="flex flex-col items-center">
+                  <span
+                    className={
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-data " +
+                      (e.done
+                        ? "border-servico bg-servico text-servico-fg"
+                        : "border-border bg-background text-muted-foreground")
+                    }
+                    aria-hidden
+                  >
+                    {e.done ? <Check className="h-4 w-4" /> : e.sortOrder}
+                  </span>
+                  {!ultima && (
+                    <span
+                      className={"w-px flex-1 " + (e.done ? "bg-servico" : "bg-border")}
+                      aria-hidden
+                    />
+                  )}
+                </div>
+
+                <div className="flex flex-1 flex-wrap items-center justify-between gap-2 pb-4">
+                  <div>
+                    <p className={e.done ? "text-sm font-medium" : "text-sm"}>{e.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {e.done ? `Concluída em ${e.doneAtLabel}` : "Pendente"}
+                    </p>
+                  </div>
+                  {!bloqueado && (podeConcluir || podeDesfazer) && (
+                    <Button
+                      variant={podeConcluir ? "servico" : "outline"}
+                      size="sm"
+                      disabled={pending}
+                      aria-label={`${podeConcluir ? "Concluir" : "Desfazer"} a etapa ${e.label}`}
+                      onClick={() => alternar(e.id, podeConcluir)}
+                    >
+                      {podeConcluir ? "Concluir" : "Desfazer"}
+                    </Button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+
+        {bloqueado && (
+          <p className="text-xs text-muted-foreground">
+            Este Select foi cancelado: a régua de entrega não se altera.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

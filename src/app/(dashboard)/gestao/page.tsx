@@ -47,7 +47,10 @@ export default async function GestaoPage(
       prisma.selectPlan.findMany({
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
         include: {
-          benefits: { orderBy: { sortOrder: "asc" }, select: { text: true } },
+          benefits: {
+            orderBy: { sortOrder: "asc" },
+            select: { text: true, executable: true },
+          },
           _count: { select: { contracts: true } },
         },
       }),
@@ -92,7 +95,7 @@ export default async function GestaoPage(
           minMonthlyPurchase: p.minMonthlyPurchase == null ? null : Number(p.minMonthlyPurchase),
           editableValues: p.editableValues,
           active: p.active,
-          benefits: p.benefits.map((b) => b.text),
+          benefits: p.benefits.map((b) => ({ text: b.text, executable: b.executable })),
           contractCount: p._count.contracts,
         }))}
       />

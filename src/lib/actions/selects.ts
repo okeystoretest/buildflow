@@ -21,6 +21,7 @@ import {
   parseMoney,
   type ExistingContract,
 } from "@/lib/select-contract";
+import { buildRoadmapSteps } from "@/lib/select-roadmap";
 
 /**
  * SELECT — adesão de uma cliente a um plano de serviço.
@@ -544,6 +545,27 @@ export async function createSelectContract(
           })),
         });
       }
+
+      // --- roadmap de entrega ---
+      // Na MESMA transação do contrato: um Select sem régua não teria por onde
+      // registrar entrega nenhuma, e gerar depois (na primeira leitura da
+      // tela) poria escrita num caminho de leitura.
+      //
+      // Os textos são COPIADOS para dentro da etapa, não referenciados:
+      // `updateSelectPlan` apaga e recria todos os SelectPlanBenefit a cada
+      // salvamento do plano. É o mesmo motivo de `planNameSnapshot`.
+      const executaveis = await tx.selectPlanBenefit.findMany({
+        where: { planId: resolved.plan.id, executable: true },
+        orderBy: { sortOrder: "asc" },
+        select: { text: true },
+      });
+      await tx.selectContractStep.createMany({
+        data: buildRoadmapSteps(executaveis.map((b) => b.text)).map((e) => ({
+          contractId: novo.id,
+          sortOrder: e.sortOrder,
+          label: e.label,
+        })),
+      });
 
       // --- encerramento do contrato trocado ---
       if (classificacao.kind === "TROCA") {

@@ -27,21 +27,37 @@ import { resolvePlanForm, type PlanFormInput } from "@/lib/select-contract";
 const MAX_BENEFIT = 200;
 const MAX_BENEFITS = 30;
 
+export interface BenefitInput {
+  text: string;
+  /**
+   * Entra na régua do roadmap. Falso é o benefício casual/contínuo, que não
+   * tem marco de entrega e por isso não pode contar percentual de conclusão.
+   */
+  executable: boolean;
+}
+
 export interface PlanActionInput extends PlanFormInput {
-  /** Um texto por benefício, na ordem em que aparecem na tela. */
-  benefits: string[];
+  /** Um benefício por linha, na ordem em que aparecem na tela. */
+  benefits: BenefitInput[];
 }
 
 /**
  * Benefícios: aparam, descartam linhas vazias e são CORTADOS no teto (texto
  * descritivo aceita corte, ao contrário do nome do plano, que é identidade).
+ *
+ * `executable` é coagido com `!== false`: isto é limite de confiança, chega o
+ * que o navegador mandou, e o default do banco é `true` — só um `false`
+ * explícito tira o benefício da régua.
  */
-function normalizeBenefits(raw: string[]): string[] | { error: string } {
+function normalizeBenefits(raw: BenefitInput[]): BenefitInput[] | { error: string } {
   // `limitText` já apara e devolve null para linha vazia — o filtro abaixo
   // descarta justamente as linhas que o usuário adicionou e não preencheu.
-  const limpos = raw
-    .map((t) => limitText(t, MAX_BENEFIT))
-    .filter((t): t is string => t != null);
+  const limpos = (Array.isArray(raw) ? raw : [])
+    .map((b) => ({
+      text: limitText(b?.text, MAX_BENEFIT),
+      executable: b?.executable !== false,
+    }))
+    .filter((b): b is BenefitInput => b.text != null);
   if (limpos.length > MAX_BENEFITS) {
     return { error: `No máximo ${MAX_BENEFITS} benefícios por plano.` };
   }
@@ -106,7 +122,11 @@ export async function createSelectPlan(
             : new Prisma.Decimal(resolvido.plan.minMonthlyPurchase),
         sortOrder: (ultimo._max.sortOrder ?? 0) + 1,
         benefits: {
-          create: benefits.map((text, i) => ({ text, sortOrder: i + 1 })),
+          create: benefits.map((b, i) => ({
+            text: b.text,
+            executable: b.executable,
+            sortOrder: i + 1,
+          })),
         },
       },
       select: { id: true },
@@ -163,9 +183,10 @@ export async function updateSelectPlan(
       await tx.selectPlanBenefit.deleteMany({ where: { planId: input.id } });
       if (benefits.length > 0) {
         await tx.selectPlanBenefit.createMany({
-          data: benefits.map((text, i) => ({
+          data: benefits.map((b, i) => ({
             planId: input.id,
-            text,
+            text: b.text,
+            executable: b.executable,
             sortOrder: i + 1,
           })),
         });
