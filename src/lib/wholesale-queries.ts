@@ -9,7 +9,7 @@ import { isValidRejectionCode } from "@/lib/wholesale-rejection-codes";
  * Consultas da Análise de Clientes. Nada aqui escreve.
  */
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 6;
 
 /**
  * Intervalo de CHEGADA da candidatura, para o `where`.
@@ -271,6 +271,8 @@ export async function listLeadsFor(
     busca?: string;
     /** Nome do auxiliar, como gravado em `assistantName`. */
     auxiliar?: string;
+    /** UF da loja da candidata (duas letras). */
+    estado?: string;
     /** Id da vendedora dona. Só a Gestão escolhe — ver abaixo. */
     vendedora?: string;
     /** Intervalo de chegada (YYYY-MM-DD). */
@@ -304,6 +306,7 @@ export async function listLeadsFor(
   const busca = (opts.busca ?? "").trim();
   const auxiliar = (opts.auxiliar ?? "").trim();
   const vendedora = (opts.vendedora ?? "").trim();
+  const estado = (opts.estado ?? "").trim();
 
   const where: Prisma.WholesaleLeadWhereInput = {
     // O ESCOPO VEM PRIMEIRO e o filtro de vendedora só se aplica DEPOIS dele.
@@ -326,6 +329,9 @@ export async function listLeadsFor(
     // o valor exato que a tela ofereceu — a lista de opções sai dos valores que
     // existem no banco, então não há como pedir um que ninguém usou.
     ...(auxiliar ? { assistantName: auxiliar } : {}),
+    // UF: comparada em MAIUSCULAS porque e assim que a LP grava. Valor que
+    // nao tem duas letras e ignorado em vez de devolver lista vazia.
+    ...(estado.length === 2 ? { state: estado.toUpperCase() } : {}),
     // Período de chegada. Depois do escopo, como todo filtro: ele estreita o
     // que a pessoa já podia ver, nunca alarga.
     ...filtroDePeriodo(opts.de, opts.ate),

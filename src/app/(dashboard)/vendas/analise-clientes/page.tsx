@@ -65,7 +65,7 @@ export default async function AnaliseClientesPage(
       brand?: string;
       page?: string;
       busca?: string;
-      auxiliar?: string;
+      estado?: string;
       vendedora?: string;
       de?: string;
       ate?: string;
@@ -89,7 +89,7 @@ export default async function AnaliseClientesPage(
   const status = searchParams?.status?.trim() || "";
   const brand = searchParams?.brand?.trim() || "";
   const busca = searchParams?.busca?.trim() || "";
-  const auxiliar = searchParams?.auxiliar?.trim() || "";
+  const estado = searchParams?.estado?.trim() || "";
   // Lido da URL por qualquer papel, mas `listLeadsFor` só o aplica para a
   // GESTAO: para quem é de Vendas o escopo já fixa o `sellerId` no próprio id,
   // e um `?vendedora=<outro>` na barra de endereços não alarga nada.
@@ -104,7 +104,7 @@ export default async function AnaliseClientesPage(
     brand,
     page,
     busca,
-    auxiliar,
+    estado,
     vendedora,
     de,
     ate,
@@ -282,23 +282,20 @@ export default async function AnaliseClientesPage(
 
   // OPÇÕES DOS FILTROS.
   //
-  // Auxiliar é texto livre: as opções são os valores que de fato existem, e
-  // DENTRO DO ESCOPO de quem está olhando — oferecer à vendedora o nome de um
-  // auxiliar que só aparece em candidatura de outra pessoa contaria algo que
-  // ela não deveria ver, mesmo que o filtro depois não devolvesse nada.
-  const auxiliares = (
+  // Estado: as UFs que de fato existem, e DENTRO DO ESCOPO de quem está
+  // olhando — oferecer à vendedora uma UF que só aparece em candidatura de
+  // outra pessoa contaria algo que ela não deveria ver, mesmo que o filtro
+  // depois não devolvesse nada.
+  const estados = (
     await prisma.wholesaleLead.findMany({
-      where: {
-        assistantName: { not: null },
-        ...(ehGestao ? {} : { sellerId: actor.userId }),
-      },
-      distinct: ["assistantName"],
-      select: { assistantName: true },
-      orderBy: { assistantName: "asc" },
+      where: ehGestao ? {} : { sellerId: actor.userId },
+      distinct: ["state"],
+      select: { state: true },
+      orderBy: { state: "asc" },
     })
   )
-    .map((l) => l.assistantName)
-    .filter((n): n is string => Boolean(n && n.trim()));
+    .map((l) => l.state?.trim().toUpperCase())
+    .filter((uf): uf is string => Boolean(uf));
 
   // Vendedoras: só a Gestão escolhe, então a consulta só acontece para ela.
   // Inclui as INATIVAS de propósito — candidatura antiga continua apontando
@@ -317,7 +314,7 @@ export default async function AnaliseClientesPage(
     if (status) sp.set("status", status);
     if (brand) sp.set("brand", brand);
     if (busca) sp.set("busca", busca);
-    if (auxiliar) sp.set("auxiliar", auxiliar);
+    if (estado) sp.set("estado", estado);
     if (vendedora) sp.set("vendedora", vendedora);
     if (de) sp.set("de", de);
     if (ate) sp.set("ate", ate);
@@ -328,9 +325,11 @@ export default async function AnaliseClientesPage(
   };
 
   // Colunas: 8 para a vendedora, 9 para a Gestão (ela também vê "Vendedora").
-  const colunas = ehGestao ? 9 : 8;
+  // Cidade e UF viraram duas colunas: 10 para a Gestao (que tambem ve
+  // "Vendedora"), 9 para a vendedora.
+  const colunas = ehGestao ? 10 : 9;
   const temFiltro = Boolean(
-    status || brand || busca || auxiliar || vendedora || de || ate || motivo,
+    status || brand || busca || estado || vendedora || de || ate || motivo,
   );
 
   return (
@@ -344,8 +343,8 @@ export default async function AnaliseClientesPage(
       <AnaliseClientesTabs ativa="lista" />
 
       <AnaliseClientesFiltros
-        defaults={{ busca, status, auxiliar, vendedora, de, ate, motivo }}
-        auxiliares={auxiliares}
+        defaults={{ busca, status, estado, vendedora, de, ate, motivo }}
+        estados={estados}
         vendedoras={vendedoras}
         ehGestao={ehGestao}
       />
@@ -379,7 +378,8 @@ export default async function AnaliseClientesPage(
                       Recebido
                     </th>
                     <th className="border-r border-border py-2 pl-4 pr-4">Nome</th>
-                    <th className="border-r border-border py-2 pl-4 pr-4">Cidade/UF</th>
+                    <th className="border-r border-border py-2 pl-4 pr-4">Cidade</th>
+                    <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">UF</th>
                     <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
                       CNPJ
                     </th>
@@ -395,8 +395,9 @@ export default async function AnaliseClientesPage(
                         {dataCurta(l.createdAt)}
                       </td>
                       <td className="border-r border-border py-2 pl-4 pr-4">{l.contactName}</td>
-                      <td className="border-r border-border py-2 pl-4 pr-4">
-                        {l.city}/{l.state}
+                      <td className="border-r border-border py-2 pl-4 pr-4">{l.city}</td>
+                      <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
+                        {l.state}
                       </td>
                       <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4 font-data">
                         {formatCnpj(l.cnpj)}
@@ -426,7 +427,8 @@ export default async function AnaliseClientesPage(
                     Recebido
                   </th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Nome</th>
-                  <th className="border-r border-border py-2 pl-4 pr-4">Cidade/UF</th>
+                  <th className="border-r border-border py-2 pl-4 pr-4">Cidade</th>
+                  <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">UF</th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Instagram</th>
                   <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
                     CNPJ
@@ -453,8 +455,12 @@ export default async function AnaliseClientesPage(
                         {dataCurta(l.createdAt)}
                       </td>
                       <td className="border-r border-border py-2 pl-4 pr-4">{l.contactName}</td>
-                      <td className="border-r border-border py-2 pl-4 pr-4">
-                        {l.city}/{l.state}
+                      <td className="border-r border-border py-2 pl-4 pr-4">{l.city}</td>
+                      {/* UF em coluna estreita e propria: e dado de largura
+                          fixa, e colado na cidade impedia filtrar e ler por
+                          estado de relance. */}
+                      <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
+                        {l.state}
                       </td>
                       <td className="border-r border-border py-2 pl-4 pr-4">
                         {l.instagram ? `@${l.instagram}` : "—"}

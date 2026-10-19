@@ -22,30 +22,30 @@ const selectClass =
  * ignorar no servidor são decisões separadas — a segunda é a que vale, e está
  * em `listLeadsFor`.
  *
- * AUXILIAR é texto livre (gravado por `setAssistantName`), então as opções são
- * os valores que REALMENTE existem no banco, lidos pela página. Um campo de
- * texto livre aqui faria a vendedora caçar a grafia exata que alguém digitou
- * meses atrás.
+ * ESTADO (UF) substituiu o filtro de Auxiliar em 19/10/2026, a pedido do dono.
+ * As opções são as UFs que REALMENTE existem na base, lidas pela página e
+ * dentro do escopo de quem olha — oferecer as 27 faria a vendedora procurar
+ * entre estados de onde nunca chegou candidatura.
  *
  * Marca não entra: a Lov saiu de circulação em 17/10/2026 e sobrou uma marca
  * só. Quando ela voltar, este é o lugar.
  */
 export function AnaliseClientesFiltros({
   defaults,
-  auxiliares,
+  estados,
   vendedoras,
   ehGestao,
 }: {
   defaults: {
     busca: string;
     status: string;
-    auxiliar: string;
+    estado: string;
     vendedora: string;
     de: string;
     ate: string;
     motivo: string;
   };
-  auxiliares: string[];
+  estados: string[];
   vendedoras: { id: string; name: string }[];
   ehGestao: boolean;
 }) {
@@ -54,7 +54,7 @@ export function AnaliseClientesFiltros({
     {
       instant: {
         status: defaults.status,
-        auxiliar: defaults.auxiliar,
+        estado: defaults.estado,
         vendedora: defaults.vendedora,
         de: defaults.de,
         ate: defaults.ate,
@@ -104,20 +104,23 @@ export function AnaliseClientesFiltros({
           </select>
         </div>
 
-        <div className="space-y-1.5" style={{ minWidth: 160 }}>
-          <Label>Auxiliar</Label>
+        {/* ESTADO no lugar do Auxiliar: as opcoes sao as UFs que de fato
+            existem na base, dentro do escopo de quem olha. Uma lista com as 27
+            faria a vendedora procurar entre estados de onde nunca chegou
+            candidatura. */}
+        <div className="space-y-1.5" style={{ minWidth: 120 }}>
+          <Label htmlFor="filtro-estado">Estado</Label>
           <select
+            id="filtro-estado"
             className={selectClass}
-            value={f.instant.auxiliar}
-            onChange={(e) => f.setInstant("auxiliar", e.target.value)}
-            disabled={auxiliares.length === 0}
+            value={f.instant.estado}
+            onChange={(e) => f.setInstant("estado", e.target.value)}
+            disabled={estados.length === 0}
           >
-            {/* Sem nenhum auxiliar gravado, o select fica desabilitado e diz
-                por quê. Um "Todos" sozinho parece filtro quebrado. */}
-            <option value="">{auxiliares.length === 0 ? "Nenhum ainda" : "Todos"}</option>
-            {auxiliares.map((a) => (
-              <option key={a} value={a}>
-                {a}
+            <option value="">{estados.length === 0 ? "Nenhum ainda" : "Todos"}</option>
+            {estados.map((uf) => (
+              <option key={uf} value={uf}>
+                {uf}
               </option>
             ))}
           </select>
