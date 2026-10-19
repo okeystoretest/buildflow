@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { Inbox } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { BackButton } from "@/components/shared/back-button";
+import { atorDaFerramenta } from "@/lib/wholesale-actor";
+import { AcessoNegadoAtacado, AnaliseClientesTabs } from "./tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Prisma } from "@prisma/client";
 import { formatCnpj, normalizeCnpj, phoneMatchKeys } from "@/lib/wholesale-identity";
-import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permissions";
 import { classifyDuplicateMatch, listLeadsFor } from "@/lib/wholesale-queries";
+import { findRejectionCode } from "@/lib/wholesale-rejection-codes";
 import { LeadStatusChip } from "./lead-status-chip";
 import { LeadRowActions } from "./lead-row-actions";
 import { AnaliseClientesFiltros } from "./filtros-client";
@@ -65,35 +67,17 @@ export default async function AnaliseClientesPage(
       busca?: string;
       auxiliar?: string;
       vendedora?: string;
+      de?: string;
+      ate?: string;
+      motivo?: string;
     }>;
   }
 ) {
   const searchParams = await props.searchParams;
-  const session = await requireRole(["VENDAS", "GESTAO"]);
-
-  // Sem `!`: se o usuário da sessão não existe mais (desativado, removido), o
-  // caminho é negar, não estourar um 500 por acesso a `undefined`.
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { id: true, role: true, salesModel: true },
-  });
-
-  const actor: WholesaleActor | null = user
-    ? { userId: user.id, role: user.role, salesModel: user.salesModel }
-    : null;
-
-  if (!actor || !canUseWholesaleTool(actor)) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-vendas-text">Análise de Clientes</h1>
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            A Análise de Clientes é da equipe de Atacado.
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Papel, escopo de Atacado e releitura do ator vivem em `atorDaFerramenta`:
+  // o dashboard aplica a MESMA regra, e escrita duas vezes ela diverge.
+  const actor = await atorDaFerramenta();
+  if (!actor) return <AcessoNegadoAtacado />;
 
   const ehGestao = actor.role === "GESTAO";
 
@@ -110,6 +94,9 @@ export default async function AnaliseClientesPage(
   // GESTAO: para quem é de Vendas o escopo já fixa o `sellerId` no próprio id,
   // e um `?vendedora=<outro>` na barra de endereços não alarga nada.
   const vendedora = searchParams?.vendedora?.trim() || "";
+  const de = searchParams?.de?.trim() || "";
+  const ate = searchParams?.ate?.trim() || "";
+  const motivo = searchParams?.motivo?.trim() || "";
   const page = Math.max(1, Number(searchParams?.page) || 1);
 
   const { leads, total, totalPages } = await listLeadsFor(actor, {
@@ -119,6 +106,9 @@ export default async function AnaliseClientesPage(
     busca,
     auxiliar,
     vendedora,
+    de,
+    ate,
+    motivo,
   });
   const pageSafe = Math.min(page, totalPages);
 
@@ -329,6 +319,9 @@ export default async function AnaliseClientesPage(
     if (busca) sp.set("busca", busca);
     if (auxiliar) sp.set("auxiliar", auxiliar);
     if (vendedora) sp.set("vendedora", vendedora);
+    if (de) sp.set("de", de);
+    if (ate) sp.set("ate", ate);
+    if (motivo) sp.set("motivo", motivo);
     if (p > 1) sp.set("page", String(p));
     const qs = sp.toString();
     return qs ? `/vendas/analise-clientes?${qs}` : "/vendas/analise-clientes";
@@ -336,16 +329,22 @@ export default async function AnaliseClientesPage(
 
   // Colunas: 8 para a vendedora, 9 para a Gestão (ela também vê "Vendedora").
   const colunas = ehGestao ? 9 : 8;
-  const temFiltro = Boolean(status || brand || busca || auxiliar || vendedora);
+  const temFiltro = Boolean(
+    status || brand || busca || auxiliar || vendedora || de || ate || motivo,
+  );
 
   return (
     <div className="space-y-6">
+      <BackButton />
+
       {/* Título em `text-vendas-text`: a tela é de Vendas. Os CHIPS de status, não —
           estado não é setor (ver `lead-status-chip.tsx`). */}
       <h1 className="text-2xl font-bold text-vendas-text">Análise de Clientes</h1>
 
+      <AnaliseClientesTabs ativa="lista" />
+
       <AnaliseClientesFiltros
-        defaults={{ busca, status, auxiliar, vendedora }}
+        defaults={{ busca, status, auxiliar, vendedora, de, ate, motivo }}
         auxiliares={auxiliares}
         vendedoras={vendedoras}
         ehGestao={ehGestao}
@@ -466,16 +465,49 @@ export default async function AnaliseClientesPage(
                       <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
                         <LeadStatusChip status={l.status} />
                       </td>
-                      {/* Exibida em maiúsculas (decisão 19). A action já grava
-                          assim; o `uppercase` aqui cobre registro antigo que
-                          tenha entrado por outro caminho. */}
-                      <td className="border-r border-border py-2 pl-4 pr-4 uppercase">
-                        {l.assistantName ?? "—"}
-                      </td>
-                      {ehGestao && (
-                        <td className="border-r border-border py-2 pl-4 pr-4">
-                          {l.sellerName ?? "—"}
+                      {/* REPROVADA: no lugar de Auxiliar e Vendedora, o MOTIVO.
+                          Numa candidatura recusada, quem a atendeu deixou de
+                          ser a informação útil da linha — o que se procura ao
+                          varrer a lista é por que ela caiu, e esse dado estava
+                          escondido atrás do modal. */}
+                      {l.status === "REPROVADO" ? (
+                        <td
+                          colSpan={ehGestao ? 2 : 1}
+                          className="border-r border-border py-2 pl-4 pr-4"
+                        >
+                          {l.rejectionCode ? (
+                            <span
+                              className="text-destructive"
+                              title={findRejectionCode(l.rejectionCode)?.label ?? undefined}
+                            >
+                              <span className="font-data font-semibold">{l.rejectionCode}</span>
+                              {/* O rótulo vem junto quando a tabela tem espaço:
+                                  o código sozinho exige decorar os 34. */}
+                              <span className="hidden lg:inline">
+                                {" "}
+                                — {findRejectionCode(l.rejectionCode)?.label ?? "motivo desconhecido"}
+                              </span>
+                            </span>
+                          ) : (
+                            // Reprovada antiga, de antes de o código ser
+                            // obrigatório: dizer isso é melhor que um traço.
+                            <span className="text-muted-foreground">Sem código</span>
+                          )}
                         </td>
+                      ) : (
+                        <>
+                          {/* Exibida em maiúsculas (decisão 19). A action já grava
+                              assim; o `uppercase` aqui cobre registro antigo que
+                              tenha entrado por outro caminho. */}
+                          <td className="border-r border-border py-2 pl-4 pr-4 uppercase">
+                            {l.assistantName ?? "—"}
+                          </td>
+                          {ehGestao && (
+                            <td className="border-r border-border py-2 pl-4 pr-4">
+                              {l.sellerName ?? "—"}
+                            </td>
+                          )}
+                        </>
                       )}
                       <td className="py-2 pl-4 pr-4 text-right">
                         {/* Sem as respostas completas não há o que analisar. Só
@@ -486,6 +518,7 @@ export default async function AnaliseClientesPage(
                           <LeadRowActions
                             lead={respostas}
                             alerts={alertasPorLead.get(l.id) ?? []}
+                            ehGestao={ehGestao}
                           />
                         ) : (
                           <span className="text-xs text-muted-foreground">

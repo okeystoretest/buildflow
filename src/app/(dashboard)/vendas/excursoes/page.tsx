@@ -5,7 +5,7 @@ import { SearchBox } from "@/components/shared/search-box";
 import { Pagination } from "@/components/shared/pagination";
 import { ExcursoesManager, type ExcursaoRow } from "./manager-client";
 
-const PER_PAGE = 20;
+const PER_PAGE = 6;
 
 // Cadastro de Excursões (Vendas). Segue o padrão do Cadastro de Clientes:
 // busca no servidor (?q=) e paginação no banco.

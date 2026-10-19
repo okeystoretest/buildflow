@@ -1,7 +1,7 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PeriodoFiltro } from "@/components/shared/periodo-filtro";
 import { Card, CardContent } from "@/components/ui/card";
 import { useFilterQuery } from "@/hooks/use-filter-query";
 
@@ -28,14 +28,14 @@ export function MetricasFiltros({
   return (
     <Card>
       <CardContent className="flex flex-wrap items-end gap-3 pt-5">
-        <div className="space-y-1.5">
-          <Label>Pedidos criados de</Label>
-          <Input type="date" value={f.instant.de} onChange={(e) => f.setInstant("de", e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Até</Label>
-          <Input type="date" value={f.instant.ate} onChange={(e) => f.setInstant("ate", e.target.value)} />
-        </div>
+        <PeriodoFiltro
+          de={f.instant.de}
+          ate={f.instant.ate}
+          onChange={(p) => f.setInstantMany(p)}
+          setor="distribuicao"
+          titulo="Criação"
+          id="logistica-metricas"
+        />
         <div className="flex-1 space-y-1.5" style={{ minWidth: 200 }}>
           <Label>Loja de Origem</Label>
           <select

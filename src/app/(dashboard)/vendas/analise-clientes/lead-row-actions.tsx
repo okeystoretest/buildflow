@@ -23,9 +23,12 @@ import { DecisionModal, type DuplicateAlertView, type LeadAnswers } from "./deci
 export function LeadRowActions({
   lead,
   alerts,
+  ehGestao,
 }: {
   lead: LeadAnswers;
   alerts: DuplicateAlertView[];
+  /** Só a Gestão vê o botão de excluir dentro do modal. */
+  ehGestao: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
 
@@ -42,6 +45,7 @@ export function LeadRowActions({
         <DecisionModal
           lead={lead}
           alerts={alerts}
+          ehGestao={ehGestao}
           onClose={() => setAberto(false)}
           // `decideLead` e `setAssistantName` chamam
           // `revalidatePath("/vendas/analise-clientes")`, então a lista se

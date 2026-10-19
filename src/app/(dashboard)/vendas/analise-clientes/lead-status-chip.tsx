@@ -32,15 +32,32 @@ import { cn } from "@/lib/utils";
  * emerald-600 dá ~3,8:1, abaixo do 4,5:1 que o WCAG AA pede para texto
  * normal; sobre emerald-700 dá ~5,5:1. O chip é texto pequeno, então o piso
  * que vale é o de texto normal, não o de texto grande.
+ *
+ * `chip` e `dot` são DOIS trabalhos diferentes, como em `TRANSPORT_STATUS_STYLE`:
+ * o chip precisa de contraste do TEXTO contra o próprio fundo; o ponto (e a
+ * fatia da barra empilhada do painel) precisa se separar do FUNDO DA TELA, sem
+ * texto nenhum em cima. Por isso "Em análise" é `bg-secondary` no chip e
+ * `bg-slate-400` no ponto: um ponto de 8px em `bg-secondary` sobre o card
+ * desapareceria, e a fatia dele na barra sumiria dentro da própria trilha —
+ * que também é `bg-secondary`. Um estado invisível num painel lê-se como
+ * "nenhuma candidatura nesse estado", que é a informação errada.
  */
 export const LEAD_STATUS_META: Record<
   WholesaleLeadStatus,
-  { label: string; chip: string }
+  { label: string; chip: string; dot: string }
 > = {
-  EM_ANALISE: { label: "Em análise", chip: "bg-secondary text-secondary-foreground" },
-  APROVADO: { label: "Aprovado", chip: "bg-emerald-700 text-white" },
-  REPROVADO: { label: "Reprovado", chip: "bg-destructive text-destructive-foreground" },
-  CUIDADO: { label: "Cuidado", chip: "bg-amber-400 text-amber-950" },
+  EM_ANALISE: {
+    label: "Em análise",
+    chip: "bg-secondary text-secondary-foreground",
+    dot: "bg-slate-400",
+  },
+  APROVADO: { label: "Aprovado", chip: "bg-emerald-700 text-white", dot: "bg-emerald-600" },
+  REPROVADO: {
+    label: "Reprovado",
+    chip: "bg-destructive text-destructive-foreground",
+    dot: "bg-destructive",
+  },
+  CUIDADO: { label: "Cuidado", chip: "bg-amber-400 text-amber-950", dot: "bg-amber-400" },
 };
 
 /** Os quatro status na ordem do fluxo, para montar o seletor do modal. */

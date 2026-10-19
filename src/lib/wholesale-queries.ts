@@ -3,12 +3,39 @@ import { Prisma, WholesaleBrand, WholesaleLeadStatus } from "@prisma/client";
 import { normalizeCnpj, phoneMatchKeys } from "@/lib/wholesale-identity";
 import { donaDoRodizio, voltasDoRodizio } from "@/lib/wholesale-rodizio";
 import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permissions";
+import { isValidRejectionCode } from "@/lib/wholesale-rejection-codes";
 
 /**
  * Consultas da Análise de Clientes. Nada aqui escreve.
  */
 
 const PAGE_SIZE = 20;
+
+/**
+ * Intervalo de CHEGADA da candidatura, para o `where`.
+ *
+ * Uma função só porque a lista e o dashboard filtram o mesmo período sobre a
+ * mesma coluna: escrito duas vezes, um lado inclui o último dia e o outro não,
+ * e os dois números da mesma tela deixam de bater sem ninguém saber qual está
+ * certo.
+ *
+ * `ate` fecha às 23:59:59 do dia escolhido. Com `lte` na meia-noite, o filtro
+ * "até 19/10" perderia tudo que chegou no dia 19 — e quem escolhe uma data
+ * final está incluindo aquele dia, não o excluindo.
+ *
+ * Devolve `{}` quando não há período: em Prisma, uma chave `createdAt: {}`
+ * também não filtraria, mas devolver o objeto vazio deixa o `...spread` de quem
+ * chama não acrescentar chave nenhuma.
+ */
+export function filtroDePeriodo(de?: string, ate?: string): Prisma.WholesaleLeadWhereInput {
+  const inicio = (de ?? "").trim();
+  const fim = (ate ?? "").trim();
+  if (!inicio && !fim) return {};
+  const createdAt: Prisma.DateTimeFilter = {};
+  if (inicio) createdAt.gte = new Date(`${inicio}T00:00:00`);
+  if (fim) createdAt.lte = new Date(`${fim}T23:59:59`);
+  return { createdAt };
+}
 
 /**
  * O filtro do aviso de cadastro repetido (decisão 9), separado e PURO para
@@ -246,6 +273,11 @@ export async function listLeadsFor(
     auxiliar?: string;
     /** Id da vendedora dona. Só a Gestão escolhe — ver abaixo. */
     vendedora?: string;
+    /** Intervalo de chegada (YYYY-MM-DD). */
+    de?: string;
+    ate?: string;
+    /** Código do motivo de reprovação (os 34 da planilha). */
+    motivo?: string;
   } = {},
 ): Promise<{ leads: LeadRow[]; total: number; totalPages: number }> {
   if (!canUseWholesaleTool(actor)) return { leads: [], total: 0, totalPages: 1 };
@@ -294,6 +326,15 @@ export async function listLeadsFor(
     // o valor exato que a tela ofereceu — a lista de opções sai dos valores que
     // existem no banco, então não há como pedir um que ninguém usou.
     ...(auxiliar ? { assistantName: auxiliar } : {}),
+    // Período de chegada. Depois do escopo, como todo filtro: ele estreita o
+    // que a pessoa já podia ver, nunca alarga.
+    ...filtroDePeriodo(opts.de, opts.ate),
+    // Motivo da reprovação. Código fora da tabela é IGNORADO (e não devolve
+    // zero): um `?motivo=99` digitado à mão não deve produzir uma lista vazia
+    // que parece "nenhuma reprovada por este motivo".
+    ...(isValidRejectionCode((opts.motivo ?? "").trim())
+      ? { rejectionCode: (opts.motivo ?? "").trim() }
+      : {}),
   };
 
   const total = await prisma.wholesaleLead.count({ where });

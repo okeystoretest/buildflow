@@ -12,6 +12,7 @@ import {
   WHOLESALE_DENIED_MSG,
   type WholesaleActor,
 } from "@/lib/wholesale-permissions";
+import { apagarCandidatura } from "@/lib/wholesale-retention";
 import type { WholesaleLeadStatus } from "@prisma/client";
 
 /**
@@ -187,6 +188,51 @@ export async function setAssistantName(input: {
 
   revalidatePath("/vendas/analise-clientes");
   return actionOk({ assistantName: nome });
+}
+
+/**
+ * EXCLUSÃO DE UMA CANDIDATURA — só a GESTÃO, e não volta atrás.
+ *
+ * Por que só a Gestão: apagar remove as 18 respostas, as duas fotos e o
+ * diário de decisões. A vendedora dona pode DECIDIR a candidatura dela; apagar
+ * o registro de uma decisão é outra ordem de poder, e `canUseWholesaleTool`
+ * sozinho não a separa — por isso o papel é conferido aqui, explicitamente, e
+ * não só escondendo o botão na tela.
+ *
+ * É a mesma rotina do expurgo de 90 dias (`apagarCandidatura`): a foto sai
+ * antes da linha, e o diário sai junto. Escrever a exclusão de novo aqui
+ * criaria duas versões de uma regra de LGPD.
+ *
+ * SEM registro do que foi apagado. Um "diário da exclusão" guardando nome e
+ * CNPJ de quem foi apagado desfaria o próprio apagamento — a candidata pediu
+ * para sumir e sobraria uma linha dizendo quem ela era. Quem apagou fica no
+ * log do servidor, não numa tabela de dado pessoal.
+ */
+export async function deleteLead(input: { leadId: string }): Promise<ActionResult<void>> {
+  const actor = await atorAtual();
+  if (!actor || !canUseWholesaleTool(actor) || actor.role !== "GESTAO") {
+    return actionError(WHOLESALE_DENIED_MSG);
+  }
+
+  const leadId = asText(input?.leadId);
+  if (!leadId) return actionError(WHOLESALE_DENIED_MSG);
+
+  const lead = await prisma.wholesaleLead.findUnique({
+    where: { id: leadId },
+    select: { id: true, instagramImagePath: true, storeImagePath: true },
+  });
+  // Mesma resposta de "não existe": idempotente de propósito, dois cliques no
+  // botão não produzem um erro assustador no segundo.
+  if (!lead) return actionOk(undefined);
+
+  try {
+    await apagarCandidatura(lead);
+  } catch {
+    return actionError("Não foi possível excluir o cadastro. Tente de novo.");
+  }
+
+  revalidatePath("/vendas/analise-clientes");
+  return actionOk(undefined);
 }
 
 /* `assignLeadSeller` (distribuicao manual da Gestao) saiu em 17/10/2026, a

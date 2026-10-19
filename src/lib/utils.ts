@@ -109,3 +109,31 @@ export function limitText(raw: string | null | undefined, max: number): string |
   const limpo = raw.trim().slice(0, max);
   return limpo || null;
 }
+
+/**
+ * O rotulo do botao de periodo (src/components/shared/periodo-filtro.tsx).
+ *
+ * Mostra o recorte escolhido no proprio botao, para que ele diga o que esta
+ * valendo sem precisar ser aberto. Sem periodo, devolve o `titulo` — que e o
+ * que aquele periodo significa naquela tela ("Abertura", "Criacao", "Inicio").
+ *
+ * As pontas sao independentes: so "de" e um periodo aberto a frente, so "ate"
+ * e um periodo aberto atras, e os dois precisam ser dizíveis — a consulta
+ * aceita as duas formas.
+ *
+ * Fatia a string em vez de passar por `Date`: o valor ja e uma data sem hora
+ * (YYYY-MM-DD), e `new Date("2026-10-19")` seria interpretada em UTC e voltaria
+ * um dia atras para quem esta a oeste de Greenwich — um filtro "de 19/10"
+ * aparecendo como "18/10" no proprio botao que o define.
+ */
+export function dataCurtaBR(iso: string): string {
+  const [a, m, d] = iso.split("-");
+  return d && m && a ? `${d}/${m}/${a.slice(2)}` : iso;
+}
+
+export function rotuloDePeriodo(de: string, ate: string, titulo: string): string {
+  if (de && ate) return `${dataCurtaBR(de)} – ${dataCurtaBR(ate)}`;
+  if (de) return `desde ${dataCurtaBR(de)}`;
+  if (ate) return `até ${dataCurtaBR(ate)}`;
+  return titulo;
+}

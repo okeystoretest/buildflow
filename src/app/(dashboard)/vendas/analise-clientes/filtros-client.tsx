@@ -3,8 +3,10 @@
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PeriodoFiltro } from "@/components/shared/periodo-filtro";
 import { Card, CardContent } from "@/components/ui/card";
 import { useFilterQuery } from "@/hooks/use-filter-query";
+import { rejectionCodesByCategory } from "@/lib/wholesale-rejection-codes";
 
 const selectClass =
   "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm " +
@@ -34,7 +36,15 @@ export function AnaliseClientesFiltros({
   vendedoras,
   ehGestao,
 }: {
-  defaults: { busca: string; status: string; auxiliar: string; vendedora: string };
+  defaults: {
+    busca: string;
+    status: string;
+    auxiliar: string;
+    vendedora: string;
+    de: string;
+    ate: string;
+    motivo: string;
+  };
   auxiliares: string[];
   vendedoras: { id: string; name: string }[];
   ehGestao: boolean;
@@ -46,6 +56,9 @@ export function AnaliseClientesFiltros({
         status: defaults.status,
         auxiliar: defaults.auxiliar,
         vendedora: defaults.vendedora,
+        de: defaults.de,
+        ate: defaults.ate,
+        motivo: defaults.motivo,
       },
     },
   );
@@ -109,6 +122,43 @@ export function AnaliseClientesFiltros({
             ))}
           </select>
         </div>
+
+        {/* Período de CHEGADA da candidatura. Sem padrão: um intervalo que
+            cai no mês atual sozinho esconderia o histórico inteiro sem avisar,
+            que é o defeito que o Histórico de Pedidos já teve (correção 2.1). */}
+        {/* Motivo da reprovação: os mesmos 34 códigos do modal, agrupados por
+            categoria na ordem da planilha — é a ordem em que o negócio pensa
+            os motivos. Escolher um motivo já implica reprovada, então o filtro
+            de Status não precisa ser mexido junto. */}
+        <div className="space-y-1.5" style={{ minWidth: 190 }}>
+          <Label htmlFor="filtro-motivo">Motivo da reprovação</Label>
+          <select
+            id="filtro-motivo"
+            className={selectClass}
+            value={f.instant.motivo}
+            onChange={(e) => f.setInstant("motivo", e.target.value)}
+          >
+            <option value="">Todos</option>
+            {rejectionCodesByCategory().map((g) => (
+              <optgroup key={g.category} label={g.category}>
+                {g.codes.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} — {c.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+
+        <PeriodoFiltro
+          de={f.instant.de}
+          ate={f.instant.ate}
+          onChange={(p) => f.setInstantMany(p)}
+          setor="vendas"
+          titulo="Recebimento"
+          id="analise"
+        />
 
         {ehGestao && (
           <div className="space-y-1.5" style={{ minWidth: 170 }}>

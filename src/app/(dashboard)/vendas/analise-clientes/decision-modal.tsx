@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, ClipboardCheck, ImageOff, X } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, ImageOff, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { decideLead, setAssistantName } from "@/lib/actions/wholesale-leads";
+import { decideLead, deleteLead, setAssistantName } from "@/lib/actions/wholesale-leads";
 import { findRejectionCode, rejectionCodesByCategory } from "@/lib/wholesale-rejection-codes";
 import { formatCnpj } from "@/lib/wholesale-identity";
 import { formatPhone } from "@/lib/phone";
@@ -209,7 +209,21 @@ function Miniatura({ caminho, alt }: { caminho: string; alt: string }) {
   );
 }
 
-/** Pergunta em cima, resposta embaixo: lê-se em coluna, cabe no celular. */
+/**
+ * Pergunta em cima, resposta embaixo, DENTRO de uma caixa com contorno.
+ *
+ * O contorno por campo vem do `Info` de `order-ficha.tsx`, que é o padrão do
+ * modal de pedidos. Sem ele, dezoito perguntas em cinza e dezoito respostas em
+ * preto viram uma parede de texto onde não se vê onde uma acaba e a outra
+ * começa — e é justamente nesta tela que alguém decide sobre o negócio de uma
+ * pessoa real.
+ *
+ * O CORPO É MAIOR QUE O DO `Info` (16px na resposta, 14px na pergunta, contra
+ * 14/12 lá), a pedido do dono. Aqui se LÊ: o modal de pedidos é conferência de
+ * campos que a pessoa já conhece de cor, e este é texto escrito pela lojista,
+ * lido uma vez para decidir. A hierarquia não se perde porque continua dupla —
+ * a pergunta é apagada e normal, a resposta é cheia e `font-medium`.
+ */
 function Resposta({
   pergunta,
   children,
@@ -220,18 +234,27 @@ function Resposta({
   className?: string;
 }) {
   return (
-    <div className={className}>
-      <p className="text-xs text-muted-foreground">{pergunta}</p>
-      <p className="whitespace-pre-line break-words text-sm">{children}</p>
+    <div className={`rounded-lg border border-border px-3 py-2 ${className ?? ""}`}>
+      <p className="text-sm leading-snug text-muted-foreground">{pergunta}</p>
+      <p className="mt-0.5 whitespace-pre-line break-words text-base font-medium leading-snug">
+        {children}
+      </p>
     </div>
   );
 }
 
+/**
+ * Bloco de informação: contorno externo e uma grade dentro.
+ *
+ * Três colunas a partir de `lg`, duas em tablet, uma no celular. É a largura
+ * nova do modal que permite a terceira — e é ela que faz cada bloco caber
+ * inteiro sem empurrar o seguinte para fora da tela.
+ */
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-border p-4">
-      <h4 className="mb-3 text-sm font-semibold text-muted-foreground">{titulo}</h4>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
+      <h4 className="mb-3 text-base font-semibold text-muted-foreground">{titulo}</h4>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
     </section>
   );
 }
@@ -239,18 +262,25 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
 export function DecisionModal({
   lead,
   alerts,
+  ehGestao,
   onClose,
   onDone,
 }: {
   lead: LeadAnswers;
   /** Vem calculado no servidor: `findDuplicateAlerts` consulta o banco. */
   alerts: DuplicateAlertView[];
+  /**
+   * Libera a EXCLUSÃO do cadastro. Esconder o botão é conveniência; a guarda
+   * está em `deleteLead`, que reconfere o papel no servidor.
+   */
+  ehGestao: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
   const [pending, start] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
 
   const [status, setStatus] = useState(lead.status);
   const [codigo, setCodigo] = useState(lead.rejectionCode ?? "");
@@ -302,6 +332,23 @@ export function DecisionModal({
   const faltaJustificativa = status === "CUIDADO" && !justificativa.trim();
   const nadaMudou = !decisaoMudou && !auxiliarMudou;
 
+  /**
+   * `onDone` e não `onClose`: a linha que este modal mostra deixou de existir,
+   * e o pai precisa fechar sabendo que a lista mudou. `deleteLead` já chama
+   * `revalidatePath`, então a tabela se redesenha sem a candidatura.
+   */
+  function excluir() {
+    setErro(null);
+    start(async () => {
+      const r = await deleteLead({ leadId: lead.id });
+      if (r.ok) onDone();
+      else {
+        setConfirmandoExclusao(false);
+        setErro(r.error);
+      }
+    });
+  }
+
   function salvar() {
     setErro(null);
     start(async () => {
@@ -349,7 +396,12 @@ export function DecisionModal({
       {/* `max-h-[90vh]` com rolagem própria, como no `order-detail-modal`:
           são 18 respostas mais os campos de decisão, e um painel mais alto que
           a tela centralizado pelo flex teria o topo inalcançável. */}
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in">
+      {/* `max-w-[88rem]` (e não o `max-w-2xl` do modal de pedidos): são 18
+          respostas com perguntas de frase inteira, em corpo maior, e em duas
+          colunas estreitas cada bloco ficava mais alto que a tela. Em `rem` e
+          não `vw` para não colar nas bordas do monitor; o `p-4` do fundo
+          escuro continua garantindo a margem em tela menor. */}
+      <div className="max-h-[90vh] w-full max-w-[88rem] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-vendas/15 text-vendas-text">
@@ -433,7 +485,7 @@ export function DecisionModal({
               <span className="font-data">{lead.phone ? formatPhone(lead.phone) : "—"}</span>
             </Resposta>
             <Resposta
-              className="sm:col-span-2"
+              className="sm:col-span-2 lg:col-span-3"
               pergunta="Conte-nos um pouco sobre você e sua trajetória:"
             >
               {ou(lead.story)}
@@ -446,7 +498,7 @@ export function DecisionModal({
               {ou(lead.city)}
             </Resposta>
             <Resposta
-              className="sm:col-span-2"
+              className="sm:col-span-2 lg:col-span-3"
               pergunta="Como você atende suas clientes hoje?"
             >
               {rotulo(SERVICE_MODEL_LABEL, lead.serviceModel)}
@@ -462,31 +514,32 @@ export function DecisionModal({
             <Resposta pergunta="Quantas pessoas fazem parte da sua equipe atualmente?">
               {ou(lead.teamSize)}
             </Resposta>
-            <div className="sm:col-span-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <p className="mb-1 text-xs text-muted-foreground">
-                  Envie uma imagem ou print do perfil do seu Instagram:
-                </p>
-                <Miniatura
-                  caminho={lead.instagramImagePath}
-                  alt={`Print do Instagram de ${lead.contactName}`}
-                />
-              </div>
-              <div>
-                {/* O rótulo acompanha o que foi PEDIDO no envio (decisão 21):
-                    loja só online não tem espaço físico para fotografar. */}
-                <p className="mb-1 text-xs text-muted-foreground">{rotuloFotoLoja}</p>
-                <Miniatura
-                  caminho={lead.storeImagePath}
-                  alt={`Imagem da loja de ${lead.contactName}`}
-                />
-              </div>
+            {/* As duas imagens ganham o MESMO contorno das respostas: elas são
+                resposta de pergunta do formulário como as outras, e sem a caixa
+                flutuariam soltas no meio da grade. */}
+            <div className="rounded-lg border border-border px-2.5 py-1.5">
+              <p className="mb-1 text-sm leading-snug text-muted-foreground">
+                Envie uma imagem ou print do perfil do seu Instagram:
+              </p>
+              <Miniatura
+                caminho={lead.instagramImagePath}
+                alt={`Print do Instagram de ${lead.contactName}`}
+              />
+            </div>
+            <div className="rounded-lg border border-border px-2.5 py-1.5">
+              {/* O rótulo acompanha o que foi PEDIDO no envio (decisão 21):
+                  loja só online não tem espaço físico para fotografar. */}
+              <p className="mb-1 text-sm leading-snug text-muted-foreground">{rotuloFotoLoja}</p>
+              <Miniatura
+                caminho={lead.storeImagePath}
+                alt={`Imagem da loja de ${lead.contactName}`}
+              />
             </div>
           </Secao>
 
           <Secao titulo="Conectividade e Parceria Comercial">
             <Resposta
-              className="sm:col-span-2"
+              className="sm:col-span-2 lg:col-span-3"
               pergunta="Quais marcas já fazem parte do seu espaço?"
             >
               {ou(lead.brandsCarried)}
@@ -508,7 +561,7 @@ export function DecisionModal({
 
           <Secao titulo="Validação Cadastro">
             <Resposta
-              className="sm:col-span-2"
+              className="sm:col-span-2 lg:col-span-3"
               pergunta="Para finalizarmos, informe o CNPJ da sua empresa (utilizado para confirmação do segmento):"
             >
               <span className="font-data">{lead.cnpj ? formatCnpj(lead.cnpj) : "—"}</span>
@@ -620,6 +673,35 @@ export function DecisionModal({
 
         {erro && <p className="mt-3 text-sm text-destructive">{erro}</p>}
 
+        {/* EXCLUSÃO — só a Gestão, e em dois tempos.
+            A confirmação é inline e não `window.confirm`: é o padrão da casa
+            (o cancelamento do Select faz igual) e um diálogo nativo dentro de
+            um portal não respeita nem o tema nem o ESC deste modal.
+            Dois tempos porque isto não tem desfazer: as 18 respostas, as duas
+            fotos e o diário saem juntos. */}
+        {ehGestao && confirmandoExclusao && (
+          <div className="mt-4 space-y-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3">
+            <p className="text-sm">
+              Excluir apaga <strong>definitivamente</strong> o cadastro de{" "}
+              <strong>{lead.contactName}</strong>: as respostas do formulário, as
+              duas fotos enviadas e o histórico de decisões. Não há como
+              desfazer.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="destructive" onClick={excluir} disabled={pending}>
+                {pending ? "Excluindo..." : "Confirmar exclusão"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setConfirmandoExclusao(false)}
+                disabled={pending}
+              >
+                Voltar
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <Button
             variant="vendas"
@@ -631,6 +713,20 @@ export function DecisionModal({
           <Button variant="outline" onClick={onClose} disabled={pending}>
             Fechar
           </Button>
+          {/* Longe do "Salvar decisão" e com o visual destrutivo: é a ação que
+              não tem volta, e vizinhança de botão é o que produz clique
+              errado. `ml-auto` empurra para a outra ponta da linha. */}
+          {ehGestao && !confirmandoExclusao && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto text-destructive hover:bg-destructive/10"
+              onClick={() => setConfirmandoExclusao(true)}
+              disabled={pending}
+            >
+              <Trash2 className="h-4 w-4" /> Excluir cadastro
+            </Button>
+          )}
           {/* Diz POR QUE o botão está travado. Botão desabilitado sem motivo
               visível manda a pessoa procurar o campo que falta. */}
           {faltaMotivo && (

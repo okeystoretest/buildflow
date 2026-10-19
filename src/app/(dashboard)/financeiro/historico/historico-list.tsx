@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { X } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Modal } from "@/components/shared/modal";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -39,38 +40,84 @@ function outcomeBadge(outcome: FinHistItem["outcome"]) {
   return "bg-emerald-600/90 text-white border-emerald-700"; // APROVADO
 }
 
+/**
+ * HISTÓRICO DO FINANCEIRO — grade de cards, ficha em modal.
+ *
+ * Mesmo mecanismo do Fluxo de Pedidos da Logística e dos outros dois
+ * históricos: o card é compacto, o detalhe abre por cima. A expansão para
+ * baixo empurrava os cards seguintes tela abaixo, e com um aberto não dava
+ * para comparar com nenhum outro.
+ *
+ * Card próprio, e não o `OrderCard` dos outros históricos: aqui a linha não é
+ * um pedido em fluxo, é um PROCESSAMENTO do Financeiro — o que identifica cada
+ * um é o desfecho (Aprovado / Pago / Interrompido) e a data em que foi
+ * processado, que o card do fluxo não tem onde mostrar.
+ */
 export function FinHistoricoList({ orders }: { orders: FinHistItem[] }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const aberto = orders.find((o) => o.id === openId) ?? null;
 
   return (
-    <div className="space-y-3">
-      {orders.map((o) => {
-        const open = openId === o.id;
-        return (
+    <>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {orders.map((o) => (
           <Card key={o.id} className="overflow-hidden animate-fade-in-up">
             <button
               type="button"
-              onClick={() => setOpenId(open ? null : o.id)}
-              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary/50"
+              onClick={() => setOpenId(o.id)}
+              className="flex w-full flex-col gap-2 p-4 text-left transition-colors hover:bg-secondary/50"
             >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">
+              <div className="flex items-start justify-between gap-2">
+                <p className="min-w-0 truncate text-sm font-semibold">
                   Pedido {o.orderNumber}
-                  {o.comandaNumber && <span className="text-muted-foreground"> · Comanda {o.comandaNumber}</span>}
+                  {o.comandaNumber && (
+                    <span className="text-muted-foreground"> · {o.comandaNumber}</span>
+                  )}
                 </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {o.customerName} · {new Date(o.processedAt).toLocaleString("pt-BR")}
-                </p>
+                <Badge className={cn("shrink-0 border", outcomeBadge(o.outcome))}>
+                  {o.outcomeLabel}
+                </Badge>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <Badge className={cn("border", outcomeBadge(o.outcome))}>{o.outcomeLabel}</Badge>
-                <span className="font-data text-sm font-medium">{o.total}</span>
-                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+              <p className="truncate text-xs text-muted-foreground">{o.customerName}</p>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-data text-sm font-semibold">{o.total}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {new Date(o.processedAt).toLocaleDateString("pt-BR")}
+                </span>
               </div>
             </button>
+          </Card>
+        ))}
+      </div>
 
-            {open && (
-              <div className="space-y-3 border-t border-border px-4 py-3 text-sm animate-fade-in">
+      {aberto && (
+        <Modal onClose={() => setOpenId(null)}>
+          {(() => {
+            const o = aberto;
+            return (
+              <div className="space-y-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-semibold">
+                      Pedido {o.orderNumber}
+                      {o.comandaNumber && (
+                        <span className="text-muted-foreground"> · Comanda {o.comandaNumber}</span>
+                      )}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{o.customerName}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge className={cn("border", outcomeBadge(o.outcome))}>{o.outcomeLabel}</Badge>
+                    <button
+                      onClick={() => setOpenId(null)}
+                      aria-label="Fechar"
+                      className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <Info label="Pedido" value={o.orderNumber} />
                   <Info label="Comanda" value={o.comandaNumber ?? "—"} />
@@ -122,11 +169,11 @@ export function FinHistoricoList({ orders }: { orders: FinHistItem[] }) {
                   <ProofGallery label="Comprovantes do Financeiro" proofs={o.financeProofs} />
                 )}
               </div>
-            )}
-          </Card>
-        );
-      })}
-    </div>
+            );
+          })()}
+        </Modal>
+      )}
+    </>
   );
 }
 

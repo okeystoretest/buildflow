@@ -13,7 +13,7 @@ import { CopiarLinkAtacado, CopiarLinkGeral } from "./copiar-link-atacado";
 import { canUseWholesaleTool } from "@/lib/wholesale-permissions";
 import type { Prisma } from "@prisma/client";
 
-const PAGE_SIZE = 10; // exibe apenas as ultimas 10 vendas por pagina
+const PAGE_SIZE = 6; // exibe apenas as ultimas 6 vendas por pagina
 
 export default async function VendasPage(
   props: {

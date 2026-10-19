@@ -3,6 +3,7 @@
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PeriodoFiltro } from "@/components/shared/periodo-filtro";
 import { Card, CardContent } from "@/components/ui/card";
 import { useFilterQuery } from "@/hooks/use-filter-query";
 
@@ -50,14 +51,14 @@ export function FinHistoricoFiltros({
             )}
           </div>
         </div>
-        <div className="space-y-1.5">
-          <Label>De</Label>
-          <Input type="date" value={f.instant.de} onChange={(e) => f.setInstant("de", e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Até</Label>
-          <Input type="date" value={f.instant.ate} onChange={(e) => f.setInstant("ate", e.target.value)} />
-        </div>
+        <PeriodoFiltro
+          de={f.instant.de}
+          ate={f.instant.ate}
+          onChange={(p) => f.setInstantMany(p)}
+          setor="financeiro"
+          titulo="Período"
+          id="financeiro-historico"
+        />
       </CardContent>
     </Card>
   );

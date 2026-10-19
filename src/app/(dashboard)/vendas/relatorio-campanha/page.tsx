@@ -8,7 +8,9 @@ import { premiacaoDoItem, PREMIACAO_POR_PECA } from "@/lib/campaign-commission";
 import { RelatorioCampanhaFiltros } from "./filtros-client";
 import type { Prisma } from "@prisma/client";
 
-const PER_PAGE = 20;
+// 50 e nao 20: o "Detalhamento dos itens" e uma tabela de conferencia, e
+// virar pagina a cada 20 linhas e o que deixava o bloco curto demais.
+const PER_PAGE = 50;
 
 // Relatório de Campanha (Vendas): detalhamento de TODOS os itens de campanha
 // (CampaignItem) — cada linha traz campanha, referência, quantidade, valor,

@@ -74,17 +74,30 @@ export function useFilterQuery<
     setTextState((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  // Campos INSTANTANEOS aplicam na hora (sem esperar debounce).
-  const setInstant = useCallback(
-    (key: keyof I, value: string) => {
+  // Varios campos INSTANTANEOS de uma vez, numa navegacao so.
+  //
+  // Existe porque chamar setInstant duas vezes seguidas (limpar "de" e "ate",
+  // por exemplo) navega DUAS vezes: a URL final fica certa, mas empilha duas
+  // entradas no historico e o botao Voltar precisa de dois cliques para
+  // desfazer uma acao.
+  const setInstantMany = useCallback(
+    (patch: Partial<I>) => {
       setInstantState((prev) => {
-        const nextInstant = { ...prev, [key]: value } as I;
+        const nextInstant = { ...prev, ...patch } as I;
         if (timer.current) clearTimeout(timer.current);
         navigate({ ...text, ...nextInstant });
         return nextInstant;
       });
     },
     [navigate, text],
+  );
+
+  // Campos INSTANTANEOS aplicam na hora (sem esperar debounce).
+  const setInstant = useCallback(
+    (key: keyof I, value: string) => {
+      setInstantMany({ [key]: value } as Partial<I>);
+    },
+    [setInstantMany],
   );
 
   // Limpa um campo de texto (usado pelo "X"): aplica imediatamente.
@@ -100,5 +113,5 @@ export function useFilterQuery<
     [navigate, instant],
   );
 
-  return { text, instant, setText, setInstant, clear };
+  return { text, instant, setText, setInstant, setInstantMany, clear };
 }

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Pencil, Trash2, PackageMinus } from "lucide-react";
+import { Pencil, Trash2, PackageMinus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Modal } from "@/components/shared/modal";
 import { OrderCard, type OrderCardData } from "@/components/shared/order-card";
 import { OrderFicha, type OrderDetail } from "@/components/shared/order-ficha";
 import { EditProofsModal, type EditProof } from "@/components/shared/edit-proofs-modal";
@@ -12,18 +12,24 @@ import { ReturnModal } from "@/components/shared/return-modal";
 import { deleteHistoryOrder } from "@/lib/actions/orders";
 
 /**
- * LISTA DE COMANDAS DO HISTÓRICO — o card do Fluxo, expansível.
+ * LISTA DE COMANDAS DO HISTÓRICO — a grade do Fluxo, com a ficha em modal.
  * ---------------------------------------------------------------------------
  * Os três históricos (Vendas, Logística e Motorista) mostravam a mesma comanda
  * de três formas diferentes, cada uma com um recorte próprio dos dados. Esta
  * lista unifica as duas metades:
  *
- *   - FECHADO: o card do Fluxo de Pedidos (`OrderCard`), exatamente o mesmo
- *     componente, com bolinha de status, Comanda/Pedido, valor, cliente,
- *     vendedora e os sinais de Comprovante/NF. Sem os realces de atraso, que
- *     não dizem nada num pedido já encerrado.
- *   - ABERTO: a ficha completa (`OrderFicha`), a mesma do modal do Fluxo,
- *     carregada de `/api/orders/[id]` no primeiro clique.
+ *   - A GRADE: o card do Fluxo de Pedidos (`OrderCard`), exatamente o mesmo
+ *     componente e a mesma grade de colunas, com bolinha de status,
+ *     Comanda/Pedido, valor, cliente, vendedora e os sinais de Comprovante/NF.
+ *     Sem os realces de atraso, que não dizem nada num pedido já encerrado.
+ *   - O MODAL: a ficha completa (`OrderFicha`), a mesma do Fluxo, carregada de
+ *     `/api/orders/[id]` ao abrir.
+ *
+ * ABRE EM MODAL, não para baixo. A expansão vertical empurrava os cards
+ * seguintes tela abaixo: achar de novo a comanda que se estava lendo exigia
+ * rolar de volta, e com a comanda aberta não dava para comparar com nenhuma
+ * outra. É também o mecanismo que o Fluxo de Pedidos da Logística já usa — as
+ * duas telas mostram o mesmo pedido, e abriam de dois jeitos diferentes.
  *
  * A ficha vem do servidor com o recorte por papel já aplicado (o motorista não
  * recebe valores, comprovantes, NF, devoluções nem itens de campanha). Isto é
@@ -62,30 +68,38 @@ export function ComandaList({
   campaigns?: { id: string; name: string }[];
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const aberta = orders.find((o) => o.id === openId) ?? null;
 
   return (
-    <div className="space-y-3">
-      {orders.map((o) => (
-        <ComandaRow
-          key={o.id}
-          item={o}
-          open={openId === o.id}
-          onToggle={() => setOpenId(openId === o.id ? null : o.id)}
+    <>
+      {/* A grade do Fluxo. Três colunas e não as cinco de lá: o histórico
+          mostra 9 por página, e 3x3 fecha a página sem deixar vão. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {orders.map((o) => (
+          <OrderCard key={o.id} data={o} onClick={() => setOpenId(o.id)} />
+        ))}
+      </div>
+
+      {/* UMA ficha montada por vez, e desmontada ao fechar: montar as nove
+          significaria nove consultas a `/api/orders/[id]` para ler uma. */}
+      {aberta && (
+        <ComandaDetalhe
+          item={aberta}
+          onClose={() => setOpenId(null)}
           driverMode={driverMode}
           editableProofs={editableProofs}
           canDelete={canDelete}
           canReturn={canReturn}
           campaigns={campaigns}
         />
-      ))}
-    </div>
+      )}
+    </>
   );
 }
 
-function ComandaRow({
+function ComandaDetalhe({
   item: o,
-  open,
-  onToggle,
+  onClose,
   driverMode,
   editableProofs,
   canDelete,
@@ -93,8 +107,7 @@ function ComandaRow({
   campaigns,
 }: {
   item: ComandaListItem;
-  open: boolean;
-  onToggle: () => void;
+  onClose: () => void;
   driverMode: boolean;
   editableProofs: boolean;
   canDelete: boolean;
@@ -102,10 +115,8 @@ function ComandaRow({
   campaigns?: { id: string; name: string }[];
 }) {
   const router = useRouter();
-  // A ficha é buscada no PRIMEIRO clique e fica em memória: reabrir o mesmo
-  // bloco não repete a consulta.
   const [detail, setDetail] = useState<OrderDetail | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [returning, setReturning] = useState(false);
@@ -113,11 +124,11 @@ function ComandaRow({
   const [erro, setErro] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  function toggle() {
-    const abrindo = !open;
-    onToggle();
-    if (abrindo && !detail && !loading) carregar();
-  }
+  // Carrega ao montar: o componente só existe enquanto o modal está aberto.
+  useEffect(() => {
+    carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [o.id]);
 
   function carregar() {
     setLoading(true);
@@ -156,44 +167,31 @@ function ComandaRow({
   const proofs: EditProof[] = detail?.delivery?.proofs ?? [];
 
   return (
-    <div>
-      {/* FECHADO: o card do Fluxo. Ao abrir, os cantos de baixo ficam retos e o
-          hover para de levantar — o card e o painel viram um bloco só. */}
-      <OrderCard
-        data={o}
-        onClick={toggle}
-        hoverLift={!open}
-        className={cn(open && "rounded-b-none")}
-        action={
-          <button
-            type="button"
-            onClick={toggle}
-            className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-            aria-expanded={open}
-            aria-label={open ? "Recolher comanda" : "Ver comanda completa"}
-          >
-            <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
-          </button>
-        }
-      />
-
-      {/* ABERTO: a ficha completa, no mesmo bloco. */}
-      {open && (
-        <div className="rounded-b-xl border border-t-0 border-border bg-card px-4 py-4 text-sm animate-fade-in">
-          {loading && <p className="text-muted-foreground">Carregando comanda...</p>}
-          {loadError && (
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-destructive">{loadError}</p>
-              <Button variant="outline" size="sm" onClick={carregar}>Tentar de novo</Button>
-            </div>
-          )}
-          {detail && (
+    <>
+      <Modal onClose={() => !pending && onClose()} largura="max-w-2xl">
+        {loading && <p className="text-muted-foreground">Carregando comanda...</p>}
+        {loadError && (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-destructive">{loadError}</p>
+            <Button variant="outline" size="sm" onClick={carregar}>Tentar de novo</Button>
+          </div>
+        )}
+        {detail && (
             <OrderFicha
               order={detail}
               onChange={setDetail}
               driverMode={driverMode}
               compact
               campaignEdit={campaigns?.length ? { campaigns } : undefined}
+              headerAction={
+                <button
+                  onClick={onClose}
+                  aria-label="Fechar"
+                  className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              }
               footer={
                 temAcoes ? (
                   <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
@@ -217,12 +215,11 @@ function ComandaRow({
                 ) : null
               }
             />
-          )}
-        </div>
-      )}
+        )}
+      </Modal>
 
       {confirming && (
-        <ConfirmModal onClose={() => !pending && setConfirming(false)}>
+        <Modal onClose={() => !pending && setConfirming(false)} largura="max-w-sm">
           <h2 className="mb-1 text-lg font-bold">Excluir pedido</h2>
           <p className="mb-4 text-sm text-muted-foreground">
             Tem certeza que deseja excluir o pedido {o.orderNumber} do histórico? O
@@ -237,7 +234,7 @@ function ComandaRow({
               {pending ? "Excluindo..." : "Excluir"}
             </Button>
           </div>
-        </ConfirmModal>
+        </Modal>
       )}
 
       {returning && podeDevolver && (
@@ -268,22 +265,6 @@ function ComandaRow({
           }
         />
       )}
-    </div>
-  );
-}
-
-function ConfirmModal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </div>
-    </div>
+    </>
   );
 }

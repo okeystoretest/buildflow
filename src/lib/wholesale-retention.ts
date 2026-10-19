@@ -42,19 +42,51 @@ export function limiteDeRetencao(agora: Date): Date {
   return new Date(agora.getTime() - RETENCAO_DIAS * 24 * 60 * 60 * 1000);
 }
 
+/**
+ * Apaga UMA candidatura: as duas fotos e depois a linha, com o diário junto.
+ *
+ * ORDEM IMPORTA, e é a razão de isto ser uma função só em vez de estar copiado
+ * nos dois chamadores. O arquivo sai ANTES da linha: apagar a linha primeiro
+ * perde o caminho do arquivo, e o arquivo fica órfão no volume para sempre —
+ * um vazamento de dado pessoal que nenhuma consulta mostra. O expurgo diário e
+ * a exclusão manual da Gestão precisam obedecer à mesma ordem, e uma regra de
+ * LGPD escrita duas vezes é uma regra que diverge na primeira correção.
+ *
+ * `deleteUploadedFile` já se recusa a sair da raiz de uploads e já ignora
+ * arquivo ausente, então chamar duas vezes não quebra.
+ *
+ * Devolve quantos arquivos saíram. Lança se o banco recusar — quem chama
+ * decide se isso derruba a operação (exclusão manual) ou se conta a falha e
+ * segue (expurgo em lote).
+ */
+export async function apagarCandidatura(lead: {
+  id: string;
+  instagramImagePath: string | null;
+  storeImagePath: string | null;
+}): Promise<number> {
+  let arquivos = 0;
+  for (const caminho of [lead.instagramImagePath, lead.storeImagePath]) {
+    if (!caminho) continue;
+    await deleteUploadedFile(caminho);
+    arquivos++;
+  }
+  // O diário de decisões aponta para a candidatura; sai junto, no mesmo
+  // movimento, senão sobra um evento órfão falando de um lead que não existe.
+  await prisma.$transaction([
+    prisma.wholesaleLeadEvent.deleteMany({ where: { leadId: lead.id } }),
+    prisma.wholesaleLead.delete({ where: { id: lead.id } }),
+  ]);
+  return arquivos;
+}
+
 export interface ResultadoDoExpurgo {
   apagados: number;
   arquivosApagados: number;
 }
 
 /**
- * Apaga as candidaturas vencidas e as duas fotos de cada uma.
- *
- * Ordem importa: o arquivo sai ANTES da linha. Apagar a linha primeiro perde o
- * caminho do arquivo, e o arquivo fica órfão no volume para sempre — um
- * vazamento de dado pessoal que nenhuma consulta mostra. `deleteUploadedFile`
- * já se recusa a sair da raiz de uploads e já ignora arquivo ausente, então
- * rodar duas vezes não quebra.
+ * Apaga as candidaturas vencidas e as duas fotos de cada uma, por
+ * `apagarCandidatura` — a mesma rotina que a exclusão manual da Gestão usa.
  *
  * Uma transação por candidatura, não uma para todas: o expurgo é higiene, e um
  * registro problemático não deve impedir os outros 300 de serem apagados. O
@@ -74,17 +106,7 @@ export async function expurgarCandidaturasVencidas(
 
   for (const lead of vencidas) {
     try {
-      for (const caminho of [lead.instagramImagePath, lead.storeImagePath]) {
-        if (!caminho) continue;
-        await deleteUploadedFile(caminho);
-        arquivosApagados++;
-      }
-      // O diário de decisões aponta para a candidatura; sai junto, no mesmo
-      // movimento, senão sobra um evento órfão falando de um lead que não existe.
-      await prisma.$transaction([
-        prisma.wholesaleLeadEvent.deleteMany({ where: { leadId: lead.id } }),
-        prisma.wholesaleLead.delete({ where: { id: lead.id } }),
-      ]);
+      arquivosApagados += await apagarCandidatura(lead);
       apagados++;
     } catch {
       // Conta como não apagado e segue. A próxima execução tenta de novo:

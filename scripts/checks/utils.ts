@@ -1,6 +1,6 @@
 // Checagem dos helpers puros de src/lib/utils.ts.
 // Rodar com: npx tsx scripts/checks/utils.ts
-import { shortName, nextCampaignId } from "../../src/lib/utils";
+import { shortName, nextCampaignId, dataCurtaBR, rotuloDePeriodo } from "../../src/lib/utils";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -46,5 +46,18 @@ check("lista vazia", nextCampaignId([], "a"), "");
 // ficaria parado para sempre exibindo o fallback.
 check("id ausente recomeca", nextCampaignId(["a", "b"], "zzz"), "a");
 check("id vazio comeca do inicio", nextCampaignId(["a", "b"], ""), "a");
+
+// --- rotulo do botao de periodo ---------------------------------------------
+// Sem periodo, o botao diz o que aquele periodo SIGNIFICA naquela tela.
+check("sem periodo, mostra o titulo", rotuloDePeriodo("", "", "Abertura"), "Abertura");
+// A ordem dos pedacos e o risco real: dd/mm/aa, nao aa/mm/dd.
+check("data vira dd/mm/aa", dataCurtaBR("2026-10-19"), "19/10/26");
+check("periodo fechado", rotuloDePeriodo("2026-10-01", "2026-10-19", "P"), "01/10/26 – 19/10/26");
+// As duas pontas sao independentes: a consulta aceita periodo aberto dos dois
+// lados, e o botao precisa saber dizer os dois.
+check("so o inicio", rotuloDePeriodo("2026-10-01", "", "P"), "desde 01/10/26");
+check("so o fim", rotuloDePeriodo("", "2026-10-19", "P"), "até 19/10/26");
+// Valor estranho nao pode virar "undefined/undefined/un" no botao.
+check("valor fora do formato sai inteiro", dataCurtaBR("xxx"), "xxx");
 
 console.log(falhas === 0 ? "OK: utils" : `${falhas} falha(s) em utils`);

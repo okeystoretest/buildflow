@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PeriodoFiltro } from "@/components/shared/periodo-filtro";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface Opt { id: string; name: string; }
@@ -32,14 +32,19 @@ export function RelatorioCampanhaFiltros({
   const pathname = usePathname();
   const params = useSearchParams();
 
-  function apply(key: string, value: string) {
+  /** Vários parâmetros numa navegação só — limpar o período é um clique. */
+  function applyMany(patch: Record<string, string>) {
     const next = new URLSearchParams(params.toString());
-    if (value) next.set(key, value);
-    else next.delete(key);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
     next.delete("page");
     const qs = next.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }
+
+  const apply = (key: string, value: string) => applyMany({ [key]: value });
 
   return (
     <Card>
@@ -74,14 +79,14 @@ export function RelatorioCampanhaFiltros({
           </div>
         )}
 
-        <div className="space-y-1.5">
-          <Label>De</Label>
-          <Input type="date" value={defaultDe} onChange={(e) => apply("de", e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Até</Label>
-          <Input type="date" value={defaultAte} onChange={(e) => apply("ate", e.target.value)} />
-        </div>
+        <PeriodoFiltro
+          de={defaultDe}
+          ate={defaultAte}
+          onChange={(p) => applyMany(p as Record<string, string>)}
+          setor="vendas"
+          titulo="Período"
+          id="campanha"
+        />
       </CardContent>
     </Card>
   );

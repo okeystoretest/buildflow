@@ -10,7 +10,7 @@ import { Pagination } from "@/components/shared/pagination";
 import type { Prisma } from "@prisma/client";
 
 // Itens por pagina. O historico so cresce, entao paginamos no banco.
-const PER_PAGE = 20;
+const PER_PAGE = 9;
 
 function firstDayOfMonth(): string {
   const d = new Date();
