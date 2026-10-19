@@ -20,6 +20,8 @@ interface PollResponse {
   now: number;
   bootstrap: boolean;
   events: PollEvent[];
+  /** Build que respondeu. Muda => foi publicada uma versão nova. */
+  rev?: string;
 }
 
 /** Intervalo do polling do board. */
@@ -49,6 +51,11 @@ export function RealtimeProvider({ role }: { role: Role }) {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Build que estava no ar quando esta aba carregou. Guardado na primeira
+  // resposta do poll; se mudar, saiu versão nova embaixo da pessoa.
+  const revRef = useRef<string | null>(null);
+  const [versaoNova, setVersaoNova] = useState(false);
 
   // Papéis que recebem alerta ativo (pop-up em foco, vindo do polling):
   //  - FINANCEIRO: novo pedido para análise (→ /financeiro)
@@ -121,6 +128,18 @@ export function RealtimeProvider({ role }: { role: Role }) {
         });
         if (res.ok) {
           const data = (await res.json()) as PollResponse;
+
+          // VERSÃO NOVA PUBLICADA. Os ids das Server Actions são regerados a
+          // cada build e ficam no HTML que esta aba baixou: a partir daqui,
+          // todo botão que chama uma action falha em silêncio
+          // ("Failed to find Server Action" no log do servidor). O aviso vem
+          // ANTES do primeiro clique, que é o que evita a pessoa clicar cinco
+          // vezes sem entender por que nada acontece.
+          if (data.rev) {
+            if (revRef.current === null) revRef.current = data.rev;
+            else if (revRef.current !== data.rev) setVersaoNova(true);
+          }
+
           since = data.now; // avanca o relogio para o proximo poll
           if (!data.bootstrap && data.events.length > 0) {
             // Houve mudanca => atualiza o board.
@@ -167,8 +186,46 @@ export function RealtimeProvider({ role }: { role: Role }) {
     };
   }, [scheduleRefresh, maybeNotify]);
 
-  if (!mounted || !receivesPush) return null;
-  return <NotificationOptIn />;
+  if (!mounted) return null;
+  return (
+    <>
+      {/* O aviso vale para TODO papel — qualquer tela tem botão que chama
+          Server Action. O opt-in de push, não: só para quem recebe. */}
+      {versaoNova && <AvisoVersaoNova />}
+      {receivesPush && <NotificationOptIn />}
+    </>
+  );
+}
+
+/**
+ * Avisa que saiu versão nova e oferece o reload.
+ *
+ * NÃO RECARREGA SOZINHO, de propósito: a pessoa pode estar com meio formulário
+ * preenchido — uma adesão de Select, uma justificativa de atraso — e um reload
+ * automático jogaria fora o que ela digitou. Quem decide a hora é ela.
+ *
+ * Fica no rodapé e não cobre a tela: enquanto não recarrega, LER continua
+ * funcionando normalmente. O que parou de funcionar é gravar.
+ */
+function AvisoVersaoNova() {
+  return (
+    <div
+      role="status"
+      className="fixed inset-x-0 bottom-0 z-[90] flex flex-wrap items-center justify-center gap-3 border-t border-brand/40 bg-brand/10 px-4 py-2.5 backdrop-blur-sm"
+    >
+      <span className="text-sm">
+        <strong>Nova versão publicada.</strong> Recarregue para voltar a salvar —
+        até lá, os botões podem não responder.
+      </span>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="inline-flex h-8 shrink-0 items-center rounded-lg bg-brand px-3 text-sm font-medium text-brand-fg transition-colors hover:bg-brand/90"
+      >
+        Recarregar
+      </button>
+    </div>
+  );
 }
 
 /**

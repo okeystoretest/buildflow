@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getEventsSince } from "@/lib/realtime/bus";
+import { BUILD_ID } from "@/lib/build-id";
 
 /**
  * Endpoint de POLLING do tempo real.
@@ -58,8 +59,12 @@ export async function GET(req: Request): Promise<Response> {
     events = [];
   }
 
+  // `rev`: qual build esta respondendo. O cliente guarda o primeiro que ve e
+  // avisa quando mudar — e assim que ele descobre que foi publicada uma versao
+  // nova enquanto estava com a tela aberta. Pega carona neste poll, que ja roda
+  // a cada 4s em toda tela logada, em vez de uma rota nova so para isso.
   return NextResponse.json(
-    { now, bootstrap: safeSince === 0, events },
+    { now, bootstrap: safeSince === 0, events, rev: BUILD_ID },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
