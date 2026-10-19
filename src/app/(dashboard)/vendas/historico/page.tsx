@@ -7,11 +7,15 @@ import { HistoricoFiltros } from "./filtros-client";
 import { ComandaList, type ComandaListItem } from "@/components/shared/comanda-list";
 import { isAnexoDispensavel } from "@/lib/validations/order";
 import { Pagination } from "@/components/shared/pagination";
-import type { Prisma } from "@prisma/client";
+import {
+  buildHistoricoWhere,
+  parseHistoricoFiltros,
+} from "@/lib/historico-vendas-query";
+import { RelatorioDeVendas } from "./exportar-pdf-client";
 
 // Itens por pagina. O historico so cresce (todo pedido concluido fica aqui),
 // entao a consulta e paginada no banco em vez de trazer tudo.
-const PER_PAGE = 20;
+const PER_PAGE = 9;
 
 export default async function HistoricoPage(
   props: {
@@ -21,34 +25,19 @@ export default async function HistoricoPage(
   const searchParams = await props.searchParams;
   const session = await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
-  // IMPORTANTE (correcao 2.1): NAO ha mais filtro de data padrao. Antes o
-  // periodo caia no "mes atual", o que ocultava silenciosamente todos os
-  // pedidos legados/anteriores. Agora, sem "de"/"ate" na URL, o historico
-  // exibe TODOS os pedidos concluidos, independentemente da data. O filtro de
-  // periodo so e aplicado quando o usuario o define explicitamente.
-  const de = searchParams.de?.trim() || "";
-  const ate = searchParams.ate?.trim() || "";
-  const comanda = searchParams.comanda?.trim() || "";
+  // Filtros e escopo vivem em historico-vendas-query.ts: a rota do PDF monta o
+  // MESMO where a partir das mesmas funcoes, e e o que garante que o relatorio
+  // nao divirja desta tela — nem no recorte, nem no escopo.
+  const { de, ate, comanda } = parseHistoricoFiltros(searchParams);
   const page = Math.max(1, Number(searchParams.page ?? 1) || 1);
-
-  // Intervalo de data condicional: so entra no filtro se informado.
-  const updatedAt: Prisma.DateTimeFilter = {};
-  if (de) updatedAt.gte = new Date(de + "T00:00:00");
-  if (ate) updatedAt.lte = new Date(ate + "T23:59:59");
   const temPeriodo = de !== "" || ate !== "";
 
+  // GESTAO/FINANCEIRO veem tudo; VENDAS ve apenas os proprios pedidos.
+  const sellerId =
+    session.role === "GESTAO" || session.role === "FINANCEIRO" ? null : session.userId;
+
   // O mesmo filtro serve para listar a pagina e para contar o total.
-  const where: Prisma.OrderWhereInput = {
-    status: "CONCLUIDO",
-    // GESTAO/FINANCEIRO veem tudo; VENDAS ve apenas os proprios pedidos.
-    ...(session.role === "GESTAO" || session.role === "FINANCEIRO"
-      ? {}
-      : { sellerId: session.userId }),
-    ...(temPeriodo ? { updatedAt } : {}),
-    ...(comanda
-      ? { comandaNumber: { contains: comanda, mode: "insensitive" } }
-      : {}),
-  };
+  const where = buildHistoricoWhere({ de, ate, comanda }, { sellerId });
 
   // As tres consultas correm em paralelo.
   //
@@ -111,7 +100,13 @@ export default async function HistoricoPage(
   return (
     <div className="space-y-6">
       <BackButton href="/vendas" />
-      <h1 className="text-2xl font-bold text-vendas-text">Histórico de Pedidos</h1>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-vendas-text">Histórico de Pedidos</h1>
+        {/* O relatorio pede o periodo no proprio modal, entao o botao nao
+            depende do que o filtro da tela esta mostrando agora. */}
+        <RelatorioDeVendas defaultDe={de} defaultAte={ate} />
+      </div>
 
       <HistoricoFiltros defaultDe={de} defaultAte={ate} defaultComanda={comanda} />
 
