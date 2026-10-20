@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDollarSign, Wallet, Truck, Paperclip, MessageSquare, FileText, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CardScroller } from "@/components/shared/card-scroller";
+import { shortName } from "@/lib/utils";
 import { flagOrderIssue, confirmPayment, markOrderPaid, uploadSecondPaymentProof, savePaymentPendingNote } from "@/lib/actions/finance";
 import { prepareProofFile } from "@/lib/client-image";
 import { useRouter } from "next/navigation";
@@ -414,8 +415,8 @@ function PendingCard({ card, onOpen, onFlag }: { card: FinanceCard; onOpen: () =
           <span className="font-data text-sm font-semibold">Pedido {card.orderNumber}</span>
           <span className="font-data text-sm font-semibold">{card.total}</span>
         </div>
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <User className="h-3 w-3 shrink-0" /> {card.customerName} · {card.sellerName}
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground" title={card.customerName}>
+          <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {card.sellerName}
         </p>
 
         {/* Obs. de Pagamento em DESTAQUE laranja (visibilidade imediata p/ o
@@ -480,8 +481,8 @@ function ProcessedCard({ card }: { card: FinanceCard }) {
         </span>
         <span className="font-data text-sm font-semibold">{card.total}</span>
       </div>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <User className="h-3 w-3 shrink-0" /> {card.customerName} · {card.sellerName}
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground" title={card.customerName}>
+        <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {card.sellerName}
       </p>
       <div className="mt-2 flex items-center justify-between">
         {aprovado ? (
@@ -700,8 +701,8 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
         <span className="font-data text-sm font-semibold">{rotuloComanda(card)}</span>
         <span className="font-data text-sm font-semibold">{card.total}</span>
       </div>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <User className="h-3 w-3 shrink-0" /> {card.customerName} · {card.sellerName}
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground" title={card.customerName}>
+        <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {card.sellerName}
       </p>
       <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
         <Clock className="h-3 w-3" />

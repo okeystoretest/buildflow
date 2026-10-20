@@ -5,6 +5,7 @@ import { History, Search, ChevronRight, X } from "lucide-react";
 import type { PieceStatus } from "@prisma/client";
 import { PIECE_LABEL } from "@/lib/piece-control";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
+import { shortName } from "@/lib/utils";
 
 /**
  * HISTÓRICO DO CONTROLE DE PEÇAS
@@ -148,7 +149,7 @@ export function HistoricoPecas({
                         Pedido {item.orderNumber}
                         {item.comandaNumber && ` · Comanda ${item.comandaNumber}`}
                       </p>
-                      <p className="truncate pl-6 text-sm">{item.customerName}</p>
+                      <p className="truncate pl-6 text-sm" title={item.customerName}>{shortName(item.customerName)}</p>
                       <p className="pl-6 text-xs text-muted-foreground">
                         Vendedora: {item.sellerName}
                         {item.pieceCount > 0 && ` · ${item.pieceCount} peça(s)`}

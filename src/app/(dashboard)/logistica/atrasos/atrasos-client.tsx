@@ -6,6 +6,7 @@ import { formatDuracao } from "@/lib/pendencias";
 import type { AtrasoPedido } from "@/lib/atrasos";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { shortName } from "@/lib/utils";
 
 /**
  * Listagem do Relatório de Atrasos.
@@ -41,8 +42,8 @@ export function AtrasosList({ pedidos }: { pedidos: AtrasoPedido[] }) {
                     <span className="text-muted-foreground"> · sem comanda</span>
                   )}
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  {p.customerName} (Cód. {p.customerCode}) · Vendedora: {p.sellerName}
+                <p className="text-sm text-muted-foreground" title={p.customerName}>
+                  {shortName(p.customerName)} (Cód. {p.customerCode}) · Vendedora: {p.sellerName}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {p.orderTypeName}

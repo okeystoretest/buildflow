@@ -6,6 +6,7 @@ import { STATUS_LABEL } from "@/lib/order-flow";
 import { formatDuracao, type CicloPendencia, type PendenciaPedido } from "@/lib/pendencias";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { shortName } from "@/lib/utils";
 
 // O tipo da ficha passou para src/lib/pendencias.ts, porque agora e consumido
 // tambem pelo gerador de PDF. Reexportado aqui para nao quebrar imports.
@@ -52,8 +53,8 @@ export function PendenciasList({ pedidos }: { pedidos: PendenciaPedido[] }) {
                     Pedido {p.orderNumber}
                     {p.comandaNumber && ` · Comanda ${p.comandaNumber}`}
                   </p>
-                  <p className="mt-0.5 truncate pl-6 text-sm">
-                    {p.customerName}
+                  <p className="mt-0.5 truncate pl-6 text-sm" title={p.customerName}>
+                    {shortName(p.customerName)}
                     <span className="font-data ml-2 rounded-md bg-secondary px-1.5 py-0.5 text-xs">
                       Cód. {p.customerCode}
                     </span>

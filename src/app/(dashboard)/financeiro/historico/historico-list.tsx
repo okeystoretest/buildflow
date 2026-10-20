@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/shared/modal";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, shortName } from "@/lib/utils";
 
 export interface FinHistProof { id: string; filePath: string; }
 export interface FinHistItem {
@@ -78,7 +78,7 @@ export function FinHistoricoList({ orders }: { orders: FinHistItem[] }) {
                   {o.outcomeLabel}
                 </Badge>
               </div>
-              <p className="truncate text-xs text-muted-foreground">{o.customerName}</p>
+              <p className="truncate text-xs text-muted-foreground" title={o.customerName}>{shortName(o.customerName)}</p>
               <div className="flex items-baseline justify-between gap-2">
                 <span className="font-data text-sm font-semibold">{o.total}</span>
                 <span className="shrink-0 text-xs text-muted-foreground">

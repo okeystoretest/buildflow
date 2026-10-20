@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { payDriverDelivery } from "@/lib/actions/driver-payments";
-import { cn } from "@/lib/utils";
+import { cn, shortName } from "@/lib/utils";
 
 // Ficha completa de uma entrega concluída. Sem ocultar/resumir: exibe todos os
 // dados da venda e da entrega. Compartilhada pelos históricos de Entregas da
@@ -154,8 +154,8 @@ export function EntregasList({
                   )}
                 </div>
               </div>
-              <p className="truncate text-xs text-muted-foreground">
-                {o.customerName}
+              <p className="truncate text-xs text-muted-foreground" title={o.customerName}>
+                {shortName(o.customerName)}
                 {o.driverName ? ` · ${o.driverName}` : ""}
               </p>
               <span className="font-data text-sm font-semibold">{o.total}</span>

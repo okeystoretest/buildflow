@@ -10,6 +10,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { OrderDetailModal } from "@/components/shared/order-detail-modal";
 import { CompletePhotoModal } from "./complete-photo-modal";
 import { Truck, Camera, Eye, CheckCircle2, X, MapPin } from "lucide-react";
+import { shortName } from "@/lib/utils";
 
 export interface DriverOrderView {
   id: string;
@@ -91,8 +92,8 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
       {/* Cabeçalho: cliente + código + status */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-base font-semibold">
-            {order.customer}
+          <p className="truncate text-base font-semibold" title={order.customer}>
+            {shortName(order.customer)}
             {order.customerCode && (
               <span className="font-data ml-2 rounded-md bg-secondary px-1.5 py-0.5 text-xs text-foreground/70">
                 {order.customerCode}
