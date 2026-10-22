@@ -1,7 +1,13 @@
 # Handoff — 21/10/2026 — Visibilidade das tabelas + importação de candidaturas
 
-Sessão em modo "ponytail" (menor mudança que resolve por inteiro). Quatro
-entregas, nesta ordem. Nada foi commitado: está tudo na árvore de trabalho.
+Sessão em modo "ponytail" (menor mudança que resolve por inteiro).
+
+**Commitado e enviado em 22/10:** `19104aa` em `master`
+(`origin/master` atualizado). O commit carrega também a **conversão por
+vendedora no painel**, que estava na árvore de trabalho sem commit desde
+ANTES desta sessão e ocupa as mesmas regiões dos três arquivos do dashboard —
+não havia como separar por arquivo. `Resumo 19_10 - sessao 7.md` continua
+fora do controle de versão, como estava.
 
 **Pendência que bloqueia o uso:** a migração do Prisma **não foi aplicada**.
 Ver [Antes de qualquer coisa](#antes-de-qualquer-coisa-no-próximo-chat).
@@ -285,15 +291,16 @@ destruído a base inteira. Foi esse episódio que motivou a `importKey`.
    `src/lib/wholesale-retention.ts` (retenção de 90 dias), anterior a esta
    sessão.
 
-## Mudanças na árvore que NÃO são desta sessão
+## O que no commit NÃO é desta sessão
 
-Para não atribuir errado no próximo chat:
+Para não atribuir errado no próximo chat, `19104aa` também leva:
 
-- `scripts/checks/wholesale-dashboard.ts` e `src/lib/wholesale-dashboard.ts`
-  (modificados), `analise-clientes/dashboard/page.tsx` (modificado) — já
-  estavam alterados quando a sessão começou.
-- Três `handoff-*.md` apagados e `Resumo 19_10 - sessao 7.md` não rastreado —
-  idem.
+- **Conversão por vendedora no painel** (`agrupaPorVendedora`,
+  `ContagemPorVendedora`, o componente `Conversoes` e as checagens dela), em
+  `src/lib/wholesale-dashboard.ts`, `scripts/checks/wholesale-dashboard.ts` e
+  `analise-clientes/dashboard/page.tsx`. Estava na árvore sem commit quando a
+  sessão começou, nas mesmas regiões que as mudanças de hoje.
+- A remoção de três `handoff-*.md` antigos, apagados antes da sessão.
 
 ## Arquivos desta sessão
 
