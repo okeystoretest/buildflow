@@ -19,7 +19,12 @@
     --secondary: 220 18% 91%;
     --secondary-foreground: 217 30% 22%;
     --muted: 220 18% 91%;
-    --muted-foreground: 217 12% 45%;
+    /* Texto secundario (cabecalho de tabela, rotulo, legenda). Subiu de 45%
+       para 36% em 21/10/2026: a 45% dava 4,47:1 sobre o fundo da pagina e
+       4,06:1 sobre `bg-secondary` — reprovado em AA, que pede 4,5:1. Mesma hue
+       e saturacao, so a luminosidade; a hierarquia com o --foreground (20%)
+       continua visivel. scripts/checks/cor-de-setor.ts recalcula. */
+    --muted-foreground: 217 12% 36%;
     --accent: 204 55% 92%;
     --accent-foreground: 204 70% 28%;
     --destructive: 0 70% 50%;
@@ -72,7 +77,9 @@
     --secondary: 222 18% 18%;
     --secondary-foreground: 215 20% 89%;
     --muted: 222 18% 18%;
-    --muted-foreground: 217 14% 60%;
+    /* Mesmo passe do tema claro, invertido: aqui o texto secundario CLAREIA.
+       A 60% dava 4,74:1 sobre `bg-secondary`, no limite; a 70% sao 6,52:1. */
+    --muted-foreground: 217 14% 70%;
     --accent: 204 60% 20%;
     --accent-foreground: 204 75% 80%;
     --destructive: 0 65% 55%;
@@ -117,6 +124,38 @@
   }
 
   .font-data { font-family: var(--font-mono); font-feature-settings: "tnum"; }
+
+  /* ===== Tabela fechada =====
+     Substituiu o degrade do cabecalho em 21/10/2026: o degrade nao separou o
+     cabecalho do corpo, e a grade completa resolve sem cor nenhuma.
+
+     Linha em TODA celula, mais a borda em volta da tabela. Tres telas ja
+     tinham as verticais na mao (Pedidos, Candidaturas, Select, via
+     `border-r border-border`); as outras nove nao, e a tabela ficava
+     "aberta" dos lados. Estas quatro declaracoes fecham as doze de uma vez.
+     As classes `border-r` que ja existiam continuam validas e redundantes —
+     mesma cor e mesma largura, e `border-collapse: collapse` (preflight do
+     Tailwind) funde as duas em uma linha so.
+
+     O cabecalho ganha o `secondary` CHAPADO. A cor sai daqui, e nao de uma
+     classe, para ser a mesma nas doze tabelas; por isso os tres `<thead>`
+     que traziam fundo proprio (`bg-card` no Rank, `bg-secondary/50` no
+     Financeiro e no historico do motorista) tiveram a classe removida —
+     utility do Tailwind vence regra de @layer base, e eles ficariam de fora.
+     O `secondary` e opaco, o que o cabecalho `sticky` do Rank exige.
+
+     Texto do cabecalho em --foreground sobre este fundo: 10,79:1 no claro e
+     10,95:1 no escuro, medido em scripts/checks/cor-de-setor.ts. */
+  table {
+    border: 1px solid hsl(var(--border));
+  }
+  th,
+  td {
+    border: 1px solid hsl(var(--border));
+  }
+  thead {
+    background-color: hsl(var(--secondary));
+  }
 
   /* ===== Card de pedido ATRASADO (tempo limite excedido) =====
      Fundo vermelho preenchido por inteiro. Para manter a legibilidade (WCAG AA

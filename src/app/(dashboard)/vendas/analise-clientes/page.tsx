@@ -10,9 +10,12 @@ import type { Prisma } from "@prisma/client";
 import { formatCnpj, normalizeCnpj, phoneMatchKeys } from "@/lib/wholesale-identity";
 import { classifyDuplicateMatch, listLeadsFor } from "@/lib/wholesale-queries";
 import { findRejectionCode } from "@/lib/wholesale-rejection-codes";
-import { LeadStatusChip } from "./lead-status-chip";
+import { LeadStatusCell } from "./lead-status-cell";
 import { LeadRowActions } from "./lead-row-actions";
 import { AnaliseClientesFiltros } from "./filtros-client";
+import { CsvImport } from "@/components/shared/csv-import";
+import { importWholesaleLeadsCsv } from "@/lib/actions/import";
+import { COLUNAS_IMPORT } from "@/lib/wholesale-import";
 import type { DuplicateAlertView, LeadAnswers } from "./decision-modal";
 
 /**
@@ -372,7 +375,7 @@ export default async function AnaliseClientesPage(
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b text-left text-muted-foreground">
+                <thead className="border-b text-left text-foreground">
                   <tr>
                     <th className="w-px whitespace-nowrap border-r border-border py-2 pr-4">
                       Recebido
@@ -416,9 +419,24 @@ export default async function AnaliseClientesPage(
           <CardTitle>{ehGestao ? "Candidaturas" : "Minhas candidaturas"}</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* IMPORTAÇÃO DA PLANILHA ANTIGA — só Gestão, e só aqui: é carga de
+              histórico, não operação do dia. Fica dentro do card da lista
+              porque é dela que a planilha vira linha. A action valida e recusa
+              linha por linha (ver src/lib/wholesale-import.ts). */}
+          {ehGestao && (
+            <div className="mb-4">
+              <CsvImport
+                title="Importar candidaturas da planilha"
+                description="Carga do histórico: baixe o modelo, preencha no Excel o que a planilha antiga tem, salve como CSV e envie. Coluna sem dado fica em branco — só marca e nome são obrigatórios."
+                columns={COLUNAS_IMPORT.map((c) => c.nome)}
+                sample={COLUNAS_IMPORT.map((c) => c.exemplo)}
+                action={importWholesaleLeadsCsv}
+              />
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b text-left text-muted-foreground">
+              <thead className="border-b text-left text-foreground">
                 <tr>
                   {/* Colunas estreitas (`w-px whitespace-nowrap`) são as de
                       conteúdo de largura fixa: data, CNPJ, status. O espaço
@@ -446,6 +464,17 @@ export default async function AnaliseClientesPage(
               <tbody>
                 {leads.map((l) => {
                   const respostas = respostasPorLead.get(l.id);
+                  // O motivo da reprovação não fica mais escrito na linha: ele
+                  // aparece sob CLIQUE no chip de status (`lead-status-cell.tsx`,
+                  // que registra por que é clique e não hover). Numa tela que a
+                  // Gestão varre com a lojista do lado, o motivo exposto ao lado
+                  // do nome é constrangedor; a um clique, continua perto.
+                  const motivoReprovacao =
+                    l.status !== "REPROVADO"
+                      ? undefined
+                      : l.rejectionCode
+                        ? `Motivo: ${l.rejectionCode} — ${findRejectionCode(l.rejectionCode)?.label ?? "motivo desconhecido"}`
+                        : "Reprovada antes de o código de motivo existir.";
                   return (
                     <tr
                       key={l.id}
@@ -469,51 +498,18 @@ export default async function AnaliseClientesPage(
                         {formatCnpj(l.cnpj)}
                       </td>
                       <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
-                        <LeadStatusChip status={l.status} />
+                        <LeadStatusCell status={l.status} motivo={motivoReprovacao} />
                       </td>
-                      {/* REPROVADA: no lugar de Auxiliar e Vendedora, o MOTIVO.
-                          Numa candidatura recusada, quem a atendeu deixou de
-                          ser a informação útil da linha — o que se procura ao
-                          varrer a lista é por que ela caiu, e esse dado estava
-                          escondido atrás do modal. */}
-                      {l.status === "REPROVADO" ? (
-                        <td
-                          colSpan={ehGestao ? 2 : 1}
-                          className="border-r border-border py-2 pl-4 pr-4"
-                        >
-                          {l.rejectionCode ? (
-                            <span
-                              className="text-destructive"
-                              title={findRejectionCode(l.rejectionCode)?.label ?? undefined}
-                            >
-                              <span className="font-data font-semibold">{l.rejectionCode}</span>
-                              {/* O rótulo vem junto quando a tabela tem espaço:
-                                  o código sozinho exige decorar os 34. */}
-                              <span className="hidden lg:inline">
-                                {" "}
-                                — {findRejectionCode(l.rejectionCode)?.label ?? "motivo desconhecido"}
-                              </span>
-                            </span>
-                          ) : (
-                            // Reprovada antiga, de antes de o código ser
-                            // obrigatório: dizer isso é melhor que um traço.
-                            <span className="text-muted-foreground">Sem código</span>
-                          )}
+                      {/* Exibida em maiúsculas (decisão 19). A action já grava
+                          assim; o `uppercase` aqui cobre registro antigo que
+                          tenha entrado por outro caminho. */}
+                      <td className="border-r border-border py-2 pl-4 pr-4 uppercase">
+                        {l.assistantName ?? "—"}
+                      </td>
+                      {ehGestao && (
+                        <td className="border-r border-border py-2 pl-4 pr-4">
+                          {l.sellerName ?? "—"}
                         </td>
-                      ) : (
-                        <>
-                          {/* Exibida em maiúsculas (decisão 19). A action já grava
-                              assim; o `uppercase` aqui cobre registro antigo que
-                              tenha entrado por outro caminho. */}
-                          <td className="border-r border-border py-2 pl-4 pr-4 uppercase">
-                            {l.assistantName ?? "—"}
-                          </td>
-                          {ehGestao && (
-                            <td className="border-r border-border py-2 pl-4 pr-4">
-                              {l.sellerName ?? "—"}
-                            </td>
-                          )}
-                        </>
                       )}
                       <td className="py-2 pl-4 pr-4 text-right">
                         {/* Sem as respostas completas não há o que analisar. Só

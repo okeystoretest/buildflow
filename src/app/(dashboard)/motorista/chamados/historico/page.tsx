@@ -41,7 +41,7 @@ export default async function ChamadosHistoricoPage() {
       </div>
       <div className="overflow-x-auto rounded-2xl border border-border">
         <table className="w-full text-sm">
-          <thead className="bg-secondary/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <thead className="text-left text-xs uppercase tracking-wide text-foreground">
             <tr>
               <th className="px-3 py-2">Código</th>
               <th className="px-3 py-2">Serviço</th>

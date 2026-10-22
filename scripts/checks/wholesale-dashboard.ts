@@ -16,6 +16,8 @@
 import {
   MAX_MESES_NO_GRAFICO,
   MESES_NO_GRAFICO,
+  agrupaPorMotivo,
+  agrupaPorVendedora,
   bucketsDeMes,
   escopoDoAtor,
   taxaDeConversao,
@@ -53,6 +55,43 @@ check("base zero é 0, não NaN", taxaDeConversao(0, 0), 0);
 // O denominador é o TOTAL, não as decididas: com 2 aprovadas, 2 reprovadas e
 // 6 em análise, a resposta é 20% — não 50%.
 check("as em análise contam no denominador", taxaDeConversao(2, 10), 20);
+
+// --- conversão por vendedora ------------------------------------------------
+// O painel "Taxa de conversão por vendedora" soma linhas (vendedora × status)
+// do groupBy. Dois erros moram aqui: contar APROVADO no total errado e perder a
+// linha sem dona, que tem `sellerId: null` e também aparece no painel.
+const linha = (sellerId: string | null, status: string, n: number) =>
+  ({ sellerId, status, _count: { _all: n } }) as Parameters<typeof agrupaPorVendedora>[0][number];
+
+const nomes = new Map([
+  ["v1", "Ana"],
+  ["v2", "Bia"],
+]);
+const grupos = agrupaPorVendedora(
+  [
+    linha("v1", "APROVADO", 3),
+    linha("v1", "REPROVADO", 1),
+    linha("v1", "EM_ANALISE", 1),
+    linha("v2", "EM_ANALISE", 2),
+    linha(null, "APROVADO", 1),
+    linha("v9", "APROVADO", 1),
+  ],
+  nomes,
+);
+
+check(
+  "uma linha por vendedora, ordenada por volume",
+  grupos.map((g) => `${g.nome}:${g.aprovadas}/${g.total}=${g.conversao}`),
+  ["Ana:3/5=60", "Bia:0/2=0", "Sem vendedora:1/1=100", "Vendedora removida:1/1=100"],
+);
+// Só APROVADO conta no numerador; REPROVADO e EM_ANALISE ficam no denominador.
+check("só APROVADO é aprovada", grupos[0].aprovadas, 3);
+// `null` não pode ser descartado nem casar com outra vendedora: é a candidatura
+// que chegou pelo link geral sem dona, e o painel precisa mostrá-la.
+check("a linha sem dona sobrevive", grupos.find((g) => g.sellerId === null)?.total, 1);
+// Vendedora que saiu da equipe não sai do histórico dela.
+check("id sem nome não vira linha anônima", grupos[3].nome, "Vendedora removida");
+check("sem linhas, sem painel", agrupaPorVendedora([], nomes), []);
 
 // --- meses do gráfico -------------------------------------------------------
 const meses = bucketsDeMes(new Date("2026-10-19T12:00:00.000Z"));
@@ -131,6 +170,36 @@ check(
   bucketsDeMes(hoje, "2026-09-01", "2026-03-01").map((m) => m.chave),
   ["2026-03"],
 );
+
+// --- reprovacoes por motivo -------------------------------------------------
+// Substituiu "Ultimas candidaturas" no painel em 22/10/2026. O que esta em jogo
+// e a ORDEM (quem le um painel age sobre as primeiras linhas, e a tela mostra
+// oito dos 34 motivos) e o motivo NULO: escondido, as parcelas nao fechariam com
+// o total de reprovacoes, e diferenca inexplicada num painel e pior que linha a
+// mais.
+const motivos = agrupaPorMotivo([
+  { rejectionCode: "02", _count: { _all: 3 } },
+  { rejectionCode: null, _count: { _all: 5 } },
+  { rejectionCode: "01", _count: { _all: 9 } },
+  { rejectionCode: "03", _count: { _all: 3 } },
+]);
+check("motivo mais frequente vem primeiro", motivos[0].total, 9);
+check("ordena do maior para o menor", motivos.map((m) => m.total), [9, 5, 3, 3]);
+// Empate desempatado pelo codigo: sem criterio, a ordem mudaria a cada leitura e
+// o painel pareceria instavel sem nada ter mudado.
+check("empate e desempatado pelo codigo", [motivos[2].code, motivos[3].code], ["02", "03"]);
+check("rotulo traz codigo e texto", motivos[0].rotulo, "01 — Sem CNPJ");
+check("reprovada sem codigo aparece como linha", motivos[1].rotulo, "Sem código");
+check("nada reprovado devolve lista vazia", agrupaPorMotivo([]), []);
+// Codigo que saiu da taxonomia: mostrar o cru e mais honesto que sumir com a linha.
+check(
+  "codigo desconhecido nao some do painel",
+  agrupaPorMotivo([{ rejectionCode: "99", _count: { _all: 1 } }])[0].rotulo,
+  "99 — motivo desconhecido",
+);
+// As parcelas TEM de fechar com o total: e a conta que o painel mostra ao lado
+// de cada linha, em percentual.
+check("as parcelas somam o total de reprovacoes", motivos.reduce((n, m) => n + m.total, 0), 20);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

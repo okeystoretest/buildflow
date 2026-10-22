@@ -50,9 +50,13 @@ export function CsvImport({ title, description, columns, sample, action }: Props
   }
 
   function downloadTemplate() {
-    const header = columns.join(",");
-    const example = sample.join(",");
-    const blob = new Blob([`${header}\n${example}\n`], { type: "text/csv;charset=utf-8" });
+    // `;` e BOM porque o modelo existe para ser PREENCHIDO NO EXCEL em
+    // português: com vírgula ele abre tudo empilhado numa coluna só, e sem o
+    // BOM ele lê UTF-8 como ANSI e "São" vira "SÃ£o". O leitor do servidor
+    // detecta os dois separadores (ver `detectSep`), então nada no import muda.
+    const header = columns.join(";");
+    const example = sample.join(";");
+    const blob = new Blob([`﻿${header}\n${example}\n`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

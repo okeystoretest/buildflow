@@ -457,7 +457,7 @@ function SelectTable({ perf }: { perf: CampaignPerf }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-card text-left text-xs uppercase tracking-wide text-muted-foreground">
+        <thead className="sticky top-0 text-left text-xs uppercase tracking-wide text-foreground">
           <tr>
             <th className="pb-1 pr-2">Cliente</th>
             <th className="pb-1 pr-2">Plano</th>
@@ -679,7 +679,7 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
        verticalmente conforme a quantidade de linhas. */
     <div className="flex-1">
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+        <thead className="text-left text-xs uppercase tracking-wide text-foreground">
           <tr>
             <th className="pb-1 pr-2">Vendedores</th>
             <th className="pb-1 pr-2 text-right">Meta</th>

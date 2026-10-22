@@ -51,22 +51,23 @@ export interface LeadAnswers {
   // --- Seção 2: Sobre o Seu Negócio ---
   state: string;
   city: string;
-  serviceModel: string;
+  serviceModel: string | null;
   serviceModelOther: string | null;
   instagram: string;
   instagramImagePath: string;
   storeImagePath: string;
-  storeImageKind: string;
+  /** Nulo em candidatura importada de planilha — ver `wholesale-import.ts`. */
+  storeImageKind: string | null;
   marketTime: string;
   teamSize: string;
 
   // --- Seção 3: Conectividade e Parceria Comercial ---
   brandsCarried: string;
-  foundUs: string;
+  foundUs: string | null;
   foundUsOther: string | null;
   followTime: string;
-  investmentBand: string;
-  wantsVisit: boolean;
+  investmentBand: string | null;
+  wantsVisit: boolean | null;
 
   // --- Seção 4: Validação Cadastro ---
   cnpj: string;
@@ -147,7 +148,13 @@ const MATCH_LABEL: Record<DuplicateMatch, string> = {
 };
 
 /** Enum desconhecido mostra o valor cru em vez de vazio: some menos informação. */
-const rotulo = (mapa: Record<string, string>, valor: string) => mapa[valor] ?? valor;
+/**
+ * Rótulo de valor fechado. `null` é resposta AUSENTE (candidatura importada de
+ * planilha, que não registrava estas perguntas) e vira travessão, igual ao que
+ * `ou()` faz com texto vazio — não "null" nem espaço em branco na ficha.
+ */
+const rotulo = (mapa: Record<string, string>, valor: string | null) =>
+  valor ? (mapa[valor] ?? valor) : "—";
 
 /** Resposta ausente aparece como travessão, nunca como espaço em branco. */
 const ou = (v: string | null | undefined) => (v && v.trim() ? v.trim() : "—");
@@ -386,10 +393,15 @@ export function DecisionModal({
 
   if (!portalTarget) return null;
 
+  // Sem `storeImageKind` (candidatura importada) a pergunta não é afirmada:
+  // dizer "foto do seu espaço físico" a uma loja só online seria inventar o que
+  // foi pedido — e nada foi, porque não houve formulário.
   const rotuloFotoLoja =
-    lead.storeImageKind === "LOJA_ONLINE"
-      ? "Compartilhe conosco um print da sua loja online:"
-      : "Compartilhe conosco uma foto do seu espaço físico:";
+    lead.storeImageKind === null
+      ? "Imagem da loja:"
+      : lead.storeImageKind === "LOJA_ONLINE"
+        ? "Compartilhe conosco um print da sua loja online:"
+        : "Compartilhe conosco uma foto do seu espaço físico:";
 
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
@@ -555,7 +567,7 @@ export function DecisionModal({
               {rotulo(INVESTMENT_LABEL, lead.investmentBand)}
             </Resposta>
             <Resposta pergunta="Gostaria de receber a visita de uma de nossas representantes em sua loja?">
-              {lead.wantsVisit ? "Sim" : "Não"}
+              {lead.wantsVisit === null ? "—" : lead.wantsVisit ? "Sim" : "Não"}
             </Resposta>
           </Secao>
 

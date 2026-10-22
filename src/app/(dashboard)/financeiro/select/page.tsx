@@ -123,7 +123,7 @@ export default async function FinanceiroSelectPage(
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b text-left text-muted-foreground">
+              <thead className="border-b text-left text-foreground">
                 <tr>
                   <th className="w-px whitespace-nowrap border-r border-border py-2 pr-4">Código</th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Cliente</th>

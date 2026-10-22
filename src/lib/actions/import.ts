@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleAction, hashPassword } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import type { Role, SalesModel } from "@prisma/client";
+import { COLUNAS_IMPORT, chaveDeImportacao, converterLinha, ehEmail, mapearCabecalho, normalizarNome } from "@/lib/wholesale-import";
 
 export interface ImportSummary {
   created: number;
@@ -257,5 +258,162 @@ export async function importCustomersCsv(csv: string): Promise<ActionResult<Impo
     return actionOk(summary);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao importar clientes.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CANDIDATURAS DE ATACADO — a planilha antiga da Analise de Clientes.
+//
+// As colunas, o modelo e a validacao vivem em `src/lib/wholesale-import.ts`
+// (puro, conferido por scripts/checks/wholesale-leads-import.ts). Aqui fica o
+// que exige banco: resolver e-mail de vendedora e de quem decidiu para id, e
+// gravar.
+//
+// LINHA RUIM NAO DERRUBA O LOTE: cada linha recusada entra no relatorio com o
+// numero dela e as outras entram. Uma planilha de centenas de candidaturas
+// antigas tem celula torta, e abortar tudo por causa de uma obrigaria a Gestao
+// a caçar o defeito as cegas.
+//
+// CNPJ REPETIDO NAO E ERRO AQUI: `WholesaleLead.cnpj` nao tem @unique de
+// proposito ("a repeticao e informacao, nao erro" — decisao 9), e e ela que
+// alimenta o aviso de repeticao da ficha. A importacao so CONTA quantas
+// repetem, para a Gestao saber o que vai encontrar.
+// ---------------------------------------------------------------------------
+export async function importWholesaleLeadsCsv(csv: string): Promise<ActionResult<ImportSummary>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    const todas = parseCsv(csv);
+    if (todas.length === 0) return actionError("Arquivo vazio ou sem linhas válidas.");
+
+    const col = mapearCabecalho(todas[0]);
+    if (!col) {
+      return actionError(
+        `A primeira linha precisa ser o cabeçalho do modelo (com as colunas "marca" e "nome"). Baixe o modelo no botão ao lado. Colunas esperadas: ${COLUNAS_IMPORT.map((c) => c.nome).join(", ")}.`,
+      );
+    }
+    const linhas = todas.slice(1);
+    if (linhas.length === 0) return actionError("Arquivo sem linhas de dados (apenas cabeçalho).");
+
+    const summary: ImportSummary = { created: 0, updated: 0, skipped: 0, errors: [] };
+
+    // Os usuarios UMA vez, nao um SELECT por linha. Sao dezenas numa empresa, e
+    // a planilha tem centenas de linhas — o inverso custaria centenas de idas
+    // ao banco para reencontrar as mesmas poucas pessoas.
+    const usuarios = await prisma.user.findMany({ select: { id: true, name: true, email: true } });
+    const idPorEmail = new Map(usuarios.map((u) => [u.email.toLowerCase(), u.id]));
+    // Nome NAO e unico no banco: duas "Ana Paula" sao possiveis, e escolher uma
+    // delas em silencio atribuiria o historico de uma a outra. Por isso o mapa
+    // guarda a LISTA, e o desempate e recusar a linha pedindo o e-mail.
+    const idsPorNome = new Map<string, string[]>();
+    for (const u of usuarios) {
+      const chave = normalizarNome(u.name);
+      idsPorNome.set(chave, [...(idsPorNome.get(chave) ?? []), u.id]);
+    }
+
+    /** Resolve "nome ou e-mail" para id, ou devolve a recusa em palavras. */
+    const resolver = (ref: string, coluna: string): { id: string } | { error: string } => {
+      if (ehEmail(ref)) {
+        const id = idPorEmail.get(ref.toLowerCase());
+        return id ? { id } : { error: `${coluna}: não existe usuário com o e-mail "${ref}".` };
+      }
+      const achados = idsPorNome.get(normalizarNome(ref)) ?? [];
+      if (achados.length === 1) return { id: achados[0] };
+      if (achados.length === 0) {
+        return { error: `${coluna}: não existe usuário chamado "${ref}". Confira o nome no cadastro de usuários ou use o e-mail.` };
+      }
+      return { error: `${coluna}: há ${achados.length} usuários chamados "${ref}". Use o e-mail nesta coluna para dizer qual.` };
+    };
+
+    let repetidos = 0;
+    for (let i = 0; i < linhas.length; i++) {
+      // +2: a linha 1 do arquivo e o cabecalho, e quem conferir a planilha vai
+      // contar como o Excel conta.
+      const ln = i + 2;
+      const r = converterLinha(linhas[i], col);
+      if (!("ok" in r)) {
+        summary.skipped++;
+        summary.errors.push(`Linha ${ln}: ${r.error}`);
+        continue;
+      }
+      const { sellerRef, decidedByRef, ...lead } = r.lead;
+
+      // Linha com pessoa que o sistema nao conhece e RECUSADA, nao gravada sem
+      // dona: candidatura historica sem vendedora some da conferencia (ninguem
+      // a ve na lista de ninguem) e reaparece como numero que nao fecha.
+      let sellerId: string | undefined;
+      if (sellerRef) {
+        const r2 = resolver(sellerRef, "atendente");
+        if ("error" in r2) {
+          summary.skipped++;
+          summary.errors.push(`Linha ${ln}: ${r2.error}`);
+          continue;
+        }
+        sellerId = r2.id;
+      }
+      let decidedById: string | undefined;
+      if (decidedByRef) {
+        const r2 = resolver(decidedByRef, "decidido_por");
+        if ("error" in r2) {
+          summary.skipped++;
+          summary.errors.push(`Linha ${ln}: ${r2.error}`);
+          continue;
+        }
+        decidedById = r2.id;
+      }
+
+      // Repetido aqui e so o CNPJ que bate com cadastro do FORMULARIO
+      // (importKey nulo). O que bate com importacao anterior nao e repeticao:
+      // e a mesma linha da planilha, e o upsert abaixo atualiza.
+      if (lead.cnpj) {
+        const repete = await prisma.wholesaleLead.findFirst({
+          where: { cnpj: lead.cnpj, importKey: null },
+          select: { id: true },
+        });
+        if (repete) repetidos++;
+      }
+
+      const { createdAt, ...semData } = lead;
+      const comuns = {
+        ...semData,
+        // Imagens sao arquivo enviado, nao celula de planilha. A ficha exibe
+        // "Imagem nao disponivel" (ver `Miniatura`).
+        instagramImagePath: "",
+        storeImagePath: "",
+        sellerId: sellerId ?? null,
+        decidedById: decidedById ?? null,
+        // NULL = dona fixa, fora do rodizio do link geral. Candidatura
+        // historica nao disputa a fila de hoje (ver wholesale-rodizio.ts).
+        rodizioIndice: null,
+      };
+      // Data VAZIA nao sobrescreve a que ja esta gravada: numa reimportacao,
+      // apagar a data de recebimento por causa de celula em branco seria perder
+      // o que a importacao anterior trouxe. Sem data nenhuma, quem data e o
+      // @default(now()) do banco — melhor que uma data falsa.
+      const data = createdAt ? { createdAt } : {};
+
+      const importKey = chaveDeImportacao(lead);
+      const existia = await prisma.wholesaleLead.findUnique({
+        where: { importKey },
+        select: { id: true },
+      });
+      await prisma.wholesaleLead.upsert({
+        where: { importKey },
+        create: { ...comuns, ...data, importKey },
+        update: { ...comuns, ...data },
+      });
+      if (existia) summary.updated = (summary.updated ?? 0) + 1;
+      else summary.created++;
+    }
+
+    if (repetidos > 0) {
+      summary.errors.push(
+        `Aviso: ${repetidos} candidatura(s) da planilha têm CNPJ que já existe num cadastro vindo do formulário. Entraram como candidatura nova — a repetição vira aviso na ficha, e nenhum cadastro real foi sobrescrito.`,
+      );
+    }
+    revalidatePath("/vendas/analise-clientes");
+    revalidatePath("/vendas/analise-clientes/dashboard");
+    return actionOk(summary);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao importar candidaturas.");
   }
 }

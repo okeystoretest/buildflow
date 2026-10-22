@@ -165,7 +165,7 @@ function OperationPanel({ rows }: { rows: OpRow[] }) {
       />
       {error && <p className="text-sm text-destructive">{error}</p>}
       <table className="w-full text-sm">
-        <thead className="border-b border-border text-left text-muted-foreground">
+        <thead className="border-b border-border text-left text-foreground">
           <tr><th className="py-2 pr-4">Código</th><th className="py-2 pr-4">Nome</th><th className="py-2 pr-4">Ativo</th><th className="py-2 pr-4 text-right">Ações</th></tr>
         </thead>
         <tbody>
@@ -452,7 +452,7 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
       />
 
       <table className="w-full text-sm">
-        <thead className="border-b border-border text-left text-muted-foreground">
+        <thead className="border-b border-border text-left text-foreground">
           <tr><th className="py-2 pr-4">Nome</th><th className="py-2 pr-4">Usuário</th><th className="py-2 pr-4">Perfil</th><th className="py-2 pr-4">Modelo</th><th className="py-2 pr-4">Lojas de Origem</th><th className="py-2 pr-4">Ativo</th><th className="py-2 pr-4 text-right">Ações</th></tr>
         </thead>
         <tbody>
@@ -568,7 +568,7 @@ function OriginStoresPanel({ rows }: { rows: OriginStoreRow[] }) {
       </div>
 
       <table className="w-full text-sm">
-        <thead className="border-b border-border text-left text-muted-foreground">
+        <thead className="border-b border-border text-left text-foreground">
           <tr><th className="py-2 pr-4">Nome</th><th className="py-2 pr-4">Fluxo</th><th className="py-2 pr-4">Ativo</th><th className="py-2 pr-4 text-right">Ações</th></tr>
         </thead>
         <tbody>
@@ -753,7 +753,7 @@ function GoalsPanel({ sellers, goals, activeCampaigns, month, year, periodMonth,
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <table className="w-full text-sm">
-        <thead className="border-b border-border text-left text-muted-foreground">
+        <thead className="border-b border-border text-left text-foreground">
           <tr><th className="py-2 pr-4">Vendedor</th><th className="py-2 pr-4">Meta</th><th className="py-2 pr-4">Vínculo</th><th className="py-2 pr-4">Período</th><th className="py-2 pr-4">Escopo</th><th className="py-2 pr-4 text-right">Ações</th></tr>
         </thead>
         <tbody>
@@ -860,7 +860,7 @@ function CampaignsPanel({ campaigns }: { campaigns: CampaignRow[] }) {
       )}
 
       <table className="w-full text-sm">
-        <thead className="border-b border-border text-left text-muted-foreground">
+        <thead className="border-b border-border text-left text-foreground">
           <tr><th className="py-2 pr-4">Campanha</th><th className="py-2 pr-4">Ativa</th><th className="py-2 pr-4 text-right">Ações</th></tr>
         </thead>
         <tbody>

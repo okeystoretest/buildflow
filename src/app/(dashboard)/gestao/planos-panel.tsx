@@ -353,7 +353,7 @@ export function PlanosPanel({ plans }: { plans: PlanAdminRow[] }) {
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="border-b border-border text-left text-muted-foreground">
+          <thead className="border-b border-border text-left text-foreground">
             <tr>
               <th className="py-2 pr-4">Plano</th>
               <th className="py-2 pr-4">Mensalidade</th>

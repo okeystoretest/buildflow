@@ -123,7 +123,7 @@ export default async function VendasPage(
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b text-left text-muted-foreground">
+              <thead className="border-b text-left text-foreground">
                 <tr>
                   {/* Coluna estreita: o numero do pedido nao precisa de largura
                       flexivel — encolhe para o conteudo e libera espaco. */}

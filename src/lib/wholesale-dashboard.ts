@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { WholesaleLeadStatus, type Prisma } from "@prisma/client";
 import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permissions";
 import { filtroDePeriodo } from "@/lib/wholesale-queries";
+import { findRejectionCode } from "@/lib/wholesale-rejection-codes";
 
 /**
  * DASHBOARD DA ANÁLISE DE CLIENTES — só leitura, nada escreve.
@@ -41,6 +42,9 @@ export interface ContagemPorVendedora {
   sellerId: string | null;
   nome: string;
   total: number;
+  aprovadas: number;
+  /** Aprovadas ÷ recebidas DELA, em 0–100 — mesma conta de `taxaDeConversao`. */
+  conversao: number;
 }
 
 export interface EntradaNoMes {
@@ -61,6 +65,14 @@ export interface CandidaturaRecente {
   createdAtLabel: string;
 }
 
+export interface ContagemPorMotivo {
+  /** O código dos 34, ou `null` para reprovada antes de ele existir. */
+  code: string | null;
+  /** "12 — Loja sem vitrine" (ou "Sem código"). */
+  rotulo: string;
+  total: number;
+}
+
 export interface FiltrosDoPainel {
   de?: string;
   ate?: string;
@@ -74,6 +86,8 @@ export interface ResumoDoAtacado {
   porVendedora: ContagemPorVendedora[];
   entradasPorMes: EntradaNoMes[];
   recentes: CandidaturaRecente[];
+  /** As reprovações desta fatia, por motivo, da mais frequente para a menos. */
+  porMotivo: ContagemPorMotivo[];
   /** Aprovadas ÷ total recebido, em 0–100. */
   conversao: number;
   aprovadas: number;
@@ -85,6 +99,7 @@ const VAZIO: ResumoDoAtacado = {
   porVendedora: [],
   entradasPorMes: [],
   recentes: [],
+  porMotivo: [],
   conversao: 0,
   aprovadas: 0,
 };
@@ -111,6 +126,42 @@ export function escopoDoAtor(actor: WholesaleActor): Prisma.WholesaleLeadWhereIn
  */
 export function taxaDeConversao(aprovadas: number, total: number): number {
   return total === 0 ? 0 : Math.round((aprovadas / total) * 1000) / 10;
+}
+
+/**
+ * As linhas (vendedora × status) do `groupBy` viram uma linha por vendedora,
+ * com total, aprovadas e a taxa dela.
+ *
+ * PURO e exportado pelo mesmo motivo que `taxaDeConversao`: é a conta que o
+ * painel mostra, e conta que nenhum script confere é conta que se perde numa
+ * refatoração. Ordenado por VOLUME — quem lê por taxa reordena na tela, e o
+ * `lider` ("quem mais recebeu") depende desta ordem.
+ */
+export function agrupaPorVendedora(
+  linhas: { sellerId: string | null; status: WholesaleLeadStatus; _count: { _all: number } }[],
+  nomes: Map<string, string>,
+): ContagemPorVendedora[] {
+  // Chave de string porque `null` (sem dona) também é uma linha do painel.
+  const porDona = new Map<string, { total: number; aprovadas: number }>();
+  for (const l of linhas) {
+    const chave = l.sellerId ?? "";
+    const acc = porDona.get(chave) ?? { total: 0, aprovadas: 0 };
+    acc.total += l._count._all;
+    if (l.status === WholesaleLeadStatus.APROVADO) acc.aprovadas += l._count._all;
+    porDona.set(chave, acc);
+  }
+  return [...porDona.entries()]
+    .map(([chave, { total, aprovadas }]) => ({
+      sellerId: chave || null,
+      // Sem dona = chegou pelo link geral sem nenhuma vendedora ativa para
+      // receber. É um aviso de operação, e some da lista quando alguém é
+      // ativada — por isso aparece nomeado, não escondido.
+      nome: chave ? (nomes.get(chave) ?? "Vendedora removida") : "Sem vendedora",
+      total,
+      aprovadas,
+      conversao: taxaDeConversao(aprovadas, total),
+    }))
+    .sort((a, b) => b.total - a.total);
 }
 
 function mesDe(d: Date): Date {
@@ -141,6 +192,40 @@ function bucketDoMes(d: Date): EntradaNoMes {
  * que ninguém chegou — justamente o que um painel de entrada existe para
  * mostrar.
  */
+/**
+ * As reprovações por motivo, da mais frequente para a menos.
+ *
+ * PURA e exportada pelo mesmo motivo de `agrupaPorVendedora`: é a conta que o
+ * painel mostra, e conta que script nenhum confere é conta que se perde numa
+ * refatoração silenciosa.
+ *
+ * Motivo NULO vira "Sem código" em vez de sumir: são as reprovadas de antes de
+ * o código ser obrigatório, e escondê-las faria as parcelas não fecharem com o
+ * total de reprovações — diferença inexplicada é pior que a linha a mais.
+ *
+ * O rótulo traz o CÓDIGO junto do texto ("12 — Loja sem vitrine") porque é pelo
+ * código que a Gestão filtra a lista, na tela ao lado.
+ */
+export function agrupaPorMotivo(
+  linhas: { rejectionCode: string | null; _count: { _all: number } }[],
+): ContagemPorMotivo[] {
+  return linhas
+    .map(({ rejectionCode, _count }) => {
+      const achado = rejectionCode ? findRejectionCode(rejectionCode) : null;
+      return {
+        code: rejectionCode,
+        rotulo:
+          !rejectionCode ? "Sem código"
+          : achado ? `${rejectionCode} — ${achado.label}`
+          // Código gravado que não existe mais na taxonomia: mostrar o código
+          // cru é mais honesto que omitir a linha.
+          : `${rejectionCode} — motivo desconhecido`,
+        total: _count._all,
+      };
+    })
+    .sort((a, b) => b.total - a.total || (a.code ?? "").localeCompare(b.code ?? ""));
+}
+
 export function bucketsDeMes(agora: Date, de?: string, ate?: string): EntradaNoMes[] {
   const fimPedido = (ate ?? "").trim() ? new Date(`${ate}T12:00:00Z`) : agora;
   const fim = mesDe(Number.isNaN(fimPedido.getTime()) ? agora : fimPedido);
@@ -199,24 +284,35 @@ export async function resumoDoAtacado(
     ? new Date(Date.UTC(Number(anoJanela), Number(mesJanela) - 1, 1))
     : new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), 1));
 
-  const [total, statusRaw, vendedoraRaw, naJanela, recentesRaw] = await Promise.all([
+  const [total, statusRaw, vendedoraRaw, naJanela, recentesRaw, motivoRaw] = await Promise.all([
     prisma.wholesaleLead.count({ where }),
     prisma.wholesaleLead.groupBy({ by: ["status"], where, _count: { _all: true } }),
-    // Distribuição por vendedora só faz sentido (e só é permitida) para a
-    // Gestão: para a vendedora, o escopo já reduz o gráfico a uma barra dela.
-    ehGestao
-      ? prisma.wholesaleLead.groupBy({ by: ["sellerId"], where, _count: { _all: true } })
-      : Promise.resolve([]),
+    // Agrupado por vendedora E status na MESMA consulta: a conversão dela é
+    // aprovadas ÷ recebidas, e separar isso em duas queries daria duas idas ao
+    // banco para cruzar números que já vêm juntos.
+    //
+    // Roda para todo papel, e isso NÃO alarga nada: o `where` acima já começa
+    // pelo escopo, então para quem não é Gestão este groupBy só pode devolver a
+    // linha do próprio `sellerId`. É o que deixa a vendedora ver a conversão
+    // dela sem ver a das colegas.
+    prisma.wholesaleLead.groupBy({
+      by: ["sellerId", "status"],
+      where,
+      _count: { _all: true },
+    }),
     // Só a janela do gráfico sai do banco, e só a coluna da data: a contagem
     // por mês é feita em memória sobre um recorte limitado, em vez de SQL cru.
     prisma.wholesaleLead.findMany({
       where: { ...where, createdAt: { gte: inicioJanela } },
       select: { createdAt: true },
     }),
+    // UMA, nao dez: desde que o painel de "ultimas candidaturas" virou
+    // "reprovacoes por motivo", so o KPI da ultima candidatura le isto — e ele
+    // usa `recentes[0]`. A lista inteira vive na tela ao lado.
     prisma.wholesaleLead.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 10,
+      take: 1,
       select: {
         id: true,
         contactName: true,
@@ -226,6 +322,14 @@ export async function resumoDoAtacado(
         createdAt: true,
         seller: { select: { name: true } },
       },
+    }),
+    // As reprovações por motivo. Herda o MESMO `where`: o escopo do ator e o
+    // período já vêm aplicados, então uma vendedora vê os motivos dela e não
+    // os da equipe.
+    prisma.wholesaleLead.groupBy({
+      by: ["rejectionCode"],
+      where: { ...where, status: WholesaleLeadStatus.REPROVADO },
+      _count: { _all: true },
     }),
   ]);
 
@@ -238,28 +342,21 @@ export async function resumoDoAtacado(
     total: contagem.get(status) ?? 0,
   }));
 
+  const idsComDona = [...new Set(vendedoraRaw.map((v) => v.sellerId))].filter(
+    (id): id is string => id != null,
+  );
   const nomes = new Map<string, string>();
-  const ids = vendedoraRaw.map((v) => v.sellerId).filter((id): id is string => id != null);
-  if (ids.length > 0) {
+  if (idsComDona.length > 0) {
     // Inclui as INATIVAS: candidatura antiga continua apontando para quem saiu
     // da equipe, e sem o nome a barra ficaria anônima.
     for (const u of await prisma.user.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: idsComDona } },
       select: { id: true, name: true },
     })) {
       nomes.set(u.id, u.name);
     }
   }
-  const porVendedora: ContagemPorVendedora[] = vendedoraRaw
-    .map((v) => ({
-      sellerId: v.sellerId,
-      // Sem dona = chegou pelo link geral sem nenhuma vendedora ativa para
-      // receber. É um aviso de operação, e some da lista quando alguém é
-      // ativada — por isso aparece nomeado, não escondido.
-      nome: v.sellerId ? (nomes.get(v.sellerId) ?? "Vendedora removida") : "Sem vendedora",
-      total: v._count._all,
-    }))
-    .sort((a, b) => b.total - a.total);
+  const porVendedora = agrupaPorVendedora(vendedoraRaw, nomes);
 
   const indice = new Map(entradasPorMes.map((b, i) => [b.chave, i]));
   for (const { createdAt } of naJanela) {
@@ -287,6 +384,7 @@ export async function resumoDoAtacado(
       // e a divergência apareceria como erro de hidratação.
       createdAtLabel: dataCurta(r.createdAt),
     })),
+    porMotivo: agrupaPorMotivo(motivoRaw),
     conversao,
     aprovadas,
   };

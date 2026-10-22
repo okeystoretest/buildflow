@@ -1358,23 +1358,31 @@ model WholesaleLead {
   /// UF de 2 letras (decisão 23).
   state             String
   city              String
-  serviceModel      WholesaleServiceModel
+  /// NULO só em candidatura IMPORTADA de planilha antiga (ver
+  /// src/lib/wholesale-import.ts): o formulário público sempre grava um valor,
+  /// e a planilha que a Gestão tinha não registrava estas respostas. Preencher
+  /// com "OUTRO" faria a ficha afirmar à analista algo que ninguém respondeu.
+  serviceModel      WholesaleServiceModel?
   serviceModelOther String?
   /// Handle sem o "@".
   instagram         String
   instagramImagePath String
   storeImagePath     String
-  storeImageKind     WholesaleStoreImageKind
+  /// Derivado de serviceModel (storeImageKindFor); NULO quando ele é nulo.
+  storeImageKind     WholesaleStoreImageKind?
   marketTime         String
   teamSize           String
 
   // --- Seção 3: Conectividade e Parceria Comercial ---
   brandsCarried  String
-  foundUs        WholesaleFoundUs
+  /// NULO só em candidatura importada — ver serviceModel acima.
+  foundUs        WholesaleFoundUs?
   foundUsOther   String?
   followTime     String
-  investmentBand WholesaleInvestmentBand
-  wantsVisit     Boolean
+  /// NULO só em candidatura importada — ver serviceModel acima.
+  investmentBand WholesaleInvestmentBand?
+  /// NULO só em candidatura importada: `false` leria como "não quer visita".
+  wantsVisit     Boolean?
 
   // --- Seção 4: Validação Cadastro ---
   /// Só dígitos (14). SEM @unique: a repetição é informação, não erro — é ela
@@ -1395,6 +1403,14 @@ model WholesaleLead {
 
   /// IP do envio: rate limit e o código 34 (tentativa de burlar cadastro).
   submittedIp String?
+
+  /// CHAVE DA PLANILHA. Nula = chegou pelo formulário público; preenchida =
+  /// veio da importação (src/lib/wholesale-import.ts). Serve a duas coisas:
+  /// marca a origem, e é por ela que reimportar o arquivo ATUALIZA a linha em
+  /// vez de criar outra. `@unique` com nulo permitido — o Postgres aceita
+  /// vários NULL num índice único, então as candidaturas do formulário não
+  /// disputam nada entre si (mesmo arranjo de `Campaign.selectBrand`).
+  importKey String? @unique
 
   /// Posicao no rodizio do link geral. NULL = veio pelo link de uma vendedora
   /// (dona fixa). Numero = veio pelo link geral e passa para a seguinte a cada

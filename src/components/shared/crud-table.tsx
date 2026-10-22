@@ -61,7 +61,7 @@ export function CrudTable({
     <div className="space-y-2">
       {error && <p className="text-sm text-destructive">{error}</p>}
       <table className="w-full text-sm">
-        <thead className="border-b border-border text-left text-muted-foreground">
+        <thead className="border-b border-border text-left text-foreground">
           <tr>
             <th className="py-2 pr-4">Nome</th>
             {extraHeader && <th className="py-2 pr-4">{extraHeader}</th>}

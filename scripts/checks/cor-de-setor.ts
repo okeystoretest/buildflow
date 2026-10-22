@@ -60,6 +60,7 @@ function razao(a: number[], b: number[]): number {
   return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
 }
 
+const { execSync } = require("node:child_process") as typeof import("node:child_process");
 const raiz = path.resolve(__dirname, "../..");
 const css = readFileSync(path.join(raiz, "src/app/globals.css"), "utf8");
 const conf = readFileSync(path.join(raiz, "tailwind.config.ts"), "utf8");
@@ -125,6 +126,65 @@ for (const setor of SETORES) {
   }
 }
 
+// --- texto NEUTRO (foreground e muted-foreground) ---------------------------
+// Nao e cor de setor, mas e a cor da maior parte do texto do sistema: corpo de
+// tabela, cabecalho de tabela, rotulo de formulario, legenda, a ficha da
+// cliente em Candidaturas. Entrou aqui em 21/10/2026, junto com o passe que
+// subiu o --muted-foreground, para nao repetir o erro do setor: a cor "parece
+// certa" e ninguem mede. Fica neste arquivo por reusar as mesmas formulas.
+//
+// A superficie mais dificil aqui NAO e a mesma do setor: `bg-secondary` e a
+// mais escura do tema claro (91%, abaixo do fundo) e a mais clara do escuro
+// (18%, acima do card). E usada como fundo de cabecalho de tabela e no hover
+// de toda linha, entao e ela que manda.
+const secundarioClaro = hslDoCss(blocoClaro, "secondary");
+const secundarioEscuro = hslDoCss(blocoEscuro, "secondary");
+check("leu o secondary do tema claro", secundarioClaro !== null, true);
+check("leu o secondary do tema escuro", secundarioEscuro !== null, true);
+
+for (const token of ["foreground", "muted-foreground"] as const) {
+  const claro = hslDoCss(blocoClaro, token);
+  const escuro = hslDoCss(blocoEscuro, token);
+  check(`${token}: existe nos dois temas`, claro !== null && escuro !== null, true);
+  if (!claro || !escuro || !secundarioClaro || !secundarioEscuro) continue;
+  const rClaro = razao(claro, secundarioClaro);
+  const rEscuro = razao(escuro, secundarioEscuro);
+  check(`${token}: tema claro sobre bg-secondary >= ${MINIMO} (${rClaro})`, rClaro >= MINIMO, true);
+  check(`${token}: tema escuro sobre bg-secondary >= ${MINIMO} (${rEscuro})`, rEscuro >= MINIMO, true);
+}
+
+// Cabecalho de tabela e rotulo, nao texto secundario: voltou para o
+// --foreground em 21/10/2026. A regressao e invisivel (o cabecalho so fica
+// palido de novo), entao fica medida aqui.
+//
+// O fundo tambem: ele vem da regra `thead` do globals.css para ser o mesmo nas
+// doze tabelas. Uma utility `bg-*` num `<thead>` vence aquela regra (layer
+// utilities ganha de layer base) e tira aquela tabela do padrao sem erro
+// nenhum aparecer — foi o que havia em tres delas.
+const theadsFracos = (
+  execSync(
+    `node -e "const{readdirSync,readFileSync,statSync}=require('fs');const p=require('path');let n=0;(function w(d){for(const e of readdirSync(d)){const f=p.join(d,e);if(statSync(f).isDirectory())w(f);else if(/\.tsx$/.test(e)){const m=readFileSync(f,'utf8').match(/<thead[^>]*(text-muted-foreground|bg-)/g);if(m)n+=m.length}}})('src');console.log(n)"`,
+    { cwd: raiz, encoding: "utf8" },
+  ) as string
+).trim();
+check("nenhum cabecalho de tabela com cor ou fundo proprio", theadsFracos, "0");
+
+// --- `popover`: variavel declarada e nao mapeada ---------------------------
+// `--popover` e `--popover-foreground` vivem no globals.css e nunca entraram no
+// `colors` do tailwind.config.ts. Uma classe `bg-popover` entao nao gera regra
+// NENHUMA: o elemento sai transparente, sem erro de build e sem aviso.
+// Aconteceu em 21/10/2026 com a bolha do motivo de reprovacao, e so se descobre
+// olhando a tela — a mesma familia de defeito que abre este arquivo.
+//
+// Mapear as duas no tailwind.config (ou apagar as variaveis) tambem resolve;
+// ate que alguem decida, a classe nao se usa. Os valores de `--popover` e
+// `--card` sao identicos nos dois temas, e `card` esta mapeado.
+const usaPopover = execSync(
+  `node -e "const{readdirSync,readFileSync,statSync}=require('fs');const p=require('path');let n=0;(function w(d){for(const e of readdirSync(d)){const f=p.join(d,e);if(statSync(f).isDirectory())w(f);else if(/[.](tsx?|css)$/.test(e)){const m=readFileSync(f,'utf8').match(/(bg|text|border|ring)-popover/g);if(m)n+=m.length}}})('src');console.log(n)"`,
+  { cwd: raiz, encoding: "utf8" },
+).trim();
+check("nenhuma classe -popover (a variavel nao esta no tailwind.config)", usaPopover, "0");
+
 // --- cores de MARCA (nao sao setor) ----------------------------------------
 // O creme da OKEY e fundo de botao com texto escuro FIXO nos dois temas. Sobre
 // ele, branco da 1,27:1 e o --foreground do tema escuro da 1,03:1 — e por isso
@@ -155,7 +215,6 @@ for (const marca of MARCAS_DE_BOTAO) {
 
 // Nenhum arquivo deve ter voltado a usar a cor sólida como cor de texto: é a
 // regressão exata que este passe conserta, e ela é invisível na tela.
-const { execSync } = require("node:child_process") as typeof import("node:child_process");
 let puros = "";
 try {
   puros = execSync(

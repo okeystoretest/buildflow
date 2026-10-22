@@ -20,7 +20,7 @@ import { prisma } from "@/lib/prisma";
 import { pct } from "@/lib/transport/dashboard-math";
 import { cn } from "@/lib/utils";
 import { atorDaFerramenta } from "@/lib/wholesale-actor";
-import { MAX_MESES_NO_GRAFICO, resumoDoAtacado } from "@/lib/wholesale-dashboard";
+import { resumoDoAtacado, type ContagemPorVendedora } from "@/lib/wholesale-dashboard";
 import { LEAD_STATUS_META, LEAD_STATUS_ORDER } from "../lead-status-chip";
 import { AcessoNegadoAtacado, AnaliseClientesTabs } from "../tabs";
 import { DashboardFiltros } from "./filtros-client";
@@ -34,8 +34,9 @@ import { DashboardFiltros } from "./filtros-client";
  * sistema que se parecem são duas telas que se aprendem uma vez.
  *
  * SEM BIBLIOTECA DE GRÁFICO. O projeto não tem nenhuma, e as formas aqui são a
- * barra empilhada e as listas que aquele painel já usa. Uma dependência de
- * charts entraria no bundle de todo mundo para substituir divs com `width: %`.
+ * barra empilhada, a barra de proporção e as listas que aquele painel já usa.
+ * Uma dependência de charts entraria no bundle de todo mundo para substituir
+ * divs com `width: %`.
  *
  * O ESCOPO é o mesmo da fila (`resumoDoAtacado` o monta a partir do ator): a
  * vendedora vê o painel das candidaturas dela. "28 recebidas, 19 aprovadas"
@@ -149,6 +150,54 @@ function Lista({
   );
 }
 
+/**
+ * Conversão por vendedora: barra proporcional à TAXA, não ao volume.
+ *
+ * `Lista` não serve aqui: o percentual dela é fatia-do-total ("quanto desta
+ * vendedora no total recebido"), e aqui o percentual é aprovadas ÷ recebidas
+ * DELA. São dois números diferentes com o mesmo símbolo, e trocar um pelo outro
+ * é o erro que esta tela não pode cometer.
+ *
+ * O DENOMINADOR VAI EM CADA LINHA de propósito: 1 de 1 também é 100%, e sem o
+ * "1/1" ao lado ela empata na leitura com quem aprovou 30 de 40.
+ */
+function Conversoes({ linhas }: { linhas: ContagemPorVendedora[] }) {
+  if (linhas.length === 0) {
+    return <p className="text-xs text-muted-foreground">Sem dados.</p>;
+  }
+  return (
+    <ul className="space-y-2.5">
+      {linhas.map((v) => (
+        <li key={v.sellerId ?? "sem-dona"} className="space-y-1">
+          <div className="flex items-baseline gap-2 text-sm">
+            <span className="min-w-0 flex-1 truncate" title={v.nome}>
+              {v.nome}
+            </span>
+            <span className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-300">
+              {v.conversao.toLocaleString("pt-BR")}%
+            </span>
+            <span className="w-14 shrink-0 text-right font-data text-xs text-muted-foreground">
+              {v.aprovadas}/{v.total}
+            </span>
+          </div>
+          <div
+            className="h-1.5 w-full overflow-hidden rounded-full bg-secondary"
+            role="img"
+            aria-label={`${v.nome}: ${v.conversao}% de conversão, ${v.aprovadas} aprovadas de ${v.total} recebidas`}
+          >
+            <span
+              className="block h-full rounded-full bg-emerald-500"
+              // Sem mínimo: 0% precisa ficar VAZIO. Um traço de cortesia aqui
+              // viraria "quase converteu" em quem não converteu nada.
+              style={{ width: `${v.conversao}%` }}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /* ------------------------------------------------------------------ página */
 
 export default async function AnaliseClientesDashboardPage(props: {
@@ -196,10 +245,10 @@ export default async function AnaliseClientesDashboardPage(props: {
   // daria um terço do valor certo.
   const mesesNaJanela = Math.max(1, r.entradasPorMes.length);
   const mediaMensal = Math.round((somaJanela / mesesNaJanela) * 10) / 10;
-  // O gráfico foi cortado no teto, mas os KPIs somam o período inteiro.
-  const graficoRecortado = somaJanela < r.total;
-  const maiorMes = Math.max(1, ...r.entradasPorMes.map((m) => m.total));
   const lider = r.porVendedora[0];
+  // Cópia antes de ordenar: `r.porVendedora` vem por VOLUME, e `lider` acima
+  // depende dessa ordem. O painel de conversão lê melhor pela taxa.
+  const conversoes = [...r.porVendedora].sort((a, b) => b.conversao - a.conversao);
 
   return (
     <div className="space-y-4">
@@ -339,38 +388,8 @@ export default async function AnaliseClientesDashboardPage(props: {
               />
             </Painel>
 
-            <Painel
-              titulo={`Entrada · ${mesesNaJanela} ${mesesNaJanela === 1 ? "mês" : "meses"}`}
-              icon={<CalendarDays className="h-3.5 w-3.5" />}
-            >
-              <div
-                className="flex h-20 items-end gap-1.5"
-                role="img"
-                aria-label={`Entrada por mês: ${r.entradasPorMes
-                  .map((m) => `${m.rotulo}, ${m.total}`)
-                  .join("; ")}`}
-              >
-                {r.entradasPorMes.map((m) => (
-                  <div key={m.chave} className="flex flex-1 flex-col items-center gap-1">
-                    <span className="font-data text-[10px] text-muted-foreground">{m.total}</span>
-                    <div
-                      className="w-full rounded-t bg-vendas"
-                      // Mínimo de 2px: mês zerado precisa deixar um traço, senão
-                      // vira um buraco sem explicação no eixo.
-                      style={{ height: `${Math.max(2, (m.total / maiorMes) * 100)}%` }}
-                    />
-                    <span className="text-[10px] text-muted-foreground">{m.rotulo}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Um gráfico que mostra menos que os cartões ao lado precisa
-                  dizer isso, senão a soma das colunas "não bate" com o total. */}
-              {graficoRecortado && (
-                <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
-                  O período escolhido passa de {MAX_MESES_NO_GRAFICO} meses: o gráfico mostra os
-                  mais recentes, os cartões somam o período inteiro.
-                </p>
-              )}
+            <Painel titulo="Taxa de conversão por vendedora" icon={<Percent className="h-3.5 w-3.5" />}>
+              <Conversoes linhas={conversoes} />
             </Painel>
 
             {/* Distribuição por vendedora só existe para a Gestão: para a
@@ -390,28 +409,20 @@ export default async function AnaliseClientesDashboardPage(props: {
               </Painel>
             )}
 
-            <Painel titulo="Últimas candidaturas" icon={<Inbox className="h-3.5 w-3.5" />}>
-              <ul className="space-y-2">
-                {r.recentes.slice(0, 6).map((c) => (
-                  <li key={c.id} className="flex items-center gap-2 text-sm">
-                    <span
-                      className={cn("h-2 w-2 shrink-0 rounded-full", LEAD_STATUS_META[c.status].dot)}
-                      aria-hidden
-                    />
-                    <span
-                      className="min-w-0 flex-1 truncate"
-                      title={`${c.contactName} · ${c.city}/${c.state}${
-                        c.sellerName ? ` · ${c.sellerName}` : ""
-                      }`}
-                    >
-                      {c.contactName}
-                    </span>
-                    <span className="shrink-0 font-data text-xs text-muted-foreground">
-                      {c.createdAtLabel}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+            {/* REPROVAÇÕES POR MOTIVO, no lugar de "Últimas candidaturas".
+                A lista das últimas já está na tela ao lado, inteira e
+                filtrável; aqui o que o painel tem a dizer é POR QUE as
+                candidaturas caem — é isso que muda o que a Gestão faz. */}
+            <Painel titulo="Reprovações por motivo" icon={<Inbox className="h-3.5 w-3.5" />}>
+              <Lista
+                // Oito linhas: a taxonomia tem 34 motivos e a cauda é longa,
+                // mas quem lê um painel age sobre os primeiros.
+                fatias={r.porMotivo.slice(0, 8).map((m) => ({ label: m.rotulo, count: m.total }))}
+                // Percentual sobre o total de REPROVAÇÕES, não sobre o total
+                // recebido: "22% das reprovações foram por isto" é a leitura
+                // útil, e sobre o total daria um número menor e sem sentido.
+                total={r.porMotivo.reduce((n, m) => n + m.total, 0)}
+              />
             </Painel>
           </div>
         </>

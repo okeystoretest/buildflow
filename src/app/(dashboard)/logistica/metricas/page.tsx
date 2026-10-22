@@ -110,7 +110,7 @@ export default async function MetricasPage(
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b text-left text-muted-foreground">
+                <thead className="border-b text-left text-foreground">
                   <tr>
                     <th className="py-2 pr-4">Etapa</th>
                     <th className="py-2 pr-4 text-right">Tempo médio</th>

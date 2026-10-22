@@ -177,7 +177,7 @@ export function CnpjPanel({ rows }: { rows: CnpjRow[] }) {
 
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
-          <thead className="bg-secondary/50 text-left text-xs text-muted-foreground">
+          <thead className="text-left text-xs text-foreground">
             <tr>
               <th className="px-3 py-2">Nome</th>
               <th className="px-3 py-2">CNPJ</th>
