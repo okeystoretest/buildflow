@@ -152,6 +152,15 @@
   th,
   td {
     border: 1px solid hsl(var(--border));
+
+    /* A borda acima pede respiro: sem isto o texto encosta na linha da
+       esquerda. ~141 celulas do sistema trazem so `pr-4`/`pr-2` (padding a
+       direita), porque antes da grade nao havia linha em que esbarrar. Vale
+       1rem para casar com o `pr-4` dominante. Utility do Tailwind vence
+       regra de @layer base, entao quem ja declara `pl-4` ou `px-3` segue
+       mandando no proprio padding. */
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
   thead {
     background-color: hsl(var(--secondary));

@@ -49,7 +49,7 @@ export default async function ChamadosHistoricoPage() {
               <th className="px-3 py-2">Motorista</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Encerrado</th>
-              <th className="px-3 py-2">Km</th>
+              <th className="px-3 py-2 text-right">Km</th>
             </tr>
           </thead>
           <tbody>
@@ -65,7 +65,7 @@ export default async function ChamadosHistoricoPage() {
                     <span className={cn("rounded-full px-2 py-0.5 text-xs", s.badge)}>{s.label}</span>
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{dataHora(i.finishedAt)}</td>
-                  <td className="px-3 py-2 text-xs">{i.distanceKm ?? "—"}</td>
+                  <td className="px-3 py-2 text-right text-xs">{i.distanceKm ?? "—"}</td>
                 </tr>
               );
             })}

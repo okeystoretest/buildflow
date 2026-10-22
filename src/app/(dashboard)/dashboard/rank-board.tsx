@@ -459,23 +459,23 @@ function SelectTable({ perf }: { perf: CampaignPerf }) {
       <table className="w-full text-sm">
         <thead className="sticky top-0 text-left text-xs uppercase tracking-wide text-foreground">
           <tr>
-            <th className="pb-1 pr-2">Cliente</th>
-            <th className="pb-1 pr-2">Plano</th>
+            <th className="pb-1 px-2">Cliente</th>
+            <th className="pb-1 px-2">Plano</th>
             <th className="pb-1 text-right">Valor</th>
           </tr>
         </thead>
         <tbody>
           {selects.map((s, i) => (
             <tr key={`${s.cliente}-${i}`} className="border-t border-border/60">
-              <td className="truncate py-1 pr-2" title={s.cliente}>{s.cliente}</td>
-              <td className="truncate py-1 pr-2 text-muted-foreground" title={s.plano}>{s.plano}</td>
+              <td className="truncate py-1 px-2" title={s.cliente}>{s.cliente}</td>
+              <td className="truncate py-1 px-2 text-muted-foreground" title={s.plano}>{s.plano}</td>
               <td className="py-1 text-right font-data font-semibold">{formatBRL(s.valor)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr className="border-t border-border">
-            <td className="py-1 pr-2 text-xs text-muted-foreground" colSpan={2}>
+            <td className="py-1 px-2 text-xs text-muted-foreground" colSpan={2}>
               Total no mês
             </td>
             <td className="py-1 text-right font-data font-bold">{formatBRL(total)}</td>
@@ -681,11 +681,11 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
       <table className="w-full text-sm">
         <thead className="text-left text-xs uppercase tracking-wide text-foreground">
           <tr>
-            <th className="pb-1 pr-2">Vendedores</th>
-            <th className="pb-1 pr-2 text-right">Meta</th>
-            <th className="pb-1 pr-2 text-center">Qtd Peças</th>
+            <th className="pb-1 px-2">Vendedores</th>
+            <th className="pb-1 px-2 text-right">Meta</th>
+            <th className="pb-1 px-2 text-right">Qtd Peças</th>
             {/* Coluna "Valor" removida a pedido do produto. */}
-            <th className="pb-1 pr-2 text-right">Premiação</th>
+            <th className="pb-1 px-2 text-right">Premiação</th>
             <th className="pb-1 pl-2" style={{ width: "28%" }}>Meta%</th>
           </tr>
         </thead>
@@ -693,16 +693,16 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
           {/* Sem corte: todos os vendedores com meta na campanha aparecem. */}
           {perf.rows.map((r, i) => (
             <tr key={r.nome} className="border-t border-border/60">
-              <td className="py-1 pr-2">
+              <td className="py-1 px-2">
                 <span className="flex items-center gap-1.5">
                   {i < 3 && <RankTrophy pos={i + 1} />}
                   <span className="font-medium">{r.nome}</span>
                 </span>
               </td>
-              <td className="py-1 pr-2 text-right font-data">{r.meta > 0 ? r.meta : "—"}</td>
-              <td className="py-1 pr-2 text-center font-data">{r.qtd}</td>
+              <td className="py-1 px-2 text-right font-data">{r.meta > 0 ? r.meta : "—"}</td>
+              <td className="py-1 px-2 text-right font-data">{r.qtd}</td>
               {/* Coluna "Valor" removida a pedido do produto. */}
-              <td className="py-1 pr-2 text-right font-data text-vendas-text">{formatBRL(r.premiacao)}</td>
+              <td className="py-1 px-2 text-right font-data text-vendas-text">{formatBRL(r.premiacao)}</td>
               <td className="py-1 pl-2">
                 <div className="flex items-center gap-2">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">

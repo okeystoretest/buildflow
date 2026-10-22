@@ -141,10 +141,10 @@ export default async function RelatorioCampanhaPage(
                 <tr>
                   <th className="py-2 pr-4">Campanha</th>
                   <th className="py-2 pr-4">Referência</th>
-                  <th className="py-2 pr-4">Qtd</th>
-                  <th className="py-2 pr-4">Valor</th>
+                  <th className="py-2 pr-4 text-right">Qtd</th>
+                  <th className="py-2 pr-4 text-right">Valor</th>
                   <th className="py-2 pr-4">Nº Comanda</th>
-                  <th className="py-2 pr-4">Premiação</th>
+                  <th className="py-2 pr-4 text-right">Premiação</th>
                   <th className="py-2 pr-4">Pedido</th>
                   <th className="py-2 pr-4">Cliente</th>
                   {veTudo && <th className="py-2 pr-4">Vendedora</th>}
@@ -157,11 +157,11 @@ export default async function RelatorioCampanhaPage(
                     <tr key={it.id} className="border-b border-border last:border-0 transition-colors hover:bg-secondary/50">
                       <td className="py-2 pr-4 font-medium">{it.campaign?.name ?? "—"}</td>
                       <td className="py-2 pr-4">{it.reference}</td>
-                      <td className="py-2 pr-4 font-data">{it.quantity}</td>
-                      <td className="py-2 pr-4 font-data">{formatBRL(Number(it.value))}</td>
+                      <td className="py-2 pr-4 text-right font-data">{it.quantity}</td>
+                      <td className="py-2 pr-4 text-right font-data">{formatBRL(Number(it.value))}</td>
                       {/* Comanda ainda nao gerada (pedido nao faturado) mostra "—". */}
                       <td className="py-2 pr-4 font-data">{it.order?.comandaNumber ?? "—"}</td>
-                      <td className="py-2 pr-4 font-data">{formatBRL(premiacao)}</td>
+                      <td className="py-2 pr-4 text-right font-data">{formatBRL(premiacao)}</td>
                       <td className="py-2 pr-4 font-data">{it.order?.orderNumber ?? "—"}</td>
                       <td className="py-2 pr-4">{it.order?.customer?.name ?? "—"}</td>
                       {veTudo && <td className="py-2 pr-4">{it.order?.seller?.name ?? "—"}</td>}

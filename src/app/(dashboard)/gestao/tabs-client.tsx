@@ -754,13 +754,13 @@ function GoalsPanel({ sellers, goals, activeCampaigns, month, year, periodMonth,
       {error && <p className="text-sm text-destructive">{error}</p>}
       <table className="w-full text-sm">
         <thead className="border-b border-border text-left text-foreground">
-          <tr><th className="py-2 pr-4">Vendedor</th><th className="py-2 pr-4">Meta</th><th className="py-2 pr-4">Vínculo</th><th className="py-2 pr-4">Período</th><th className="py-2 pr-4">Escopo</th><th className="py-2 pr-4 text-right">Ações</th></tr>
+          <tr><th className="py-2 pr-4">Vendedor</th><th className="py-2 pr-4 text-right">Meta</th><th className="py-2 pr-4">Vínculo</th><th className="py-2 pr-4">Período</th><th className="py-2 pr-4">Escopo</th><th className="py-2 pr-4 text-right">Ações</th></tr>
         </thead>
         <tbody>
           {goals.map((g) => (
             <tr key={g.id} className="border-b border-border last:border-0 hover:bg-secondary/50">
               <td className="py-2 pr-4 font-medium">{g.userName}</td>
-              <td className="py-2 pr-4 font-data">
+              <td className="py-2 pr-4 text-right font-data">
                 {g.campaignName
                   ? `${g.targetItems ?? 0} itens`
                   : formatBRL(g.amount)}

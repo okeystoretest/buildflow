@@ -16,7 +16,7 @@ interface NavItem { href: string; label: string; roles: Role[]; }
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Rank de Vendas", roles: ["GESTAO", "VENDAS"] },
   { href: "/fluxo", label: "Fluxo de Pedidos", roles: ["GESTAO", "VENDAS", "FINANCEIRO"] },
-  { href: "/vendas", label: "Vendas", roles: ["GESTAO", "VENDAS", "FINANCEIRO"] },
+  { href: "/vendas", label: "Comercial", roles: ["GESTAO", "VENDAS", "FINANCEIRO"] },
   { href: "/financeiro", label: "Financeiro", roles: ["GESTAO", "FINANCEIRO"] },
   { href: "/logistica", label: "Logística", roles: ["GESTAO", "LOGISTICA"] },
   // LOGISTICA entra para as ferramentas Chamados e Dashboard (nao ve Entregas).

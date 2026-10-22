@@ -427,7 +427,7 @@ export default async function AnaliseClientesPage(
             <div className="mb-4">
               <CsvImport
                 title="Importar candidaturas da planilha"
-                description="Carga do histórico: baixe o modelo, preencha no Excel o que a planilha antiga tem, salve como CSV e envie. Coluna sem dado fica em branco — só marca e nome são obrigatórios."
+                description="Baixe o modelo, preencha no Excel o que a planilha antiga tem, salve como CSV e envie."
                 columns={COLUNAS_IMPORT.map((c) => c.nome)}
                 sample={COLUNAS_IMPORT.map((c) => c.exemplo)}
                 action={importWholesaleLeadsCsv}

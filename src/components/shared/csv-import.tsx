@@ -71,9 +71,6 @@ export function CsvImport({ title, description, columns, sample, action }: Props
         <div>
           <p className="flex items-center gap-2 font-medium"><FileText className="h-4 w-4" /> {title}</p>
           <p className="text-xs text-muted-foreground">{description}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Colunas: <span className="font-data">{columns.join(", ")}</span>
-          </p>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">

@@ -88,7 +88,7 @@ export default async function VendasPage(
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-vendas-text">Vendas</h1>
+        <h1 className="text-2xl font-bold text-vendas-text">Comercial</h1>
         <div className="flex gap-2">
           {/* Captação de revendedor: só a equipe de Atacado (decisão 15). São
               DOIS botões, um por marca (OKEY e Lov), que somem para VAREJO; a
@@ -132,7 +132,7 @@ export default async function VendasPage(
                   <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4 text-right">N° Peças</th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Comanda</th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Cliente</th>
-                  <th className="border-r border-border py-2 pl-4 pr-4">Total</th>
+                  <th className="border-r border-border py-2 pl-4 pr-4 text-right">Total</th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Status</th>
                   {/* Acoes visiveis para todos: a vendedora pode EDITAR os proprios
                       pedidos (a lista ja e restrita a eles). Excluir segue so na Gestao. */}
@@ -158,7 +158,7 @@ export default async function VendasPage(
                     </td>
                     <td className="border-r border-border py-2 pl-4 pr-4 font-data">{o.comandaNumber ?? "—"}</td>
                     <td className="border-r border-border py-2 pl-4 pr-4">{o.customer.name}</td>
-                    <td className="border-r border-border py-2 pl-4 pr-4">{formatBRL(o.total.toString())}</td>
+                    <td className="border-r border-border py-2 pl-4 pr-4 text-right font-data">{formatBRL(o.total.toString())}</td>
                     <td className="border-r border-border py-2 pl-4 pr-4"><StatusBadge status={o.status} /></td>
                     <td className="py-2 pl-4 pr-4">
                       <VendaRowActions

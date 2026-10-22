@@ -356,20 +356,20 @@ export function PlanosPanel({ plans }: { plans: PlanAdminRow[] }) {
           <thead className="border-b border-border text-left text-foreground">
             <tr>
               <th className="py-2 pr-4">Plano</th>
-              <th className="py-2 pr-4">Mensalidade</th>
-              <th className="py-2 pr-4">Mínimo mensal</th>
-              <th className="py-2 pr-4">Validade</th>
-              <th className="py-2 pr-4">Benefícios</th>
-              <th className="py-2 pr-4">Contratos</th>
+              <th className="py-2 pr-4 text-right">Mensalidade</th>
+              <th className="py-2 pr-4 text-right">Mínimo mensal</th>
+              <th className="py-2 pr-4 text-right">Validade</th>
+              <th className="py-2 pr-4 text-right">Benefícios</th>
+              <th className="py-2 pr-4 text-right">Contratos</th>
               <th className="py-2 pr-4">Situação</th>
-              <th className="py-2 pr-4">Ações</th>
+              <th className="py-2 pr-4 text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
             {plans.map((p) => (
               <tr key={p.id} className="border-b border-border/60">
                 <td className="py-2 pr-4 font-medium">{p.name}</td>
-                <td className="py-2 pr-4">
+                <td className="py-2 pr-4 text-right">
                   {p.editableValues ? (
                     <span className="text-muted-foreground">negociada</span>
                   ) : (
@@ -381,16 +381,16 @@ export function PlanosPanel({ plans }: { plans: PlanAdminRow[] }) {
                     </>
                   )}
                 </td>
-                <td className="py-2 pr-4">
+                <td className="py-2 pr-4 text-right">
                   {p.minMonthlyPurchase == null ? (
                     <span className="text-muted-foreground">negociado</span>
                   ) : (
                     formatBRL(p.minMonthlyPurchase)
                   )}
                 </td>
-                <td className="py-2 pr-4 font-data">{p.validityMonths} m</td>
-                <td className="py-2 pr-4">{p.benefits.length}</td>
-                <td className="py-2 pr-4 font-data">{p.contractCount}</td>
+                <td className="py-2 pr-4 text-right font-data">{p.validityMonths} m</td>
+                <td className="py-2 pr-4 text-right">{p.benefits.length}</td>
+                <td className="py-2 pr-4 text-right font-data">{p.contractCount}</td>
                 <td className="py-2 pr-4">
                   {p.active ? (
                     <span className="text-servico-text">Ativo</span>
@@ -399,7 +399,7 @@ export function PlanosPanel({ plans }: { plans: PlanAdminRow[] }) {
                   )}
                 </td>
                 <td className="py-2 pr-4">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-end gap-1">
                     <Button
                       variant="outline"
                       size="icon"
