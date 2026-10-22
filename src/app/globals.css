@@ -166,6 +166,31 @@
     background-color: hsl(var(--secondary));
   }
 
+  /* OPT-OUT: o que NAO e grade de dados.
+     O Rank de Vendas e um painel de telao -- suas linhas ja se separam por um
+     `border-t border-border/60` sutil e o cabecalho nunca levou faixa. As tres
+     regras acima existem para as doze tabelas de DADOS; sem esta saida elas
+     alcancam toda `<table>` do sistema e transformam o painel numa planilha.
+     O padding tambem volta a zero: ali ele e definido celula a celula. */
+  /* `:where()` NAO soma especificidade, e isso aqui e o ponto, nao enfeite.
+     Escrito como `.table-plain th`, o seletor vale (0,1,1) e vence a utility
+     `pl-2` (0,1,0) -- o padding que a celula declara morre, e "Premiacao" e
+     "Meta%" colam. Dentro de `:where()` ele cai para (0,0,1): continua
+     vencendo a regra base `th, td` (mesma especificidade, declarada antes) e
+     perde para qualquer utility, que e quem deve mandar na celula. */
+  table:where(.table-plain) {
+    border: 0;
+  }
+  :where(.table-plain) th,
+  :where(.table-plain) td {
+    border: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  :where(.table-plain) thead {
+    background-color: transparent;
+  }
+
   /* ===== Card de pedido ATRASADO (tempo limite excedido) =====
      Fundo vermelho preenchido por inteiro. Para manter a legibilidade (WCAG AA
      sobre o vermelho ~#dc2626), forçamos texto/ícones em branco em TODO o
