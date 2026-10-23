@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { RefreshCw, Target, TrendingUp, BarChart3, Flame, Trophy, Maximize2, Minimize2, CalendarClock, Pencil, Check, RotateCcw, Undo2, Play, Pause } from "lucide-react";
 import { formatBRL, tierColor, tierText, nextCampaignId } from "@/lib/utils";
 import { setRankAdjustment, clearRankAdjustment, clearRankAdjustments } from "@/lib/actions/rank-adjustments";
-import type { RankData, RankRow, CampaignPerf } from "@/lib/rank-data";
+import type { RankData, RankRow, CampaignPerf, CampaignPerfRow } from "@/lib/rank-data";
 
 /**
  * Converte o texto digitado no modo de edicao em numero.
@@ -44,14 +44,61 @@ const MESES = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
+// Particulas que nao viram inicial: "Maria DA Silva" e "MS", nunca "MD".
+const PARTICULAS = new Set(["de", "da", "do", "das", "dos", "e", "di", "du", "del", "van", "von"]);
+
+/**
+ * Iniciais para o avatar: primeiro + ultimo nome de verdade.
+ * "Arliane Araujo Trajano" -> "AT". Nome de uma palavra devolve uma letra.
+ */
+function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter((p) => p && !PARTICULAS.has(p.toLowerCase()));
+  if (partes.length === 0) return "?";
+  const primeira = partes[0][0];
+  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : "";
+  return (primeira + ultima).toUpperCase();
+}
+
+/**
+ * Parte inteira e centavos de um valor em BRL, separados.
+ *
+ * Os centavos entram menores no KPI: num telao lido de longe, quem olha decide
+ * pela ordem de grandeza — o centavo so rouba altura da linha. O valor
+ * continua inteiro na tela, nao arredondado.
+ */
+function brlPartes(valor: number): [string, string] {
+  const s = formatBRL(valor);
+  const i = s.lastIndexOf(",");
+  return i < 0 ? [s, ""] : [s.slice(0, i), s.slice(i + 1)];
+}
+
+/** Soma o realizado de um painel — serve ao "Total" do cabecalho. */
+function somaVendido(rows: RankRow[]): number {
+  return rows.reduce((acc, r) => acc + r.vendido, 0);
+}
+
+/**
+ * Situacao da vendedora na campanha, em palavra.
+ *
+ * As FAIXAS SAO AS MESMAS de `tierColor`/`tierText` (34 / 67 / 100) de
+ * proposito: a cor da barra e a palavra do selo respondem a mesma pergunta, e
+ * com reguas diferentes 40% seria "amarelo" na barra e "elegivel" no selo —
+ * duas leituras do mesmo numero na mesma linha.
+ */
+function statusCampanha(r: CampaignPerfRow): { label: string; tone: Tone } {
+  if (r.meta <= 0) return { label: "Sem meta", tone: "neutral" };
+  if (r.qtd === 0) return { label: "Sem vendas", tone: "neutral" };
+  if (r.pct >= 100) return { label: "Meta batida", tone: "emerald" };
+  if (r.pct >= 67) return { label: "Elegível", tone: "blue" };
+  if (r.pct >= 34) return { label: "Em pacing", tone: "amber" };
+  return { label: "Abaixo", tone: "red" };
+}
+
 export function RankBoard({ initial, canEdit = false }: { initial: RankData; canEdit?: boolean }) {
   const [data, setData] = useState<RankData>(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<Date>(new Date());
   const [campSel, setCampSel] = useState<string>(initial.campaignPerf[0]?.id ?? "");
-  // Rodizio ligado? Escolher uma campanha a mao DESLIGA: quem mexeu no seletor
-  // quer ver aquela campanha, e ter a tela trocada sozinha 5 minutos depois
-  // desfaz a escolha sem aviso. O botao ao lado religa.
   const [campRotating, setCampRotating] = useState(true);
   const [isFull, setIsFull] = useState(false);
   // Modo de edicao manual dos valores realizados. Exclusivo da GESTAO e
@@ -181,12 +228,62 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
   const nowYear = new Date().getFullYear();
   const anos = Array.from({ length: 5 }, (_, i) => nowYear - i);
 
+  // ---- Numeros derivados do que ja esta na tela (nenhuma consulta nova) ----
+
+  const totalVarejo = somaVendido(data.rankVarejo);
+  const totalAtacado = somaVendido(data.rankAtacado);
+  // Participacao do Atacado no que as DUAS frentes somam. Sem faturamento
+  // nenhum nao ha participacao a mostrar — 0/0 leria como "0% do atacado".
+  const participacaoAtacado =
+    totalVarejo + totalAtacado > 0
+      ? (totalAtacado / (totalVarejo + totalAtacado)) * 100
+      : null;
+
+  // Concentracao do topo: quanto do volume do mes esta nas tres primeiras.
+  // Com tres vendedoras ou menos a resposta e sempre 100% e nao informa nada.
+  const concentracaoTop3 = useMemo(() => {
+    if (data.rankGeral.length <= 3) return null;
+    const total = somaVendido(data.rankGeral);
+    if (total <= 0) return null;
+    return (somaVendido(data.rankGeral.slice(0, 3)) / total) * 100;
+  }, [data.rankGeral]);
+
+  // PACING DO MES
+  //
+  // Quanto do mes ja passou, em dias corridos, e onde o mes fecha mantido o
+  // ritmo atual. So no mes corrente: mes fechado nao se projeta.
+  //
+  // shortcut: dias corridos, nao dias uteis — sabado e domingo contam como dia
+  // de venda. Trocar por dias uteis quando a operacao tiver calendario proprio.
+  const pacing = useMemo(() => {
+    if (!data.isCurrent || data.metaGeral <= 0 || data.realizadoGeral <= 0) return null;
+    const hoje = new Date();
+    // Antes do dia 3 a projecao e ruido: dividir por 1/31 do mes multiplica
+    // qualquer venda por trinta e o telao mostraria um numero absurdo.
+    if (hoje.getDate() < 3) return null;
+    const diasNoMes = new Date(selYear, selMonth, 0).getDate();
+    const decorrido = Math.min(hoje.getDate(), diasNoMes) / diasNoMes;
+    const projecao = data.realizadoGeral / decorrido;
+    return {
+      pctMes: Math.round(decorrido * 100),
+      projecao,
+      pctProj: Math.round((projecao / data.metaGeral) * 100),
+    };
+  }, [data.isCurrent, data.metaGeral, data.realizadoGeral, selMonth, selYear]);
+
+  // Campanha em exibicao: meta somada de todas as vendedoras e o ticket medio
+  // de quem efetivamente vendeu (quem esta com 0 nao forma media de ninguem).
+  const campMetaGlobal = campPerf?.rows.reduce((a, r) => a + r.meta, 0) ?? 0;
+  const campVendedoras = campPerf?.rows.filter((r) => r.qtd > 0).length ?? 0;
+  const campTicket = campVendedoras > 0 ? (campTotalVol?.volume ?? 0) / campVendedoras : null;
+  const campPremiacao = campPerf?.rows.reduce((a, r) => a + r.premiacao, 0) ?? 0;
+
   // O quadro ocupa a altura da tela. Quando a tabela de Performance cresce
   // muito (muitos vendedores com meta), o excedente rola a PAGINA inteira —
   // nunca uma barra de rolagem dentro do bloco de Performance.
   const wrapClass = isFull
-    ? "flex min-h-screen flex-col gap-2.5 overflow-y-auto bg-background p-3"
-    : "flex min-h-[calc(100vh-7rem)] flex-col gap-2.5";
+    ? "flex min-h-screen flex-col gap-3 overflow-y-auto bg-background p-3"
+    : "flex min-h-[calc(100vh-7rem)] flex-col gap-3";
 
   // Contexto de edicao repassado as linhas. `ativo` fica false em tela cheia
   // ou para quem nao e GESTAO — nesse caso as linhas renderizam normalmente.
@@ -199,83 +296,117 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
 
   return (
     <div ref={rootRef} className={wrapClass}>
-      {/* Barra de filtro de periodo */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h1 className="mr-1 text-xl font-extrabold uppercase tracking-tight text-vendas-text sm:text-2xl lg:text-3xl">Ranking de Vendas</h1>
-          <CalendarClock className="h-4 w-4 text-muted-foreground" />
-          <select className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
-            value={selMonth} onChange={(e) => changePeriod(Number(e.target.value), selYear)}>
-            {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
-          </select>
-          <select className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
-            value={selYear} onChange={(e) => changePeriod(selMonth, Number(e.target.value))}>
-            {anos.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          {data.ajustesCount > 0 && (
-            <span
-              title="Há valores informados manualmente neste período."
-              className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-500"
-            >
-              {data.ajustesCount} ajuste(s) manual(is)
+      {/* CABECALHO — identidade do quadro a esquerda, controles a direita.
+          Virou card para separar "que tela e esta" de "o que ela mostra": no
+          telao, o titulo solto sobre o fundo competia com os KPIs. */}
+      <header className="shrink-0 rounded-xl border border-border bg-card px-3.5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-vendas/15 text-vendas-text">
+              <TrendingUp className="h-5 w-5" />
             </span>
-          )}
-          {!data.isCurrent && (
-            <>
-              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-500">
-                Histórico
-              </span>
-              <button onClick={goCurrent}
-                className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-                Voltar ao mês atual
-              </button>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          {/* EDICAO MANUAL — some por completo em tela cheia. */}
-          {canEdit && !isFull && (
-            <>
-              <button
-                onClick={() => { setEditMode((v) => !v); setEditErro(null); }}
-                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                  editMode
-                    ? "border-vendas bg-vendas/10 text-vendas-text"
-                    : "border-border bg-card text-muted-foreground hover:text-foreground"
-                }`}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-xl font-extrabold uppercase leading-none tracking-tight text-vendas-text sm:text-2xl lg:text-[1.7rem]">
+                  Ranking de Vendas
+                </h1>
+                {data.isCurrent ? (
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-emerald-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 motion-safe:animate-pulse" />
+                    Ao vivo
+                  </span>
+                ) : (
+                  <Pill tone="amber">Histórico</Pill>
+                )}
+              </div>
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                Performance comercial integrada · Atacado &amp; Varejo
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Periodo: calendario e os dois seletores num controle so. */}
+            <div className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5">
+              <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <select
+                aria-label="Mês"
+                className="cursor-pointer bg-transparent py-1 text-sm font-medium outline-none"
+                value={selMonth}
+                onChange={(e) => changePeriod(Number(e.target.value), selYear)}
               >
-                {editMode ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-                <span className="hidden sm:inline">{editMode ? "Concluir edição" : "Editar valores"}</span>
-              </button>
-              {(editMode || data.ajustesCount > 0) && (
+                {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
+              </select>
+              <span className="h-4 w-px shrink-0 bg-border" />
+              <select
+                aria-label="Ano"
+                className="font-data cursor-pointer bg-transparent py-1 text-sm font-medium outline-none"
+                value={selYear}
+                onChange={(e) => changePeriod(selMonth, Number(e.target.value))}
+              >
+                {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+
+            {data.ajustesCount > 0 && (
+              <Pill tone="sky" dot title="Há valores informados manualmente neste período.">
+                {data.ajustesCount} ajuste{data.ajustesCount > 1 ? "s" : ""} manu{data.ajustesCount > 1 ? "ais" : "al"}
+              </Pill>
+            )}
+
+            {!data.isCurrent && (
+              <BarButton onClick={goCurrent}>Voltar ao mês atual</BarButton>
+            )}
+
+            {/* EDICAO MANUAL — some por completo em tela cheia. */}
+            {canEdit && !isFull && (
+              <div className="flex h-9 items-center rounded-lg border border-border bg-background">
                 <button
-                  onClick={restaurarTudo}
-                  disabled={data.ajustesCount === 0 || refreshing}
-                  title={
-                    data.ajustesCount === 0
-                      ? "Nenhum ajuste manual neste período"
-                      : "Descartar os ajustes e voltar aos valores do sistema"
-                  }
-                  className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                  onClick={() => { setEditMode((v) => !v); setEditErro(null); }}
+                  className={`flex h-full items-center gap-1.5 rounded-l-lg px-2.5 text-xs font-medium transition-colors ${
+                    editMode
+                      ? "bg-vendas/15 text-vendas-text"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  }`}
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Restaurar padrão</span>
+                  {editMode ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">{editMode ? "Concluir edição" : "Editar valores"}</span>
                 </button>
-              )}
-            </>
-          )}
-          <button onClick={refresh}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            {lastSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-          </button>
-          <button onClick={toggleFull} aria-label="Tela cheia"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-            {isFull ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">{isFull ? "Sair" : "Tela cheia"}</span>
-          </button>
+                {(editMode || data.ajustesCount > 0) && (
+                  <>
+                    <span className="h-4 w-px shrink-0 bg-border" />
+                    <button
+                      onClick={restaurarTudo}
+                      disabled={data.ajustesCount === 0 || refreshing}
+                      title={
+                        data.ajustesCount === 0
+                          ? "Nenhum ajuste manual neste período"
+                          : "Descartar os ajustes e voltar aos valores do sistema"
+                      }
+                      className="flex h-full items-center gap-1.5 rounded-r-lg px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Restaurar</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            <BarButton onClick={refresh} title="Atualizar agora">
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              <span className="font-data">
+                {lastSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </BarButton>
+
+            <BarButton onClick={toggleFull} aria-label={isFull ? "Sair da tela cheia" : "Tela cheia"}>
+              {isFull ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">{isFull ? "Sair" : "Tela cheia"}</span>
+            </BarButton>
+          </div>
         </div>
-      </div>
+      </header>
 
       {editErro && (
         <p className="shrink-0 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
@@ -292,14 +423,30 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
       )}
 
       {/* KPIs */}
-      <div className="grid shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-4">
-        <MetaGeralKpi meta={data.metaGeral} realizado={data.realizadoGeral} pct={data.metaGeralPct} />
-        <Kpi icon={<TrendingUp className="h-5 w-5" />} iconClass="text-emerald-500" label={data.isCurrent ? "Maior Venda Semanal" : "Maior Venda no Mês"}
-          value={data.maiorSemana ? formatBRL(data.maiorSemana.total) : "—"} sub={data.maiorSemana?.nome ?? `${String(data.month).padStart(2,"0")}/${data.year}`} subClass="text-vendas-text" />
-        <Kpi icon={<BarChart3 className="h-5 w-5" />} iconClass="text-sky-500" label="Maior Venda Mensal"
-          value={data.maiorMes ? formatBRL(data.maiorMes.total) : "—"} sub={data.maiorMes?.nome ?? "—"} />
-        <Kpi icon={<Flame className="h-5 w-5" />} iconClass="text-orange-500" label={`Total por Campanha${campTotalVol ? " · " + campTotalVol.name : ""}`}
-          value={String(campTotalVol?.volume ?? 0)} sub="peças" />
+      <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetaGeralKpi meta={data.metaGeral} realizado={data.realizadoGeral} pct={data.metaGeralPct} pacing={pacing} />
+        <RecordeKpi
+          icon={<TrendingUp className="h-4 w-4" />}
+          iconClass="bg-emerald-500/15 text-emerald-500"
+          label={data.isCurrent ? "Maior venda semanal" : "Maior venda no mês"}
+          total={data.maiorSemana?.total ?? null}
+          nome={data.maiorSemana?.nome ?? null}
+          vazio={`${String(data.month).padStart(2, "0")}/${data.year}`}
+        />
+        <RecordeKpi
+          icon={<BarChart3 className="h-4 w-4" />}
+          iconClass="bg-sky-500/15 text-sky-500"
+          label="Maior venda mensal"
+          total={data.maiorMes?.total ?? null}
+          nome={data.maiorMes?.nome ?? null}
+          vazio="—"
+        />
+        <CampanhaKpi
+          nome={campTotalVol?.name ?? null}
+          volume={campTotalVol?.volume ?? 0}
+          metaGlobal={campMetaGlobal}
+          ticket={campTicket}
+        />
       </div>
 
       {/* Grade principal (2 linhas x 3 colunas no desktop):
@@ -312,23 +459,92 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
       {/* A 2a linha e `auto`: o bloco de Performance cresce conforme o numero
           de vendedores, sem barra de rolagem interna. Varejo/Atacado (1a linha)
           cedem altura — tem minimo de 160px e rolam internamente se preciso. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 lg:grid-cols-3 lg:grid-rows-[minmax(160px,1fr)_auto]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-3 lg:grid-rows-[minmax(160px,1fr)_auto]">
         {/* Progresso Geral: ate 20 nomes, rola se passar disso. */}
         <div className="flex min-h-0 lg:row-span-2">
-          <RankPanel title="Progresso Geral de Vendedoras" rows={data.rankGeral} showTrophy hideValue compact maxRows={20} className="flex-1"
-            edicao={edicao} />
+          <RankPanel
+            title="Progresso geral de vendedoras"
+            rows={data.rankGeral}
+            showTrophy
+            hideValue
+            destacarTop3
+            maxRows={20}
+            className="flex-1"
+            edicao={edicao}
+            meta={
+              <span className="shrink-0 text-right text-[11px] uppercase leading-tight tracking-widest text-muted-foreground">
+                <span className="font-data block text-sm font-bold normal-case tracking-normal text-foreground">
+                  {data.rankGeral.length}
+                </span>
+                vendedoras
+              </span>
+            }
+            footer={
+              concentracaoTop3 !== null && (
+                <>
+                  <span>Top 3 concentram</span>
+                  <span className="font-data font-bold normal-case tracking-normal text-foreground">
+                    {concentracaoTop3.toFixed(1)}% do volume
+                  </span>
+                </>
+              )
+            }
+          />
         </div>
-        <RankPanel title="Varejo" rows={data.rankVarejo} showTrophy compact edicao={edicao} />
-        <RankPanel title="Atacado" rows={data.rankAtacado} showTrophy compact edicao={edicao} />
+
+        <RankPanel
+          title="Varejo"
+          dotClass="bg-cyan-400"
+          rows={data.rankVarejo}
+          showTrophy
+          edicao={edicao}
+          meta={
+            <TotalPainel
+              qtd={data.rankVarejo.length}
+              rotulo={data.rankVarejo.length === 1 ? "operação" : "operações"}
+              total={totalVarejo}
+            />
+          }
+        />
+
+        <RankPanel
+          title="Atacado"
+          dotClass="bg-violet-400"
+          rows={data.rankAtacado}
+          showTrophy
+          edicao={edicao}
+          meta={
+            <TotalPainel
+              qtd={data.rankAtacado.length}
+              rotulo={data.rankAtacado.length === 1 ? "conta" : "contas"}
+              total={totalAtacado}
+            />
+          }
+          footer={
+            participacaoAtacado !== null && (
+              <>
+                <span>Participação no faturamento</span>
+                <span className="font-data font-bold normal-case tracking-normal text-foreground">
+                  {participacaoAtacado.toFixed(1)}% da empresa
+                </span>
+              </>
+            )
+          }
+        />
 
         {/* Tabela de performance por campanha — ocupa apenas as colunas de
             Varejo/Atacado, na linha de baixo. Rola internamente. */}
-        <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3 lg:col-span-2">
-          <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="text-base font-semibold">Performance na</span>
+        <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3.5 lg:col-span-2">
+          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />
+              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Performance na campanha
+              </h2>
               {data.campaignPerf.length > 0 && (
-                <select className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+                <select
+                  aria-label="Campanha"
+                  className="h-8 cursor-pointer rounded-lg border border-border bg-background px-2 text-sm font-semibold"
                   value={campSel}
                   onChange={(e) => {
                     // Escolha manual desliga o rodizio: a pessoa quer ESTA
@@ -361,7 +577,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
                   className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors ${
                     campRotating
                       ? "border-vendas/40 bg-vendas/10 text-vendas-text hover:bg-vendas/20"
-                      : "border-input text-muted-foreground hover:bg-secondary"
+                      : "border-border text-muted-foreground hover:bg-secondary"
                   }`}
                 >
                   {campRotating ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -371,6 +587,16 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
                 </button>
               )}
             </div>
+            {/* Premiacao somada da campanha. So na campanha de pecas: a de
+                Select paga por contrato, e a tabela dela nem tem a coluna. */}
+            {!campPerf?.selects && campPremiacao > 0 && (
+              <span className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground">
+                Total em premiações
+                <span className="font-data rounded-lg bg-secondary px-2 py-1 text-sm font-bold normal-case tracking-normal text-vendas-text">
+                  {formatBRL(campPremiacao)}
+                </span>
+              </span>
+            )}
           </div>
           {/* Cabecalho da campanha Select: quantos Selects a equipe precisa
               vender no mes, e quantos ja sairam. A outra campanha nao tem
@@ -385,6 +611,207 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
         </div>
       </div>
     </div>
+  );
+}
+
+/* ========================== Pecas de interface ============================ */
+
+type Tone = "neutral" | "sky" | "amber" | "emerald" | "blue" | "red";
+
+const TONES: Record<Tone, { pill: string; dot: string }> = {
+  neutral: { pill: "bg-secondary text-muted-foreground", dot: "bg-muted-foreground" },
+  sky: { pill: "bg-sky-500/15 text-sky-500", dot: "bg-sky-500" },
+  amber: { pill: "bg-amber-500/15 text-amber-500", dot: "bg-amber-500" },
+  emerald: { pill: "bg-emerald-500/15 text-emerald-500", dot: "bg-emerald-500" },
+  blue: { pill: "bg-blue-500/15 text-blue-500", dot: "bg-blue-500" },
+  red: { pill: "bg-red-500/15 text-red-500", dot: "bg-red-500" },
+};
+
+/** Selo de estado. Fundo tingido da propria cor, nunca chapado. */
+function Pill({ tone = "neutral", dot, children, title }: {
+  tone?: Tone; dot?: boolean; children: React.ReactNode; title?: string;
+}) {
+  return (
+    <span
+      title={title}
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${TONES[tone].pill}`}
+    >
+      {dot && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONES[tone].dot}`} />}
+      {children}
+    </span>
+  );
+}
+
+/** Botao da barra de controles. Mesma altura e peso dos seletores. */
+function BarButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Contagem e total de um painel, no canto direito do cabecalho. */
+function TotalPainel({ qtd, rotulo, total }: { qtd: number; rotulo: string; total: number }) {
+  return (
+    <span className="flex shrink-0 items-center gap-2">
+      <Pill>{qtd} {rotulo}</Pill>
+      <span className="whitespace-nowrap text-[11px] uppercase tracking-widest text-muted-foreground">
+        Total{" "}
+        <span className="font-data text-sm font-bold normal-case tracking-normal text-foreground">
+          {formatBRL(total)}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/** Moldura comum dos quatro KPIs: rotulo em caixa alta, icone e valor grande. */
+function KpiShell({ label, icon, iconClass, children }: {
+  label: string; icon: React.ReactNode; iconClass: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col rounded-xl border border-border bg-card p-3.5">
+      <div className="flex items-start justify-between gap-2">
+        <p className="truncate pt-0.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground" title={label}>
+          {label}
+        </p>
+        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${iconClass}`}>{icon}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Valor grande em reais, com os centavos menores.
+ * O `tracking-tight` segura numero de sete digitos na largura do card.
+ */
+function ValorGrande({ valor }: { valor: number }) {
+  const [inteiro, centavos] = brlPartes(valor);
+  return (
+    <p className="font-data mt-2 truncate text-2xl font-bold leading-none tracking-tight lg:text-[1.75rem]">
+      {inteiro}
+      {centavos && <span className="text-base font-semibold text-muted-foreground">,{centavos}</span>}
+    </p>
+  );
+}
+
+// KPI especial da Meta Geral: meta, realizado do mes, barra e o pacing.
+function MetaGeralKpi({ meta, realizado, pct, pacing }: {
+  meta: number; realizado: number; pct: number;
+  pacing: { pctMes: number; projecao: number; pctProj: number } | null;
+}) {
+  return (
+    <KpiShell label="Meta geral (mensal)" icon={<Target className="h-4 w-4" />} iconClass="bg-primary/15 text-primary">
+      <ValorGrande valor={meta} />
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="font-data truncate text-sm text-vendas-text">{formatBRL(realizado)} no mês</span>
+        <span className={`font-data shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs font-bold ${tierText(pct)}`}>
+          {pct}%
+        </span>
+      </div>
+      <div className="mt-auto pt-2.5">
+        <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+          <div className={`h-full rounded-full ${tierColor(pct)}`}
+            style={{ width: `${Math.min(pct, 100)}%`, transition: "width .5s ease" }} />
+        </div>
+        {pacing && (
+          <p className="mt-2 truncate text-[11px] text-muted-foreground">
+            Pacing do mês <span className="font-data font-semibold text-foreground">{pacing.pctMes}%</span>
+            {" · Projeção "}
+            <span className="font-data font-semibold text-foreground">{formatBRL(pacing.projecao)}</span>
+            {" ("}
+            <span className={`font-data font-semibold ${tierText(pacing.pctProj)}`}>{pacing.pctProj}%</span>
+            {")"}
+          </p>
+        )}
+      </div>
+    </KpiShell>
+  );
+}
+
+/**
+ * KPI de recorde (maior venda da semana / do mes): valor, e de quem foi.
+ * A inicial em disco identifica a pessoa de longe, antes de o nome ser lido.
+ */
+function RecordeKpi({ icon, iconClass, label, total, nome, vazio }: {
+  icon: React.ReactNode; iconClass: string; label: string;
+  total: number | null; nome: string | null; vazio: string;
+}) {
+  return (
+    <KpiShell label={label} icon={icon} iconClass={iconClass}>
+      {total === null ? (
+        <p className="font-data mt-2 truncate text-2xl font-bold leading-none tracking-tight text-muted-foreground lg:text-[1.75rem]">
+          —
+        </p>
+      ) : (
+        <ValorGrande valor={total} />
+      )}
+      <div className="mt-auto flex items-center gap-2 pt-3">
+        {nome ? (
+          <>
+            <span className="font-data grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary text-[10px] font-bold text-muted-foreground" aria-hidden>
+              {iniciais(nome)}
+            </span>
+            <span className="truncate text-sm font-medium" title={nome}>{nome}</span>
+          </>
+        ) : (
+          <span className="font-data truncate text-sm text-muted-foreground">{vazio}</span>
+        )}
+      </div>
+    </KpiShell>
+  );
+}
+
+/**
+ * KPI da campanha em exibicao: pecas vendidas, ticket medio por vendedora e a
+ * meta somada da equipe. O nome da campanha esta no rotulo — nao se repete num
+ * selo "campanha ativa" ao lado, que diria a mesma coisa duas vezes.
+ */
+function CampanhaKpi({ nome, volume, metaGlobal, ticket }: {
+  nome: string | null; volume: number; metaGlobal: number; ticket: number | null;
+}) {
+  const pct = metaGlobal > 0 ? Math.round((volume / metaGlobal) * 100) : 0;
+  return (
+    <KpiShell
+      label={nome ? `Campanha · ${nome}` : "Campanha ativa"}
+      icon={<Flame className="h-4 w-4" />}
+      iconClass="bg-orange-500/15 text-orange-500"
+    >
+      <p className="font-data mt-2 truncate text-2xl font-bold leading-none tracking-tight lg:text-[1.75rem]">
+        {volume}
+        <span className="ml-1.5 font-sans text-sm font-semibold text-muted-foreground">peças</span>
+      </p>
+      <p className="mt-2 truncate text-[11px] text-muted-foreground">
+        {ticket !== null ? (
+          <>Ticket médio por vendedora <span className="font-data font-semibold text-foreground">{ticket.toFixed(1)} pç</span></>
+        ) : (
+          "Nenhuma peça vendida nesta campanha."
+        )}
+      </p>
+      <div className="mt-auto pt-2.5">
+        {metaGlobal > 0 ? (
+          <>
+            <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+              <div className={`h-full rounded-full ${tierColor(pct)}`}
+                style={{ width: `${Math.min(pct, 100)}%`, transition: "width .5s ease" }} />
+            </div>
+            <p className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              <span className="truncate">
+                Meta da equipe <span className="font-data font-semibold text-foreground">{metaGlobal} peças</span>
+              </span>
+              <span className={`font-data shrink-0 font-bold ${tierText(pct)}`}>{pct}%</span>
+            </p>
+          </>
+        ) : (
+          <p className="truncate text-[11px] text-muted-foreground">Sem metas vinculadas à campanha.</p>
+        )}
+      </div>
+    </KpiShell>
   );
 }
 
@@ -405,7 +832,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
 function SelectMetaHeader({ vendidos, meta }: { vendidos: number; meta: number }) {
   if (meta <= 0) {
     return (
-      <p className="mb-2 shrink-0 text-sm text-muted-foreground">
+      <p className="mb-2.5 shrink-0 text-sm text-muted-foreground">
         <span className="font-data font-semibold text-foreground">{vendidos}</span> Selects
         vendidos no mês · sem meta cadastrada em Gestão &gt; Metas
       </p>
@@ -414,7 +841,7 @@ function SelectMetaHeader({ vendidos, meta }: { vendidos: number; meta: number }
 
   const pct = Math.round((vendidos / meta) * 100);
   return (
-    <div className="mb-2 flex shrink-0 items-center gap-3">
+    <div className="mb-2.5 flex shrink-0 items-center gap-3">
       <p className="shrink-0 text-sm text-muted-foreground">
         <span className="font-data font-semibold text-foreground">{vendidos}</span>
         {" de "}
@@ -422,7 +849,7 @@ function SelectMetaHeader({ vendidos, meta }: { vendidos: number; meta: number }
         {" Selects"}
       </p>
       <div
-        className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-secondary"
+        className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-secondary"
         // A barra é decorativa: o "X de Y" ao lado e o percentual à direita já
         // dizem tudo a quem não a enxerga.
         aria-hidden
@@ -457,71 +884,31 @@ function SelectTable({ perf }: { perf: CampaignPerf }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <table className="table-plain w-full text-sm">
-        <thead className="sticky top-0 text-left text-xs uppercase tracking-wide text-foreground">
+        <thead className="sticky top-0 bg-card text-left text-[11px] uppercase tracking-widest text-muted-foreground">
           <tr>
-            <th className="pb-1 pr-2">Cliente</th>
-            <th className="pb-1 pr-2">Plano</th>
-            <th className="pb-1 text-right">Valor</th>
+            <th className="pb-2 pr-2 font-semibold">Cliente</th>
+            <th className="pb-2 pr-2 font-semibold">Plano</th>
+            <th className="pb-2 text-right font-semibold">Valor</th>
           </tr>
         </thead>
         <tbody>
           {selects.map((s, i) => (
             <tr key={`${s.cliente}-${i}`} className="border-t border-border/60">
-              <td className="truncate py-1 pr-2" title={s.cliente}>{s.cliente}</td>
-              <td className="truncate py-1 pr-2 text-muted-foreground" title={s.plano}>{s.plano}</td>
-              <td className="py-1 text-right font-data font-semibold">{formatBRL(s.valor)}</td>
+              <td className="truncate py-1.5 pr-2 font-medium" title={s.cliente}>{s.cliente}</td>
+              <td className="truncate py-1.5 pr-2 text-muted-foreground" title={s.plano}>{s.plano}</td>
+              <td className="py-1.5 text-right font-data font-semibold">{formatBRL(s.valor)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr className="border-t border-border">
-            <td className="py-1 pr-2 text-xs text-muted-foreground" colSpan={2}>
+            <td className="py-1.5 pr-2 text-[11px] uppercase tracking-widest text-muted-foreground" colSpan={2}>
               Total no mês
             </td>
-            <td className="py-1 text-right font-data font-bold">{formatBRL(total)}</td>
+            <td className="py-1.5 text-right font-data font-bold">{formatBRL(total)}</td>
           </tr>
         </tfoot>
       </table>
-    </div>
-  );
-}
-
-// KPI especial da Meta Geral: mostra meta, realizado do mês e barra de progresso.
-function MetaGeralKpi({ meta, realizado, pct }: { meta: number; realizado: number; pct: number }) {
-  return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card p-3">
-      <div className="flex items-start justify-between">
-        <div className="min-w-0">
-          <p className="truncate text-sm text-muted-foreground">Meta Geral</p>
-          <p className="font-data mt-1 truncate text-2xl font-bold">{formatBRL(meta)}</p>
-          <p className="font-data truncate text-sm text-vendas-text">{formatBRL(realizado)} no mês</p>
-        </div>
-        <span className="shrink-0 text-primary"><Target className="h-5 w-5" /></span>
-      </div>
-      <div className="mt-2 flex items-center gap-2">
-        <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-          <div className={`h-full rounded-full ${tierColor(pct)}`}
-            style={{ width: `${Math.min(pct, 100)}%`, transition: "width .5s ease" }} />
-        </div>
-        <span className={`font-data shrink-0 text-sm font-bold ${tierText(pct)}`}>{pct}%</span>
-      </div>
-    </div>
-  );
-}
-
-function Kpi({ icon, iconClass, label, value, sub, subClass }: {
-  icon: React.ReactNode; iconClass?: string; label: string; value: string; sub: string; subClass?: string;
-}) {
-  return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card p-3">
-      <div className="flex items-start justify-between">
-        <div className="min-w-0">
-          <p className="truncate text-sm text-muted-foreground">{label}</p>
-          <p className="font-data mt-1 truncate text-2xl font-bold">{value}</p>
-          <p className={`font-data truncate text-sm ${subClass ?? "text-muted-foreground"}`}>{sub}</p>
-        </div>
-        <span className={`shrink-0 ${iconClass ?? "text-muted-foreground/60"}`}>{icon}</span>
-      </div>
     </div>
   );
 }
@@ -536,24 +923,39 @@ export interface EdicaoCtx {
 
 // `maxRows` define quantos nomes o painel exibe (default 10). O container rola
 // verticalmente quando a lista nao cabe na altura disponivel.
-function RankPanel({ title, rows, showTrophy, compact, hideValue, maxRows = 10, className, edicao }: {
-  title: string; rows: RankRow[]; showTrophy?: boolean; compact?: boolean; hideValue?: boolean;
-  maxRows?: number; className?: string; edicao?: EdicaoCtx;
+function RankPanel({ title, dotClass, rows, showTrophy, hideValue, destacarTop3, maxRows = 10, className, edicao, meta, footer }: {
+  title: string; dotClass?: string; rows: RankRow[]; showTrophy?: boolean; hideValue?: boolean;
+  destacarTop3?: boolean; maxRows?: number; className?: string; edicao?: EdicaoCtx;
+  meta?: React.ReactNode; footer?: React.ReactNode;
 }) {
   return (
-    <div className={`flex min-h-0 flex-col rounded-xl border border-border bg-card p-3 ${className ?? ""}`}>
-      <p className="mb-1.5 shrink-0 text-base font-semibold lg:text-lg">{title}</p>
-      <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${compact ? "justify-start gap-2" : "justify-around gap-0.5"}`}>
+    <div className={`flex min-h-0 flex-col rounded-xl border border-border bg-card p-3.5 ${className ?? ""}`}>
+      <div className="mb-3 flex shrink-0 items-start justify-between gap-2">
+        <h2 className="flex min-w-0 items-center gap-2 pt-0.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          {dotClass && <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} />}
+          <span className="truncate">{title}</span>
+        </h2>
+        {meta}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
         {rows.slice(0, maxRows).map((r, i) => (
-          <RankLine key={r.userId} pos={i + 1} row={r} showTrophy={showTrophy} compact={compact} hideValue={hideValue} edicao={edicao} />
+          <RankLine key={r.userId} pos={i + 1} row={r} showTrophy={showTrophy} hideValue={hideValue}
+            destaque={destacarTop3 === true && i < 3} edicao={edicao} />
         ))}
         {rows.length === 0 && <p className="m-auto text-sm text-muted-foreground">Sem dados.</p>}
       </div>
+      {footer && (
+        <p className="mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-border pt-2.5 text-[11px] uppercase tracking-widest text-muted-foreground">
+          {footer}
+        </p>
+      )}
     </div>
   );
 }
 
-function RankLine({ pos, row, showTrophy, compact, hideValue, edicao }: { pos: number; row: RankRow; showTrophy?: boolean; compact?: boolean; hideValue?: boolean; edicao?: EdicaoCtx }) {
+function RankLine({ pos, row, showTrophy, hideValue, destaque, edicao }: {
+  pos: number; row: RankRow; showTrophy?: boolean; hideValue?: boolean; destaque?: boolean; edicao?: EdicaoCtx;
+}) {
   // Progresso real: vendido / meta. Sem meta cadastrada, mostra 0%.
   const semMeta = !(row.meta > 0);
   const pct = semMeta ? 0 : row.pct;
@@ -561,13 +963,22 @@ function RankLine({ pos, row, showTrophy, compact, hideValue, edicao }: { pos: n
   // Pedidos registrados DEPOIS do ajuste somam sobre o valor digitado (ajuste
   // incremental). A tela mostra essa parcela para o numero ficar auditavel.
   const somouDepois = row.ajustado && row.vendidoAposAjuste > 0;
+  const medalha = showTrophy === true && pos <= 3;
 
   return (
-    <div className={compact ? "py-1" : ""}>
+    // O destaque do podio e moldura e fundo, nao barra colorida na lateral: a
+    // cor nesta tela e a regua de progresso, e uma faixa a mais competiria.
+    <div className={destaque ? "rounded-lg border border-border bg-secondary/50 px-2.5 py-2" : "px-0.5 py-1"}>
       <div className="flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-1.5">
-          {showTrophy && pos <= 3 && <RankTrophy pos={pos} />}
-          <span className="truncate text-sm font-medium lg:text-base">{row.nome}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          {medalha ? (
+            <RankTrophy pos={pos} />
+          ) : (
+            <span className="font-data w-4 shrink-0 text-center text-xs text-muted-foreground">{pos}</span>
+          )}
+          <span className={`truncate text-sm lg:text-[0.9375rem] ${destaque ? "font-bold" : "font-medium"}`} title={row.nome}>
+            {row.nome}
+          </span>
           {row.ajustado && (
             <span
               title={
@@ -586,20 +997,20 @@ function RankLine({ pos, row, showTrophy, compact, hideValue, edicao }: { pos: n
             </span>
           )}
         </span>
-        <span className="flex shrink-0 items-center gap-2">
+        <span className="flex shrink-0 items-center gap-2.5">
           {editando ? (
             <ValorEditavel row={row} edicao={edicao!} />
           ) : (
             !hideValue && row.vendido > 0 && (
-              <span className="font-data text-sm lg:text-base">{formatBRL(row.vendido)}</span>
+              <span className="font-data text-sm lg:text-[0.9375rem]">{formatBRL(row.vendido)}</span>
             )
           )}
-          <span className={`font-data text-sm font-bold lg:text-base ${semMeta ? "text-muted-foreground" : tierText(pct)}`}>
+          <span className={`font-data w-11 shrink-0 text-right text-sm font-bold lg:text-[0.9375rem] ${semMeta ? "text-muted-foreground" : tierText(pct)}`}>
             {semMeta ? "s/ meta" : `${pct}%`}
           </span>
         </span>
       </div>
-      <div className={`${compact ? "mt-1 h-1.5" : "mt-1 h-1.5"} overflow-hidden rounded-full bg-secondary`}>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary">
         <div className={`h-full rounded-full ${tierColor(pct)}`}
           style={{ width: `${Math.min(pct, 100)}%`, transition: "width .5s ease" }} />
       </div>
@@ -663,7 +1074,7 @@ function ValorEditavel({ row, edicao }: { row: RankRow; edicao: EdicaoCtx }) {
 
 function RankTrophy({ pos }: { pos: number }) {
   const color = pos === 1 ? "text-amber-400" : pos === 2 ? "text-slate-300" : "text-amber-700";
-  return <Trophy className={`h-4 w-4 lg:h-5 lg:w-5 ${color}`} />;
+  return <Trophy className={`h-4 w-4 shrink-0 ${color}`} aria-hidden />;
 }
 
 function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
@@ -679,41 +1090,57 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
        verticalmente conforme a quantidade de linhas. */
     <div className="flex-1">
       <table className="table-plain w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wide text-foreground">
+        <thead className="text-left text-[11px] uppercase tracking-widest text-muted-foreground">
           <tr>
-            <th className="pb-1 pr-2">Vendedores</th>
-            <th className="pb-1 pr-2 text-right">Meta</th>
-            <th className="pb-1 pr-2 text-right">Qtd Peças</th>
+            <th className="pb-2 pr-2 font-semibold">Vendedora</th>
+            <th className="pb-2 pr-2 text-right font-semibold">Meta</th>
+            <th className="pb-2 pr-2 text-right font-semibold">Qtd peças</th>
             {/* Coluna "Valor" removida a pedido do produto. */}
-            <th className="pb-1 pr-2 text-right">Premiação</th>
-            <th className="pb-1 pl-2" style={{ width: "28%" }}>Meta%</th>
+            <th className="pb-2 pr-2 text-right font-semibold">Premiação</th>
+            <th className="px-2 pb-2 font-semibold" style={{ width: "26%" }}>Meta &amp; progresso</th>
+            {/* A 6a coluna so entra onde ha largura para ela. Abaixo de 1280px
+                o card vale 2/3 da grade e cinco colunas ja e o limite — e a
+                palavra do selo sai da MESMA faixa do percentual ao lado, entao
+                esconde-la nao tira informacao de ninguem. */}
+            <th className="hidden pb-2 pl-2 text-right font-semibold xl:table-cell">Status</th>
           </tr>
         </thead>
         <tbody>
           {/* Sem corte: todos os vendedores com meta na campanha aparecem. */}
-          {perf.rows.map((r, i) => (
-            <tr key={r.nome} className="border-t border-border/60">
-              <td className="py-1 pr-2">
-                <span className="flex items-center gap-1.5">
-                  {i < 3 && <RankTrophy pos={i + 1} />}
-                  <span className="font-medium">{r.nome}</span>
-                </span>
-              </td>
-              <td className="py-1 pr-2 text-right font-data">{r.meta > 0 ? r.meta : "—"}</td>
-              <td className="py-1 pr-2 text-right font-data">{r.qtd}</td>
-              {/* Coluna "Valor" removida a pedido do produto. */}
-              <td className="py-1 pr-2 text-right font-data text-vendas-text">{formatBRL(r.premiacao)}</td>
-              <td className="py-1 pl-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-                    <div className={`h-full rounded-full ${tierColor(r.pct)}`}
-                      style={{ width: `${Math.min(r.pct, 100)}%` }} />
+          {perf.rows.map((r, i) => {
+            const status = statusCampanha(r);
+            // Quem nao vendeu recua para o segundo plano: a tabela e lida de
+            // longe, e a linha zerada so precisa existir, nao disputar atencao.
+            const apagada = r.qtd === 0;
+            return (
+              <tr key={r.nome} className={`border-t border-border/60 ${apagada ? "text-muted-foreground" : ""}`}>
+                <td className="py-1.5 pr-2">
+                  <span className="flex items-center gap-2">
+                    {i < 3 && !apagada ? <RankTrophy pos={i + 1} /> : <span className="w-4 shrink-0" />}
+                    <span className={apagada ? "" : "font-semibold"}>{r.nome}</span>
+                  </span>
+                </td>
+                <td className="py-1.5 pr-2 text-right font-data">{r.meta > 0 ? r.meta : "—"}</td>
+                <td className={`py-1.5 pr-2 text-right font-data ${apagada ? "" : "font-bold text-foreground"}`}>{r.qtd}</td>
+                {/* Coluna "Valor" removida a pedido do produto. */}
+                <td className={`py-1.5 pr-2 text-right font-data ${apagada ? "" : "text-vendas-text"}`}>{formatBRL(r.premiacao)}</td>
+                <td className="px-2 py-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                      <div className={`h-full rounded-full ${tierColor(r.pct)}`}
+                        style={{ width: `${Math.min(r.pct, 100)}%`, transition: "width .5s ease" }} />
+                    </div>
+                    <span className={`font-data w-9 shrink-0 text-right text-sm font-bold ${r.meta > 0 ? tierText(r.pct) : "text-muted-foreground"}`}>
+                      {r.meta > 0 ? `${r.pct}%` : "—"}
+                    </span>
                   </div>
-                  <span className={`font-data w-9 shrink-0 text-right text-sm font-bold ${tierText(r.pct)}`}>{r.pct}%</span>
-                </div>
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="hidden py-1.5 pl-2 text-right xl:table-cell">
+                  <Pill tone={status.tone}>{status.label}</Pill>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
