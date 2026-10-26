@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { setSelectStepDone } from "@/lib/actions/select-roadmap";
 import { canCompleteStep, canUndoStep, roadmapProgress } from "@/lib/select-roadmap";
@@ -51,6 +51,7 @@ export function SelectRoadmapCard({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [erroLocal, setErroLocal] = useState<string | null>(null);
+  const [historicoAberto, setHistoricoAberto] = useState(false);
 
   const estados = steps.map((e) => ({ sortOrder: e.sortOrder, done: e.done }));
   const { done, total, percent } = roadmapProgress(estados);
@@ -248,33 +249,55 @@ export function SelectRoadmapCard({
           </ol>
         </div>
 
-        {/* ------------------------------------------------- histórico -- */}
+        {/* ------------------------------------------------- histórico --
+            RETRAÍDO por padrão: o que a tela vem responder é "em que pé está a
+            entrega", e isso a régua acima já diz. O histórico é a segunda
+            pergunta ("quem mexeu nisto, e quando"), e aberto de saída ele
+            empurrava o acompanhamento de compras para fora da tela.
+
+            A CONTAGEM fica no botão fechado. Sem ela, recolher esconderia que
+            existe algo para ver — e o único jeito de descobrir seria clicar. */}
         <div className="border-t border-border pt-4">
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            Histórico de interações
-          </h3>
-          {historico.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhuma etapa foi marcada ainda.
-            </p>
-          ) : (
-            // Rola em vez de crescer sem fim: uma régua de dez etapas marcada e
-            // desmarcada algumas vezes empurraria o resto da tela para baixo.
-            <ol className="kanban-scroll max-h-60 space-y-2 overflow-y-auto pr-1">
-              {historico.map((h) => (
-                <li key={h.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
-                  <span className="font-data shrink-0 text-muted-foreground">{h.atLabel}</span>
-                  <span className="text-foreground">
-                    <strong className="font-medium">{h.actorName}</strong>{" "}
-                    <span className={h.done ? "text-servico-text" : "text-muted-foreground"}>
-                      {h.done ? "concluiu" : "desmarcou"}
-                    </span>{" "}
-                    {h.etapa}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
+          <button
+            type="button"
+            onClick={() => setHistoricoAberto((v) => !v)}
+            aria-expanded={historicoAberto}
+            aria-controls="roadmap-historico"
+            className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left text-xs font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {historicoAberto
+              ? <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
+              : <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />}
+            <span>Histórico de interações</span>
+            {historico.length > 0 && (
+              <span className="font-data normal-case tracking-normal">({historico.length})</span>
+            )}
+          </button>
+
+          <div id="roadmap-historico" hidden={!historicoAberto} className="pt-2">
+            {historico.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma etapa foi marcada ainda.
+              </p>
+            ) : (
+              // Rola em vez de crescer sem fim: uma régua de dez etapas marcada e
+              // desmarcada algumas vezes empurraria o resto da tela para baixo.
+              <ol className="kanban-scroll max-h-60 space-y-2 overflow-y-auto pr-1">
+                {historico.map((h) => (
+                  <li key={h.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                    <span className="font-data shrink-0 text-muted-foreground">{h.atLabel}</span>
+                    <span className="text-foreground">
+                      <strong className="font-medium">{h.actorName}</strong>{" "}
+                      <span className={h.done ? "text-servico-text" : "text-muted-foreground"}>
+                        {h.done ? "concluiu" : "desmarcou"}
+                      </span>{" "}
+                      {h.etapa}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
