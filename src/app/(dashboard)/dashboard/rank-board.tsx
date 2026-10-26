@@ -280,7 +280,12 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
   // de quem efetivamente vendeu (quem esta com 0 nao forma media de ninguem).
   const campMetaGlobal = campPerf?.rows.reduce((a, r) => a + r.meta, 0) ?? 0;
   const campVendedoras = campPerf?.rows.filter((r) => r.qtd > 0).length ?? 0;
-  const campTicket = campVendedoras > 0 ? (campTotalVol?.volume ?? 0) / campVendedoras : null;
+  // O VOLUME da campanha de Select e a contagem de contratos, nao `volume`,
+  // que soma `itemCount` dos pedidos vinculados — e Select nao passa pelo
+  // fluxo de pedidos. Sem esta troca o KPI do topo dizia "0 pecas" e "Nenhuma
+  // peca vendida nesta campanha" num mes em que ela vendeu.
+  const campVolume = campPerf?.select ? campPerf.select.vendidos : (campTotalVol?.volume ?? 0);
+  const campTicket = campVendedoras > 0 ? campVolume / campVendedoras : null;
   const campPremiacao = campPerf?.rows.reduce((a, r) => a + r.premiacao, 0) ?? 0;
 
   // O quadro ocupa a altura da tela. Quando a tabela de Performance cresce
@@ -448,9 +453,10 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
         />
         <CampanhaKpi
           nome={campTotalVol?.name ?? null}
-          volume={campTotalVol?.volume ?? 0}
+          volume={campVolume}
           metaGlobal={campMetaGlobal}
           ticket={campTicket}
+          ehSelect={campPerf?.select != null}
         />
       </div>
 
@@ -602,9 +608,10 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
                 </button>
               )}
             </div>
-            {/* Premiacao somada da campanha. So na campanha de pecas: a de
-                Select paga por contrato, e a tabela dela nem tem a coluna. */}
-            {!campPerf?.selects && campPremiacao > 0 && (
+            {/* Premiacao somada da campanha. So na campanha de pecas: Select
+                nao gera premiacao (decisao do dono em 26/10/2026), e a tabela
+                dela nem tem a coluna. */}
+            {!campPerf?.select && campPremiacao > 0 && (
               <span className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground">
                 Total em premiações
                 <span className="font-data rounded-lg bg-secondary px-2 py-1 text-sm font-bold normal-case tracking-normal text-vendas-text">
@@ -616,10 +623,10 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
           {/* Cabecalho da campanha Select: quantos Selects a equipe precisa
               vender no mes, e quantos ja sairam. A outra campanha nao tem
               numero equivalente — a meta dela e por vendedora, na tabela. */}
-          {campPerf?.selects && (
+          {campPerf?.select && (
             <SelectMetaHeader
-              vendidos={campPerf.selects.length}
-              meta={campPerf.metaSelects ?? 0}
+              vendidos={campPerf.select.vendidos}
+              meta={campPerf.select.meta}
             />
           )}
           <PerfTable perf={campPerf} />
@@ -789,10 +796,19 @@ function RecordeKpi({ icon, iconClass, label, total, nome, vazio }: {
  * meta somada da equipe. O nome da campanha esta no rotulo — nao se repete num
  * selo "campanha ativa" ao lado, que diria a mesma coisa duas vezes.
  */
-function CampanhaKpi({ nome, volume, metaGlobal, ticket }: {
+function CampanhaKpi({ nome, volume, metaGlobal, ticket, ehSelect = false }: {
   nome: string | null; volume: number; metaGlobal: number; ticket: number | null;
+  /** Campanha de Select: a unidade e CONTRATO, nao peca. */
+  ehSelect?: boolean;
 }) {
   const pct = metaGlobal > 0 ? Math.round((volume / metaGlobal) * 100) : 0;
+  // A unidade muda junta em todo o card. Deixar "pecas" fixo aqui era o que
+  // fazia a campanha de Select anunciar "0 pecas" tendo vendido contratos.
+  const unidade = ehSelect ? "Selects" : "peças";
+  const unidadeCurta = ehSelect ? "Selects" : "pç";
+  const vazio = ehSelect
+    ? "Nenhum Select vendido nesta campanha."
+    : "Nenhuma peça vendida nesta campanha.";
   return (
     <KpiShell
       label={nome ? `Campanha · ${nome}` : "Campanha ativa"}
@@ -801,13 +817,15 @@ function CampanhaKpi({ nome, volume, metaGlobal, ticket }: {
     >
       <p className="font-data mt-2 truncate text-2xl font-bold leading-none tracking-tight lg:text-[1.75rem]">
         {volume}
-        <span className="ml-1.5 font-sans text-sm font-semibold text-muted-foreground">peças</span>
+        <span className="ml-1.5 font-sans text-sm font-semibold text-muted-foreground">{unidade}</span>
       </p>
       <p className="mt-2 truncate text-[11px] text-muted-foreground">
         {ticket !== null ? (
-          <>Ticket médio por vendedora <span className="font-data font-semibold text-foreground">{ticket.toFixed(1)} pç</span></>
+          // "Ticket medio" e vocabulario de peca e de dinheiro; para contrato
+          // o termo honesto e so "media".
+          <>{ehSelect ? "Média por vendedora" : "Ticket médio por vendedora"} <span className="font-data font-semibold text-foreground">{ticket.toFixed(1)} {unidadeCurta}</span></>
         ) : (
-          "Nenhuma peça vendida nesta campanha."
+          vazio
         )}
       </p>
       <div className="mt-auto pt-2.5">
@@ -819,7 +837,7 @@ function CampanhaKpi({ nome, volume, metaGlobal, ticket }: {
             </div>
             <p className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
               <span className="truncate">
-                Meta da equipe <span className="font-data font-semibold text-foreground">{metaGlobal} peças</span>
+                Meta da equipe <span className="font-data font-semibold text-foreground">{metaGlobal} {unidade}</span>
               </span>
               <span className={`font-data shrink-0 font-bold ${tierText(pct)}`}>{pct}%</span>
             </p>
@@ -877,55 +895,6 @@ function SelectMetaHeader({ vendidos, meta }: { vendidos: number; meta: number }
         />
       </div>
       <span className={`font-data shrink-0 text-sm font-bold ${tierText(pct)}`}>{pct}%</span>
-    </div>
-  );
-}
-
-/**
- * A lista da campanha Select: cliente, plano e valor, e nada mais.
- *
- * Os tres campos sao o escopo que o dono definiu. Vendedora nao entra de
- * proposito: esta lista responde "o que foi vendido", e quem vendeu ja esta no
- * ranking ao lado — onde o valor do Select tambem soma.
- */
-function SelectTable({ perf }: { perf: CampaignPerf }) {
-  const selects = perf.selects ?? [];
-  if (selects.length === 0) {
-    return (
-      <p className="m-auto text-sm text-muted-foreground">
-        Nenhum Select vendido neste mês.
-      </p>
-    );
-  }
-  const total = selects.reduce((a, s) => a + s.valor, 0);
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <table className="table-plain w-full text-sm">
-        <thead className="table-sticky-head text-left text-[11px] uppercase tracking-widest text-foreground">
-          <tr>
-            <th className="pb-2 pr-2 font-semibold">Cliente</th>
-            <th className="pb-2 pr-2 font-semibold">Plano</th>
-            <th className="pb-2 text-right font-semibold">Valor</th>
-          </tr>
-        </thead>
-        <tbody>
-          {selects.map((s, i) => (
-            <tr key={`${s.cliente}-${i}`} className="border-t border-border/60">
-              <td className="truncate py-1.5 pr-2 font-medium" title={s.cliente}>{s.cliente}</td>
-              <td className="truncate py-1.5 pr-2 text-muted-foreground" title={s.plano}>{s.plano}</td>
-              <td className="py-1.5 text-right font-data font-semibold">{formatBRL(s.valor)}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="border-t border-border">
-            <td className="py-1.5 pr-2 text-[11px] uppercase tracking-widest text-muted-foreground" colSpan={2}>
-              Total no mês
-            </td>
-            <td className="py-1.5 text-right font-data font-bold">{formatBRL(total)}</td>
-          </tr>
-        </tfoot>
-      </table>
     </div>
   );
 }
@@ -1100,9 +1069,12 @@ function RankTrophy({ pos }: { pos: number }) {
 }
 
 function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
-  // A campanha Select mostra a lista de contratos, nao a tabela de pecas por
-  // vendedora: um Select e uma venda nominal. `selects` so vem preenchido nela.
-  if (perf?.selects) return <SelectTable perf={perf} />;
+  // A campanha de Select usa a MESMA tabela, com duas diferencas: a coluna de
+  // quantidade conta contratos e nao pecas, e a de premiacao nao existe
+  // (Select nao premia). O resto — meta, progresso, selo — e identico, e e o
+  // ponto: no telao as campanhas se alternam sozinhas a cada 5 min, e trocar a
+  // forma da tabela junto obrigaria quem olha a reaprender o quadro.
+  const ehSelect = perf?.select != null;
 
   if (!perf || perf.rows.length === 0) {
     return <p className="m-auto text-sm text-muted-foreground">Nenhuma campanha ativa ou sem metas vinculadas.</p>;
@@ -1116,9 +1088,9 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
           <tr>
             <th className="pb-2 pr-2 font-semibold">Vendedora</th>
             <th className="pb-2 pr-2 text-right font-semibold">Meta</th>
-            <th className="pb-2 pr-2 text-right font-semibold">Qtd peças</th>
+            <th className="pb-2 pr-2 text-right font-semibold">{ehSelect ? "Selects" : "Qtd peças"}</th>
             {/* Coluna "Valor" removida a pedido do produto. */}
-            <th className="pb-2 pr-2 text-right font-semibold">Premiação</th>
+            {!ehSelect && <th className="pb-2 pr-2 text-right font-semibold">Premiação</th>}
             <th className="px-2 pb-2 font-semibold" style={{ width: "26%" }}>Meta &amp; progresso</th>
             {/* A 6a coluna so entra onde ha largura para ela. Abaixo de 1280px
                 o card vale 2/3 da grade e cinco colunas ja e o limite — e a
@@ -1145,7 +1117,9 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
                 <td className="py-1.5 pr-2 text-right font-data">{r.meta > 0 ? r.meta : "—"}</td>
                 <td className={`py-1.5 pr-2 text-right font-data ${apagada ? "" : "font-bold text-foreground"}`}>{r.qtd}</td>
                 {/* Coluna "Valor" removida a pedido do produto. */}
-                <td className={`py-1.5 pr-2 text-right font-data ${apagada ? "" : "text-vendas-text"}`}>{formatBRL(r.premiacao)}</td>
+                {!ehSelect && (
+                  <td className={`py-1.5 pr-2 text-right font-data ${apagada ? "" : "text-vendas-text"}`}>{formatBRL(r.premiacao)}</td>
+                )}
                 <td className="px-2 py-1.5">
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">

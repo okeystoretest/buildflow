@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { premiacaoDoItem } from "@/lib/campaign-commission";
 import { janelaDoMes, janelaDaSemana, corteLegado, instanteNoFuso } from "@/lib/rank-window";
-import { computeRealizado, vendidoDoVendedor } from "@/lib/rank-math";
+import { computeRealizado, vendidoDoVendedor, selectCampaignRows } from "@/lib/rank-math";
 
 export interface RankRow {
   /** Necessário para o ajuste manual (a linha precisa saber a quem pertence). */
@@ -37,25 +37,25 @@ export interface CampaignPerfRow {
   premiacao: number; // R$ de premiação (peças × R$ 5,00)
   pct: number;    // % da meta de itens (qtd / meta)
 }
-/** Uma venda de Select na campanha homônima. Os três campos que o bloco mostra. */
-export interface SelectVendaRow {
-  cliente: string;
-  plano: string;
-  /** Valor TOTAL do contrato (mensalidade x validade), decidido pelo dono. */
-  valor: number;
-}
 export interface CampaignPerf {
   id: string;
   name: string;
   rows: CampaignPerfRow[];
   /**
-   * Presente SÓ na campanha Select. Quando vem, o bloco troca a tabela por
-   * vendedora pela lista de contratos: um Select é uma venda nominal (cliente,
-   * plano, valor), não um punhado de peças de um pedido.
+   * Presente SÓ na campanha de Select, e é ele que diz à tela que ela é uma.
+   * Quando vem, `rows.qtd` conta CONTRATOS, não peças, e a coluna de premiação
+   * sai da tabela — ver `selectCampaignRows` em `rank-math.ts`.
+   *
+   * Substituiu a lista nominal de contratos que o bloco mostrava até 26/10/2026:
+   * o dono pediu a venda contabilizada POR VENDEDORA, e as duas tabelas não
+   * cabiam no mesmo bloco de altura fixa do telão.
    */
-  selects?: SelectVendaRow[];
-  /** Meta de Selects a vender no mês — o cabeçalho do bloco. */
-  metaSelects?: number;
+  select?: {
+    /** Selects vendidos no mês nesta campanha — o número do cabeçalho. */
+    vendidos: number;
+    /** Meta de Selects da equipe no mês (soma dos `targetItems` vinculados). */
+    meta: number;
+  };
 }
 export interface RankData {
   month: number;
@@ -222,6 +222,9 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
       planNameSnapshot: true,
       brand: true,
       customer: { select: { name: true } },
+      // O nome de quem vendeu: a tabela da campanha de Select e por vendedora
+      // desde 26/10/2026, e sem ele a linha nao tem rotulo.
+      responsible: { select: { name: true } },
     },
   });
 
@@ -448,23 +451,33 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     // venda declara a marca na adesao e cai na campanha daquela marca. Com o
     // nome, renomear a campanha no cadastro parava a atribuicao em silencio.
     if (c.selectBrand) {
+      // `rows` calculado acima NAO serve aqui: ele soma `itemCount` dos pedidos
+      // da campanha, e um Select nao passa pelo fluxo de pedidos — daria zero
+      // em toda linha. A contagem e de CONTRATOS, e a regra e pura, em
+      // `selectCampaignRows`, para o check exercita-la sem banco.
+      const vendasDaMarca = selectsDoMes.filter((v) => v.brand === c.selectBrand);
       return {
         id: c.id,
         name: c.name,
-        rows,
-        // Os TRES campos pedidos, e so eles. Vendedora nao entra: esta lista
-        // responde "o que foi vendido", e quem vendeu ja esta no ranking.
-        selects: selectsDoMes
-          .filter((v) => v.brand === c.selectBrand)
-          .map((v) => ({
-            cliente: v.customer.name,
-            plano: v.planNameSnapshot,
+        rows: selectCampaignRows(
+          vendasDaMarca.map((v) => ({
+            sellerId: v.responsibleId,
+            sellerName: v.responsible.name,
             valor: Number(v.totalAmount),
           })),
-        // Meta de Selects do mes: a soma das metas de itens vinculadas a esta
-        // campanha. E o mesmo campo (`targetItems`) que as outras campanhas
-        // usam para "pecas" — aqui um item e um Select.
-        metaSelects: c.goals.reduce((a: number, g: any) => a + (g.targetItems ?? 0), 0),
+          c.goals.map((g: any) => ({
+            userId: g.userId,
+            userName: g.user.name,
+            targetItems: g.targetItems ?? 0,
+          })),
+        ),
+        select: {
+          vendidos: vendasDaMarca.length,
+          // Meta de Selects do mes: a soma das metas de itens vinculadas a esta
+          // campanha. E o mesmo campo (`targetItems`) que as outras campanhas
+          // usam para "pecas" — aqui um item e um Select.
+          meta: c.goals.reduce((a: number, g: any) => a + (g.targetItems ?? 0), 0),
+        },
       };
     }
     return { id: c.id, name: c.name, rows };

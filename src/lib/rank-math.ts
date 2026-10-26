@@ -118,3 +118,89 @@ export function computeRealizado(args: {
     porVendedor,
   };
 }
+
+// ---------------------------------------------------------------------------
+// PERFORMANCE DA CAMPANHA DE SELECT
+//
+// A campanha de Select conta VENDAS DO SERVICO, nao pecas. Um contrato e uma
+// venda; dez pecas num pedido sao dez. Por isso ela nao pode reusar a conta da
+// campanha comum, que soma `itemCount` e multiplica por R$ 5,00.
+//
+// Decisoes do dono em 26/10/2026:
+//  - a tabela e POR VENDEDORA, como nas outras campanhas (a lista nominal de
+//    contratos saiu do bloco; o KPI ao lado segue mostrando o total do mes);
+//  - Select NAO gera premiacao. Pecas pagam R$ 5,00 cada; aplicar isso a um
+//    contrato inventaria um valor que ninguem definiu, e o principio 3 do
+//    produto e que o sistema informa, nao inventa movimento financeiro;
+//  - quem vendeu SEM meta vinculada APARECE, com meta zero. A campanha de
+//    pecas esconde esse caso, e herdar a regra faria uma venda real sumir do
+//    telao — e o total do bloco nao bateria com a soma das linhas.
+// ---------------------------------------------------------------------------
+
+/** Um contrato Select ja atribuido a uma campanha (pela marca). */
+export interface SelectCampaignVenda {
+  sellerId: string;
+  sellerName: string;
+  /** Valor TOTAL do contrato (mensalidade x validade), como no resto do rank. */
+  valor: number;
+}
+
+/** Meta de Selects de uma vendedora nesta campanha. */
+export interface SelectCampaignMeta {
+  userId: string;
+  userName: string;
+  targetItems: number;
+}
+
+export interface SelectCampaignRow {
+  nome: string;
+  meta: number;
+  qtd: number;
+  valor: number;
+  premiacao: number;
+  pct: number;
+}
+
+/**
+ * A tabela por vendedora de uma campanha de Select.
+ *
+ * Entra quem tem meta OU quem vendeu — a uniao dos dois, nao a intersecao.
+ * `qtd` e a CONTAGEM de contratos, e e ela que forma o percentual contra a
+ * meta; `valor` e a soma dos contratos, e nao entra no percentual.
+ *
+ * Ordena como a campanha de pecas: maior percentual primeiro, e a quantidade
+ * desempata. Sem meta o percentual e 0, entao essas linhas caem para o fim
+ * sem precisar de caso especial.
+ */
+export function selectCampaignRows(
+  vendas: SelectCampaignVenda[],
+  metas: SelectCampaignMeta[],
+): SelectCampaignRow[] {
+  const porVend = new Map<string, { nome: string; meta: number; qtd: number; valor: number }>();
+
+  // Primeiro as metas: quem tem meta e nao vendeu precisa aparecer zerada,
+  // senao a cobranca do mes some junto com a venda que nao houve.
+  for (const m of metas) {
+    const cur = porVend.get(m.userId) ?? { nome: m.userName, meta: 0, qtd: 0, valor: 0 };
+    cur.meta += m.targetItems;
+    porVend.set(m.userId, cur);
+  }
+
+  for (const v of vendas) {
+    const cur = porVend.get(v.sellerId) ?? { nome: v.sellerName, meta: 0, qtd: 0, valor: 0 };
+    cur.qtd += 1;
+    cur.valor += v.valor;
+    porVend.set(v.sellerId, cur);
+  }
+
+  return [...porVend.values()]
+    .map((v) => ({
+      nome: v.nome,
+      meta: v.meta,
+      qtd: v.qtd,
+      valor: v.valor,
+      premiacao: 0,
+      pct: v.meta > 0 ? Math.round((v.qtd / v.meta) * 100) : 0,
+    }))
+    .sort((a, b) => b.pct - a.pct || b.qtd - a.qtd);
+}
