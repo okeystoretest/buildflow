@@ -232,12 +232,17 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
 
   const totalVarejo = somaVendido(data.rankVarejo);
   const totalAtacado = somaVendido(data.rankAtacado);
-  // Participacao do Atacado no que as DUAS frentes somam. Sem faturamento
-  // nenhum nao ha participacao a mostrar — 0/0 leria como "0% do atacado".
+  // Participacao de cada frente no que as DUAS somam. Sem faturamento nenhum
+  // nao ha participacao a mostrar — 0/0 leria como "0% do atacado".
+  //
+  // As duas saem da MESMA divisao e somam 100%: calcular o varejo como
+  // "100 - atacado" daria o mesmo numero, mas um arredondamento a menos
+  // deixaria 49,9 + 50,0 na tela.
+  const faturamentoTotal = totalVarejo + totalAtacado;
   const participacaoAtacado =
-    totalVarejo + totalAtacado > 0
-      ? (totalAtacado / (totalVarejo + totalAtacado)) * 100
-      : null;
+    faturamentoTotal > 0 ? (totalAtacado / faturamentoTotal) * 100 : null;
+  const participacaoVarejo =
+    faturamentoTotal > 0 ? (totalVarejo / faturamentoTotal) * 100 : null;
 
   // Concentracao do topo: quanto do volume do mes esta nas tres primeiras.
   // Com tres vendedoras ou menos a resposta e sempre 100% e nao informa nada.
@@ -505,6 +510,16 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
               total={totalVarejo}
             />
           }
+          footer={
+            participacaoVarejo !== null && (
+              <>
+                <span>Participação no faturamento</span>
+                <span className="font-data font-bold normal-case tracking-normal text-foreground">
+                  {participacaoVarejo.toFixed(1)}% da empresa
+                </span>
+              </>
+            )
+          }
         />
 
         <RankPanel
@@ -659,9 +674,11 @@ function TotalPainel({ qtd, rotulo, total }: { qtd: number; rotulo: string; tota
   return (
     <span className="flex shrink-0 items-center gap-2">
       <Pill>{qtd} {rotulo}</Pill>
+      {/* O rotulo fica pequeno e o VALOR cresce: no telao o que se le de longe
+          e o numero, e "Total" so precisa ser identificavel de perto. */}
       <span className="whitespace-nowrap text-[11px] uppercase tracking-widest text-muted-foreground">
         Total{" "}
-        <span className="font-data text-sm font-bold normal-case tracking-normal text-foreground">
+        <span className="font-data text-base font-bold normal-case tracking-normal text-foreground">
           {formatBRL(total)}
         </span>
       </span>
@@ -884,7 +901,7 @@ function SelectTable({ perf }: { perf: CampaignPerf }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <table className="table-plain w-full text-sm">
-        <thead className="sticky top-0 bg-card text-left text-[11px] uppercase tracking-widest text-muted-foreground">
+        <thead className="table-sticky-head text-left text-[11px] uppercase tracking-widest text-foreground">
           <tr>
             <th className="pb-2 pr-2 font-semibold">Cliente</th>
             <th className="pb-2 pr-2 font-semibold">Plano</th>
@@ -937,7 +954,12 @@ function RankPanel({ title, dotClass, rows, showTrophy, hideValue, destacarTop3,
         </h2>
         {meta}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+      {/* `kanban-scroll`: sem ela a barra deste painel e a do Windows, grossa e
+          com setinha nas pontas, dentro de um card num telao. A rolagem
+          HORIZONTAL aparece quando nome + valor nao cabem na largura do painel
+          — ver pendencia 3 do handoff de 22/10; a classe so veste a barra, nao
+          resolve o transbordo. */}
+      <div className="kanban-scroll flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
         {rows.slice(0, maxRows).map((r, i) => (
           <RankLine key={r.userId} pos={i + 1} row={r} showTrophy={showTrophy} hideValue={hideValue}
             destaque={destacarTop3 === true && i < 3} edicao={edicao} />
@@ -1090,7 +1112,7 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
        verticalmente conforme a quantidade de linhas. */
     <div className="flex-1">
       <table className="table-plain w-full text-sm">
-        <thead className="text-left text-[11px] uppercase tracking-widest text-muted-foreground">
+        <thead className="text-left text-[11px] uppercase tracking-widest text-foreground">
           <tr>
             <th className="pb-2 pr-2 font-semibold">Vendedora</th>
             <th className="pb-2 pr-2 text-right font-semibold">Meta</th>

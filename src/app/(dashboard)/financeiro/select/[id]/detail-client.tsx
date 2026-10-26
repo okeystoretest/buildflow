@@ -4,21 +4,21 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle, Ban, Check, ChevronDown, ChevronRight, FileText, Paperclip, RotateCcw, Star,
+  AlertTriangle, Ban, ChevronDown, ChevronRight, FileText, Paperclip, RotateCcw, Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatBRL, tierColor } from "@/lib/utils";
+import { formatBRL } from "@/lib/utils";
 import { shrinkImageToBase64 } from "@/lib/client-image";
 import {
   registerSelectPayment, reverseSelectPayment, cancelSelectInstallment, setSelectInstallmentNote,
 } from "@/lib/actions/select-finance";
 import { cancelSelectContract } from "@/lib/actions/selects";
-import { setSelectStepDone } from "@/lib/actions/select-roadmap";
-import { canCompleteStep, canUndoStep, roadmapProgress } from "@/lib/select-roadmap";
+import { SelectRoadmapCard } from "@/components/shared/select-roadmap-card";
+import { SelectPurchaseCycles } from "@/components/shared/select-purchase-cycles";
 import {
   formatDayBR, toInputDate, dayUTC,
   CONTRACT_STATE_LABEL, INSTALLMENT_STATE_LABEL,
@@ -122,7 +122,7 @@ export function SelectDetailClient({
       )}
 
       {/* ----------------------------------------- roadmap de entrega -- */}
-      <RoadmapCard
+      <SelectRoadmapCard
         steps={detail.steps}
         bloqueado={detail.state === "CANCELADO"}
         onErro={(t) => setMsg({ ok: false, text: t })}
@@ -132,18 +132,40 @@ export function SelectDetailClient({
       <Card>
         <CardHeader><CardTitle>Contrato</CardTitle></CardHeader>
         <CardContent>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm md:grid-cols-4">
-            <Campo rotulo="Plano" valor={detail.planName} />
-            <Campo rotulo="Responsável" valor={detail.responsibleName} />
-            <Campo rotulo="Início" valor={d(detail.startDate)} />
-            <Campo rotulo="Fim" valor={d(detail.closedAt ?? detail.endDate)} />
-            <Campo rotulo="Validade" valor={`${detail.validityMonths} meses`} />
-            <Campo rotulo="Mensalidade" valor={formatBRL(detail.monthlyAmount)} />
-            <Campo rotulo="Valor do contrato" valor={formatBRL(detail.totalAmount)} />
-            <Campo rotulo="A cobrar (parcelas geradas)" valor={formatBRL(detail.billableAmount)} />
-            <Campo rotulo="Mínimo de compras mensal" valor={formatBRL(detail.minMonthlyPurchase)} />
-            <Campo rotulo="Registrado em" valor={d(detail.createdAt)} />
-          </dl>
+          {/* Tabela, e não a grade de `<dl>` que havia aqui: dez campos soltos
+              num grid de quatro colunas não diziam onde um terminava e o outro
+              começava, e com a tela mais larga o vão só cresceu. A `<table>`
+              sem `table-plain` herda a grade completa do `globals.css` — linha
+              em toda célula e cabeçalho chapado —, que é exatamente o
+              separador que faltava, sem CSS novo.
+
+              PARES por linha (rótulo, valor, rótulo, valor): com um par só a
+              tabela teria dez linhas e metade da largura vazia. Rola na
+              horizontal no celular, onde quatro colunas não cabem. */}
+          <div className="kanban-scroll overflow-x-auto">
+            <table className="w-full text-sm">
+              <caption className="sr-only">Dados do contrato</caption>
+              <tbody>
+                {[
+                  ["Plano", detail.planName, "Responsável", detail.responsibleName],
+                  ["Início", d(detail.startDate), "Fim", d(detail.closedAt ?? detail.endDate)],
+                  ["Validade", `${detail.validityMonths} meses`, "Mensalidade", formatBRL(detail.monthlyAmount)],
+                  ["Valor do contrato", formatBRL(detail.totalAmount), "A cobrar (parcelas geradas)", formatBRL(detail.billableAmount)],
+                  ["Mínimo de compras mensal", formatBRL(detail.minMonthlyPurchase), "Registrado em", d(detail.createdAt)],
+                ].map(([r1, v1, r2, v2]) => (
+                  <tr key={r1}>
+                    <th scope="row" className="whitespace-nowrap py-2.5 text-left text-xs font-normal uppercase tracking-wide text-muted-foreground">{r1}</th>
+                    {/* `w-1/4` nas duas células de valor: sem largura declarada
+                        o navegador dá a sobra toda à coluna do rótulo mais
+                        longo, e os dois pares da linha saem assimétricos. */}
+                    <td className="w-1/4 py-2.5 font-medium">{v1}</td>
+                    <th scope="row" className="whitespace-nowrap py-2.5 text-left text-xs font-normal uppercase tracking-wide text-muted-foreground">{r2}</th>
+                    <td className="w-1/4 py-2.5 font-medium">{v2}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {detail.billableAmount < detail.totalAmount && (
             <p className="mt-3 rounded-lg border border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
@@ -215,56 +237,12 @@ export function SelectDetailClient({
       </Card>
 
       {/* ------------------------------------- mínimo de compras ----- */}
-      <Card>
-        <CardHeader><CardTitle>Mínimo de compras mensal</CardTitle></CardHeader>
-        <CardContent>
-          <p className="mb-3 text-xs text-muted-foreground">
-            Soma dos pedidos da cliente <strong>aprovados pelo Financeiro</strong> dentro de cada ciclo do
-            contrato, pelo valor do pedido (sem frete), descontadas as devoluções. Estornados, cancelados e
-            doações não entram. É um indicador: não bloqueia nem cobra nada.
-          </p>
-          {detail.cycles.length === 0 ? (
-            <p className="py-4 text-center text-muted-foreground">O contrato ainda não começou.</p>
-          ) : (
-            <div className="space-y-2">
-              {[...detail.cycles].reverse().map((c) => {
-                const pct = c.minimum > 0 ? (c.purchased / c.minimum) * 100 : 0;
-                return (
-                  <div key={c.index} className={`rounded-lg border p-3 ${c.current ? "border-servico/40 bg-servico/5" : "border-border"}`}>
-                    <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                      <span className="font-medium">
-                        Ciclo {c.index} · {d(c.from)} a {d(c.to)} {c.current && <span className="text-servico-text">(atual)</span>}
-                      </span>
-                      <span className="font-data">
-                        {formatBRL(c.purchased)} <span className="text-muted-foreground">de {formatBRL(c.minimum)}</span>
-                        {" · "}
-                        <span className={pct >= 100 ? "text-servico-text" : "text-muted-foreground"}>{Math.round(pct)}%</span>
-                      </span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                      <div className={`h-full rounded-full ${tierColor(pct)}`} style={{ width: `${Math.min(100, pct)}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <SelectPurchaseCycles cycles={detail.cycles} />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-
-function Campo({ rotulo, valor }: { rotulo: string; valor: string }) {
-  return (
-    <div>
-      <dt className="text-xs uppercase tracking-wide text-muted-foreground">{rotulo}</dt>
-      <dd className="font-medium">{valor}</dd>
-    </div>
-  );
-}
 
 /** Uma parcela: linha resumida que abre nos pagamentos e nas ações. */
 function Parcela({
@@ -527,137 +505,5 @@ function Parcela({
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * ROADMAP DE ENTREGA — a régua do contrato, avançada por clique.
- *
- * Vertical, numerada, com a linha ligando as etapas: é o mesmo desenho da
- * `Timeline` que a cliente já vê em `/acompanhar/[token]`, e numa tela estreita
- * a régua horizontal da referência vira texto ilegível ou rolagem lateral.
- *
- * O botão só fica ativo na etapa que a ORDEM libera: a próxima pendente, ou a
- * última concluída (para desfazer). Isso é conveniência — a guarda está em
- * `setSelectStepDone`, no servidor.
- *
- * `aria-label` diz o nome da etapa, não só "Concluir": com dez botões iguais,
- * quem usa leitor de tela ouviria "Concluir" dez vezes sem saber o quê.
- */
-function RoadmapCard({
-  steps, bloqueado, onErro,
-}: {
-  steps: SelectDetail["steps"];
-  bloqueado: boolean;
-  onErro: (texto: string) => void;
-}) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-
-  const estados = steps.map((e) => ({ sortOrder: e.sortOrder, done: e.done }));
-  const { done, total, percent } = roadmapProgress(estados);
-
-  function alternar(stepId: string, novoDone: boolean) {
-    start(async () => {
-      const res = await setSelectStepDone({ stepId, done: novoDone });
-      if (res.ok) router.refresh();
-      else onErro(res.error);
-    });
-  }
-
-  if (total === 0) {
-    return (
-      <Card>
-        <CardHeader><CardTitle>Roadmap de entrega</CardTitle></CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          {/* Só acontece em contrato anterior ao roadmap. Dizer o que fazer
-              vale mais que um vazio mudo. */}
-          Este Select não tem régua de entrega. Ela é gerada na adesão, a partir
-          dos benefícios do plano marcados como entregáveis.
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex flex-wrap items-center justify-between gap-2">
-          <span>Roadmap de entrega</span>
-          <span className="font-data text-sm font-normal text-muted-foreground">
-            {done} de {total} · {percent}%
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Barra decorativa: o número ao lado já diz o progresso a quem não a
-            enxerga, por isso ela sai da árvore de acessibilidade. */}
-        <div className="h-2 w-full overflow-hidden rounded-full bg-secondary" aria-hidden>
-          <div
-            className="h-full rounded-full bg-servico transition-all"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-
-        <ol className="space-y-0">
-          {steps.map((e, i) => {
-            const podeConcluir = canCompleteStep(estados, e.sortOrder);
-            const podeDesfazer = canUndoStep(estados, e.sortOrder);
-            const ultima = i === steps.length - 1;
-            return (
-              <li key={e.id} className="flex gap-3">
-                {/* Marcador + o fio que liga ao próximo. O fio é do item de
-                    cima, então o último não desenha nenhum. */}
-                <div className="flex flex-col items-center">
-                  <span
-                    className={
-                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-data " +
-                      (e.done
-                        ? "border-servico bg-servico text-servico-fg"
-                        : "border-border bg-background text-muted-foreground")
-                    }
-                    aria-hidden
-                  >
-                    {e.done ? <Check className="h-4 w-4" /> : e.sortOrder}
-                  </span>
-                  {!ultima && (
-                    <span
-                      className={"w-px flex-1 " + (e.done ? "bg-servico" : "bg-border")}
-                      aria-hidden
-                    />
-                  )}
-                </div>
-
-                <div className="flex flex-1 flex-wrap items-center justify-between gap-2 pb-4">
-                  <div>
-                    <p className={e.done ? "text-sm font-medium" : "text-sm"}>{e.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {e.done ? `Concluída em ${e.doneAtLabel}` : "Pendente"}
-                    </p>
-                  </div>
-                  {!bloqueado && (podeConcluir || podeDesfazer) && (
-                    <Button
-                      variant={podeConcluir ? "servico" : "outline"}
-                      size="sm"
-                      disabled={pending}
-                      aria-label={`${podeConcluir ? "Concluir" : "Desfazer"} a etapa ${e.label}`}
-                      onClick={() => alternar(e.id, podeConcluir)}
-                    >
-                      {podeConcluir ? "Concluir" : "Desfazer"}
-                    </Button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-
-        {bloqueado && (
-          <p className="text-xs text-muted-foreground">
-            Este Select foi cancelado: a régua de entrega não se altera.
-          </p>
-        )}
-      </CardContent>
-    </Card>
   );
 }

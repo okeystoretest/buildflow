@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
-import { canCompleteStep, canUndoStep } from "@/lib/select-roadmap";
+import { canCompleteStep, canUndoStep, canEditRoadmap } from "@/lib/select-roadmap";
 
 /**
  * AVANÇO DO ROADMAP DE ENTREGA — o clique que marca uma etapa concluída.
@@ -22,13 +22,19 @@ import { canCompleteStep, canUndoStep } from "@/lib/select-roadmap";
  * CONTRATO CANCELADO NÃO SE MEXE. Cancelar é o fim da linha ("um Select
  * cancelado não volta atrás"), e registrar entrega depois disso criaria
  * histórico de uma entrega que o contrato não mais prevê.
+ *
+ * A VENDEDORA entra aqui, mas só nos Selects dela. Quem entrega o benefício é
+ * quem vendeu, então ela precisa marcar; o escopo é o mesmo que `/vendas` já
+ * aplica aos pedidos ("VENDAS vê apenas os próprios"), e vale por
+ * `responsibleId`, lido do contrato no servidor. Financeiro e Gestão seguem
+ * sem escopo.
  */
 export async function setSelectStepDone(input: {
   stepId: string;
   done: boolean;
 }): Promise<ActionResult<void>> {
   try {
-    const session = await requireRoleAction(["FINANCEIRO", "GESTAO"]);
+    const session = await requireRoleAction(["FINANCEIRO", "GESTAO", "VENDAS"]);
 
     // Limite de confiança: chega o que o navegador mandou. `stepId` não-texto
     // recebe a mesma resposta de etapa inexistente.
@@ -42,10 +48,15 @@ export async function setSelectStepDone(input: {
         id: true,
         sortOrder: true,
         contractId: true,
-        contract: { select: { status: true } },
+        contract: { select: { status: true, responsibleId: true } },
       },
     });
     if (!etapa) return actionError("Etapa não encontrada.");
+    // Select de outra vendedora recebe a MESMA resposta de etapa inexistente:
+    // "este contrato não é seu" confirmaria que o contrato existe.
+    if (!canEditRoadmap({ role: session.role, userId: session.userId }, etapa.contract)) {
+      return actionError("Etapa não encontrada.");
+    }
     if (etapa.contract.status === "CANCELADO") {
       return actionError("Este Select foi cancelado: a régua de entrega não se altera.");
     }
@@ -66,14 +77,32 @@ export async function setSelectStepDone(input: {
       return actionError("Desfaça a etapa seguinte antes desta.");
     }
 
-    await prisma.selectContractStep.update({
-      where: { id: etapa.id },
-      data: done
-        ? { doneAt: new Date(), doneById: session.userId }
-        : { doneAt: null, doneById: null },
-    });
+    // Estado e histórico na MESMA transação: um evento gravado sem a etapa ter
+    // mudado (ou o contrário) seria um histórico que não descreve o que
+    // aconteceu — e é justamente o histórico que ninguém pode corrigir depois.
+    await prisma.$transaction([
+      prisma.selectContractStep.update({
+        where: { id: etapa.id },
+        data: done
+          ? { doneAt: new Date(), doneById: session.userId }
+          : { doneAt: null, doneById: null },
+      }),
+      prisma.selectContractStepEvent.create({
+        data: {
+          stepId: etapa.id,
+          done,
+          actorId: session.userId,
+          actorName: session.name,
+        },
+      }),
+    ]);
 
     revalidatePath(`/financeiro/select/${etapa.contractId}`);
+    revalidatePath(`/vendas/select/${etapa.contractId}`);
+    // A LISTA da vendedora também: ela mostra "N de M etapas" por contrato, e
+    // voltar do detalhe depois de marcar traria a contagem velha do cache de
+    // rota do Next.
+    revalidatePath("/vendas/select");
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao atualizar a etapa.");

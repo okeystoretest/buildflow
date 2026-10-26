@@ -303,6 +303,18 @@ export interface SelectStepRow {
   label: string;
   done: boolean;
   doneAtLabel: string | null;
+  /** Histórico de interação, do mais recente ao mais antigo. */
+  events: SelectStepEventRow[];
+}
+
+export interface SelectStepEventRow {
+  id: string;
+  /** true marcou a etapa como concluída, false desfez. */
+  done: boolean;
+  actorName: string;
+  /** ISO, só para ordenar: a exibição usa `atLabel`, já no fuso do servidor. */
+  at: string;
+  atLabel: string;
 }
 
 export async function getSelectDetail(id: string): Promise<SelectDetail | null> {
@@ -314,7 +326,10 @@ export async function getSelectDetail(id: string): Promise<SelectDetail | null> 
       responsible: { select: { name: true } },
       replaces: { select: { id: true, planNameSnapshot: true, startDate: true } },
       replacedBy: { select: { id: true, planNameSnapshot: true, startDate: true } },
-      steps: { orderBy: { sortOrder: "asc" } },
+      steps: {
+        orderBy: { sortOrder: "asc" },
+        include: { events: { orderBy: { createdAt: "desc" } } },
+      },
       installments: {
         orderBy: { number: "asc" },
         include: {
@@ -400,23 +415,55 @@ export async function getSelectDetail(id: string): Promise<SelectDetail | null> 
     paidBeyondClosure,
     installments,
     cycles: await purchaseCycles(c, hoje),
-    // `doneAt` é instante (o clique), não data pura como as do contrato, então
-    // desce FORMATADO do servidor. Formatar no navegador usaria o fuso de quem
-    // está olhando, e a divergência com o servidor aparece como erro de
-    // hidratação — mesmo motivo documentado na Análise de Clientes.
-    steps: c.steps.map((e) => ({
-      id: e.id,
-      sortOrder: e.sortOrder,
-      label: e.label,
-      done: e.doneAt != null,
-      doneAtLabel: e.doneAt
-        ? e.doneAt.toLocaleDateString("pt-BR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            timeZone: "America/Sao_Paulo",
-          })
-        : null,
+    steps: c.steps.map((e) => mapStepRow(e)),
+  };
+}
+
+/**
+ * Uma etapa do roadmap, pronta para a tela. Vive à parte porque o Financeiro e
+ * a vendedora leem a MESMA régua: duas cópias desta formatação divergiriam no
+ * primeiro ajuste de fuso.
+ *
+ * `doneAt` e `createdAt` são INSTANTES (o clique), não datas puras como as do
+ * contrato, então descem FORMATADOS do servidor. Formatar no navegador usaria
+ * o fuso de quem está olhando, e a divergência com o servidor aparece como
+ * erro de hidratação — mesmo motivo documentado na Análise de Clientes.
+ */
+function mapStepRow(e: {
+  id: string;
+  sortOrder: number;
+  label: string;
+  doneAt: Date | null;
+  events: { id: string; done: boolean; actorName: string; createdAt: Date }[];
+}): SelectStepRow {
+  return {
+    id: e.id,
+    sortOrder: e.sortOrder,
+    label: e.label,
+    done: e.doneAt != null,
+    doneAtLabel: e.doneAt
+      ? e.doneAt.toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          timeZone: "America/Sao_Paulo",
+        })
+      : null,
+    // O histórico leva a HORA: num mesmo dia uma etapa pode ser marcada e
+    // desfeita mais de uma vez, e só a data não ordena o que o leitor vê.
+    events: e.events.map((ev) => ({
+      id: ev.id,
+      done: ev.done,
+      actorName: ev.actorName,
+      at: ev.createdAt.toISOString(),
+      atLabel: ev.createdAt.toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "America/Sao_Paulo",
+      }),
     })),
   };
 }
@@ -510,4 +557,136 @@ async function purchaseCycles(
       current: atual?.index === w.index,
     })),
   );
+}
+
+// ---------------------------------------------------------------------------
+// A VISÃO DA VENDEDORA
+//
+// Duas consultas próprias, e não `listSelectContracts`/`getSelectDetail` com um
+// filtro a mais, por dois motivos que andam juntos:
+//
+// 1. ESCOPO. O `responsibleId` entra no `where`, não numa checagem depois de
+//    ler. Uma consulta que nunca devolve o contrato de outra vendedora não tem
+//    como vazá-lo por esquecimento de quem chamar.
+// 2. SUPERFÍCIE. A vendedora vê a entrega (roadmap) e o acompanhamento de
+//    compras — não as parcelas, não os pagamentos, não os valores em aberto.
+//    Não trazer é mais barato e mais seguro do que trazer e não renderizar.
+// ---------------------------------------------------------------------------
+
+export interface SellerSelectRow {
+  id: string;
+  customerCode: string;
+  customerName: string;
+  planName: string;
+  state: ContractState;
+  stepsDone: number;
+  stepsTotal: number;
+}
+
+/** Quantos Selects a lista da vendedora mostra por página. */
+export const SELLER_SELECT_PAGE_SIZE = 9;
+
+/**
+ * Uma PÁGINA dos Selects de uma vendedora, do mais recente ao mais antigo.
+ *
+ * Nove por página porque a grade é de três colunas: qualquer outro número
+ * deixaria a última linha pela metade. O `page` chega da URL e pode vir
+ * qualquer coisa — número fora da faixa cai na primeira página, não em
+ * `skip: NaN`.
+ */
+export async function listSellerSelects(
+  sellerId: string,
+  page = 1,
+): Promise<{ rows: SellerSelectRow[]; total: number; page: number }> {
+  const hoje = dayUTC();
+  const where = { responsibleId: sellerId };
+
+  const total = await prisma.selectContract.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / SELLER_SELECT_PAGE_SIZE));
+  const pageSafe = Math.min(Math.max(1, Math.floor(page) || 1), totalPages);
+
+  const rows = await prisma.selectContract.findMany({
+    where,
+    orderBy: { startDate: "desc" },
+    skip: (pageSafe - 1) * SELLER_SELECT_PAGE_SIZE,
+    take: SELLER_SELECT_PAGE_SIZE,
+    select: {
+      id: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      closedAt: true,
+      planNameSnapshot: true,
+      customer: { select: { code: true, name: true } },
+      // Só o que conta o progresso: o rótulo da etapa não é lido na lista.
+      steps: { select: { doneAt: true } },
+    },
+  });
+
+  return {
+    total,
+    page: pageSafe,
+    rows: rows.map((c) => ({
+      id: c.id,
+      customerCode: c.customer.code,
+      customerName: c.customer.name,
+      planName: c.planNameSnapshot,
+      state: contractState(c, hoje),
+      stepsDone: c.steps.filter((e) => e.doneAt != null).length,
+      stepsTotal: c.steps.length,
+    })),
+  };
+}
+
+export interface SellerSelectDetail {
+  id: string;
+  customerCode: string;
+  customerName: string;
+  planName: string;
+  state: ContractState;
+  steps: SelectStepRow[];
+  cycles: PurchaseCycle[];
+}
+
+/**
+ * O detalhe enxuto de UM Select da vendedora. Devolve `null` tanto para
+ * contrato inexistente quanto para contrato de outra vendedora — a tela
+ * responde 404 nos dois casos, porque a existência do contrato já é informação
+ * (princípio 6 do produto).
+ */
+export async function getSellerSelectDetail(
+  id: string,
+  sellerId: string,
+): Promise<SellerSelectDetail | null> {
+  const hoje = dayUTC();
+  const c = await prisma.selectContract.findFirst({
+    where: { id, responsibleId: sellerId },
+    select: {
+      id: true,
+      status: true,
+      customerId: true,
+      startDate: true,
+      endDate: true,
+      closedAt: true,
+      minMonthlyPurchase: true,
+      validityMonths: true,
+      planNameSnapshot: true,
+      customer: { select: { code: true, name: true } },
+      steps: {
+        orderBy: { sortOrder: "asc" },
+        include: { events: { orderBy: { createdAt: "desc" } } },
+      },
+    },
+  });
+  if (!c) return null;
+
+  return {
+    id: c.id,
+    customerCode: c.customer.code,
+    customerName: c.customer.name,
+    planName: c.planNameSnapshot,
+    state: contractState(c, hoje),
+    steps: c.steps.map((e) => mapStepRow(e)),
+    cycles: await purchaseCycles(c, hoje),
+  };
 }

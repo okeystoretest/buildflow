@@ -279,6 +279,21 @@
     transform: translateY(-2px);
   }
 
+  /* CABECALHO FIXO de tabela sem grade (as duas do Rank de Vendas).
+     `table-plain` zera o fundo do `thead`, e um cabecalho `sticky` sem fundo
+     OPACO deixa as linhas passarem por baixo ao rolar — por isso ele precisa
+     de um, ao contrario dos outros doze.
+
+     O fundo vem daqui e nao de uma utility `bg-*` na marcacao pelo MESMO
+     motivo da regra `thead` la em cima: cor de cabecalho e decisao do sistema,
+     e uma utility vence a regra base sem ninguem notar. E e exatamente isso
+     que `scripts/checks/cor-de-setor.ts` reprova, com razao. */
+  .table-sticky-head {
+    position: sticky;
+    top: 0;
+    background-color: hsl(var(--card));
+  }
+
   /* Barra de rolagem minimalista das colunas do Kanban.
      Fina, arredondada, usa os tokens do sistema (muted/border) e some quando
      nao ha overflow. Aparece com leve destaque ao passar o mouse na coluna. */
@@ -286,11 +301,31 @@
     scrollbar-width: thin;                         /* Firefox */
     scrollbar-color: hsl(var(--border)) transparent;
   }
+  /* ATENCAO antes de mexer no bloco ::-webkit- abaixo: ele NAO vale mais no
+     Chrome. Desde que o navegador passou a suportar `scrollbar-width`, a
+     presenca da propriedade padrao (duas linhas acima) faz ele IGNORAR todas
+     as pseudo-classes ::-webkit-scrollbar. Medido no Chrome 155 em 26/10/2026:
+     com a classe a barra sai com 10px (o "thin" do padrao), nao com os 6px que
+     a regra pede; sem a classe, 15px.
+
+     Ou seja: quem afina e tinge a barra e o par scrollbar-width/scrollbar-color
+     acima. O que vem abaixo e so o caminho para motores que ainda nao
+     implementaram o padrao (Safari antigo) -- fica, mas nao e por ele que a
+     barra do Chrome muda, e ajustar os 6px aqui nao produz efeito nenhum.
+
+     Consequencia pratica conhecida: no Windows a barra horizontal fina do
+     Chrome desenha duas setinhas nas pontas, e NAO ha CSS que as tire enquanto
+     o padrao estiver no comando. */
   .kanban-scroll::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
   .kanban-scroll::-webkit-scrollbar-track {
     background: transparent;
+  }
+  /* So para os motores legados descritos acima; no Chrome e inerte. */
+  .kanban-scroll::-webkit-scrollbar-button {
+    display: none;
   }
   .kanban-scroll::-webkit-scrollbar-thumb {
     background-color: hsl(var(--border));

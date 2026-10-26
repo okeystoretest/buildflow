@@ -67,12 +67,17 @@ export async function getSession(): Promise<SessionPayload | null> {
       // do momento do login. Sem esta releitura, um rebaixamento de perfil
       // (GESTAO -> VENDAS) só valeria no próximo login. É o mesmo round-trip
       // que já era feito para a revogação — apenas um campo a mais no select.
-      select: { tokenVersion: true, active: true, role: true },
+      //
+      // `name` entra pelo mesmo raciocínio, e porque ele é COPIADO para
+      // registros de histórico (ver SelectContractStepEvent.actorName): o nome
+      // do JWT é o do login, e um registro permanente não deve nascer com um
+      // nome de até sete dias atrás.
+      select: { tokenVersion: true, active: true, role: true, name: true },
     });
     if (!user || !user.active) return null;
     if ((session.tokenVersion ?? 0) !== user.tokenVersion) return null;
 
-    return { ...session, role: user.role };
+    return { ...session, role: user.role, name: user.name };
   } catch {
     return null;
   }

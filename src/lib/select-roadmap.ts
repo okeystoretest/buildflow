@@ -97,3 +97,24 @@ export function roadmapProgress(steps: RoadmapStepState[]): RoadmapProgress {
   const done = steps.filter((s) => s.done).length;
   return { done, total, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
 }
+
+/**
+ * Quem pode mexer na régua deste contrato.
+ *
+ * FINANCEIRO e GESTAO mexem em qualquer um — é a tela de trabalho deles.
+ * VENDAS mexe só onde ela é a responsável: quem entrega o benefício é quem
+ * vendeu, e o escopo é o mesmo que `/vendas` já aplica aos pedidos ("VENDAS vê
+ * apenas os próprios"). Decisão do dono em 26/10/2026.
+ *
+ * Mora aqui, e não só dentro da action, pelo motivo que abre este arquivo:
+ * regra sem Prisma é regra que o check exercita sem banco. A action continua
+ * sendo quem a aplica — esta função não autoriza nada sozinha.
+ */
+export function canEditRoadmap(
+  actor: { role: string; userId: string },
+  contract: { responsibleId: string },
+): boolean {
+  if (actor.role === "FINANCEIRO" || actor.role === "GESTAO") return true;
+  if (actor.role === "VENDAS") return contract.responsibleId === actor.userId;
+  return false;
+}

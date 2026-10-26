@@ -1203,8 +1203,36 @@ model SelectContractStep {
 
   createdAt DateTime @default(now())
 
+  events SelectContractStepEvent[]
+
   @@unique([contractId, sortOrder])
   @@index([contractId, sortOrder])
+}
+
+// HISTORICO DE INTERACAO DA ETAPA — quem marcou, quem desmarcou, e quando.
+//
+// Existe porque `SelectContractStep.doneAt/doneById` guardam o ESTADO ATUAL:
+// desmarcar os zera e apaga quem tinha marcado. "Historico nao se reescreve"
+// (principio 2) exige um registro proprio, so de insercao — nada aqui e
+// atualizado ou apagado depois de gravado.
+model SelectContractStepEvent {
+  id     String             @id @default(cuid())
+  step   SelectContractStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  stepId String
+
+  // O que o clique fez: true marcou como concluida, false desfez.
+  done Boolean
+
+  // Autor SEM FK, como o resto da auditoria do Select. `actorName` e COPIA do
+  // nome no momento do clique, pelo mesmo motivo de `planNameSnapshot`: o
+  // historico tem de continuar legivel depois que o usuario sai da empresa, e
+  // sem join nenhum para renderizar.
+  actorId   String
+  actorName String
+
+  createdAt DateTime @default(now())
+
+  @@index([stepId, createdAt])
 }
 
 // Parcela mensal. Geradas na adesao, uma por mes de validade — EXCETO as de

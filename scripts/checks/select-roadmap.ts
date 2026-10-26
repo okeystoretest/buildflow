@@ -14,6 +14,7 @@ import {
   buildRoadmapSteps,
   canCompleteStep,
   canUndoStep,
+  canEditRoadmap,
   roadmapProgress,
 } from "../../src/lib/select-roadmap";
 
@@ -74,6 +75,20 @@ check("etapa inexistente não desfaz", canUndoStep(duasFeitas, 99), false);
 check("progresso conta as concluídas", roadmapProgress(duasFeitas), { done: 2, total: 3, percent: 67 });
 check("régua vazia é 0%, não divisão por zero", roadmapProgress([]), { done: 0, total: 0, percent: 0 });
 check("tudo concluído é 100%", roadmapProgress([{ sortOrder: 1, done: true }]), { done: 1, total: 1, percent: 100 });
+
+// --- quem pode mexer na regua -----------------------------------------------
+// O escopo da vendedora e a unica guarda que depende de QUEM clicou, e nao do
+// estado da regua. Errar para o lado permissivo deixa uma vendedora registrar
+// entrega no contrato de outra.
+const contrato = { responsibleId: "u-ana" };
+check("financeiro mexe em qualquer contrato", canEditRoadmap({ role: "FINANCEIRO", userId: "u-fin" }, contrato), true);
+check("gestao mexe em qualquer contrato", canEditRoadmap({ role: "GESTAO", userId: "u-ges" }, contrato), true);
+check("a vendedora responsavel mexe", canEditRoadmap({ role: "VENDAS", userId: "u-ana" }, contrato), true);
+check("outra vendedora NAO mexe", canEditRoadmap({ role: "VENDAS", userId: "u-bia" }, contrato), false);
+// Papel que nem chega na action hoje: a funcao nega por padrao, e nao por
+// ausencia de caso.
+check("papel sem relacao com o Select nao mexe", canEditRoadmap({ role: "LOGISTICA", userId: "u-log" }, contrato), false);
+check("papel desconhecido nao mexe", canEditRoadmap({ role: "", userId: "u-ana" }, contrato), false);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, Users, ListTodo, History, Plus, BarChart3, MapPin, ClipboardCheck } from "lucide-react";
+import { AlertTriangle, Users, ListTodo, History, Plus, BarChart3, MapPin, ClipboardCheck, Star } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -100,6 +100,12 @@ export default async function VendasPage(
           {session.role === "GESTAO" && <CopiarLinkGeral />}
           {podeAnalisar && (
             <Button asChild variant="outline"><Link href="/vendas/analise-clientes"><ClipboardCheck className="h-4 w-4" /> Análise de Clientes</Link></Button>
+          )}
+          {/* "Meus Selects": só VENDAS. Gestão e Financeiro têm a tela cheia em
+              /financeiro/select — esta é a versão da vendedora, com o roadmap
+              de entrega e o acompanhamento de compras e nada de financeiro. */}
+          {session.role === "VENDAS" && (
+            <Button asChild variant="outline"><Link href="/vendas/select"><Star className="h-4 w-4" /> Meus Selects</Link></Button>
           )}
           <Button asChild variant="outline"><Link href="/vendas/clientes"><Users className="h-4 w-4" /> Cadastrar Cliente</Link></Button>
           <Button asChild variant="outline"><Link href="/vendas/excursoes"><MapPin className="h-4 w-4" /> Cadastrar Excursão</Link></Button>
