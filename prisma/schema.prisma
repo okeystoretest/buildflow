@@ -1143,8 +1143,14 @@ model SelectContract {
   // NAO e a soma das parcelas geradas (ver SelectInstallment).
   totalAmount        Decimal @db.Decimal(10, 2)
   minMonthlyPurchase Decimal @db.Decimal(10, 2)
-  // Nome do plano no momento da adesao: renomear o plano nao reescreve o
-  // historico de quem ja comprou.
+  // Nome do plano COPIADO na adesao — mas renomear o plano ATUALIZA esta
+  // coluna em todos os contratos dele (updateSelectPlan, decisao do dono em
+  // 27/10/2026, revertendo a regra de 19/10). Corrigir o nome e dizer melhor a
+  // mesma coisa, e o contrato antigo com o nome velho lia como defeito.
+  //
+  // A coluna continua existindo porque protege do que importa: o plano ter
+  // VALORES e BENEFICIOS trocados por baixo de quem ja comprou. Mensalidade,
+  // minimo e validade seguem congelados na adesao; so o nome acompanha.
   planNameSnapshot   String
 
   // Marca da contratacao, escolhida na adesao. E ela que leva a venda para a
@@ -1164,7 +1170,9 @@ model SelectContract {
   // um usuario nao pode apagar (nem travar) o registro de um contrato.
   createdAt   DateTime @default(now())
   createdById String
-  // So se move em cancelamento e encerramento: contrato nao se sobrescreve.
+  // Move em cancelamento, encerramento e na renomeacao do plano — esta ultima
+  // e um updateMany em massa, entao ela mexe no `updatedAt` SEM mexer no
+  // `updatedById`: nao foi o Financeiro que alterou aquele contrato.
   updatedAt   DateTime @updatedAt
   updatedById String?
 

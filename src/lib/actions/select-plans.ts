@@ -157,7 +157,7 @@ export async function updateSelectPlan(
     await prisma.$transaction(async (tx) => {
       const atual = await tx.selectPlan.findUnique({
         where: { id: input.id },
-        select: { id: true },
+        select: { id: true, name: true },
       });
       if (!atual) throw new Error("Plano não encontrado.");
 
@@ -175,6 +175,27 @@ export async function updateSelectPlan(
               : new Prisma.Decimal(resolvido.plan.minMonthlyPurchase),
         },
       });
+
+      // RENOMEAR O PLANO RENOMEIA OS CONTRATOS DELE. Decisão do dono em
+      // 27/10/2026, na mesma transação do plano: ou os dois nomes mudam, ou
+      // nenhum.
+      //
+      // `planNameSnapshot` CONTINUA existindo, e isto não é contradição: ele
+      // protege contra o plano ser REESCRITO (valores e benefícios trocados
+      // por baixo de quem já comprou), não contra a correção do próprio nome.
+      // Renomear "Estrela" para "Estrela Prata" é dizer melhor a mesma coisa,
+      // e deixar o contrato antigo com o nome velho lia como defeito.
+      //
+      // O limite, que vale escrever: se um dia um plano for REAPROVEITADO
+      // (mesmo registro passando a significar outro produto), este update leva
+      // junto o contrato de quem comprou o produto anterior. Nesse dia a saída
+      // é plano novo, não renomear o antigo.
+      if (atual.name !== resolvido.plan.name) {
+        await tx.selectContract.updateMany({
+          where: { planId: input.id },
+          data: { planNameSnapshot: resolvido.plan.name },
+        });
+      }
 
       // Benefícios são substituídos por inteiro, e não casados um a um: a
       // tela manda a lista final, com a ordem já resolvida por quem arrastou
