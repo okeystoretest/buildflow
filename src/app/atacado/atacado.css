@@ -131,8 +131,84 @@
 /* Armadilha 2: o body pertence ao globals.css, e o overscroll do iOS mostra o
    que está atrás do wrapper. :has() é seguro aqui porque este arquivo só
    carrega nesta rota. */
+/* ---------------------------------------------------------------------------
+   1b. LOV CLUB — a irmã mais nova
+   A marca é feminina, jovem e moderna, e a direção do dono em 26/10/2026 foi
+   "use a estrutura da OKEY, mas não muito". Então a ESTRUTURA é a mesma (mesmas
+   seções, mesmo requerimento, mesmas classes) e o que muda é tudo que dá voz:
+   cor, tipo e raio.
+
+   Vive aqui, e não num arquivo próprio, pelo motivo que abre este CSS: o que
+   preserva a isolação é usar os MESMOS NOMES de token com valores diferentes.
+   Um segundo mundo em arquivo separado divergiria da OKEY na primeira correção
+   de estrutura.
+
+   O seletor fica num wrapper DENTRO do `[data-world="atacado"]`, posto pela
+   página (o layout está acima de `[marca]` e não conhece a marca). Declaração
+   de filho vence a do ancestral para ele e seus descendentes, então nem
+   especificidade nem ordem entram na conta.
+
+   O ROSA É CAMPO, NUNCA TEXTO. #f8b4c4 dá 1,5:1 sobre branco: como cor de
+   letra ele reprova em todo critério. Entra como superfície inundada com tinta
+   escura por cima (`--accent-foreground`), e o texto que precisa ser rosa usa
+   `--accent-text`, escurecido até passar AA. É a mesma regra do bronze da
+   OKEY, que já nasceu com essa separação. */
+[data-brand="lov-club"] {
+  /* Blush, não osso. Continua fora do branco puro, como o resto do sistema. */
+  --background: 350 43% 98%; /* #fdf8f9 */
+  --foreground: 340 11% 12%; /* #231c1f tinta com fundo de ameixa */
+  --card: 0 0% 100%;
+  --card-foreground: 340 11% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 340 11% 12%;
+
+  /* Aqui a ação primária É a cor da marca, ao contrário da OKEY, onde ela é
+     tinta. É a divergência deliberada entre as irmãs: a mais nova assina o
+     botão com a própria cor. Rosa profundo para o branco por cima passar. */
+  --primary: 344 54% 32%; /* #7E2540 */
+  --primary-foreground: 350 43% 98%;
+
+  --secondary: 348 50% 95%; /* #FBEEF1 superfície alternada */
+  --secondary-foreground: 340 12% 26%;
+  --muted: 348 50% 95%;
+  --muted-foreground: 340 10% 32%; /* #5A4D52 */
+
+  /* O rosa da marca, como campo. */
+  --accent: 346 83% 84%; /* #f8b4c4 */
+  --accent-foreground: 340 25% 12%; /* tinta sobre o rosa */
+
+  /* Rosa de TEXTO: medido sobre a superfície ALTERNADA, que é a mais escura
+     em que ele aparece — mesmo teto que o bronze da OKEY respeita. */
+  --accent-text: 344 54% 36%; /* #8E2A49 */
+
+  --destructive: 0 75% 42%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 345 28% 89%; /* #EBD9DE */
+  --input: 345 28% 89%;
+  --ring: 344 54% 32%;
+
+  /* 0.25rem na OKEY. O canto arredondado é o que mais rapidamente separa
+     "alfaiataria" de "jovem" sem trocar uma linha de estrutura. */
+  --radius: 0.875rem;
+
+  /* O display deixa de ser a didone e passa a ser a mesma geométrica do corpo,
+     em peso alto: é a troca de voz mais barata que existe aqui (zero asset
+     novo — só estas duas famílias estão auto-hospedadas) e a que mais afasta
+     do editorial da irmã mais velha. */
+  --font-display: "Manrope LP", ui-sans-serif, system-ui, sans-serif;
+
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
 body:has([data-world="atacado"]) {
   background-color: hsl(36 38% 97%);
+}
+/* O overscroll do iOS revela o <body>, não o wrapper: sem esta, puxar a
+   página na Lov Club mostra o osso da OKEY por baixo do blush. */
+body:has([data-brand="lov-club"]) {
+  background-color: hsl(350 43% 98%);
 }
 
 /* ---------------------------------------------------------------------------
@@ -418,7 +494,10 @@ body:has([data-world="atacado"]) {
   position: relative;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
-  background-color: hsl(37 32% 92%);
+  /* Token, e nao o literal que estava aqui: o valor e o MESMO da OKEY
+     (--secondary e 37 32% 92%), entao ela nao muda, e a irma mais nova para de
+     herdar o bege no espaco reservado. */
+  background-color: hsl(var(--secondary));
   display: grid;
   place-items: center;
 }
@@ -446,6 +525,7 @@ body:has([data-world="atacado"]) {
   right: 1rem;
   text-align: center;
 }
+
 
 /* A "ficha sobreposta" da referência (a tarja "Atelier Fortaleza") foi RETIRADA
    daqui: nenhum TSX emitia `.ficha-imagem`, então eram sete declarações
@@ -841,4 +921,44 @@ body:has([data-world="atacado"]) {
     transform: none;
     opacity: 1;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   9. LOV CLUB — o que não cabe em token
+   Os valores da marca estão no bloco 1b. O que sobra aqui são as poucas regras
+   em que a OKEY declara um valor LITERAL, e por isso nenhum token alcança.
+
+   TUDO DA MARCA MORA NO FIM DO ARQUIVO, de propósito. Os seletores daqui valem
+   (0,2,0), igual aos do mundo, e com empate de especificidade quem decide é a
+   ORDEM. Espalhar estas regras ao lado das equivalentes da OKEY significa
+   conferir a posição de cada uma — e foi exatamente o que falhou na primeira
+   tentativa, com o bege vencendo o rosa.
+   --------------------------------------------------------------------------- */
+
+/* O ROSA COMO CAMPO, e é aqui que ele aparece de verdade. Enquanto as
+   fotografias da Lov Club não existem, o lugar reservado é a maior área
+   contínua da página — no primeiro viewport, inclusive. Inundá-lo com a cor da
+   marca é o que faz #f8b4c4 ser visto, em vez de sobrar num filete de 1px, e
+   não custa estrutura nenhuma. Quando a foto entrar, ela cobre o campo e a cor
+   recua para os detalhes, como deve ser. */
+[data-brand="lov-club"] .lugar-imagem {
+  background-color: hsl(var(--accent));
+  border-color: hsl(var(--accent));
+  border-radius: var(--radius);
+}
+
+/* Sobre o rosa, a inicial é tinta esmaecida, e não um segundo rosa: dois rosas
+   vizinhos somem um no outro. */
+[data-brand="lov-club"] .lugar-imagem .monograma {
+  color: hsl(344 40% 38% / 0.5);
+}
+
+/* O canto arredondado é o que mais depressa separa "alfaiataria" de "jovem"
+   sem trocar uma linha de estrutura. Vale nos BOTÕES e no campo de imagem, e
+   NÃO nos campos do formulário: ali a OKEY não desenha caixa nenhuma — são
+   réguas (só `border-bottom`), e arredondar uma régua não quer dizer nada. */
+[data-brand="lov-club"] .acao,
+[data-brand="lov-club"] .acao-vazia,
+[data-brand="lov-club"] input[type="file"]::file-selector-button {
+  border-radius: var(--radius);
 }

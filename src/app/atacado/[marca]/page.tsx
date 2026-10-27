@@ -71,7 +71,12 @@ export default async function MarcaPage(
   // seguindo a referência do dono: responder a objeção antes de pedir 18 campos
   // converte melhor que pedir primeiro e explicar depois. É divergência da
   // ordem original da spec, registrada para emenda.
+  // `data-brand`: o gancho da identidade por marca. Vai AQUI e não no layout
+  // porque o layout está acima de `[marca]` e não recebe o parâmetro. O slug
+  // já passou por `getBrandContent`, então só "okey" ou "lov-club" chegam —
+  // slug inválido virou 404 lá em cima.
   return (
+    <div data-brand={params.marca}>
     <ModoEdicaoProvider podeEditar={podeEditar} marcaSlug={params.marca}>
       <Cabecalho brandName={nome} />
       <main>
@@ -110,5 +115,6 @@ export default async function MarcaPage(
         contato={marca.content.contato}
       />
     </ModoEdicaoProvider>
+    </div>
   );
 }
