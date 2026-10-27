@@ -148,9 +148,30 @@ function digestDaCopy(c: {
     .digest("hex");
 }
 check("digest da copy OKEY", digestDaCopy(WHOLESALE_CONTENT.OKEY), DIGEST_ESPERADO);
-// O conteúdo é compartilhado entre as marcas: a planilha diz "(marca)" e
-// "nossa marca", nunca OKEY. Só o nome exibido difere.
-check("digest da copy Lov Club igual ao da OKEY", digestDaCopy(WHOLESALE_CONTENT.LOV_CLUB), DIGEST_ESPERADO);
+
+// A Lov Club tinha o MESMO digest da OKEY ate 27/10/2026, porque a planilha
+// diz "(marca)" e "nossa marca", nunca OKEY — so o nome exibido diferia.
+// Deixou de ter quando o dono informou que a Lov e outra PESSOA JURIDICA:
+// controlador, CNPJ e telefone proprios. O selo nao foi afrouxado por isso, foi
+// duplicado — sao os dois campos em que "parece certo" nao basta, e agora cada
+// marca responde pelo seu.
+// Mudou no mesmo dia, quando o dono confirmou o nono digito do WhatsApp da Lov
+// e o `wa.me` dela deixou de ser null — a mesma sequencia que a OKEY percorreu
+// em 16/10. O digest anterior (bf6fa8cf...4c3a) era o do numero sem link.
+const DIGEST_ESPERADO_LOV = "7bf2debc1ff6aefc9ba3ca8c06dbedc02a80481e5f3ae7970913a4ac0bac368a";
+check("digest da copy Lov Club", digestDaCopy(WHOLESALE_CONTENT.LOV_CLUB), DIGEST_ESPERADO_LOV);
+
+// O que divergiu foi SO o bloco juridico. As afirmacoes comerciais continuam
+// sendo o mesmo objeto nas duas marcas, e esta checagem existe para que uma
+// delas nao seja reescrita so de um lado sem ninguem ver — o digest por marca,
+// sozinho, aceitaria isso calado.
+const comercial = (c: typeof WHOLESALE_CONTENT.OKEY) =>
+  JSON.stringify([c.reasons, c.advantages, c.faq, c.metrics, c.highlights]);
+check(
+  "as afirmacoes comerciais seguem iguais nas duas marcas",
+  comercial(WHOLESALE_CONTENT.LOV_CLUB),
+  comercial(WHOLESALE_CONTENT.OKEY),
+);
 
 // --- as afirmacoes que estavam soltas no TSX --------------------------------
 check("sao quatro metricas", okey.metrics.length, 4);

@@ -240,6 +240,46 @@ const CONTATO = {
   email: "okeytecnologia@gmail.com",
 } as const;
 
+/**
+ * A Lov Club é outra PESSOA JURÍDICA, não outra marca da mesma: controlador e
+ * CNPJ próprios, informados pelo dono em 27/10/2026. Por isso estes dois
+ * blocos existem à parte, e não como um campo a mais no compartilhado — o
+ * aviso de privacidade do rodapé nomeia quem responde pelos dados, e nomear a
+ * empresa errada ali não é detalhe de copy.
+ */
+const PRIVACIDADE_LOV = {
+  controlador: "Trajano Confecções LTDA",
+  cnpj: "16.838.144/0001-51",
+  // O MESMO e-mail da OKEY, confirmado pelo dono em 27/10/2026 — não é sobra
+  // do bloco compartilhado. É o canal do Art. 18 da LGPD (acesso, correção,
+  // exclusão), e as duas empresas atendem por ele.
+  email: "okeytecnologia@gmail.com",
+  retencaoDias: 90,
+} as const;
+
+/**
+ * O NÚMERO VEIO DO DONO, duas vezes — e a segunda é o que torna o link
+ * possível. Ele informou "+55 85 8169-6371", oito dígitos, e celular
+ * brasileiro tem nove: o link ficou NULL, porque escolher o nono dígito manda
+ * a lojista para o WhatsApp de um estranho. Em 27/10/2026 ele confirmou o
+ * nono — um 9 logo depois do 85 —, e é só de lá que sai o `wa.me`.
+ *
+ * É a mesma sequência que a OKEY percorreu em 16/10: número publicado com oito
+ * dígitos, link null, dono confirma, link nasce. Fica registrado porque o
+ * caminho curto (deduzir o dígito) parece sempre inofensivo e nunca é.
+ *
+ * `whatsappLink` é o número em dígitos puros com código do país, a forma que o
+ * wa.me exige; `whatsapp` é a forma que a lojista lê. O check confere os 13
+ * dígitos de um celular brasileiro (55 + DDD + 9) — ou null, e nada no meio.
+ *
+ * O e-mail é o mesmo da OKEY, confirmado pelo dono na mesma data.
+ */
+const CONTATO_LOV = {
+  whatsapp: "(85) 98169-6371",
+  whatsappLink: "https://wa.me/5585981696371" as string | null,
+  email: "okeytecnologia@gmail.com",
+} as const;
+
 const META_DESCRIPTION =
   "Revenda {marca} na sua loja: margem de até 100% conforme a linha e o volume, " +
   "tecidos da Linha Italiana Premium e exclusividade territorial avaliada por região.";
@@ -278,8 +318,10 @@ export const WHOLESALE_CONTENT: Record<"OKEY" | "LOV_CLUB", BrandContent> = {
     faq: FAQ.map((g) => ({ group: g.group, items: [...g.items] })),
     metrics: [...METRICS],
     highlights: [...HIGHLIGHTS],
-    privacidade: { ...PRIVACIDADE },
-    contato: { ...CONTATO },
+    // Controlador, CNPJ e telefone SÃO da Lov, não os da OKEY: outra pessoa
+    // jurídica (ver PRIVACIDADE_LOV e CONTATO_LOV).
+    privacidade: { ...PRIVACIDADE_LOV },
+    contato: { ...CONTATO_LOV },
     metaDescription: META_DESCRIPTION.replace("{marca}", "Lov Club"),
   },
 };
