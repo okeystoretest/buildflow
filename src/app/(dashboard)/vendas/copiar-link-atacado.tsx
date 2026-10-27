@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Check, Cherry } from "lucide-react";
+import { Check, Cherry, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ensureMyReferralLink, linkGeralDoAtacado } from "@/lib/actions/wholesale-referral";
+import type { ActionResult } from "@/types/action";
 
 /**
  * Botões de link de indicação da vendedora de Atacado — um por marca.
@@ -27,43 +28,94 @@ import { ensureMyReferralLink, linkGeralDoAtacado } from "@/lib/actions/wholesal
 /**
  * As marcas na ordem em que aparecem na tela, com o rótulo e o ícone de cada.
  *
- * A LOV_CLUB saiu daqui em 17/10/2026, a pedido do dono: a LP dela diverge do
- * estilo visual da OKEY e vai ser redesenhada. Tirar o BOTÃO e não a ROTA é o
- * que distingue esta decisão de desativar a página — `/atacado/lov-club`
- * continua respondendo 200, então o link que alguma vendedora já mandou para o
- * WhatsApp de uma lojista continua funcionando e a candidatura dela ainda
- * entra. O que para é a criação de links NOVOS.
+ * A LOV_CLUB saiu daqui em 17/10/2026 porque a LP dela ainda vestia o estilo da
+ * OKEY e ia ser redesenhada. VOLTOU em 27/10/2026, com o redesenho feito: a
+ * página tem identidade própria (ver `[data-brand="lov-club"]` no atacado.css)
+ * e o botão ganhou a cor da marca.
  *
- * Para trazer de volta depois do redesenho: reimportar `Heart` do lucide-react
- * e devolver a linha
- *   { brand: "LOV_CLUB", rotulo: "Lov - Form", Icone: Heart },
- * Nada mais precisa mudar — `ensureMyReferralLink` sempre aceitou as duas
- * marcas, e a action não foi tocada.
+ * Nada além desta lista precisou mudar: `ensureMyReferralLink` sempre aceitou
+ * as duas marcas, e a action nunca foi tocada — tirar o BOTÃO e não a ROTA foi
+ * o que manteve, durante a pausa, o link já enviado a alguma lojista
+ * funcionando.
  */
 const MARCAS = [
   { brand: "OKEY", rotulo: "OKEY - Form", Icone: Cherry, variante: "okey" },
+  { brand: "LOV_CLUB", rotulo: "Lov - Form", Icone: Heart, variante: "lov" },
 ] as const;
 
 export function CopiarLinkAtacado() {
   return (
     <>
       {MARCAS.map((m) => (
-        <BotaoDaMarca key={m.brand} brand={m.brand} rotulo={m.rotulo} Icone={m.Icone} variante={m.variante} />
+        <BotaoDaMarca
+          key={m.brand}
+          rotulo={m.rotulo}
+          Icone={m.Icone}
+          variante={m.variante}
+          aria={`Copiar link de indicação da ${m.rotulo}`}
+          obterLink={() => ensureMyReferralLink(m.brand)}
+        />
       ))}
     </>
   );
 }
 
+/**
+ * Os links GERAIS, para a Gestão — um por marca.
+ *
+ * É a mesma página, SEM código de indicação: quem chega por aqui não tem
+ * vendedora de origem e entra no rodízio — a candidatura ganha dona sozinha e
+ * passa adiante a cada dia sem avaliação (ver `src/lib/wholesale-rodizio.ts`).
+ *
+ * A Gestão NÃO aparece nos botões por vendedora: ela usa a ferramenta
+ * (decisões 15 e 16) mas não é destino de indicação, porque uma candidatura
+ * precisa de uma vendedora como dona. Era por isso que, antes de 27/10/2026,
+ * não existia caminho nenhum para a Gestão compartilhar a LP da Lov Club: o
+ * botão por marca não é dela, e o link geral estava fixo em OKEY.
+ *
+ * Por que uma action própria e não montar a URL no navegador: a base vem de
+ * `APP_BASE_URL`, variável de SERVIDOR lida em tempo de execução. Montar aqui
+ * exigiria um `NEXT_PUBLIC_`, que o Next embute no BUILD — e este projeto
+ * compila dentro da imagem Docker, então um valor definido só no runtime do
+ * EasyPanel nunca chegaria. Mesma decisão 35 do link por vendedora.
+ */
+export function CopiarLinkGeral() {
+  return (
+    <>
+      {MARCAS.map((m) => (
+        <BotaoDaMarca
+          key={m.brand}
+          rotulo={m.rotulo}
+          Icone={m.Icone}
+          variante={m.variante}
+          aria={`Copiar o link geral do formulário da ${m.rotulo}, que distribui as candidaturas entre as vendedoras`}
+          obterLink={() => linkGeralDoAtacado(m.brand)}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
+ * Um botão de copiar link. A MARCA não entra aqui: o que muda entre os quatro
+ * botões da tela é de onde o link vem, e isso chega como `obterLink`.
+ *
+ * Antes havia duas cópias desta lógica — uma por vendedora, outra para a
+ * Gestão — e a segunda ficou para trás quando a primeira ganhou a Lov. Uma
+ * cópia só é o que impede a próxima marca de nascer pela metade de novo.
+ */
 function BotaoDaMarca({
-  brand,
   rotulo,
   Icone,
   variante,
+  aria,
+  obterLink,
 }: {
-  brand: (typeof MARCAS)[number]["brand"];
   rotulo: string;
   Icone: typeof Cherry;
-  variante: "okey";
+  variante: (typeof MARCAS)[number]["variante"];
+  aria: string;
+  obterLink: () => Promise<ActionResult<{ link: string }>>;
 }) {
   const [pending, startTransition] = useTransition();
   const [copiado, setCopiado] = useState(false);
@@ -81,7 +133,7 @@ function BotaoDaMarca({
       // transferência" seria um diagnóstico errado apontando para o lugar errado.
       let link: string;
       try {
-        const res = await ensureMyReferralLink(brand);
+        const res = await obterLink();
         if (!res.ok) {
           setErro(res.error);
           return;
@@ -115,83 +167,10 @@ function BotaoDaMarca({
         variant={variante}
         onClick={copiar}
         disabled={pending}
-        aria-label={`Copiar link de indicação da ${rotulo}`}
+        aria-label={aria}
       >
         {copiado ? <Check className="h-4 w-4" /> : <Icone className="h-4 w-4" />}
         {copiado ? "Link copiado" : rotulo}
-      </Button>
-      {erro && (
-        <span role="alert" className="self-center text-sm text-destructive">
-          {erro}
-        </span>
-      )}
-    </>
-  );
-}
-
-/**
- * O link GERAL, para a Gestão.
- *
- * É a MESMA página da OKEY, sem o código de indicação: quem chega por aqui não
- * tem vendedora de origem e entra no rodízio — a candidatura ganha dona sozinha
- * e passa adiante a cada dia sem avaliação (ver `src/lib/wholesale-rodizio.ts`).
- *
- * Por que uma action própria e não montar a URL no navegador: a base vem de
- * `APP_BASE_URL`, que é variável de SERVIDOR lida em tempo de execução. Montar
- * aqui exigiria um `NEXT_PUBLIC_`, que o Next embute no BUILD — e este projeto
- * compila dentro da imagem Docker, então um valor definido só no runtime do
- * EasyPanel nunca chegaria. É a mesma decisão 35 que vale para o link por
- * vendedora.
- *
- * Não há botão de marca aqui: a Lov saiu e, quando voltar, volta com a dela.
- */
-export function CopiarLinkGeral() {
-  const [pending, startTransition] = useTransition();
-  const [copiado, setCopiado] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-  function copiar() {
-    setErro(null);
-    startTransition(async () => {
-      let link: string;
-      try {
-        const res = await linkGeralDoAtacado();
-        if (!res.ok) {
-          setErro(res.error);
-          return;
-        }
-        link = res.data.link;
-      } catch {
-        setErro("Não foi possível obter o link agora. Recarregue a página e tente novamente.");
-        return;
-      }
-      try {
-        await navigator.clipboard.writeText(link);
-      } catch {
-        setCopiado(false);
-        setErro("Não foi possível copiar o link. Verifique a permissão da área de transferência.");
-        return;
-      }
-      setCopiado(true);
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopiado(false), 2000);
-    });
-  }
-
-  return (
-    <>
-      <Button
-        type="button"
-        variant="okey"
-        onClick={copiar}
-        disabled={pending}
-        aria-label="Copiar o link geral do formulário da OKEY, que distribui as candidaturas entre as vendedoras"
-      >
-        {copiado ? <Check className="h-4 w-4" /> : <Cherry className="h-4 w-4" />}
-        {copiado ? "Link copiado" : "OKEY - Form (geral)"}
       </Button>
       {erro && (
         <span role="alert" className="self-center text-sm text-destructive">

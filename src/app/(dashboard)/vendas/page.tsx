@@ -89,7 +89,12 @@ export default async function VendasPage(
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-vendas-text">Comercial</h1>
-        <div className="flex gap-2">
+        {/* `flex-wrap`: sao dez botoes, e sem ele a fileira saia pela direita da
+            tela — o ultimo ("Novo pedido") ficava cortado. O pai ja envolvia,
+            mas envolvia o GRUPO inteiro; quem precisava quebrar eram os botoes
+            dentro dele. Alinhados a direita para as linhas quebradas ficarem
+            sob o grupo, e nao soltas no meio. */}
+        <div className="flex flex-wrap justify-end gap-2">
           {/* Captação de revendedor: só a equipe de Atacado (decisão 15). São
               DOIS botões, um por marca (OKEY e Lov), que somem para VAREJO; a
               action confere o papel de novo no servidor. */}

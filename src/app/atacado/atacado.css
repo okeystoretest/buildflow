@@ -154,8 +154,17 @@
    `--accent-text`, escurecido até passar AA. É a mesma regra do bronze da
    OKEY, que já nasceu com essa separação. */
 [data-brand="lov-club"] {
-  /* Blush, não osso. Continua fora do branco puro, como o resto do sistema. */
-  --background: 350 43% 98%; /* #fdf8f9 */
+  /* A RAMPA DA MARCA, dada pelo dono em 27/10/2026. Cinco tons de um mesmo
+     rosa (H≈348, S 100%), do mais forte ao mais claro:
+       #ffb7c5  86%   campo
+       #ffc8d4  89%   campo secundário
+       #ffd8e0  92%   filete
+       #ffe8ec  95%   superfície alternada
+       #fff5f7  98%   fundo
+     São TODOS tintas claras — não há um escuro na rampa. Então ela cobre
+     superfície, e a tinta do texto continua vindo de fora dela: rosa claro
+     como letra reprova em qualquer critério. */
+  --background: 348 100% 98%; /* #fff5f7 */
   --foreground: 340 11% 12%; /* #231c1f tinta com fundo de ameixa */
   --card: 0 0% 100%;
   --card-foreground: 340 11% 12%;
@@ -164,29 +173,31 @@
 
   /* Aqui a ação primária É a cor da marca, ao contrário da OKEY, onde ela é
      tinta. É a divergência deliberada entre as irmãs: a mais nova assina o
-     botão com a própria cor. Rosa profundo para o branco por cima passar. */
-  --primary: 344 54% 32%; /* #7E2540 */
-  --primary-foreground: 350 43% 98%;
+     botão com a própria cor. O rosa PROFUNDO não sai da rampa (ela não tem
+     escuro): é o mesmo matiz dela levado a uma luminosidade em que o branco
+     por cima passa. */
+  --primary: 348 54% 32%; /* #7E253F */
+  --primary-foreground: 348 100% 98%;
 
-  --secondary: 348 50% 95%; /* #FBEEF1 superfície alternada */
+  --secondary: 350 100% 95.5%; /* #ffe8ec superfície alternada */
   --secondary-foreground: 340 12% 26%;
-  --muted: 348 50% 95%;
+  --muted: 350 100% 95.5%;
   --muted-foreground: 340 10% 32%; /* #5A4D52 */
 
   /* O rosa da marca, como campo. */
-  --accent: 346 83% 84%; /* #f8b4c4 */
+  --accent: 348 100% 86%; /* #ffb7c5 */
   --accent-foreground: 340 25% 12%; /* tinta sobre o rosa */
 
   /* Rosa de TEXTO: medido sobre a superfície ALTERNADA, que é a mais escura
      em que ele aparece — mesmo teto que o bronze da OKEY respeita. */
-  --accent-text: 344 54% 36%; /* #8E2A49 */
+  --accent-text: 348 54% 36%; /* #8E2A48 */
 
   --destructive: 0 75% 42%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 345 28% 89%; /* #EBD9DE */
-  --input: 345 28% 89%;
-  --ring: 344 54% 32%;
+  --border: 348 100% 92%; /* #ffd8e0 */
+  --input: 348 100% 92%;
+  --ring: 348 54% 32%;
 
   /* 0.25rem na OKEY. O canto arredondado é o que mais rapidamente separa
      "alfaiataria" de "jovem" sem trocar uma linha de estrutura. */
@@ -208,7 +219,7 @@ body:has([data-world="atacado"]) {
 /* O overscroll do iOS revela o <body>, não o wrapper: sem esta, puxar a
    página na Lov Club mostra o osso da OKEY por baixo do blush. */
 body:has([data-brand="lov-club"]) {
-  background-color: hsl(350 43% 98%);
+  background-color: hsl(348 100% 98%); /* #fff5f7, o fundo da rampa */
 }
 
 /* ---------------------------------------------------------------------------
@@ -244,14 +255,14 @@ body:has([data-brand="lov-club"]) {
     height: 10px;
   }
   [data-world="atacado"] ::-webkit-scrollbar-track {
-    background: hsl(37 32% 92%);
+    background: hsl(var(--secondary));
   }
   [data-world="atacado"] ::-webkit-scrollbar-thumb {
     background: hsl(37 20% 74%);
-    border: 2px solid hsl(37 32% 92%);
+    border: 2px solid hsl(var(--secondary));
   }
   [data-world="atacado"] ::-webkit-scrollbar-thumb:hover {
-    background: hsl(36 30% 51%);
+    background: hsl(var(--accent));
   }
 }
 
@@ -467,7 +478,10 @@ body:has([data-brand="lov-club"]) {
   position: sticky;
   top: 0;
   z-index: 50;
-  background-color: hsl(36 38% 97% / 0.95);
+  /* Token, e nao o literal que estava aqui: o valor e o MESMO da OKEY
+     (--background e 36 38% 97%), entao ela nao muda, e a Lov Club para de
+     carregar o creme da irma mais velha na barra fixa do topo. */
+  background-color: hsl(var(--background) / 0.95);
   backdrop-filter: saturate(180%) blur(8px);
   border-bottom: 1px solid hsl(var(--border));
 }
@@ -862,7 +876,7 @@ body:has([data-brand="lov-club"]) {
    ------------------------------------------------------------------------ */
 
 [data-world="atacado"] .rodape {
-  background-color: hsl(37 32% 92%);
+  background-color: hsl(var(--secondary));
   border-top: 1px solid hsl(var(--border));
 }
 
@@ -950,7 +964,7 @@ body:has([data-brand="lov-club"]) {
 /* Sobre o rosa, a inicial é tinta esmaecida, e não um segundo rosa: dois rosas
    vizinhos somem um no outro. */
 [data-brand="lov-club"] .lugar-imagem .monograma {
-  color: hsl(344 40% 38% / 0.5);
+  color: hsl(348 40% 38% / 0.5);
 }
 
 /* O canto arredondado é o que mais depressa separa "alfaiataria" de "jovem"
@@ -961,4 +975,48 @@ body:has([data-brand="lov-club"]) {
 [data-brand="lov-club"] .acao-vazia,
 [data-brand="lov-club"] input[type="file"]::file-selector-button {
   border-radius: var(--radius);
+}
+
+/* AS CORES QUE NAO ERAM TOKEN. Estas sete regras do mundo declaram um valor
+   LITERAL da familia osso/taupe/bronze da OKEY, entao nenhum token as alcanca
+   e a Lov Club herdava a cor da irma mais velha em sete lugares. Quatro outras
+   viraram token la em cima, porque o valor delas era exatamente o de um token
+   da OKEY — essas nao exigiram nada aqui.
+
+   Todos os valores abaixo saem da rampa da marca (H 348), menos o hover da
+   acao primaria, que e a propria primaria levada mais fundo. */
+
+/* O texto selecionado: o filete da rampa. */
+[data-brand="lov-club"] ::selection {
+  background-color: hsl(348 100% 92%); /* #ffd8e0 */
+}
+
+/* Placeholder: medido sobre a PLACA BRANCA, que e onde o formulario vive. */
+[data-brand="lov-club"] ::placeholder {
+  color: hsl(345 10% 46%);
+}
+
+/* Barra de rolagem: polegar no tom forte da rampa, trilho ja vem de
+   --secondary pela troca de token. */
+[data-brand="lov-club"] ::-webkit-scrollbar-thumb {
+  background: hsl(348 100% 86%); /* #ffb7c5 */
+}
+
+/* A acao primaria escurece no hover, como na OKEY — mas a partir do rosa
+   profundo da marca, nao do quase-preto dela. */
+[data-brand="lov-club"] .acao:hover {
+  background-color: hsl(348 54% 24%);
+}
+
+[data-brand="lov-club"] .vantagem:hover {
+  background-color: hsl(350 100% 95.5%); /* #ffe8ec */
+}
+
+/* Trilho da barra de progresso do formulario (2px). */
+[data-brand="lov-club"] .trilha {
+  background-color: hsl(348 100% 92%); /* #ffd8e0 */
+}
+
+[data-brand="lov-club"] .opcao:has(input:checked) {
+  background-color: hsl(350 100% 95.5%); /* #ffe8ec */
 }

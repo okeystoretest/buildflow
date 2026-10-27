@@ -70,6 +70,21 @@ const config: Config = {
           DEFAULT: "#f0e6a8", hover: "#e8dc92", fg: "#3a2a00",
         },
 
+        // A irma mais nova. `DEFAULT` e o rosa da marca (#f8b4c4), o mesmo que
+        // a LP usa — e aqui ele e FUNDO, nunca letra, pelo mesmo motivo de la:
+        // como cor de texto da 1,5:1 e reprova em todo criterio.
+        //
+        // `fg` escuro e fixo nos dois temas, como no okey: branco sobre este
+        // rosa da 2,0:1. Com a ameixa escura sao 9,5:1.
+        lov: {
+          // #ffb7c5 e o tom mais forte da rampa da marca (a mesma do
+          // atacado.css): a marca nao pode ter dois rosas. O `hover` e o
+          // seguinte da rampa, #ffc8d4 — mais CLARO que o parado, ao contrario
+          // do okey. Clarear tambem e resposta ao mouse, e escurecer sairia da
+          // rampa que o dono deu.
+          DEFAULT: "#ffb7c5", hover: "#ffc8d4", fg: "#3a1420",
+        },
+
         // ---- Tokens shadcn/ui ----
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

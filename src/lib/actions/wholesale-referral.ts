@@ -55,11 +55,20 @@ function baseValidada(): ActionResult<string> {
  * criar uma duplicaria a copy, as imagens e o digest da trava de conteúdo, e as
  * duas divergiriam na primeira edição.
  */
-export async function linkGeralDoAtacado(): Promise<ActionResult<{ link: string }>> {
+export async function linkGeralDoAtacado(
+  // A marca era FIXA em OKEY, de quando só a LP dela existia. Passou a ser
+  // parâmetro em 27/10/2026: a Gestão não é destino de indicação (decisões 15
+  // e 16) e por isso não aparece nos botões por vendedora — então, sem isto,
+  // não havia nenhum caminho para a Gestão compartilhar a LP da Lov Club.
+  //
+  // O default mantém as chamadas antigas funcionando, mas a tela passa as duas
+  // explicitamente.
+  brand: "OKEY" | "LOV_CLUB" = "OKEY",
+): Promise<ActionResult<{ link: string }>> {
   await requireRoleAction(["GESTAO"]);
   const baseOk = baseValidada();
   if (!baseOk.ok) return baseOk;
-  return actionOk({ link: `${baseOk.data.replace(/\/+$/, "")}/atacado/${brandSlug("OKEY")}` });
+  return actionOk({ link: `${baseOk.data.replace(/\/+$/, "")}/atacado/${brandSlug(brand)}` });
 }
 
 /**

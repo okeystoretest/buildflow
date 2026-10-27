@@ -23,6 +23,7 @@ const buttonVariants = cva(
         // Marca, nao setor. O hover e um tom proprio e nao `/90`: opacidade
         // sobre um creme claro clareia ainda mais e o botao some do fundo.
         okey: "bg-okey text-okey-fg hover:bg-okey-hover shadow-sm",
+        lov: "bg-lov text-lov-fg hover:bg-lov-hover shadow-sm",
       },
       size: {
         default: "h-10 px-4 py-2",

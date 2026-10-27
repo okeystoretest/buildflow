@@ -196,6 +196,7 @@ check("nenhuma classe -popover (a variavel nao esta no tailwind.config)", usaPop
 // a checagem passaria a nao encontrar nada e ninguem saberia.
 const MARCAS_DE_BOTAO = [
   { nome: "okey", re: /okey:\s*\{[^}]*DEFAULT:\s*"(#[0-9a-fA-F]{6})"[^}]*hover:\s*"(#[0-9a-fA-F]{6})"[^}]*fg:\s*"(#[0-9a-fA-F]{6})"/s },
+  { nome: "lov", re: /lov:\s*\{[^}]*DEFAULT:\s*"(#[0-9a-fA-F]{6})"[^}]*hover:\s*"(#[0-9a-fA-F]{6})"[^}]*fg:\s*"(#[0-9a-fA-F]{6})"/s },
 ] as const;
 
 for (const marca of MARCAS_DE_BOTAO) {
