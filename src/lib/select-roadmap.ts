@@ -28,6 +28,12 @@ export const ETAPAS_PREVIAS = ["Serviço apresentado", "Negociação fechada"] a
 export interface RoadmapStepInput {
   sortOrder: number;
   label: string;
+  /**
+   * Nasce concluída. Só as prévias: quando o contrato existe, apresentar o
+   * serviço e fechar a negociação JÁ ACONTECERAM — é o que a adesão prova.
+   * Decisão do dono em 27/10/2026. Benefício nunca nasce entregue.
+   */
+  done: boolean;
 }
 
 /**
@@ -41,6 +47,9 @@ export function buildRoadmapSteps(executableBenefits: string[]): RoadmapStepInpu
   return [...ETAPAS_PREVIAS, ...executableBenefits].map((label, i) => ({
     sortOrder: i + 1,
     label,
+    // Pela POSIÇÃO e não pelo texto: comparar o rótulo quebraria no dia em que
+    // alguém corrigisse uma vírgula em ETAPAS_PREVIAS.
+    done: i < ETAPAS_PREVIAS.length,
   }));
 }
 

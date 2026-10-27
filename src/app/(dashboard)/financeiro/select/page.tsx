@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
-import { formatBRL } from "@/lib/utils";
-import { formatDayBR, parseDayUTC, CONTRACT_STATE_LABEL, type ContractState } from "@/lib/select-contract";
+import { formatBRL, shortName } from "@/lib/utils";
+import { SELECT_BRAND_LABEL } from "@/lib/select-brand";
+import { parseDayUTC, CONTRACT_STATE_LABEL, type ContractState } from "@/lib/select-contract";
 import { listSelectContracts, SELECT_PAGE_SIZE, type FinancialSituation } from "@/lib/select-queries";
 import { SelectFiltros } from "./filtros-client";
 
@@ -128,8 +129,8 @@ export default async function FinanceiroSelectPage(
                   <th className="w-px whitespace-nowrap border-r border-border py-2 pr-4">Código</th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Cliente</th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Plano</th>
+                  <th className="border-r border-border py-2 pl-4 pr-4">Marca</th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Responsável</th>
-                  <th className="border-r border-border py-2 pl-4 pr-4">Vigência</th>
                   <th className="border-r border-border py-2 pl-4 pr-4 text-right">Mensalidade</th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Situação</th>
                   <th className="border-r border-border py-2 pl-4 pr-4 text-right">Parcelas</th>
@@ -152,13 +153,24 @@ export default async function FinanceiroSelectPage(
                       </Link>
                     </td>
                     <td className="border-r border-border py-2 pl-4 pr-4">
-                      <Link href={`/financeiro/select/${r.id}`} className="hover:underline">{r.customerName}</Link>
+                      {/* Nome encurtado, com o inteiro no `title`: a lista
+                          identifica a cliente, e o cadastro completo está a um
+                          clique. */}
+                      <Link
+                        href={`/financeiro/select/${r.id}`}
+                        className="hover:underline"
+                        title={r.customerName}
+                      >
+                        {shortName(r.customerName)}
+                      </Link>
                     </td>
                     <td className="border-r border-border py-2 pl-4 pr-4">{r.planName}</td>
-                    <td className="border-r border-border py-2 pl-4 pr-4">{r.responsibleName}</td>
-                    <td className="whitespace-nowrap border-r border-border py-2 pl-4 pr-4 font-data text-xs">
-                      {formatDayBR(new Date(r.startDate))} – {formatDayBR(new Date(r.closedAt ?? r.endDate))}
+                    {/* Contrato anterior ao campo de marca não tem o que
+                        mostrar, e inventar uma marca falsearia a origem. */}
+                    <td className="whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
+                      {r.brand ? SELECT_BRAND_LABEL[r.brand] : <span className="text-muted-foreground">—</span>}
                     </td>
+                    <td className="border-r border-border py-2 pl-4 pr-4">{r.responsibleName}</td>
                     <td className="border-r border-border py-2 pl-4 pr-4 text-right font-data">{formatBRL(r.monthlyAmount)}</td>
                     <td className="border-r border-border py-2 pl-4 pr-4">
                       <Badge className={BADGE[r.state]}>{CONTRACT_STATE_LABEL[r.state]}</Badge>

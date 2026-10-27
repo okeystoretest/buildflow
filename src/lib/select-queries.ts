@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type WholesaleBrand } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isDoacao } from "@/lib/validations/order";
 import {
@@ -116,6 +116,8 @@ export interface SelectListRow {
   customerCode: string;
   customerName: string;
   planName: string;
+  /** Marca pela qual o serviço foi vendido. Null em contrato anterior ao campo. */
+  brand: WholesaleBrand | null;
   responsibleName: string;
   startDate: string;
   endDate: string;
@@ -179,6 +181,7 @@ export async function listSelectContracts(f: SelectListFilters): Promise<{
       customerCode: c.customer.code,
       customerName: c.customer.name,
       planName: c.planNameSnapshot,
+      brand: c.brand,
       responsibleName: c.responsible.name,
       startDate: c.startDate.toISOString(),
       endDate: c.endDate.toISOString(),

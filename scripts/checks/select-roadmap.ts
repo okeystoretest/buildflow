@@ -90,6 +90,23 @@ check("outra vendedora NAO mexe", canEditRoadmap({ role: "VENDAS", userId: "u-bi
 check("papel sem relacao com o Select nao mexe", canEditRoadmap({ role: "LOGISTICA", userId: "u-log" }, contrato), false);
 check("papel desconhecido nao mexe", canEditRoadmap({ role: "", userId: "u-ana" }, contrato), false);
 
+// --- as previas nascem CONCLUIDAS -------------------------------------------
+// Decisao do dono em 27/10/2026: se o contrato existe, apresentar o servico e
+// fechar a negociacao ja aconteceram. O que esta em jogo e nao estender isso a
+// BENEFICIO: um beneficio nascendo entregue seria entrega registrada sem
+// ninguem ter entregue nada.
+check("as duas previas nascem concluidas", regua.filter((e) => e.done).map((e) => e.label), [...ETAPAS_PREVIAS]);
+check("nenhum beneficio nasce entregue", regua.slice(ETAPAS_PREVIAS.length).every((e) => !e.done), true);
+// A marca e pela POSICAO, nao pelo texto: comparar rotulo quebraria no dia em
+// que alguem corrigisse uma virgula em ETAPAS_PREVIAS.
+check("plano so com beneficio casual nasce com as previas concluidas", buildRoadmapSteps([]).every((e) => e.done), true);
+// A regra de ordem continua valendo por cima: com as duas previas ja feitas, a
+// proxima liberada e a 3, e a 2 pode ser desfeita (e a ultima concluida).
+const nascido = regua.map((e) => ({ sortOrder: e.sortOrder, done: e.done }));
+check("com as previas feitas, a liberada e a terceira", canCompleteStep(nascido, 3), true);
+check("e a segunda ainda pode ser desfeita", canUndoStep(nascido, 2), true);
+check("a primeira nao, porque a segunda esta concluida", canUndoStep(nascido, 1), false);
+
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);
   process.exit(1);

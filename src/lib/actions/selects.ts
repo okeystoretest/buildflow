@@ -578,11 +578,36 @@ export async function createSelectContract(
         orderBy: { sortOrder: "asc" },
         select: { text: true },
       });
+      // As PRÉVIAS nascem concluídas (decisão do dono em 27/10/2026): se o
+      // contrato existe, o serviço foi apresentado e a negociação fechada —
+      // é isso que a adesão prova. Quem assina é quem cadastrou.
+      const agora = new Date();
+      const etapas = buildRoadmapSteps(executaveis.map((b) => b.text));
       await tx.selectContractStep.createMany({
-        data: buildRoadmapSteps(executaveis.map((b) => b.text)).map((e) => ({
+        data: etapas.map((e) => ({
           contractId: novo.id,
           sortOrder: e.sortOrder,
           label: e.label,
+          doneAt: e.done ? agora : null,
+          doneById: e.done ? session.userId : null,
+        })),
+      });
+
+      // E o HISTÓRICO delas, na mesma transação. Sem isto a régua abriria com
+      // duas etapas concluídas e o histórico vazio logo abaixo — exatamente o
+      // que se lê como defeito, e o mesmo motivo do backfill da migration.
+      // `createMany` não devolve ids, então as etapas voltam pela chave que o
+      // banco já garante única (contrato + posição).
+      const previas = await tx.selectContractStep.findMany({
+        where: { contractId: novo.id, sortOrder: { in: etapas.filter((e) => e.done).map((e) => e.sortOrder) } },
+        select: { id: true },
+      });
+      await tx.selectContractStepEvent.createMany({
+        data: previas.map((p) => ({
+          stepId: p.id,
+          done: true,
+          actorId: session.userId,
+          actorName: session.name,
         })),
       });
 
