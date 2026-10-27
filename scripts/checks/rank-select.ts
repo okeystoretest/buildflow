@@ -29,8 +29,9 @@ const vendas: Venda[] = [
   { brand: "OKEY", valor: 7968 },
   { brand: "OKEY", valor: 4000 },
   { brand: "LOV_CLUB", valor: 5000 },
-  // Contrato anterior ao campo de marca: nao entra em campanha nenhuma, mas
-  // continua somando no ranking (ver o bloco do realizado, abaixo).
+  // Contrato anterior ao campo de marca. Desde 27/10/2026 ele nao aparece em
+  // lugar nenhum do quadro: nao entra em campanha (nao tem marca) e nao soma
+  // mais no realizado. So a adesao com marca escolhida e medida.
   { brand: null, valor: 3000 },
 ];
 const daCampanha = (marca: string) => vendas.filter((v) => v.brand === marca);
@@ -40,41 +41,30 @@ check("a campanha LOV leva so as vendas LOV", daCampanha("LOV_CLUB").length, 1);
 check("venda sem marca nao entra em campanha", daCampanha("OKEY").concat(daCampanha("LOV_CLUB")).length, 3);
 check("o total da campanha OKEY", daCampanha("OKEY").reduce((a, v) => a + v.valor, 0), 11968);
 
-// --- o Select somando no realizado ----------------------------------------
-const corte = new Date("2026-10-01T00:00:00.000Z");
+// --- o Select FORA do realizado -------------------------------------------
+// Ate 19/10/2026 o valor do contrato somava na meta INDIVIDUAL da vendedora e
+// na GERAL. Em 27/10/2026 o dono reverteu: a venda de servico passou a ser
+// medida pela campanha de Select (contratos por vendedora, abaixo), e creditar
+// o R$ na meta tambem contava a mesma entrega em duas reguas.
+//
+// ATENCAO ao ler estes dois checks: a exclusao NAO mora aqui. Ela e o
+// chamador, `rank-data.ts`, que deixou de passar `selectsDoMes` para
+// `computeRealizado`. A funcao nunca soube o que e um Select — ela soma o que
+// recebe. Entao nenhum check puro pega a regressao de alguem reinserir os
+// Selects naquela lista; o que segura isso e o comentario no chamador.
+//
+// O que fica preso aqui e a metade que E pura e da sustento a regra: a conta
+// nao inventa valor nenhum alem do que foi entregue a ela.
 const dia = (n: number) => new Date(`2026-10-${String(n).padStart(2, "0")}T12:00:00.000Z`);
-
 const pedido = { sellerId: "v1", orderValue: 1000, createdAt: dia(5) };
-const select = { sellerId: "v1", orderValue: 7968, createdAt: dia(6) };
 
-const soPedido = computeRealizado({ pedidos: [pedido], comMeta: new Set(["v1"]), ajustes: new Map() });
-const comSelect = computeRealizado({ pedidos: [pedido, select], comMeta: new Set(["v1"]), ajustes: new Map() });
-
-check("sem Select, so o pedido", soPedido.realizadoGeral, 1000);
-// O valor e o TOTAL do contrato (decisao do dono), somado UMA vez.
-check("o Select soma no realizado geral", comSelect.realizadoGeral, 8968);
-check("e soma na linha da vendedora", comSelect.porVendedor.get("v1")?.total, 8968);
-
-// Vendedora sem meta nao move o geral — mesma regra dos pedidos, sem excecao
-// para servico: ela nao aparece no quadro, entao nao pode mover o KPI.
-const semMeta = computeRealizado({ pedidos: [select], comMeta: new Set(), ajustes: new Map() });
-check("Select de quem nao tem meta nao move o geral", semMeta.realizadoGeral, 0);
-
-// O ajuste manual continua valendo por cima do Select, como vale do pedido:
-// o anterior ao corte ja esta respondido pelo valor digitado.
-const comAjuste = computeRealizado({
-  pedidos: [{ sellerId: "v1", orderValue: 7968, createdAt: dia(2) }],
+const soPedidos = computeRealizado({
+  pedidos: [pedido],
   comMeta: new Set(["v1"]),
-  ajustes: new Map([["v1", { amount: 5000, corte: dia(3) }]]),
+  ajustes: new Map(),
 });
-check("Select antes do corte nao soma sobre o ajuste", comAjuste.porVendedor.get("v1")?.posCorte, 0);
-const posCorte = computeRealizado({
-  pedidos: [{ sellerId: "v1", orderValue: 7968, createdAt: dia(9) }],
-  comMeta: new Set(["v1"]),
-  ajustes: new Map([["v1", { amount: 5000, corte: dia(3) }]]),
-});
-check("Select depois do corte soma sobre o ajuste", posCorte.porVendedor.get("v1")?.posCorte, 7968);
-void corte;
+check("o realizado geral conta so o que recebe", soPedidos.realizadoGeral, 1000);
+check("a linha da vendedora tambem", soPedidos.porVendedor.get("v1")?.total, 1000);
 
 // --- a tabela POR VENDEDORA da campanha de Select --------------------------
 // A campanha de Select conta VENDAS DO SERVICO, nao pecas: um contrato e um,

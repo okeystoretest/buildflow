@@ -198,10 +198,13 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   // VENDAS DE SELECT DO MES.
   //
   // Um Select e uma venda de SERVICO: nao passa pelo fluxo de pedidos, nao tem
-  // comanda e nunca apareceria em `faturados`. Mas e venda atribuida a uma
-  // vendedora, e o dono decidiu que soma na meta INDIVIDUAL dela e na meta
-  // GERAL — por isso entra na mesma conta, logo abaixo, em vez de virar um
-  // numero paralelo que ninguem reconcilia.
+  // comanda e nunca apareceria em `faturados`.
+  //
+  // E NAO SOMA NA META DA VENDEDORA. Decisao do dono em 27/10/2026, que
+  // reverte a de 19/10 (quando somava na individual e na geral): a entrega e
+  // medida pela campanha de Select, que conta CONTRATOS por vendedora, e
+  // creditar o R$ na meta tambem contava a mesma venda duas vezes. Esta
+  // consulta existe HOJE para alimentar a campanha, e so ela.
   //
   // O VALOR e o TOTAL DO CONTRATO (mensalidade x validade), nao a mensalidade:
   // decisao do dono em 19/10/2026. E o snapshot gravado na adesao, entao
@@ -304,28 +307,26 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
   //
   // maiorSemana / maiorMes NAO sao ajustados de proposito: sao recordes de UM
   // pedido especifico, e um ajuste agregado nao diz qual pedido teria mudado.
-  // Os Selects entram AQUI, na mesma lista dos pedidos, e nao numa soma a
-  // parte: `computeRealizado` e o unico lugar que alimenta ao mesmo tempo o
-  // realizado geral e o realizado por vendedora. Somado em separado, o KPI da
-  // Meta Geral e a soma das linhas da tabela deixariam de fechar — que e
-  // exatamente o defeito que o comentario de POPULACAO DO QUADRO ja descreve.
   //
-  // O ajuste manual continua valendo por cima: se a vendedora tem ajuste, o
-  // Select anterior ao corte ja esta respondido pelo valor digitado, e o
-  // posterior soma — mesma regra dos pedidos, sem excecao para servico.
+  // O SELECT NAO ENTRA AQUI. Decisao do dono em 27/10/2026, que REVERTE a de
+  // 19/10: o valor do contrato nao influencia o progresso da meta da
+  // vendedora. A venda de servico passou a ter a propria medida — a campanha
+  // de Select conta CONTRATOS por vendedora (ver `selectCampaignRows`) —, e
+  // somar o R$ aqui tambem creditava a mesma entrega em duas reguas.
+  //
+  // E uma linha so porque `computeRealizado` alimenta ao mesmo tempo o
+  // realizado geral e o realizado por vendedora: o geral E a soma das
+  // vendedoras. Nao ha como tirar o Select de uma e manter na outra sem o KPI
+  // da Meta Geral deixar de fechar com a soma das linhas da tabela.
+  //
+  // `selectsDoMes` continua sendo lido: ele alimenta a campanha de Select,
+  // logo abaixo. Nao o remova junto.
   const { ajusteManualTotal, realizadoGeral, porVendedor } = computeRealizado({
-    pedidos: [
-      ...doMes.map((o) => ({
-        sellerId: o.sellerId,
-        orderValue: receita(o),
-        createdAt: new Date(o.createdAt),
-      })),
-      ...selectsDoMes.map((c) => ({
-        sellerId: c.responsibleId,
-        orderValue: Number(c.totalAmount),
-        createdAt: new Date(c.createdAt),
-      })),
-    ],
+    pedidos: doMes.map((o) => ({
+      sellerId: o.sellerId,
+      orderValue: receita(o),
+      createdAt: new Date(o.createdAt),
+    })),
     comMeta,
     ajustes: ajustePorUser,
   });
