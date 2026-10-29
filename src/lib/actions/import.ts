@@ -410,8 +410,8 @@ export async function importWholesaleLeadsCsv(csv: string): Promise<ActionResult
         `Aviso: ${repetidos} candidatura(s) da planilha têm CNPJ que já existe num cadastro vindo do formulário. Entraram como candidatura nova — a repetição vira aviso na ficha, e nenhum cadastro real foi sobrescrito.`,
       );
     }
+    // Uma rota só: o painel virou componente da própria tela em 28/10/2026.
     revalidatePath("/vendas/analise-clientes");
-    revalidatePath("/vendas/analise-clientes/dashboard");
     return actionOk(summary);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao importar candidaturas.");

@@ -43,7 +43,7 @@ export function AtrasosList({ pedidos }: { pedidos: AtrasoPedido[] }) {
                   )}
                 </p>
                 <p className="text-sm text-muted-foreground" title={p.customerName}>
-                  {shortName(p.customerName)} (Cód. {p.customerCode}) · Vendedora: {p.sellerName}
+                  {shortName(p.customerName)} (Cód. {p.customerCode}) · Vendedora: {shortName(p.sellerName)}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {p.orderTypeName}

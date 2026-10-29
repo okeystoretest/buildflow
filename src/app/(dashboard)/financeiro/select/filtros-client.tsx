@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { PeriodoFiltro } from "@/components/shared/periodo-filtro";
 import { Card, CardContent } from "@/components/ui/card";
 import { useFilterQuery } from "@/hooks/use-filter-query";
+import { SELECT_BRAND_LABEL, SELECT_BRANDS } from "@/lib/select-brand";
 
 const selectClass =
   "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm " +
@@ -18,13 +19,18 @@ const selectClass =
  * "Situação do Select" e "Situação financeira" são coisas diferentes e por
  * isso são dois filtros: um contrato ativo pode estar com parcela vencida, e
  * um encerrado pode estar quitado.
+ *
+ * MARCA (28/10/2026) segmenta a carteira entre as duas marcas da casa. As
+ * opções são as duas fixas (`SELECT_BRANDS`), e não as que existem na base:
+ * são duas e conhecidas, e uma marca desaparecendo do seletor porque ninguém
+ * vendeu por ela neste filtro leria como defeito.
  */
 export function SelectFiltros({
   defaults,
   plans,
   responsibles,
 }: {
-  defaults: { q: string; plano: string; estado: string; responsavel: string; de: string; ate: string; financeiro: string };
+  defaults: { q: string; plano: string; estado: string; responsavel: string; marca: string; de: string; ate: string; financeiro: string };
   plans: { id: string; name: string }[];
   responsibles: { id: string; name: string }[];
 }) {
@@ -35,6 +41,7 @@ export function SelectFiltros({
         plano: defaults.plano,
         estado: defaults.estado,
         responsavel: defaults.responsavel,
+        marca: defaults.marca,
         de: defaults.de,
         ate: defaults.ate,
         financeiro: defaults.financeiro,
@@ -102,6 +109,14 @@ export function SelectFiltros({
           <select className={selectClass} value={f.instant.responsavel} onChange={(e) => f.setInstant("responsavel", e.target.value)}>
             <option value="">Todos</option>
             {responsibles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </div>
+
+        <div className="space-y-1.5" style={{ minWidth: 140 }}>
+          <Label>Marca</Label>
+          <select className={selectClass} value={f.instant.marca} onChange={(e) => f.setInstant("marca", e.target.value)}>
+            <option value="">Todas</option>
+            {SELECT_BRANDS.map((b) => <option key={b} value={b}>{SELECT_BRAND_LABEL[b]}</option>)}
           </select>
         </div>
 

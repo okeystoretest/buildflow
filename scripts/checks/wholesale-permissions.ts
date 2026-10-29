@@ -76,6 +76,59 @@ check(
   { ok: true, rejectionCode: null, cautionReason: "CNPJ de terceiros" },
 );
 
+// --- COMPROU: a única transição com origem restrita -------------------------
+// Comprar sem ter sido aprovada não é um caminho do negócio. A regra é
+// conferida aqui porque o modal esconder a opção é conveniência, não controle:
+// o `toStatus` chega do navegador e pode vir montado à mão.
+check(
+  "comprou a partir de aprovado: aceita",
+  resolveDecision({ toStatus: "COMPROU", fromStatus: "APROVADO" }),
+  { ok: true, rejectionCode: null, cautionReason: null },
+);
+check(
+  "comprou direto de em análise: recusa",
+  resolveDecision({ toStatus: "COMPROU", fromStatus: "EM_ANALISE" }),
+  { error: "Só uma candidatura aprovada pode ser marcada como Comprou." },
+);
+check(
+  "comprou a partir de reprovado: recusa",
+  resolveDecision({ toStatus: "COMPROU", fromStatus: "REPROVADO" }),
+  { error: "Só uma candidatura aprovada pode ser marcada como Comprou." },
+);
+check(
+  "comprou a partir de cuidado: recusa",
+  resolveDecision({ toStatus: "COMPROU", fromStatus: "CUIDADO" }),
+  { error: "Só uma candidatura aprovada pode ser marcada como Comprou." },
+);
+// Sem `fromStatus` NÃO passa. É o caso que importa: se um dia alguém chamar
+// `resolveDecision` esquecendo de ler o status atual, a regra tem de FECHAR, e
+// não liberar o COMPROU por omissão.
+check(
+  "comprou sem status de origem: recusa",
+  resolveDecision({ toStatus: "COMPROU" }),
+  { error: "Só uma candidatura aprovada pode ser marcada como Comprou." },
+);
+// Reafirmar quem já comprou é aceito: não é pular etapa, e a action não grava
+// evento quando o status não muda.
+check(
+  "comprou a partir de comprou: aceita",
+  resolveDecision({ toStatus: "COMPROU", fromStatus: "COMPROU" }),
+  { ok: true, rejectionCode: null, cautionReason: null },
+);
+// O motivo de reprovação anterior é apagado, como em todo outro veredito.
+check(
+  "ao marcar comprou, código de reprovação anterior é apagado",
+  resolveDecision({ toStatus: "COMPROU", fromStatus: "APROVADO", rejectionCode: "11" }),
+  { ok: true, rejectionCode: null, cautionReason: null },
+);
+// Os outros status NÃO ganharam origem restrita: `fromStatus` é indiferente
+// para eles, e exigi-lo quebraria toda chamada que não o passa.
+check(
+  "aprovar não depende da origem",
+  resolveDecision({ toStatus: "APROVADO" }),
+  { ok: true, rejectionCode: null, cautionReason: null },
+);
+
 // --- Review Focus 4: campo órfão na troca de veredito ---
 check(
   "ao aprovar, código de reprovação anterior é apagado",

@@ -19,12 +19,15 @@ export function OrderDetailModal({
   onClose,
   canManage = false,
   driverMode = false,
+  clienteClicavel = false,
 }: {
   orderId: string;
   onClose: () => void;
   canManage?: boolean;
   // Modo motorista: observacao em destaque, SEM historico, SEM valores/edicao.
   driverMode?: boolean;
+  /** Nome da cliente abre o cadastro. Padrao fechado — ver `OrderFicha`. */
+  clienteClicavel?: boolean;
 }) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +100,7 @@ export function OrderDetailModal({
             order={order}
             onChange={setOrder}
             driverMode={driverMode}
+            clienteClicavel={clienteClicavel}
             headerAction={
               <button onClick={onClose} className="text-2xl leading-none text-muted-foreground">
                 ×

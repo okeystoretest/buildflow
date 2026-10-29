@@ -29,6 +29,8 @@ export interface SelectListFilters {
   planId?: string;
   state?: ContractState;
   responsibleId?: string;
+  /** Marca da contratação. Contrato anterior ao campo não entra em nenhuma. */
+  brand?: WholesaleBrand;
   startFrom?: string;
   startTo?: string;
   financial?: FinancialSituation;
@@ -99,6 +101,11 @@ export function buildSelectWhere(f: SelectListFilters, hoje: Date): Prisma.Selec
   }
   if (f.planId) and.push({ planId: f.planId });
   if (f.responsibleId) and.push({ responsibleId: f.responsibleId });
+  // Marca: segmenta a carteira de clientes entre as duas marcas da casa. Os
+  // contratos anteriores ao campo têm `brand` nulo e somem de qualquer marca
+  // escolhida — é a resposta certa, porque a origem deles é desconhecida, e
+  // inventar uma os colocaria numa marca que ninguém vendeu.
+  if (f.brand) and.push({ brand: f.brand });
   if (f.state) and.push(stateWhere(f.state, hoje));
   if (f.financial) and.push(financialWhere(f.financial, hoje));
   if (f.startFrom) and.push({ startDate: { gte: new Date(`${f.startFrom}T00:00:00.000Z`) } });

@@ -1,50 +1,18 @@
-import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 
 /**
- * As duas telas da Análise de Clientes: a fila de candidaturas e o painel.
+ * A ANÁLISE DE CLIENTES É UMA TELA SÓ desde 28/10/2026.
  *
- * Rotas separadas, e não um estado dentro da mesma página, porque a lista
- * carrega as 18 respostas de cada linha e os avisos de cadastro repetido —
- * trabalho que o painel não usa. Numa página só, abrir o dashboard pagaria por
- * tudo isso para não desenhar nada disso.
- *
- * `ativa` vem da página (Server Component) em vez de `usePathname`: o indicador
- * sai pronto do servidor, sem precisar que isto vire componente de cliente.
+ * Havia duas abas — "Candidaturas" e "Dashboard" — em rotas separadas, porque a
+ * lista carrega as 18 respostas de cada linha e os avisos de cadastro repetido,
+ * trabalho que o painel não usa. A aba saiu a pedido do dono: os filtros eram
+ * dois conjuntos para a mesma pergunta, e trocar de aba obrigava a reaplicá-los
+ * na mão. O painel agora é um componente da própria página (`painel.tsx`), o
+ * custo da junção está anotado lá, e este arquivo guarda só o que as duas telas
+ * tinham em comum.
  */
-export function AnaliseClientesTabs({ ativa }: { ativa: "lista" | "dashboard" }) {
-  return (
-    <nav className="flex gap-1 border-b border-border" aria-label="Seções da Análise de Clientes">
-      <Aba href="/vendas/analise-clientes" rotulo="Candidaturas" ativa={ativa === "lista"} />
-      <Aba
-        href="/vendas/analise-clientes/dashboard"
-        rotulo="Dashboard"
-        ativa={ativa === "dashboard"}
-      />
-    </nav>
-  );
-}
 
-function Aba({ href, rotulo, ativa }: { href: string; rotulo: string; ativa: boolean }) {
-  return (
-    <Link
-      href={href}
-      // `aria-current` e não só a cor: a aba ativa precisa ser anunciada a quem
-      // usa leitor de tela, que não vê a borda embaixo.
-      aria-current={ativa ? "page" : undefined}
-      className={
-        "-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors " +
-        (ativa
-          ? "border-vendas text-vendas-text"
-          : "border-transparent text-muted-foreground hover:border-border hover:text-foreground")
-      }
-    >
-      {rotulo}
-    </Link>
-  );
-}
-
-/** A mesma negação nas duas telas: quem não é do Atacado não entra em nenhuma. */
+/** Quem não é do Atacado não entra. */
 export function AcessoNegadoAtacado() {
   return (
     <div className="space-y-6">

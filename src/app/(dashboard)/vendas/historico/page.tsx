@@ -131,6 +131,7 @@ export default async function HistoricoPage(
         canDelete={session.role === "GESTAO" || session.role === "FINANCEIRO"}
         canReturn
         campaigns={campaigns}
+        clienteClicavel
       />
 
       <Pagination page={page} perPage={PER_PAGE} total={total} label="pedidos" />

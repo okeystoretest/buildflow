@@ -33,9 +33,16 @@ export function KanbanBoard({
   stageLimits = {},
   simplified = false,
   askDelayReason = false,
+  clienteClicavel = false,
 }: {
   cards: KanbanCard[];
   columns: OrderStatus[];
+  /**
+   * Nome da cliente abre o cadastro dela. Padrao FECHADO: este componente e o
+   * mesmo na Logistica e na tela do Motorista, e o cadastro e de
+   * VENDAS/GESTAO/FINANCEIRO. Ver `NomeDoCliente`.
+   */
+  clienteClicavel?: boolean;
   // Quando habilitado (Logística), mostra botão "Avançar" + pop-ups.
   advance?: AdvanceConfig;
   // Quando true (Gestão), o modal exibe editar/excluir pedido.
@@ -556,7 +563,14 @@ export function KanbanBoard({
         </>
       )}
 
-      {openId && <OrderDetailModal orderId={openId} onClose={() => setOpenId(null)} canManage={canManage} />}
+      {openId && (
+        <OrderDetailModal
+          orderId={openId}
+          onClose={() => setOpenId(null)}
+          canManage={canManage}
+          clienteClicavel={clienteClicavel}
+        />
+      )}
 
       {/* Justificativa de atraso: abre sozinho para o setor dono da etapa
           quando um card passa do limiar de minutos alem do prazo. */}

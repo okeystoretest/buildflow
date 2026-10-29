@@ -55,12 +55,22 @@ export function canDecideLead(
   return canSeeLead(actor, lead);
 }
 
-const STATUSES = ["EM_ANALISE", "APROVADO", "REPROVADO", "CUIDADO"] as const;
+const STATUSES = ["EM_ANALISE", "APROVADO", "REPROVADO", "CUIDADO", "COMPROU"] as const;
 
 export interface DecisionInput {
   toStatus: string;
   rejectionCode?: string | null;
   cautionReason?: string | null;
+  /**
+   * O status ATUAL da candidatura, lido do banco por quem chama.
+   *
+   * Existe só por causa do COMPROU, que é a única transição com origem
+   * restrita. Vem de fora porque esta função é pura — e porque o valor tem de
+   * ser o do banco, não o que a tela diz que era: o modal pode estar aberto há
+   * meia hora, e a candidatura pode ter sido decidida nesse meio-tempo por
+   * outra pessoa.
+   */
+  fromStatus?: string | null;
 }
 
 export type DecisionResult =
@@ -91,6 +101,25 @@ export function resolveDecision(input: DecisionInput): DecisionResult {
     const reason = input.cautionReason?.trim();
     if (!reason) return { error: "Descreva o motivo do alerta." };
     return { ok: true, rejectionCode: null, cautionReason: reason };
+  }
+
+  // COMPROU SÓ SE ALCANÇA A PARTIR DE APROVADO.
+  //
+  // Única transição com origem restrita, e a restrição é do negócio, não da
+  // tela: comprar sem ter sido aprovada não é um caminho que exista. Marcar
+  // "Comprou" direto de EM_ANALISE pularia a análise — e a taxa de aprovação
+  // passaria a ter no denominador uma venda que nunca foi julgada.
+  //
+  // Conferido AQUI, e não só escondendo a opção no modal: a tela esconder é
+  // conveniência, e esta função é a autoridade. Marcar de novo quem já está em
+  // COMPROU é aceito (é reafirmar, não pular etapa) — mas não muda nada, e
+  // `decideLead` já não grava evento quando o status não muda.
+  if (input.toStatus === "COMPROU") {
+    const atual = input.fromStatus?.trim();
+    if (atual !== "APROVADO" && atual !== "COMPROU") {
+      return { error: "Só uma candidatura aprovada pode ser marcada como Comprou." };
+    }
+    return { ok: true, rejectionCode: null, cautionReason: null };
   }
 
   // APROVADO e EM_ANALISE não carregam motivo nenhum.

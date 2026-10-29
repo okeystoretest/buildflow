@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { STATUS_LABEL, formatOverdue } from "@/lib/order-flow";
-import { formatBRL } from "@/lib/utils";
+import { formatBRL, shortName } from "@/lib/utils";
+import { NomeDoCliente } from "@/components/shared/customer-card-modal";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { uploadInvoiceBase64, removeInvoice } from "@/lib/actions/sales";
 import { prepareInvoiceFile } from "@/lib/client-image";
@@ -151,6 +152,7 @@ export function OrderFicha({
   campaignEdit,
   children,
   footer,
+  clienteClicavel = false,
 }: {
   order: OrderDetail;
   /** Chamado quando uma ação interna altera o pedido (NF, pendência, campanha). */
@@ -171,6 +173,14 @@ export function OrderFicha({
   children?: React.ReactNode;
   /** Ações do rodapé (editar/excluir pedido, editar entrega, devolução...). */
   footer?: React.ReactNode;
+  /**
+   * Nome da cliente abre o cadastro dela.
+   *
+   * Padrão FECHADO porque esta ficha é a mesma na Logística, no Controle de
+   * Peças e na tela do Motorista, e o cadastro é de VENDAS/GESTAO/FINANCEIRO.
+   * Quem liga é a tela: o Fluxo, o Histórico de Pedidos e o Financeiro.
+   */
+  clienteClicavel?: boolean;
 }) {
   const router = useRouter();
   const [nfBusy, setNfBusy] = useState(false);
@@ -296,7 +306,13 @@ export function OrderFicha({
               {order.comandaNumber && ` · Comanda ${order.comandaNumber}`}
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{order.customer.name}</span>
+              <NomeDoCliente
+                nome={order.customer.name}
+                codigo={order.customer.code}
+                clicavel={clienteClicavel}
+                curto={false}
+                className="font-medium text-foreground"
+              />
               <span className="font-data ml-2 rounded-md bg-secondary px-1.5 py-0.5 text-xs">
                 Cód. {order.customer.code}
               </span>
@@ -334,8 +350,23 @@ export function OrderFicha({
             <Info label="Comanda" value={order.comandaNumber ?? "—"} />
           </>
         )}
-        <Info label="Cliente" value={`${order.customer.name} (${order.customer.code})`} />
-        <Info label="Vendedora" value={order.seller.name} />
+        {/* O codigo fica ao lado porque e por ele que se confere a cliente no
+            telefone; o nome leva ao cadastro inteiro. */}
+        <Info
+          label="Cliente"
+          value={
+            <>
+              <NomeDoCliente
+                nome={order.customer.name}
+                codigo={order.customer.code}
+                clicavel={clienteClicavel}
+                curto={false}
+              />
+              {` (${order.customer.code})`}
+            </>
+          }
+        />
+        <Info label="Vendedora" value={shortName(order.seller.name)} />
         <Info label="Loja" value={order.store.name} />
         <Info label="Loja de Origem" value={order.originStore?.name ?? "—"} />
         <Info label="Tipo" value={order.orderType.name} />
@@ -991,7 +1022,9 @@ function Info({
   full,
 }: {
   label: string;
-  value: string;
+  // ReactNode, e nao string: a linha do Cliente passou a carregar um nome
+  // clicavel (ver `NomeDoCliente`). Todas as outras continuam passando texto.
+  value: React.ReactNode;
   highlight?: boolean;
   full?: boolean;
 }) {

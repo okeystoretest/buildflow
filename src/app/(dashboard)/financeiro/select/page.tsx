@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
 import { formatBRL, shortName } from "@/lib/utils";
-import { SELECT_BRAND_LABEL } from "@/lib/select-brand";
+import { SELECT_BRAND_LABEL, SELECT_BRANDS } from "@/lib/select-brand";
+import { NomeDoCliente } from "@/components/shared/customer-card-modal";
 import { parseDayUTC, CONTRACT_STATE_LABEL, type ContractState } from "@/lib/select-contract";
 import { listSelectContracts, SELECT_PAGE_SIZE, type FinancialSituation } from "@/lib/select-queries";
 import { SelectFiltros } from "./filtros-client";
@@ -35,7 +36,7 @@ export default async function FinanceiroSelectPage(
   props: {
     searchParams?: Promise<{
       q?: string; plano?: string; estado?: string; responsavel?: string;
-      de?: string; ate?: string; financeiro?: string; page?: string;
+      marca?: string; de?: string; ate?: string; financeiro?: string; page?: string;
     }>;
   }
 ) {
@@ -47,6 +48,12 @@ export default async function FinanceiroSelectPage(
     : undefined;
   const financeiro = FINANCEIROS.includes(searchParams?.financeiro as FinancialSituation)
     ? (searchParams?.financeiro as FinancialSituation)
+    : undefined;
+  // Marca vinda da URL: valor fora do enum é IGNORADO (lista sem o filtro) em
+  // vez de chegar ao Prisma, que derrubaria a página por causa de um
+  // `?marca=qualquercoisa` digitado à mão.
+  const marca = SELECT_BRANDS.includes(searchParams?.marca as (typeof SELECT_BRANDS)[number])
+    ? (searchParams?.marca as (typeof SELECT_BRANDS)[number])
     : undefined;
 
   // As datas vêm da query string e são a única entrada daqui que viraria
@@ -67,6 +74,7 @@ export default async function FinanceiroSelectPage(
       planId: searchParams?.plano,
       state: estado,
       responsibleId: searchParams?.responsavel,
+      brand: marca,
       startFrom: de,
       startTo: ate,
       financial: financeiro,
@@ -111,6 +119,7 @@ export default async function FinanceiroSelectPage(
           plano: searchParams?.plano ?? "",
           estado: searchParams?.estado ?? "",
           responsavel: searchParams?.responsavel ?? "",
+          marca: searchParams?.marca ?? "",
           de: searchParams?.de ?? "",
           ate: searchParams?.ate ?? "",
           financeiro: searchParams?.financeiro ?? "",
@@ -153,16 +162,15 @@ export default async function FinanceiroSelectPage(
                       </Link>
                     </td>
                     <td className="border-r border-border py-2 pl-4 pr-4">
-                      {/* Nome encurtado, com o inteiro no `title`: a lista
-                          identifica a cliente, e o cadastro completo está a um
-                          clique. */}
-                      <Link
-                        href={`/financeiro/select/${r.id}`}
-                        className="hover:underline"
-                        title={r.customerName}
-                      >
-                        {shortName(r.customerName)}
-                      </Link>
+                      {/* O nome abre o CADASTRO da cliente; a coluna do código,
+                          ao lado, continua abrindo o Select. Era um segundo
+                          link para a mesma página — repetir o destino gastava o
+                          único clique que a linha tinha para oferecer. */}
+                      <NomeDoCliente
+                        nome={r.customerName}
+                        codigo={r.customerCode}
+                        clicavel
+                      />
                     </td>
                     <td className="border-r border-border py-2 pl-4 pr-4">{r.planName}</td>
                     {/* Contrato anterior ao campo de marca não tem o que
@@ -170,7 +178,9 @@ export default async function FinanceiroSelectPage(
                     <td className="whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
                       {r.brand ? SELECT_BRAND_LABEL[r.brand] : <span className="text-muted-foreground">—</span>}
                     </td>
-                    <td className="border-r border-border py-2 pl-4 pr-4">{r.responsibleName}</td>
+                    <td className="border-r border-border py-2 pl-4 pr-4" title={r.responsibleName}>
+                      {shortName(r.responsibleName)}
+                    </td>
                     <td className="border-r border-border py-2 pl-4 pr-4 text-right font-data">{formatBRL(r.monthlyAmount)}</td>
                     <td className="border-r border-border py-2 pl-4 pr-4">
                       <Badge className={BADGE[r.state]}>{CONTRACT_STATE_LABEL[r.state]}</Badge>

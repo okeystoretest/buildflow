@@ -242,6 +242,10 @@ model Customer {
 
   orders          Order[]
   selectContracts SelectContract[]
+  // Mais de uma: duas candidaturas com o MESMO CNPJ apontam para o mesmo
+  // cadastro (ver `cadastrarClienteDaCandidatura`), que é a resposta certa —
+  // mesmo CNPJ é o mesmo negócio.
+  wholesaleLeads  WholesaleLead[]
 
   @@index([name])
 }
@@ -1337,6 +1341,11 @@ enum WholesaleLeadStatus {
   REPROVADO
   // Sinal de risco/fraude, com justificativa obrigatória (decisão 8).
   CUIDADO
+  /// A lojista aprovada JÁ COMPROU. Só se alcança a partir de APROVADO (ver
+  /// resolveDecision), porque comprar sem ter sido aprovada não é um caminho
+  /// que exista no negócio. Chega sozinho quando um pedido aparece ligado ao
+  /// cadastro dela (src/lib/wholesale-compra.ts), ou à mão por quem analisa.
+  COMPROU
 }
 
 enum WholesaleServiceModel {
@@ -1380,6 +1389,17 @@ model WholesaleLead {
   // lojista real porque o parâmetro se perdeu é pior que uma fila de triagem.
   sellerId String?
   seller   User?   @relation("WholesaleLeadSeller", fields: [sellerId], references: [id])
+
+  /// CADASTRO DA LOJISTA, criado na APROVAÇÃO (src/lib/wholesale-customer.ts).
+  ///
+  /// NULO enquanto a candidatura não foi aprovada, e também nas aprovadas antes
+  /// de 28/10/2026 — a aprovação só passou a cadastrar a partir daí, e inventar
+  /// o cadastro retroativo criaria cliente que ninguém atendeu.
+  ///
+  /// É este vínculo que permite dizer que ela COMPROU: sem ele não há como
+  /// ligar uma candidatura a um pedido, porque `Customer` não guarda CNPJ.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
 
   // --- Seção 1: Boas-vindas e Identificação ---
   contactName String
@@ -1463,6 +1483,9 @@ model WholesaleLead {
   @@index([cnpj])
   @@index([phone])
   @@index([rodizioIndice])
+  // A reconciliação do COMPROU varre por (status, customerId) a cada leitura da
+  // tela — ver `reconciliarCompras`.
+  @@index([status, customerId])
 }
 
 /// Diário de mudanças de status (decisão 12). Sem ele os campos de decisão
@@ -1479,8 +1502,14 @@ model WholesaleLeadEvent {
   rejectionCode String?
   note          String?
 
-  actorId String
-  actor   User   @relation("WholesaleLeadEventActor", fields: [actorId], references: [id])
+  /// NULO = o SISTEMA mudou o status, não uma pessoa.
+  ///
+  /// Só acontece na virada automática para COMPROU, quando um pedido aparece
+  /// ligado ao cadastro da lojista (`reconciliarCompras`). Atribuir essa
+  /// mudança a quem por acaso abriu a tela seria mentira num diário de
+  /// auditoria — e é justamente o diário que existe para não mentir.
+  actorId String?
+  actor   User?   @relation("WholesaleLeadEventActor", fields: [actorId], references: [id])
 
   createdAt DateTime @default(now())
 

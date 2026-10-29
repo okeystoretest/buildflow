@@ -27,6 +27,22 @@ const PAGE_SIZE = 6;
  * também não filtraria, mas devolver o objeto vazio deixa o `...spread` de quem
  * chama não acrescentar chave nenhuma.
  */
+/**
+ * A marca vinda da query string, ou `undefined` quando o valor não é uma das
+ * marcas reais.
+ *
+ * Valor desconhecido é IGNORADO (lista sem o filtro) em vez de ser repassado ao
+ * Prisma, que lançaria erro de validação e derrubaria a página por causa de uma
+ * URL digitada errada. Ignorar não alarga o acesso: o escopo do ator vem antes.
+ * Mora aqui porque a lista e o painel aplicam a MESMA regra, e escrita duas
+ * vezes ela diverge.
+ */
+export function marcaValida(raw?: string): WholesaleBrand | undefined {
+  return (Object.values(WholesaleBrand) as string[]).includes(raw ?? "")
+    ? (raw as WholesaleBrand)
+    : undefined;
+}
+
 export function filtroDePeriodo(de?: string, ate?: string): Prisma.WholesaleLeadWhereInput {
   const inicio = (de ?? "").trim();
   const fim = (ate ?? "").trim();
@@ -173,7 +189,7 @@ export async function findDuplicateAlerts(lead: {
 
 export interface LeadRow {
   id: string;
-  brand: string;
+  brand: WholesaleBrand;
   status: string;
   contactName: string;
   city: string;
@@ -273,6 +289,8 @@ export async function listLeadsFor(
     auxiliar?: string;
     /** UF da loja da candidata (duas letras). */
     estado?: string;
+    /** Cidade da loja da candidata, como a lojista a escreveu. */
+    cidade?: string;
     /** Id da vendedora dona. Só a Gestão escolhe — ver abaixo. */
     vendedora?: string;
     /** Intervalo de chegada (YYYY-MM-DD). */
@@ -294,11 +312,14 @@ export async function listLeadsFor(
 
   // Antes de consultar: a dona de quem está no rodízio pode ter vencido desde a
   // última vez que alguém abriu esta tela.
+  //
+  // `reconciliarCompras` NÃO fica aqui, e sim na página. O motivo é a tela: o
+  // painel e a tabela leem em paralelo, e uma reconciliação disparada DENTRO de
+  // uma das duas consultas não é vista pela outra — a tabela mostraria COMPROU
+  // e o painel contaria a mesma candidatura como aprovada, na mesma tela.
   await reconciliarRodizio();
 
-  const brand = (Object.values(WholesaleBrand) as string[]).includes(opts.brand ?? "")
-    ? (opts.brand as WholesaleBrand)
-    : undefined;
+  const brand = marcaValida(opts.brand);
   const status = (Object.values(WholesaleLeadStatus) as string[]).includes(opts.status ?? "")
     ? (opts.status as WholesaleLeadStatus)
     : undefined;
@@ -307,6 +328,7 @@ export async function listLeadsFor(
   const auxiliar = (opts.auxiliar ?? "").trim();
   const vendedora = (opts.vendedora ?? "").trim();
   const estado = (opts.estado ?? "").trim();
+  const cidade = (opts.cidade ?? "").trim();
 
   const where: Prisma.WholesaleLeadWhereInput = {
     // O ESCOPO VEM PRIMEIRO e o filtro de vendedora só se aplica DEPOIS dele.
@@ -332,6 +354,12 @@ export async function listLeadsFor(
     // UF: comparada em MAIUSCULAS porque e assim que a LP grava. Valor que
     // nao tem duas letras e ignorado em vez de devolver lista vazia.
     ...(estado.length === 2 ? { state: estado.toUpperCase() } : {}),
+    // CIDADE: igualdade SEM diferenciar maiusculas. Ao contrario da UF, a
+    // cidade e texto livre do formulario e nao passa por normalizacao nenhuma
+    // na gravacao — a mesma cidade existe na base como "Campinas" e
+    // "campinas". Um `equals` exato faria o filtro devolver metade das linhas
+    // que deveria, sem erro nenhum para denunciar isso.
+    ...(cidade ? { city: { equals: cidade, mode: "insensitive" as const } } : {}),
     // Período de chegada. Depois do escopo, como todo filtro: ele estreita o
     // que a pessoa já podia ver, nunca alarga.
     ...filtroDePeriodo(opts.de, opts.ate),

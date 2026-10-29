@@ -60,7 +60,7 @@ export function PendenciasList({ pedidos }: { pedidos: PendenciaPedido[] }) {
                     </span>
                   </p>
                   <p className="pl-6 text-xs text-muted-foreground">
-                    Vendedora: {p.sellerName} · {p.orderTypeName}
+                    Vendedora: {shortName(p.sellerName)} · {p.orderTypeName}
                     {p.originStoreName && ` · ${p.originStoreName}`}
                     {p.pieceCount > 0 && ` · ${p.pieceCount} peça(s)`}
                   </p>

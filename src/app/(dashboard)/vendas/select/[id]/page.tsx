@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { BackButton } from "@/components/shared/back-button";
 import { Badge } from "@/components/ui/badge";
 import { SelectRoadmapCard } from "@/components/shared/select-roadmap-card";
+import { NomeDoCliente } from "@/components/shared/customer-card-modal";
 import { SelectPurchaseCycles } from "@/components/shared/select-purchase-cycles";
 import { getSellerSelectDetail } from "@/lib/select-queries";
 import { CONTRACT_STATE_LABEL, type ContractState } from "@/lib/select-contract";
@@ -42,7 +43,13 @@ export default async function VendasSelectDetailPage(props: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-servico-text">
-            <Star className="h-6 w-6" /> {detail.customerName}
+            <Star className="h-6 w-6" />{" "}
+            <NomeDoCliente
+              nome={detail.customerName}
+              codigo={detail.customerCode}
+              clicavel
+              curto={false}
+            />
           </h1>
           <p className="font-data text-sm text-muted-foreground">
             {detail.customerCode} · {detail.planName}

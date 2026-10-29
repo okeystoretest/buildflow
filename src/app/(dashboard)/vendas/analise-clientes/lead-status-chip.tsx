@@ -58,12 +58,33 @@ export const LEAD_STATUS_META: Record<
     dot: "bg-destructive",
   },
   CUIDADO: { label: "Cuidado", chip: "bg-amber-400 text-amber-950", dot: "bg-amber-400" },
+  /**
+   * COMPROU é a etapa DEPOIS de aprovado, e a cor diz isso: o mesmo verde da
+   * família, um passo mais escuro e mais saturado (emerald-800 / emerald-700).
+   *
+   * Não é azul nem violeta de propósito. Uma cor de outra família leria como
+   * "outro tipo de coisa", quando é o mesmo caminho adiante — e a barra
+   * empilhada do painel ficaria contando duas histórias com a mesma fatia.
+   *
+   * Branco sobre emerald-800 dá ~7:1, acima do 4,5:1 que o WCAG AA pede para
+   * texto normal — a mesma conta que fez APROVADO ser emerald-700 e não 600.
+   */
+  COMPROU: { label: "Comprou", chip: "bg-emerald-800 text-white", dot: "bg-emerald-700" },
 };
 
-/** Os quatro status na ordem do fluxo, para montar o seletor do modal. */
+/**
+ * Os cinco status NA ORDEM DO FLUXO, para o seletor do modal e para a barra
+ * empilhada do painel.
+ *
+ * COMPROU vem logo depois de APROVADO, não no fim: a ordem desta lista é a
+ * ordem em que as coisas acontecem com uma candidatura, e é também a ordem em
+ * que os cartões e as fatias aparecem na tela. Jogá-lo para o fim poria a etapa
+ * final do funil depois de REPROVADO e CUIDADO, que são saídas dele.
+ */
 export const LEAD_STATUS_ORDER: WholesaleLeadStatus[] = [
   "EM_ANALISE",
   "APROVADO",
+  "COMPROU",
   "REPROVADO",
   "CUIDADO",
 ];

@@ -17,13 +17,18 @@ function check(nome: string, obtido: unknown, esperado: unknown) {
 }
 
 // Reproduz a ordem da action, sem banco.
+//
+// `lead.status` entra junto do `sellerId` porque a action lê os dois na MESMA
+// consulta de permissão, e o veredito passa a depender do status atual (o
+// COMPROU só vem de APROVADO). A ordem segue intacta: permissão primeiro,
+// invariante depois.
 function simular(
   actor: WholesaleActor,
-  lead: { sellerId: string | null },
+  lead: { sellerId: string | null; status?: string },
   entrada: { toStatus: string; rejectionCode?: string | null; cautionReason?: string | null },
 ) {
   if (!canDecideLead(actor, lead)) return { error: "negado" };
-  const d = resolveDecision(entrada);
+  const d = resolveDecision({ ...entrada, fromStatus: lead.status ?? null });
   if ("error" in d) return { error: d.error };
   return { gravar: { status: entrada.toStatus, ...d } };
 }
@@ -49,6 +54,26 @@ check(
   "aprovar limpa o código anterior na gravação",
   simular(atacado, { sellerId: "u1" }, { toStatus: "APROVADO", rejectionCode: "11" }),
   { gravar: { status: "APROVADO", ok: true, rejectionCode: null, cautionReason: null } },
+);
+
+// COMPROU: a permissão continua vindo ANTES da origem do status. Uma
+// candidatura de OUTRA vendedora recebe "negado", e não "só aprovada pode" —
+// a segunda mensagem confirmaria a quem não pode ver o lead que ele existe e
+// que não está aprovado.
+check(
+  "comprou em lead de outra vendedora: nega ANTES de olhar a origem",
+  simular(atacado, { sellerId: "u9", status: "EM_ANALISE" }, { toStatus: "COMPROU" }),
+  { error: "negado" },
+);
+check(
+  "comprou em lead próprio ainda em análise: o erro é do veredito",
+  simular(atacado, { sellerId: "u1", status: "EM_ANALISE" }, { toStatus: "COMPROU" }),
+  { error: "Só uma candidatura aprovada pode ser marcada como Comprou." },
+);
+check(
+  "comprou em lead próprio já aprovado: grava",
+  simular(atacado, { sellerId: "u1", status: "APROVADO" }, { toStatus: "COMPROU" }),
+  { gravar: { status: "COMPROU", ok: true, rejectionCode: null, cautionReason: null } },
 );
 
 if (falhas > 0) {

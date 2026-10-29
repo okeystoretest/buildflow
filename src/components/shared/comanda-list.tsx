@@ -54,6 +54,7 @@ export function ComandaList({
   canDelete = false,
   canReturn = false,
   campaigns,
+  clienteClicavel = false,
 }: {
   orders: ComandaListItem[];
   /** Perfil MOTORISTA: ficha sem o pacote financeiro (igual ao Fluxo). */
@@ -66,6 +67,12 @@ export function ComandaList({
   canReturn?: boolean;
   /** Campanhas ativas. Presente = CRUD das peças de campanha habilitado. */
   campaigns?: { id: string; name: string }[];
+  /**
+   * Nome da cliente abre o cadastro dela. Padrao FECHADO: este componente e o
+   * mesmo na Logistica e na tela do Motorista, e o cadastro e de
+   * VENDAS/GESTAO/FINANCEIRO. Ver `NomeDoCliente`.
+   */
+  clienteClicavel?: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const aberta = orders.find((o) => o.id === openId) ?? null;
@@ -91,6 +98,7 @@ export function ComandaList({
           canDelete={canDelete}
           canReturn={canReturn}
           campaigns={campaigns}
+          clienteClicavel={clienteClicavel}
         />
       )}
     </>
@@ -105,6 +113,7 @@ function ComandaDetalhe({
   canDelete,
   canReturn,
   campaigns,
+  clienteClicavel,
 }: {
   item: ComandaListItem;
   onClose: () => void;
@@ -113,6 +122,7 @@ function ComandaDetalhe({
   canDelete: boolean;
   canReturn: boolean;
   campaigns?: { id: string; name: string }[];
+  clienteClicavel: boolean;
 }) {
   const router = useRouter();
   const [detail, setDetail] = useState<OrderDetail | null>(null);
@@ -181,6 +191,7 @@ function ComandaDetalhe({
               order={detail}
               onChange={setDetail}
               driverMode={driverMode}
+              clienteClicavel={clienteClicavel}
               compact
               campaignEdit={campaigns?.length ? { campaigns } : undefined}
               headerAction={

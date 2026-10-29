@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { WholesaleLeadStatus, type Prisma } from "@prisma/client";
 import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permissions";
-import { filtroDePeriodo } from "@/lib/wholesale-queries";
+import { filtroDePeriodo, marcaValida } from "@/lib/wholesale-queries";
 import { findRejectionCode } from "@/lib/wholesale-rejection-codes";
 
 /**
@@ -42,10 +42,35 @@ export interface ContagemPorVendedora {
   sellerId: string | null;
   nome: string;
   total: number;
-  aprovadas: number;
-  /** Aprovadas ÷ recebidas DELA, em 0–100 — mesma conta de `taxaDeConversao`. */
+  /** Quantas das candidaturas DELA já compraram. */
+  comprou: number;
+  /**
+   * Compraram ÷ recebidas DELA, em 0–100 — mesma conta de `taxaDeConversao`.
+   *
+   * Era a taxa de APROVAÇÃO até 29/10/2026. O painel por vendedora passou a
+   * falar de conversão a pedido do dono: aprovar é a decisão da analista,
+   * converter é a venda acontecer, e é a segunda que o painel acompanha. A taxa
+   * de aprovação continua na tela, mas só no total (o cartão do topo).
+   */
   conversao: number;
 }
+
+/**
+ * OS STATUS QUE CONTAM COMO APROVADA.
+ *
+ * COMPROU está aqui, e esquecê-lo é o defeito mais caro desta tela. O status é
+ * um só por candidatura, então quem compra DEIXA de estar em APROVADO. Contar
+ * aprovadas como `status === APROVADO` faria a taxa de aprovação CAIR a cada
+ * venda fechada — aprovar e vender pioraria o indicador de quem vendeu, e o
+ * número ainda pareceria plausível na tela.
+ *
+ * Quem comprou foi aprovada: o COMPROU é a etapa seguinte do funil, não um
+ * desvio dele.
+ */
+export const APROVADAS: WholesaleLeadStatus[] = [
+  WholesaleLeadStatus.APROVADO,
+  WholesaleLeadStatus.COMPROU,
+];
 
 export interface EntradaNoMes {
   /** "2026-10" — chave estável para ordenar. */
@@ -78,6 +103,21 @@ export interface FiltrosDoPainel {
   ate?: string;
   /** Id da vendedora. Só a Gestão escolhe — ver `resumoDoAtacado`. */
   vendedora?: string;
+  /** Marca de origem do cadastro. Texto livre da URL; ver `marcaValida`. */
+  marca?: string;
+  /**
+   * UF e cidade da loja da candidata.
+   *
+   * Entraram em 29/10/2026, junto do filtro de Cidade. São recortes
+   * GEOGRÁFICOS limpos, e por isso alimentam o painel — ao contrário de status,
+   * busca e motivo, que o distorceriam (filtrar por "aprovado" deixaria a taxa
+   * de aprovação em 100% e a barra de status com uma fatia só).
+   *
+   * Sem isto, escolher uma cidade mudaria a tabela e deixaria os números acima
+   * dela intactos, que lê como defeito e não como recorte.
+   */
+  estado?: string;
+  cidade?: string;
 }
 
 export interface ResumoDoAtacado {
@@ -88,9 +128,27 @@ export interface ResumoDoAtacado {
   recentes: CandidaturaRecente[];
   /** As reprovações desta fatia, por motivo, da mais frequente para a menos. */
   porMotivo: ContagemPorMotivo[];
-  /** Aprovadas ÷ total recebido, em 0–100. */
-  conversao: number;
+  /**
+   * TAXA DE APROVAÇÃO: aprovadas ÷ total recebido, em 0–100.
+   *
+   * Chamava-se `conversao` até 28/10/2026. Foi renomeada porque a tela passou a
+   * ter DUAS taxas — esta e a conversão de verdade (quem comprou ÷ recebidas) —
+   * e um campo chamado "conversao" guardando a aprovação seria a troca mais
+   * fácil de fazer sem ninguém notar.
+   */
+  aprovacao: number;
+  /** APROVADO + COMPROU — ver `APROVADAS`. */
   aprovadas: number;
+  /**
+   * TAXA DE CONVERSÃO: quem COMPROU ÷ total recebido, em 0–100.
+   *
+   * Regra nova de 28/10/2026. Antes, "conversão" era aprovadas ÷ recebidas —
+   * que é o que hoje se chama taxa de aprovação. Aprovar é dizer sim; converter
+   * é a lojista comprar. São duas perguntas, e a tela passou a mostrar as duas.
+   */
+  conversao: number;
+  /** Quantas já compraram. É o numerador da conversão. */
+  comprou: number;
 }
 
 const VAZIO: ResumoDoAtacado = {
@@ -100,8 +158,10 @@ const VAZIO: ResumoDoAtacado = {
   entradasPorMes: [],
   recentes: [],
   porMotivo: [],
-  conversao: 0,
+  aprovacao: 0,
   aprovadas: 0,
+  conversao: 0,
+  comprou: 0,
 };
 
 const dataCurta = (d: Date) =>
@@ -118,19 +178,24 @@ export function escopoDoAtor(actor: WholesaleActor): Prisma.WholesaleLeadWhereIn
 }
 
 /**
- * Aprovadas ÷ TOTAL RECEBIDO, em 0–100 com uma casa.
+ * Uma contagem ÷ TOTAL RECEBIDO, em 0–100 com uma casa.
  *
- * Como especificado, e não aprovadas ÷ (aprovadas + reprovadas): as que ainda
- * estão em análise contam no denominador. Base zero devolve 0, nunca NaN — uma
- * tela nova mostraria "NaN%" no primeiro dia.
+ * Serve às DUAS taxas da tela — aprovação (aprovadas ÷ recebidas) e conversão
+ * (compraram ÷ recebidas) —, porque é a mesma conta com numeradores
+ * diferentes. O nome fala de conversão por ser mais antiga que a distinção; o
+ * que importa é o denominador, que é sempre o TOTAL RECEBIDO.
+ *
+ * Como especificado, e não sobre as decididas: as que ainda estão em análise
+ * contam no denominador. Base zero devolve 0, nunca NaN — uma tela nova
+ * mostraria "NaN%" no primeiro dia.
  */
-export function taxaDeConversao(aprovadas: number, total: number): number {
-  return total === 0 ? 0 : Math.round((aprovadas / total) * 1000) / 10;
+export function taxaDeConversao(numerador: number, total: number): number {
+  return total === 0 ? 0 : Math.round((numerador / total) * 1000) / 10;
 }
 
 /**
  * As linhas (vendedora × status) do `groupBy` viram uma linha por vendedora,
- * com total, aprovadas e a taxa dela.
+ * com total, quantas compraram e a taxa de conversão dela.
  *
  * PURO e exportado pelo mesmo motivo que `taxaDeConversao`: é a conta que o
  * painel mostra, e conta que nenhum script confere é conta que se perde numa
@@ -142,24 +207,26 @@ export function agrupaPorVendedora(
   nomes: Map<string, string>,
 ): ContagemPorVendedora[] {
   // Chave de string porque `null` (sem dona) também é uma linha do painel.
-  const porDona = new Map<string, { total: number; aprovadas: number }>();
+  const porDona = new Map<string, { total: number; comprou: number }>();
   for (const l of linhas) {
     const chave = l.sellerId ?? "";
-    const acc = porDona.get(chave) ?? { total: 0, aprovadas: 0 };
+    const acc = porDona.get(chave) ?? { total: 0, comprou: 0 };
     acc.total += l._count._all;
-    if (l.status === WholesaleLeadStatus.APROVADO) acc.aprovadas += l._count._all;
+    // COMPROU é um status só, e aqui não há a armadilha de `APROVADAS`: quem
+    // comprou está em COMPROU e em nenhum outro lugar.
+    if (l.status === WholesaleLeadStatus.COMPROU) acc.comprou += l._count._all;
     porDona.set(chave, acc);
   }
   return [...porDona.entries()]
-    .map(([chave, { total, aprovadas }]) => ({
+    .map(([chave, { total, comprou }]) => ({
       sellerId: chave || null,
       // Sem dona = chegou pelo link geral sem nenhuma vendedora ativa para
       // receber. É um aviso de operação, e some da lista quando alguém é
       // ativada — por isso aparece nomeado, não escondido.
       nome: chave ? (nomes.get(chave) ?? "Vendedora removida") : "Sem vendedora",
       total,
-      aprovadas,
-      conversao: taxaDeConversao(aprovadas, total),
+      comprou,
+      conversao: taxaDeConversao(comprou, total),
     }))
     .sort((a, b) => b.total - a.total);
 }
@@ -265,6 +332,9 @@ export async function resumoDoAtacado(
 
   const ehGestao = actor.role === "GESTAO";
   const vendedora = (filtros.vendedora ?? "").trim();
+  const marca = marcaValida(filtros.marca);
+  const estado = (filtros.estado ?? "").trim();
+  const cidade = (filtros.cidade ?? "").trim();
   const where: Prisma.WholesaleLeadWhereInput = {
     // O ESCOPO VEM PRIMEIRO, e o filtro de vendedora só se aplica DEPOIS dele e
     // só para a Gestão — mesma regra de `listLeadsFor`. Para quem é de Vendas o
@@ -273,6 +343,17 @@ export async function resumoDoAtacado(
     // sobrescreveria o escopo. É a diferença entre um filtro e um vazamento.
     ...escopoDoAtor(actor),
     ...(ehGestao && vendedora ? { sellerId: vendedora } : {}),
+    // Marca: o painel e a tabela ficam na MESMA tela, lendo os mesmos filtros
+    // da URL. Sem esta linha, escolher uma marca mudaria a lista e deixaria os
+    // números acima dela intactos — que lê como defeito, não como recorte.
+    ...(marca ? { brand: marca } : {}),
+    // As MESMAS regras de `listLeadsFor`, e não é coincidência: o painel e a
+    // tabela ficam na mesma tela lendo os mesmos filtros, então as duas
+    // consultas têm de entender a URL do mesmo jeito. UF em maiúsculas (é
+    // assim que a LP grava); cidade sem diferenciar maiúsculas, porque ela é
+    // texto livre e a mesma cidade existe na base em duas caixas.
+    ...(estado.length === 2 ? { state: estado.toUpperCase() } : {}),
+    ...(cidade ? { city: { equals: cidade, mode: "insensitive" as const } } : {}),
     ...filtroDePeriodo(filtros.de, filtros.ate),
   };
 
@@ -365,8 +446,12 @@ export async function resumoDoAtacado(
     if (i != null) entradasPorMes[i].total++;
   }
 
-  const aprovadas = contagem.get("APROVADO") ?? 0;
-  const conversao = taxaDeConversao(aprovadas, total);
+  // APROVADO + COMPROU: quem comprou foi aprovada, e o status é um só. Sem o
+  // COMPROU aqui, fechar uma venda derrubaria a taxa de aprovação.
+  const aprovadas = APROVADAS.reduce((n, s) => n + (contagem.get(s) ?? 0), 0);
+  const aprovacao = taxaDeConversao(aprovadas, total);
+  const comprou = contagem.get(WholesaleLeadStatus.COMPROU) ?? 0;
+  const conversao = taxaDeConversao(comprou, total);
 
   return {
     total,
@@ -385,7 +470,9 @@ export async function resumoDoAtacado(
       createdAtLabel: dataCurta(r.createdAt),
     })),
     porMotivo: agrupaPorMotivo(motivoRaw),
-    conversao,
+    aprovacao,
     aprovadas,
+    conversao,
+    comprou,
   };
 }

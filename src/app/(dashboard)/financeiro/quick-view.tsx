@@ -16,7 +16,13 @@ export function QuickViewButton({ orderId }: { orderId: string }) {
         <Eye className="mr-1.5 h-4 w-4" />
         Visualização rápida
       </Button>
-      {open && <OrderDetailModal orderId={orderId} onClose={() => setOpen(false)} />}
+      {open && (
+        <OrderDetailModal
+          orderId={orderId}
+          onClose={() => setOpen(false)}
+          clienteClicavel
+        />
+      )}
     </>
   );
 }

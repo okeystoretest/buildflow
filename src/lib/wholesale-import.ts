@@ -80,10 +80,12 @@ export const COLUNAS_IMPORT: readonly ColunaImport[] = [
   { nome: "tempo_que_segue", exemplo: "2 anos" },
   { nome: "faixa_investimento", exemplo: "DE_3_A_5K", aceita: INVESTMENT_BANDS },
   { nome: "quer_visita", exemplo: "sim", aceita: ["sim", "nao"] },
+  // COMPROU entrou em 28/10/2026. O modelo baixado lista os valores aceitos a
+  // partir deste `aceita`, entao a planilha que a Gestao baixa ja o oferece.
   {
     nome: "status",
     exemplo: "APROVADO",
-    aceita: ["EM_ANALISE", "APROVADO", "REPROVADO", "CUIDADO"],
+    aceita: ["EM_ANALISE", "APROVADO", "REPROVADO", "CUIDADO", "COMPROU"],
   },
   { nome: "motivo_reprovacao", exemplo: "" },
   { nome: "motivo_cuidado", exemplo: "" },
@@ -102,7 +104,7 @@ export const COLUNAS_IMPORT: readonly ColunaImport[] = [
 /** Linha pronta para o `prisma.wholesaleLead.create`, menos o que vem do banco. */
 export interface LeadImportado {
   brand: "OKEY" | "LOV_CLUB";
-  status: "EM_ANALISE" | "APROVADO" | "REPROVADO" | "CUIDADO";
+  status: "EM_ANALISE" | "APROVADO" | "REPROVADO" | "CUIDADO" | "COMPROU";
   createdAt: Date | null;
   contactName: string;
   email: string;
@@ -246,7 +248,7 @@ export function converterLinha(
   const investmentBand = fechado("faixa_investimento", INVESTMENT_BANDS);
   if (erro(investmentBand)) return { error: investmentBand.error };
   const status =
-    fechado("status", ["EM_ANALISE", "APROVADO", "REPROVADO", "CUIDADO"] as const) ??
+    fechado("status", ["EM_ANALISE", "APROVADO", "REPROVADO", "CUIDADO", "COMPROU"] as const) ??
     "EM_ANALISE";
   if (erro(status)) return { error: status.error };
 

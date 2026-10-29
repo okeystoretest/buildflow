@@ -322,6 +322,26 @@ export function DecisionModal({
     setErro(null);
   }
 
+  /**
+   * "Comprou" só aparece no seletor quando a candidatura JÁ ESTÁ aprovada (ou
+   * já comprou).
+   *
+   * É a regra de `resolveDecision`, que recusa COMPROU vindo de qualquer outra
+   * origem — comprar sem ter sido aprovada não é um caminho do negócio.
+   * Esconder aqui é conveniência: poupa a analista de escolher uma opção que o
+   * servidor vai recusar. A AUTORIDADE continua sendo o servidor, que confere
+   * de novo com o status lido dentro da transação.
+   *
+   * A condição também garante que o status ATUAL nunca saia da lista: COMPROU
+   * é o único escondível, e ele fica quando é o estado de agora. Um `select`
+   * cujo `value` não está entre as opções aparece em branco, e aí a tela diria
+   * "sem status" sobre uma candidatura que tem um.
+   */
+  const statusOferecidos = LEAD_STATUS_ORDER.filter(
+    (s) =>
+      s !== "COMPROU" || lead.status === "APROVADO" || lead.status === "COMPROU",
+  );
+
   const criterio = codigo ? findRejectionCode(codigo)?.criteria ?? null : null;
 
   const auxiliarNormalizado = auxiliar.trim().toUpperCase();
@@ -604,7 +624,7 @@ export function DecisionModal({
                     disabled={pending}
                     className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"
                   >
-                    {LEAD_STATUS_ORDER.map((s) => (
+                    {statusOferecidos.map((s) => (
                       <option key={s} value={s}>
                         {LEAD_STATUS_META[s].label}
                       </option>

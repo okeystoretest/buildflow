@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { payDriverDelivery } from "@/lib/actions/driver-payments";
 import { cn, shortName } from "@/lib/utils";
+import { NomeDoCliente } from "@/components/shared/customer-card-modal";
 
 // Ficha completa de uma entrega concluída. Sem ocultar/resumir: exibe todos os
 // dados da venda e da entrega. Compartilhada pelos históricos de Entregas da
@@ -179,7 +180,7 @@ export function EntregasList({
                       )}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {o.customerName} · Vendedora: {o.sellerName}
+                      {shortName(o.customerName)} · Vendedora: {shortName(o.sellerName)}
                       {o.driverName ? ` · Motorista: ${o.driverName}` : ""}
                     </p>
                   </div>
@@ -194,13 +195,23 @@ export function EntregasList({
 
                 <Section title="Cliente">
                   <Info label="Código" value={o.customerCode ?? "—"} />
-                  <Info label="Nome" value={o.customerName} />
+                  <Info
+                    label="Nome"
+                    value={
+                      <NomeDoCliente
+                        nome={o.customerName}
+                        codigo={o.customerCode}
+                        clicavel
+                        curto={false}
+                      />
+                    }
+                  />
                 </Section>
 
                 <Section title="Venda">
                   <Info label="Pedido" value={o.orderNumber} />
                   <Info label="Comanda" value={o.comandaNumber ?? "—"} />
-                  <Info label="Vendedora" value={o.sellerName} />
+                  <Info label="Vendedora" value={shortName(o.sellerName)} />
                   <Info label="Loja" value={o.storeName ?? "—"} />
                   <Info label="Loja de Origem" value={o.originStoreName ?? "—"} />
                   <Info label="Tipo de Pedido" value={o.orderTypeName ?? "—"} />
@@ -369,7 +380,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Info({ label, value, full = false }: { label: string; value: string; full?: boolean }) {
+function Info({ label, value, full = false }: { label: string; value: React.ReactNode; full?: boolean }) {
   return (
     <div className={cn("min-w-0", full && "col-span-2 sm:col-span-3")}>
       <p className="text-xs text-muted-foreground">{label}</p>

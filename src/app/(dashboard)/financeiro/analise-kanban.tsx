@@ -5,6 +5,7 @@ import { Clock, User, ChevronDown, CheckCircle2, XCircle, AlertTriangle, BadgeDo
 import { Button } from "@/components/ui/button";
 import { CardScroller } from "@/components/shared/card-scroller";
 import { shortName } from "@/lib/utils";
+import { NomeDoCliente } from "@/components/shared/customer-card-modal";
 import { flagOrderIssue, confirmPayment, markOrderPaid, uploadSecondPaymentProof, savePaymentPendingNote } from "@/lib/actions/finance";
 import { prepareProofFile } from "@/lib/client-image";
 import { useRouter } from "next/navigation";
@@ -15,6 +16,8 @@ export interface FinanceCard {
   orderNumber: string;
   comandaNumber: string | null;
   customerName: string;
+  /** Codigo do cadastro, para o modal abrir a ficha da cliente. */
+  customerCode: string | null;
   sellerName: string;
   // Nome do tipo de pedido (ex.: "9 - Doação"). Define o painel simplificado.
   orderTypeName: string | null;
@@ -188,7 +191,13 @@ export function AnaliseKanban({
             <div>
               <h2 className="text-lg font-bold">Pedido {aberto.orderNumber}</h2>
               <p className="text-sm text-muted-foreground">
-                {aberto.customerName} · Vend.: {aberto.sellerName}
+                <NomeDoCliente
+                  nome={aberto.customerName}
+                  codigo={aberto.customerCode}
+                  clicavel
+                  curto={false}
+                />{" "}
+                · Vend.: {shortName(aberto.sellerName)}
               </p>
             </div>
             <button onClick={() => setOpenId(null)} className="text-2xl leading-none text-muted-foreground">×</button>
@@ -416,7 +425,7 @@ function PendingCard({ card, onOpen, onFlag }: { card: FinanceCard; onOpen: () =
           <span className="font-data text-sm font-semibold">{card.total}</span>
         </div>
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground" title={card.customerName}>
-          <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {card.sellerName}
+          <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {shortName(card.sellerName)}
         </p>
 
         {/* Obs. de Pagamento em DESTAQUE laranja (visibilidade imediata p/ o
@@ -482,7 +491,7 @@ function ProcessedCard({ card }: { card: FinanceCard }) {
         <span className="font-data text-sm font-semibold">{card.total}</span>
       </div>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground" title={card.customerName}>
-        <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {card.sellerName}
+        <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {shortName(card.sellerName)}
       </p>
       <div className="mt-2 flex items-center justify-between">
         {aprovado ? (
@@ -702,7 +711,7 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
         <span className="font-data text-sm font-semibold">{card.total}</span>
       </div>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground" title={card.customerName}>
-        <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {card.sellerName}
+        <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {shortName(card.sellerName)}
       </p>
       <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
         <Clock className="h-3 w-3" />

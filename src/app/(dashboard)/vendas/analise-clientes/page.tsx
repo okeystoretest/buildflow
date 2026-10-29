@@ -3,7 +3,12 @@ import { Inbox } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { BackButton } from "@/components/shared/back-button";
 import { atorDaFerramenta } from "@/lib/wholesale-actor";
-import { AcessoNegadoAtacado, AnaliseClientesTabs } from "./tabs";
+import { AcessoNegadoAtacado } from "./tabs";
+import { AnaliseClientesPainel } from "./painel";
+import { resumoDoAtacado } from "@/lib/wholesale-dashboard";
+import { reconciliarCompras } from "@/lib/wholesale-compra";
+import { SELECT_BRAND_LABEL } from "@/lib/select-brand";
+import { shortName } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Prisma } from "@prisma/client";
@@ -69,6 +74,7 @@ export default async function AnaliseClientesPage(
       page?: string;
       busca?: string;
       estado?: string;
+      cidade?: string;
       vendedora?: string;
       de?: string;
       ate?: string;
@@ -93,6 +99,7 @@ export default async function AnaliseClientesPage(
   const brand = searchParams?.brand?.trim() || "";
   const busca = searchParams?.busca?.trim() || "";
   const estado = searchParams?.estado?.trim() || "";
+  const cidade = searchParams?.cidade?.trim() || "";
   // Lido da URL por qualquer papel, mas `listLeadsFor` só o aplica para a
   // GESTAO: para quem é de Vendas o escopo já fixa o `sellerId` no próprio id,
   // e um `?vendedora=<outro>` na barra de endereços não alarga nada.
@@ -102,17 +109,37 @@ export default async function AnaliseClientesPage(
   const motivo = searchParams?.motivo?.trim() || "";
   const page = Math.max(1, Number(searchParams?.page) || 1);
 
-  const { leads, total, totalPages } = await listLeadsFor(actor, {
-    status,
-    brand,
-    page,
-    busca,
-    estado,
-    vendedora,
-    de,
-    ate,
-    motivo,
-  });
+  // ANTES das duas consultas, e não dentro de uma delas: uma aprovada pode ter
+  // feito o primeiro pedido desde a última vez que esta tela abriu, e isso vira
+  // COMPROU (`wholesale-compra.ts`). Disparada dentro da consulta da tabela, a
+  // reconciliação não seria vista pela do painel — que roda em paralelo —, e a
+  // mesma candidatura apareceria como "Comprou" na linha e como aprovada nos
+  // números acima dela.
+  await reconciliarCompras();
+
+  // A lista e o PAINEL acima dela saem do mesmo recorte: a barra de filtros é
+  // uma só desde que a aba do dashboard saiu (28/10/2026). As duas consultas
+  // não dependem uma da outra, então vão juntas.
+  const [{ leads, total, totalPages }, resumo] = await Promise.all([
+    listLeadsFor(actor, {
+      status,
+      brand,
+      page,
+      busca,
+      estado,
+      cidade,
+      vendedora,
+      de,
+      ate,
+      motivo,
+    }),
+    // STATUS, BUSCA e MOTIVO não entram no painel de propósito: filtrar por
+    // status deixaria "Status das análises" com uma fatia só, e a taxa de
+    // aprovação de um recorte "só aprovadas" seria sempre 100%. Período,
+    // vendedora, marca, UF e cidade entram — são recortes do CONJUNTO, e é
+    // sobre o conjunto que o painel fala.
+    resumoDoAtacado(actor, { de, ate, vendedora, marca: brand, estado, cidade }),
+  ]);
   const pageSafe = Math.min(page, totalPages);
 
   // As 18 respostas não vêm na listagem (`LeadRow` é o que a TABELA mostra), e
@@ -300,6 +327,32 @@ export default async function AnaliseClientesPage(
     .map((l) => l.state?.trim().toUpperCase())
     .filter((uf): uf is string => Boolean(uf));
 
+  // CIDADE: mesmo critério da UF — as que existem, dentro do escopo de quem
+  // olha. A diferença é que a cidade é TEXTO LIVRE do formulário e não passa
+  // por normalização na gravação, então o `distinct` do banco devolve
+  // "Campinas" e "campinas" como duas opções. A deduplicação acontece aqui, em
+  // memória, sobre a caixa dobrada: duas linhas com a mesma cidade no seletor
+  // fazem a pessoa escolher a errada e concluir que o filtro está quebrado.
+  //
+  // ACENTO NÃO É TRATADO: "São Paulo" e "Sao Paulo" seguem como duas opções.
+  // Resolver isso exige normalizar a coluna na gravação, que é outra mudança —
+  // e o filtro de cada uma funciona.
+  const cidades = [
+    ...new Map(
+      (
+        await prisma.wholesaleLead.findMany({
+          where: ehGestao ? {} : { sellerId: actor.userId },
+          distinct: ["city"],
+          select: { city: true },
+          orderBy: { city: "asc" },
+        })
+      )
+        .map((l) => l.city?.trim())
+        .filter((c): c is string => Boolean(c))
+        .map((c) => [c.toLocaleLowerCase("pt-BR"), c] as const),
+    ).values(),
+  ];
+
   // Vendedoras: só a Gestão escolhe, então a consulta só acontece para ela.
   // Inclui as INATIVAS de propósito — candidatura antiga continua apontando
   // para quem saiu da equipe, e sem o nome na lista ela ficaria inalcançável.
@@ -318,6 +371,7 @@ export default async function AnaliseClientesPage(
     if (brand) sp.set("brand", brand);
     if (busca) sp.set("busca", busca);
     if (estado) sp.set("estado", estado);
+    if (cidade) sp.set("cidade", cidade);
     if (vendedora) sp.set("vendedora", vendedora);
     if (de) sp.set("de", de);
     if (ate) sp.set("ate", ate);
@@ -328,12 +382,13 @@ export default async function AnaliseClientesPage(
   };
 
   // Colunas: 8 para a vendedora, 9 para a Gestão (ela também vê "Vendedora").
-  // Cidade e UF viraram duas colunas: 10 para a Gestao (que tambem ve
-  // "Vendedora"), 9 para a vendedora.
-  const colunas = ehGestao ? 10 : 9;
+  // Cidade e UF viraram duas colunas, e depois entrou "Marca": 11 para a
+  // Gestao (que tambem ve "Vendedora"), 10 para a vendedora.
+  const colunas = ehGestao ? 11 : 10;
   const temFiltro = Boolean(
-    status || brand || busca || estado || vendedora || de || ate || motivo,
+    status || brand || busca || estado || cidade || vendedora || de || ate || motivo,
   );
+  const nomeVendedora = vendedoras.find((v) => v.id === vendedora)?.name ?? null;
 
   return (
     <div className="space-y-6">
@@ -343,13 +398,22 @@ export default async function AnaliseClientesPage(
           estado não é setor (ver `lead-status-chip.tsx`). */}
       <h1 className="text-2xl font-bold text-vendas-text">Análise de Clientes</h1>
 
-      <AnaliseClientesTabs ativa="lista" />
-
       <AnaliseClientesFiltros
-        defaults={{ busca, status, estado, vendedora, de, ate, motivo }}
+        defaults={{ busca, status, brand, estado, cidade, vendedora, de, ate, motivo }}
         estados={estados}
+        cidades={cidades}
         vendedoras={vendedoras}
         ehGestao={ehGestao}
+      />
+
+      {/* O PAINEL VEM ANTES DA FILA (28/10/2026): os números dizem como está o
+          conjunto, e a tabela embaixo é onde se age sobre uma candidatura. Era
+          uma aba própria; ver `painel.tsx`. */}
+      <AnaliseClientesPainel
+        resumo={resumo}
+        ehGestao={ehGestao}
+        filtros={{ de, ate, temFiltro }}
+        nomeVendedora={nomeVendedora}
       />
 
       {ehGestao && semDono.length > 0 && (
@@ -397,7 +461,9 @@ export default async function AnaliseClientesPage(
                       <td className="w-px whitespace-nowrap border-r border-border py-2 pr-4 font-data">
                         {dataCurta(l.createdAt)}
                       </td>
-                      <td className="border-r border-border py-2 pl-4 pr-4">{l.contactName}</td>
+                      <td className="border-r border-border py-2 pl-4 pr-4" title={l.contactName}>
+                        {shortName(l.contactName)}
+                      </td>
                       <td className="border-r border-border py-2 pl-4 pr-4">{l.city}</td>
                       <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
                         {l.state}
@@ -419,21 +485,6 @@ export default async function AnaliseClientesPage(
           <CardTitle>{ehGestao ? "Candidaturas" : "Minhas candidaturas"}</CardTitle>
         </CardHeader>
         <CardContent>
-          {/* IMPORTAÇÃO DA PLANILHA ANTIGA — só Gestão, e só aqui: é carga de
-              histórico, não operação do dia. Fica dentro do card da lista
-              porque é dela que a planilha vira linha. A action valida e recusa
-              linha por linha (ver src/lib/wholesale-import.ts). */}
-          {ehGestao && (
-            <div className="mb-4">
-              <CsvImport
-                title="Importar candidaturas da planilha"
-                description="Baixe o modelo, preencha no Excel o que a planilha antiga tem, salve como CSV e envie."
-                columns={COLUNAS_IMPORT.map((c) => c.nome)}
-                sample={COLUNAS_IMPORT.map((c) => c.exemplo)}
-                action={importWholesaleLeadsCsv}
-              />
-            </div>
-          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b text-left text-foreground">
@@ -445,6 +496,12 @@ export default async function AnaliseClientesPage(
                     Recebido
                   </th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Nome</th>
+                  {/* MARCA: diz de QUAL dos dois formulários a candidatura
+                      veio. Coluna estreita porque os dois rótulos são curtos e
+                      de largura fixa. */}
+                  <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
+                    Marca
+                  </th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Cidade</th>
                   <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">UF</th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Instagram</th>
@@ -483,7 +540,31 @@ export default async function AnaliseClientesPage(
                       <td className="w-px whitespace-nowrap border-r border-border py-2 pr-4 font-data">
                         {dataCurta(l.createdAt)}
                       </td>
-                      <td className="border-r border-border py-2 pl-4 pr-4">{l.contactName}</td>
+                      {/* O NOME ABRE A FICHA (29/10/2026), a mesma do botão
+                          Analisar: as 18 respostas, as fotos e o diário são o
+                          cadastro integral da candidata. Primeiro + segundo
+                          nome, com o inteiro no `title` — `shortName` é só
+                          exibição, e a busca da barra de filtros continua
+                          casando com o nome COMPLETO.
+
+                          Sem as respostas carregadas (linha apagada entre as
+                          duas consultas) o nome fica texto: um botão que abriria
+                          um modal vazio é pior que um nome que não clica. */}
+                      <td className="border-r border-border py-2 pl-4 pr-4" title={l.contactName}>
+                        {respostas ? (
+                          <LeadRowActions
+                            lead={respostas}
+                            alerts={alertasPorLead.get(l.id) ?? []}
+                            ehGestao={ehGestao}
+                            gatilho="nome"
+                          />
+                        ) : (
+                          shortName(l.contactName)
+                        )}
+                      </td>
+                      <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
+                        {SELECT_BRAND_LABEL[l.brand]}
+                      </td>
                       <td className="border-r border-border py-2 pl-4 pr-4">{l.city}</td>
                       {/* UF em coluna estreita e propria: e dado de largura
                           fixa, e colado na cidade impedia filtrar e ler por
@@ -507,8 +588,11 @@ export default async function AnaliseClientesPage(
                         {l.assistantName ?? "—"}
                       </td>
                       {ehGestao && (
-                        <td className="border-r border-border py-2 pl-4 pr-4">
-                          {l.sellerName ?? "—"}
+                        <td
+                          className="border-r border-border py-2 pl-4 pr-4"
+                          title={l.sellerName ?? undefined}
+                        >
+                          {l.sellerName ? shortName(l.sellerName) : "—"}
                         </td>
                       )}
                       <td className="py-2 pl-4 pr-4 text-right">
@@ -596,6 +680,21 @@ export default async function AnaliseClientesPage(
           )}
         </CardContent>
       </Card>
+
+      {/* IMPORTAÇÃO DA PLANILHA ANTIGA — só Gestão, e ABAIXO da tabela
+          (28/10/2026): é carga de histórico, não operação do dia, e no topo do
+          card ela empurrava para baixo justamente a lista que se vem ver. A
+          action valida e recusa linha por linha (ver
+          src/lib/wholesale-import.ts). */}
+      {ehGestao && (
+        <CsvImport
+          title="Importar candidaturas da planilha"
+          description="Baixe o modelo, preencha no Excel o que a planilha antiga tem, salve como CSV e envie."
+          columns={COLUNAS_IMPORT.map((c) => c.nome)}
+          sample={COLUNAS_IMPORT.map((c) => c.exemplo)}
+          action={importWholesaleLeadsCsv}
+        />
+      )}
     </div>
   );
 }

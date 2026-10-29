@@ -100,6 +100,7 @@ export default async function FinanceiroHistoricoPage(
       orderNumber: o.orderNumber ?? "—",
       comandaNumber: o.comandaNumber,
       customerName: o.customer?.name ?? "Cliente não informado",
+      customerCode: o.customer?.code ?? null,
       sellerName: o.seller?.name ?? "—",
       total: formatBRL((o.total ?? 0).toString()),
       orderValue: formatBRL((o.orderValue ?? 0).toString()),

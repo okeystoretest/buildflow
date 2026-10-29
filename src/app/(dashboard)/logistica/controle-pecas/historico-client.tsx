@@ -151,7 +151,7 @@ export function HistoricoPecas({
                       </p>
                       <p className="truncate pl-6 text-sm" title={item.customerName}>{shortName(item.customerName)}</p>
                       <p className="pl-6 text-xs text-muted-foreground">
-                        Vendedora: {item.sellerName}
+                        Vendedora: {shortName(item.sellerName)}
                         {item.pieceCount > 0 && ` · ${item.pieceCount} peça(s)`}
                       </p>
                     </div>

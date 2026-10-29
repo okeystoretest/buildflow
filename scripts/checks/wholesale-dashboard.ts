@@ -17,12 +17,13 @@ import {
   MAX_MESES_NO_GRAFICO,
   MESES_NO_GRAFICO,
   agrupaPorMotivo,
+  APROVADAS,
   agrupaPorVendedora,
   bucketsDeMes,
   escopoDoAtor,
   taxaDeConversao,
 } from "../../src/lib/wholesale-dashboard";
-import { filtroDePeriodo } from "../../src/lib/wholesale-queries";
+import { filtroDePeriodo, marcaValida } from "../../src/lib/wholesale-queries";
 import type { WholesaleActor } from "../../src/lib/wholesale-permissions";
 
 let falhas = 0;
@@ -45,6 +46,20 @@ check("vendedora é presa ao próprio id", escopoDoAtor(vendedora), { sellerId: 
 // precisa continuar existindo para a consulta não virar "tudo".
 check("o escopo da vendedora sempre traz a chave", "sellerId" in escopoDoAtor(vendedora), true);
 
+// --- marca ------------------------------------------------------------------
+// A marca chega da query string, então é texto livre. Valor desconhecido tem
+// de virar `undefined` (painel e lista sem o filtro): repassado ao Prisma ele
+// derrubaria a tela por erro de validação, e virar lista vazia faria um
+// `?brand=OKEI` digitado errado parecer "nenhuma candidatura da OKEY".
+check("marca real passa", marcaValida("OKEY"), "OKEY");
+check("a outra marca também", marcaValida("LOV_CLUB"), "LOV_CLUB");
+check("marca inventada é ignorada", marcaValida("OKEI"), undefined);
+check("vazio é ignorado", marcaValida(""), undefined);
+check("ausente é ignorado", marcaValida(undefined), undefined);
+// Minúscula NÃO é aceita: o enum do banco é maiúsculo, e aceitar aqui faria o
+// filtro funcionar na URL e falhar no Prisma.
+check("caixa diferente é ignorada", marcaValida("okey"), undefined);
+
 // --- conversão --------------------------------------------------------------
 check("aprovadas ÷ total recebido", taxaDeConversao(19, 28), 67.9);
 check("metade é 50%", taxaDeConversao(5, 10), 50);
@@ -58,8 +73,12 @@ check("as em análise contam no denominador", taxaDeConversao(2, 10), 20);
 
 // --- conversão por vendedora ------------------------------------------------
 // O painel "Taxa de conversão por vendedora" soma linhas (vendedora × status)
-// do groupBy. Dois erros moram aqui: contar APROVADO no total errado e perder a
-// linha sem dona, que tem `sellerId: null` e também aparece no painel.
+// do groupBy. Dois erros moram aqui: contar o status errado no numerador e
+// perder a linha sem dona, que tem `sellerId: null` e também aparece no painel.
+//
+// O NUMERADOR É COMPROU, e só ele. O painel por vendedora falava de APROVAÇÃO
+// até 29/10/2026, e esta é a diferença que os checks abaixo prendem: uma
+// vendedora com três aprovadas e nenhuma venda converteu ZERO.
 const linha = (sellerId: string | null, status: string, n: number) =>
   ({ sellerId, status, _count: { _all: n } }) as Parameters<typeof agrupaPorVendedora>[0][number];
 
@@ -81,11 +100,51 @@ const grupos = agrupaPorVendedora(
 
 check(
   "uma linha por vendedora, ordenada por volume",
-  grupos.map((g) => `${g.nome}:${g.aprovadas}/${g.total}=${g.conversao}`),
-  ["Ana:3/5=60", "Bia:0/2=0", "Sem vendedora:1/1=100", "Vendedora removida:1/1=100"],
+  grupos.map((g) => `${g.nome}:${g.comprou}/${g.total}=${g.conversao}`),
+  ["Ana:0/5=0", "Bia:0/2=0", "Sem vendedora:0/1=0", "Vendedora removida:0/1=0"],
 );
-// Só APROVADO conta no numerador; REPROVADO e EM_ANALISE ficam no denominador.
-check("só APROVADO é aprovada", grupos[0].aprovadas, 3);
+
+// APROVADO NÃO CONTA NO NUMERADOR, e este é o check que separa as duas taxas.
+//
+// Aqui Ana tem 2 aprovadas e 2 que compraram em 5 recebidas. A conversão é
+// 2/5 = 40%, não 4/5: ser aprovada não é ter comprado. Trocar um pelo outro dá
+// um número maior e igualmente plausível na tela, que é o que faz esse defeito
+// sobreviver a uma revisão.
+check(
+  "aprovadas não entram na conversão",
+  agrupaPorVendedora(
+    [
+      linha("v1", "APROVADO", 2),
+      linha("v1", "COMPROU", 2),
+      linha("v1", "EM_ANALISE", 1),
+    ],
+    nomes,
+  ).map((g) => `${g.nome}:${g.comprou}/${g.total}=${g.conversao}`),
+  ["Ana:2/5=40"],
+);
+// Todas compraram: 100%.
+check(
+  "só compraram: conversão é 100%",
+  agrupaPorVendedora([linha("v1", "COMPROU", 3)], nomes).map((g) => g.conversao),
+  [100],
+);
+// Só aprovadas, nenhuma venda: conversão ZERO. É o caso que a taxa de
+// aprovação mostraria como 100% — as duas contas respondem perguntas
+// diferentes, e o painel por vendedora responde a da venda.
+check(
+  "só aprovadas: conversão é 0",
+  agrupaPorVendedora([linha("v1", "APROVADO", 3)], nomes).map((g) => g.conversao),
+  [0],
+);
+// APROVADAS continua governando a taxa de aprovação do TOTAL (o cartão do
+// topo). Prendê-la aqui porque o defeito nasce de alguém "simplificar" esta
+// lista para um só status, e aí fechar uma venda derrubaria a aprovação.
+check("APROVADAS tem exatamente APROVADO e COMPROU", [...APROVADAS].sort(), [
+  "APROVADO",
+  "COMPROU",
+]);
+// Nenhuma venda em `grupos`: o numerador é zero mesmo com 3 aprovadas.
+check("sem COMPROU, o numerador é zero", grupos[0].comprou, 0);
 // `null` não pode ser descartado nem casar com outra vendedora: é a candidatura
 // que chegou pelo link geral sem dona, e o painel precisa mostrá-la.
 check("a linha sem dona sobrevive", grupos.find((g) => g.sellerId === null)?.total, 1);

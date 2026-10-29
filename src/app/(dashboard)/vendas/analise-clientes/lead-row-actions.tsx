@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { shortName } from "@/lib/utils";
 import { DecisionModal, type DuplicateAlertView, type LeadAnswers } from "./decision-modal";
 
 /**
@@ -24,19 +25,46 @@ export function LeadRowActions({
   lead,
   alerts,
   ehGestao,
+  gatilho = "botao",
 }: {
   lead: LeadAnswers;
   alerts: DuplicateAlertView[];
   /** Só a Gestão vê o botão de excluir dentro do modal. */
   ehGestao: boolean;
+  /**
+   * O que abre o modal: o botão "Analisar" da coluna de ações, ou o NOME da
+   * candidata na própria linha.
+   *
+   * Dois gatilhos no mesmo componente em vez de dois componentes: o que o nome
+   * precisa abrir é exatamente esta ficha — as 18 respostas, as fotos e o
+   * diário são o cadastro integral da candidata, e não há outro. Um segundo
+   * componente duplicaria a montagem do modal para mostrar o mesmo conteúdo, e
+   * os dois divergiriam na primeira mudança.
+   *
+   * Aqui NÃO entra o `NomeDoCliente` de `customer-card-modal.tsx`: aquele abre
+   * o cadastro de `Customer`, que uma candidatura só tem DEPOIS de aprovada. A
+   * ficha da candidatura existe desde que ela chegou, e é mais completa.
+   */
+  gatilho?: "botao" | "nome";
 }) {
   const [aberto, setAberto] = useState(false);
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setAberto(true)}>
-        <ClipboardCheck className="h-4 w-4" /> Analisar
-      </Button>
+      {gatilho === "nome" ? (
+        <button
+          type="button"
+          onClick={() => setAberto(true)}
+          title={`${lead.contactName} — ver cadastro`}
+          className="cursor-pointer text-left underline decoration-dotted underline-offset-2 hover:decoration-solid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+        >
+          {shortName(lead.contactName)}
+        </button>
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => setAberto(true)}>
+          <ClipboardCheck className="h-4 w-4" /> Analisar
+        </Button>
+      )}
       {/* Montado só quando abre: são 18 respostas por linha, e manter 20
           modais montados por página sem necessidade seria desperdício puro.
           Desmontar também é o que garante que reabrir recomeça dos dados

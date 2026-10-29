@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/shared/modal";
 import { Badge } from "@/components/ui/badge";
 import { cn, shortName } from "@/lib/utils";
+import { NomeDoCliente } from "@/components/shared/customer-card-modal";
 
 export interface FinHistProof { id: string; filePath: string; }
 export interface FinHistItem {
@@ -13,6 +14,8 @@ export interface FinHistItem {
   orderNumber: string;
   comandaNumber: string | null;
   customerName: string;
+  /** Codigo do cadastro, para o modal abrir a ficha da cliente. */
+  customerCode: string | null;
   sellerName: string;
   total: string;
   orderValue: string;
@@ -121,8 +124,18 @@ export function FinHistoricoList({ orders }: { orders: FinHistItem[] }) {
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <Info label="Pedido" value={o.orderNumber} />
                   <Info label="Comanda" value={o.comandaNumber ?? "—"} />
-                  <Info label="Cliente" value={o.customerName} />
-                  <Info label="Vendedor(a)" value={o.sellerName} />
+                  <Info
+                    label="Cliente"
+                    value={
+                      <NomeDoCliente
+                        nome={o.customerName}
+                        codigo={o.customerCode}
+                        clicavel
+                        curto={false}
+                      />
+                    }
+                  />
+                  <Info label="Vendedor(a)" value={shortName(o.sellerName)} />
                   <Info label="Valor do pedido" value={o.orderValue} />
                   <Info label="Frete" value={o.freight} />
                   <Info label="Total" value={o.total} />
@@ -177,7 +190,7 @@ export function FinHistoricoList({ orders }: { orders: FinHistItem[] }) {
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>

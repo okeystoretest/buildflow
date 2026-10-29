@@ -6,7 +6,9 @@ import { Label } from "@/components/ui/label";
 import { PeriodoFiltro } from "@/components/shared/periodo-filtro";
 import { Card, CardContent } from "@/components/ui/card";
 import { useFilterQuery } from "@/hooks/use-filter-query";
+import { SELECT_BRAND_LABEL, SELECT_BRANDS } from "@/lib/select-brand";
 import { rejectionCodesByCategory } from "@/lib/wholesale-rejection-codes";
+import { LEAD_STATUS_META, LEAD_STATUS_ORDER } from "./lead-status-chip";
 
 const selectClass =
   "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm " +
@@ -27,25 +29,34 @@ const selectClass =
  * dentro do escopo de quem olha — oferecer as 27 faria a vendedora procurar
  * entre estados de onde nunca chegou candidatura.
  *
- * Marca não entra: a Lov saiu de circulação em 17/10/2026 e sobrou uma marca
- * só. Quando ela voltar, este é o lugar.
+ * MARCA entrou em 28/10/2026: a Lov Club voltou com formulário próprio, e sem
+ * este filtro as duas origens ficam embaralhadas na mesma fila. As opções são
+ * as duas marcas fixas (`SELECT_BRANDS`), não as que existem na base: ao
+ * contrário de UF, são duas e conhecidas, e "OKEY" desaparecer do seletor
+ * porque ninguém se candidatou hoje leria como defeito.
  */
 export function AnaliseClientesFiltros({
   defaults,
   estados,
+  cidades,
   vendedoras,
   ehGestao,
 }: {
   defaults: {
     busca: string;
     status: string;
+    /** Nome da chave na URL (`?brand=`), como `listLeadsFor` já a espera. */
+    brand: string;
     estado: string;
+    cidade: string;
     vendedora: string;
     de: string;
     ate: string;
     motivo: string;
   };
   estados: string[];
+  /** As cidades que existem na base, já deduplicadas — ver a página. */
+  cidades: string[];
   vendedoras: { id: string; name: string }[];
   ehGestao: boolean;
 }) {
@@ -54,7 +65,9 @@ export function AnaliseClientesFiltros({
     {
       instant: {
         status: defaults.status,
+        brand: defaults.brand,
         estado: defaults.estado,
+        cidade: defaults.cidade,
         vendedora: defaults.vendedora,
         de: defaults.de,
         ate: defaults.ate,
@@ -97,10 +110,31 @@ export function AnaliseClientesFiltros({
             onChange={(e) => f.setInstant("status", e.target.value)}
           >
             <option value="">Todos</option>
-            <option value="EM_ANALISE">Em análise</option>
-            <option value="APROVADO">Aprovado</option>
-            <option value="CUIDADO">Cuidado</option>
-            <option value="REPROVADO">Reprovado</option>
+            {/* Na ordem do fluxo, a mesma de `LEAD_STATUS_ORDER` e dos cartões
+                do painel: a lista é lida como o funil, não em ordem
+                alfabética. */}
+            {LEAD_STATUS_ORDER.map((s) => (
+              <option key={s} value={s}>
+                {LEAD_STATUS_META[s].label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5" style={{ minWidth: 140 }}>
+          <Label htmlFor="filtro-marca">Marca</Label>
+          <select
+            id="filtro-marca"
+            className={selectClass}
+            value={f.instant.brand}
+            onChange={(e) => f.setInstant("brand", e.target.value)}
+          >
+            <option value="">Todas</option>
+            {SELECT_BRANDS.map((b) => (
+              <option key={b} value={b}>
+                {SELECT_BRAND_LABEL[b]}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -121,6 +155,24 @@ export function AnaliseClientesFiltros({
             {estados.map((uf) => (
               <option key={uf} value={uf}>
                 {uf}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5" style={{ minWidth: 170 }}>
+          <Label htmlFor="filtro-cidade">Cidade</Label>
+          <select
+            id="filtro-cidade"
+            className={selectClass}
+            value={f.instant.cidade}
+            onChange={(e) => f.setInstant("cidade", e.target.value)}
+            disabled={cidades.length === 0}
+          >
+            <option value="">{cidades.length === 0 ? "Nenhuma ainda" : "Todas"}</option>
+            {cidades.map((c) => (
+              <option key={c} value={c}>
+                {c}
               </option>
             ))}
           </select>

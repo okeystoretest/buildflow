@@ -13,6 +13,7 @@ import {
   type WholesaleActor,
 } from "@/lib/wholesale-permissions";
 import { apagarCandidatura } from "@/lib/wholesale-retention";
+import { cadastrarClienteDaCandidatura } from "@/lib/wholesale-customer";
 import type { WholesaleLeadStatus } from "@prisma/client";
 
 /**
@@ -88,7 +89,7 @@ export async function decideLead(input: {
 
   const lead = await prisma.wholesaleLead.findUnique({
     where: { id: leadId },
-    select: { id: true, sellerId: true },
+    select: { id: true, sellerId: true, status: true },
   });
   // Mesma resposta para "não existe" e "não é seu": a existência do cadastro
   // de um negócio real não é informação pública dentro do sistema.
@@ -97,12 +98,17 @@ export async function decideLead(input: {
   // `toStatus` não-textual chega como "" e cai em "Status inválido.", nunca
   // numa exceção.
   const toStatusRaw = asText(input.toStatus) ?? "";
-  const decisao = resolveDecision({
+  const entrada = {
     toStatus: toStatusRaw,
     rejectionCode: asText(input.rejectionCode),
     cautionReason: asText(input.cautionReason),
-  });
-  if ("error" in decisao) return actionError(decisao.error);
+  };
+  // PRIMEIRA passada, com o status lido aqui fora: recusa logo o pedido
+  // inválido, com a mensagem exata, sem abrir transação nenhuma. A que VALE é
+  // a segunda, dentro da transação, com o status que a escrita vai usar — ver
+  // a nota lá embaixo.
+  const decisaoPrevia = resolveDecision({ ...entrada, fromStatus: lead.status });
+  if ("error" in decisaoPrevia) return actionError(decisaoPrevia.error);
 
   // Só chega aqui um status que `resolveDecision` reconheceu.
   const toStatus = toStatusRaw as WholesaleLeadStatus;
@@ -119,10 +125,44 @@ export async function decideLead(input: {
     // propósito: duas pessoas internas não justificam travas.)
     const atual = await tx.wholesaleLead.findUnique({
       where: { id: lead.id },
-      select: { status: true },
+      // `customerId` e os campos da candidata entram porque aprovar CADASTRA a
+      // lojista (28/10/2026), e o cadastro sai destas respostas.
+      select: {
+        status: true,
+        customerId: true,
+        contactName: true,
+        city: true,
+        state: true,
+        phone: true,
+        email: true,
+        cnpj: true,
+      },
     });
     // A linha sumiu entre a checagem de permissão e a transação: não grava nada.
     if (!atual) return false;
+
+    // SEGUNDA passada, e é esta que vale: o COMPROU só é alcançável a partir de
+    // APROVADO, e quem governa essa regra tem de ser o status que a escrita vai
+    // sobrescrever — não o lido antes da transação. Entre as duas leituras a
+    // candidatura pode ter voltado para EM_ANALISE por outra pessoa (a
+    // vendedora dona e a Gestão têm o mesmo acesso), e sem esta conferência o
+    // COMPROU entraria pulando a análise. Mesma função pura, nenhuma regra
+    // escrita duas vezes.
+    const decisao = resolveDecision({ ...entrada, fromStatus: atual.status });
+    if ("error" in decisao) return decisao.error;
+
+    // O CADASTRO DA LOJISTA, quando ela passa a ser cliente.
+    //
+    // Em COMPROU também, e não só em APROVADO: as candidaturas aprovadas ANTES
+    // desta mudança não têm cadastro, e marcar uma delas como Comprou é
+    // exatamente o momento em que ele passa a fazer falta. `customerId` já
+    // preenchido não é tocado — o cadastro é criado uma vez.
+    const criaCadastro = toStatus === "APROVADO" || toStatus === "COMPROU";
+    const customerId =
+      criaCadastro && !atual.customerId
+        ? await cadastrarClienteDaCandidatura(tx, atual)
+        : null;
+
     await tx.wholesaleLead.update({
       where: { id: lead.id },
       data: {
@@ -131,6 +171,9 @@ export async function decideLead(input: {
         cautionReason: decisao.cautionReason
           ? limitText(decisao.cautionReason, MAX_CAUTION)
           : null,
+        // Só escreve quando há cadastro novo: `undefined` em Prisma não altera
+        // a coluna, e `null` APAGARIA o vínculo de quem já o tem.
+        ...(customerId ? { customerId } : {}),
         decidedById: actor.userId,
         decidedAt: new Date(),
       },
@@ -147,6 +190,9 @@ export async function decideLead(input: {
     });
     return true;
   });
+  // A transação recusou a transição com o status fresco (COMPROU fora de
+  // APROVADO): a mensagem é a mesma da primeira passada.
+  if (typeof gravou === "string") return actionError(gravou);
   // O ator já passou por canDecideLead para este lead: dizer "sem permissão"
   // seria falso. A verdade é que o registro sumiu, e não há o que esconder de
   // quem já está autorizado a vê-lo.

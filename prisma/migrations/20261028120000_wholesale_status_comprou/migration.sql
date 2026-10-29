@@ -1,0 +1,14 @@
+-- "COMPROU": a candidatura aprovada que virou venda.
+--
+-- Quinto estado no fim do funil. NAO substitui APROVADO: a taxa de aprovacao
+-- continua contando as aprovadas, e a de conversao passa a contar as que
+-- compraram. E estado novo, e nao uma coluna booleana ao lado do status,
+-- porque o funil e uma linha — um booleano permitiria a combinacao impossivel
+-- "reprovada e comprou".
+--
+-- Isolado em sua propria migration, como "PAGO" ja foi em OrderStatus: no
+-- Postgres, ALTER TYPE ADD VALUE nao pode coexistir com o USO do novo valor na
+-- mesma transacao.
+--
+-- Nenhuma linha muda: nenhuma candidatura passa a COMPROU por esta migration.
+ALTER TYPE "WholesaleLeadStatus" ADD VALUE IF NOT EXISTS 'COMPROU';

@@ -115,6 +115,9 @@ export default async function FluxoPage(
         boardModule={`Fluxo de Pedidos → ${store.name}`}
         stageLimits={stageLimits}
         simplified={simplified}
+        // Esta tela é de GESTAO/VENDAS/FINANCEIRO, os três papéis que abrem o
+        // cadastro de clientes. O quadro da Logística não recebe a prop.
+        clienteClicavel
       />
     </div>
   );

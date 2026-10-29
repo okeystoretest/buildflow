@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { RefreshCw, Target, TrendingUp, BarChart3, Flame, Trophy, Maximize2, Minimize2, CalendarClock, Pencil, Check, RotateCcw, Undo2, Play, Pause } from "lucide-react";
-import { formatBRL, tierColor, tierText, nextCampaignId } from "@/lib/utils";
+import { formatBRL, tierColor, tierText, nextCampaignId, shortName } from "@/lib/utils";
 import { setRankAdjustment, clearRankAdjustment, clearRankAdjustments } from "@/lib/actions/rank-adjustments";
 import type { RankData, RankRow, CampaignPerf, CampaignPerfRow } from "@/lib/rank-data";
 
@@ -781,7 +781,7 @@ function RecordeKpi({ icon, iconClass, label, total, nome, vazio }: {
             <span className="font-data grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary text-[10px] font-bold text-muted-foreground" aria-hidden>
               {iniciais(nome)}
             </span>
-            <span className="truncate text-sm font-medium" title={nome}>{nome}</span>
+            <span className="truncate text-sm font-medium" title={nome}>{shortName(nome)}</span>
           </>
         ) : (
           <span className="font-data truncate text-sm text-muted-foreground">{vazio}</span>
@@ -968,7 +968,7 @@ function RankLine({ pos, row, showTrophy, hideValue, destaque, edicao }: {
             <span className="font-data w-4 shrink-0 text-center text-xs text-muted-foreground">{pos}</span>
           )}
           <span className={`truncate text-sm lg:text-[0.9375rem] ${destaque ? "font-bold" : "font-medium"}`} title={row.nome}>
-            {row.nome}
+            {shortName(row.nome)}
           </span>
           {row.ajustado && (
             <span
@@ -1111,7 +1111,7 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
                 <td className="py-1.5 pr-2">
                   <span className="flex items-center gap-2">
                     {i < 3 && !apagada ? <RankTrophy pos={i + 1} /> : <span className="w-4 shrink-0" />}
-                    <span className={apagada ? "" : "font-semibold"}>{r.nome}</span>
+                    <span className={apagada ? "" : "font-semibold"} title={r.nome}>{shortName(r.nome)}</span>
                   </span>
                 </td>
                 <td className="py-1.5 pr-2 text-right font-data">{r.meta > 0 ? r.meta : "—"}</td>
