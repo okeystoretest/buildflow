@@ -743,12 +743,6 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
         })}
       </div>
 
-      {podeAnexar && anexos > 0 && (
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          {anexos}/{MAX_COMPROVANTES} comprovante(s) anexado(s).
-        </p>
-      )}
-
       {/* Comentario ja registrado: aparece no card para nao exigir abrir o
           modal so para saber se ha alguma anotacao. */}
       {card.paymentPendingNote?.trim() && (
@@ -765,36 +759,60 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
       {err && <p className="mt-2 text-[11px] text-destructive">{err}</p>}
       {okMsg && <p className="mt-2 text-[11px] text-motorista-text">{okMsg}</p>}
 
-      {/* OS QUATRO BOTOES NUMA FILEIRA SO, cada um com a largura do proprio
-          rotulo. Eram quatro barras de largura inteira empilhadas, separadas
-          pela observacao e pelas mensagens: o card passava de 300px de altura e
-          cabiam menos de dois por tela. Numa coluna de kanban a altura e o
-          recurso caro — a largura sobra.
+      {/* OS QUATRO BOTOES NUMA GRADE 2x2, TODOS DO MESMO TAMANHO.
 
-          `flex-wrap` e nao um grid de colunas fixas: os rotulos mudam de
-          tamanho conforme o estado ("Comentar" vira "Editar comentario",
-          "Inserir comprovante" vira "Enviando..."), e uma grade daria sobra num
-          botao e aperto no vizinho a cada troca.
+          Primeiro foram quatro barras de largura inteira empilhadas: o card
+          passava de 300px e cabiam menos de dois por tela. Depois,
+          `flex-wrap` com cada botao do tamanho do seu rotulo — resolveu a
+          altura, mas deixou as fileiras irregulares, porque os rotulos tem
+          comprimentos muito diferentes ("Pago" ao lado de "Ver comprovantes
+          (2)"). Numa coluna com varios cards empilhados, cada um quebrando
+          num ponto diferente, a borda direita vira um serrilhado.
+
+          A grade resolve as duas coisas: duas colunas iguais, quatro botoes
+          em duas fileiras, alinhados de um card para o outro. E ELA ABSORVE A
+          TROCA DE ROTULO, que era a objecao ao grid na versao anterior —
+          "Comentar" vira "Editar comentario" e "Inserir comprovante" vira
+          "Enviando...", e a celula nao muda de tamanho porque a largura vem da
+          coluna, nao do texto.
 
           `h-8` por cima do `size="sm"` (que e h-9): o tamanho pedido e menor
           que o menor que o Button oferece de fabrica. Segue acima do alvo de
           toque de 32px, e como so esta tela usa, nao vira variante nova. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 grid grid-cols-2 gap-2">
         {/* O botao existe sempre, mas so abre quando ha o que ver: um clique
             num modal vazio nao diz nada que o rotulo "Sem comprovantes" ja
             nao diga. A lista vem do servidor; apos anexar por este card o
             router.refresh atualiza o card e o botao libera. */}
+        {/* A CONTAGEM VIVE NO BOTAO, com o teto junto: "(2/10)".
+
+            Era uma linha de texto solta acima dos botoes ("2/10 comprovante(s)
+            anexado(s)"), e ela gastava uma linha inteira do card para dizer um
+            numero que so importa quando se vai olhar ou anexar — que e
+            exatamente o que estes dois botoes fazem. Com o teto ao lado, quem
+            esta perto do limite descobre no mesmo lugar onde decide anexar.
+
+            O numerador e `proof2List.length`, e nao o `anexos` do estado local:
+            e este botao que ABRE a lista, entao ele promete o que vai mostrar.
+            Os dois so divergem no instante entre o upload e o refresh.
+            
+            SEM O "Ver" no rotulo: medido no navegador, "Ver comprovantes
+            (2/10)" estoura a celula na coluna mais estreita que este kanban
+            chega a ter (309px, num viewport de 1024 — abaixo disso as colunas
+            viram uma so, larga). O olho ao lado ja diz que o botao abre algo. */}
         <Button
           type="button"
           onClick={onViewProofs}
           size="sm"
           variant="outline"
-          className="h-8 px-2.5"
+          className="h-8 w-full px-2"
           disabled={card.proof2List.length === 0}
           title={card.proof2List.length === 0 ? "Nenhum comprovante inserido" : "Ver comprovantes inseridos"}
         >
           <Eye className="mr-1 h-3.5 w-3.5" />
-          {card.proof2List.length === 0 ? "Sem comprovantes" : `Ver comprovantes (${card.proof2List.length})`}
+          {card.proof2List.length === 0
+            ? "Sem comprovantes"
+            : `Comprovantes (${card.proof2List.length}/${MAX_COMPROVANTES})`}
         </Button>
 
         <Button
@@ -802,7 +820,7 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
           onClick={onComment}
           size="sm"
           variant="outline"
-          className="h-8 px-2.5"
+          className="h-8 w-full px-2"
           title={card.paymentPendingNote ? "Editar observação do pedido" : "Adicionar observação ao pedido"}
         >
           <MessageSquare className="mr-1 h-3.5 w-3.5" />
@@ -811,7 +829,8 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
 
         {podeAnexar && (
           <>
-            {/* Input escondido: o botao e quem dispara a selecao de arquivos. */}
+            {/* Input escondido: nao ocupa celula da grade (`display: none`). O
+                botao e quem dispara a selecao de arquivos. */}
             <input
               ref={inputRef}
               type="file"
@@ -826,7 +845,7 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
               disabled={anexando || busy || cheio}
               size="sm"
               variant="outline"
-              className="h-8 px-2.5"
+              className="h-8 w-full px-2"
               title={cheio ? `Limite de ${MAX_COMPROVANTES} comprovantes atingido` : "Anexar comprovante"}
             >
               <Paperclip className="mr-1 h-3.5 w-3.5" />
@@ -841,7 +860,7 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
           onClick={pay}
           disabled={busy || anexando}
           size="sm"
-          className="h-8 bg-sky-500 px-3 text-white hover:bg-sky-600"
+          className="h-8 w-full bg-sky-500 px-2 text-white hover:bg-sky-600"
         >
           <BadgeDollarSign className="mr-1 h-3.5 w-3.5" />
           {busy ? "Confirmando..." : "Pago"}
