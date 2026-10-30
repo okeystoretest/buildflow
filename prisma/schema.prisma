@@ -1341,11 +1341,39 @@ enum WholesaleLeadStatus {
   REPROVADO
   // Sinal de risco/fraude, com justificativa obrigatória (decisão 8).
   CUIDADO
-  /// A lojista aprovada JÁ COMPROU. Só se alcança a partir de APROVADO (ver
-  /// resolveDecision), porque comprar sem ter sido aprovada não é um caminho
-  /// que exista no negócio. Chega sozinho quando um pedido aparece ligado ao
-  /// cadastro dela (src/lib/wholesale-compra.ts), ou à mão por quem analisa.
+  /// LEGADO, e por isso o último da lista. Entre 28/10 e 30/10/2026 a compra
+  /// foi um STATUS, e este valor é o que sobrou disso.
+  ///
+  /// NENHUM caminho de código o escreve: a compra virou eixo próprio
+  /// (`WholesaleLead.purchaseState`), porque status é um só por candidatura e
+  /// quem comprava DEIXAVA de estar em APROVADO — "aprovada e não comprou" não
+  /// era expressável, e a taxa de aprovação caía a cada venda fechada.
+  ///
+  /// Fica no enum de propósito. Postgres não remove valor de enum, e
+  /// `WholesaleLeadEvent.fromStatus/toStatus` guardam linhas REAIS
+  /// `APROVADO -> COMPROU`: apagar o valor exigiria reescrever o diário de
+  /// auditoria, falsificando o que de fato aconteceu sob o modelo antigo.
+  ///
+  /// Quem lista status para opção, contagem ou validação usa `STATUS_VIVOS`
+  /// (src/lib/wholesale-permissions.ts), NÃO `Object.values` deste enum —
+  /// senão este valor vaza como opção de filtro e balde sempre-zero.
   COMPROU
+}
+
+/// O eixo de COMPRA de uma candidatura, separado do status.
+///
+/// Só tem significado quando `status = APROVADO` — a invariante vive em
+/// `resolvePurchase` (src/lib/wholesale-permissions.ts), que é a autoridade.
+enum WholesalePurchaseState {
+  /// Onde toda aprovada começa: está na régua de contato, ainda não comprou.
+  CADENCIA
+  /// Comprou. Chega sozinho quando um pedido aparece ligado ao cadastro dela
+  /// (src/lib/wholesale-compra.ts), ou à mão por quem analisa.
+  COMPROU
+  /// Decisão HUMANA de que não comprou. A reconciliação automática NÃO a
+  /// desfaz, mesmo que um pedido apareça depois: reverter é escolha de quem
+  /// analisa, pelo dropdown.
+  NAO_COMPROU
 }
 
 enum WholesaleServiceModel {
@@ -1383,6 +1411,14 @@ model WholesaleLead {
   id     String              @id @default(cuid())
   brand  WholesaleBrand
   status WholesaleLeadStatus @default(EM_ANALISE)
+
+  /// O eixo de COMPRA, independente do status (ver `WholesalePurchaseState`).
+  ///
+  /// Toda candidatura tem um valor, inclusive a que nem foi analisada — o
+  /// default é o que mantém a coluna NOT NULL e o `total` do painel correto ao
+  /// agrupar por este campo. Só é EXIBIDO e só pode ser ESCRITO quando
+  /// `status = APROVADO`, e disso cuida `resolvePurchase`.
+  purchaseState WholesalePurchaseState @default(CADENCIA)
 
   // Dono do lead. NULO = chegou sem código de indicação válido e espera a
   // Gestão distribuir (decisão 14). Não descartamos o cadastro: perder uma
@@ -1483,9 +1519,11 @@ model WholesaleLead {
   @@index([cnpj])
   @@index([phone])
   @@index([rodizioIndice])
-  // A reconciliação do COMPROU varre por (status, customerId) a cada leitura da
-  // tela — ver `reconciliarCompras`.
-  @@index([status, customerId])
+  // A reconciliação da compra varre por (status, purchaseState, customerId) a
+  // cada leitura da tela — ver `reconciliarCompras`. `purchaseState` entrou no
+  // meio porque é a cláusula que esvazia a varredura em regime: passada a
+  // virada, a candidatura sai de CADENCIA e não volta à consulta.
+  @@index([status, purchaseState, customerId])
 }
 
 /// Diário de mudanças de status (decisão 12). Sem ele os campos de decisão
@@ -1497,14 +1535,26 @@ model WholesaleLeadEvent {
   leadId String
   lead   WholesaleLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  fromStatus    WholesaleLeadStatus
-  toStatus      WholesaleLeadStatus
+  /// UM EVENTO É DE STATUS **OU** DE COMPRA, nunca dos dois e nunca de nenhum.
+  ///
+  /// Os quatro campos são anuláveis porque o diário passou a registrar duas
+  /// coisas diferentes na MESMA linha do tempo (é essa linha que a Gestão lê
+  /// para entender uma candidatura), mas o par preenchido diz qual eixo mudou.
+  /// A invariante não fica só no código: o CHECK
+  /// `evento_e_status_ou_compra` na migração
+  /// 20261030_wholesale_purchase_state a guarda no banco, porque diário de
+  /// auditoria com linha malformada é pior que não ter diário — ninguém
+  /// desconfia dele.
+  fromStatus    WholesaleLeadStatus?
+  toStatus      WholesaleLeadStatus?
+  fromPurchase  WholesalePurchaseState?
+  toPurchase    WholesalePurchaseState?
   rejectionCode String?
   note          String?
 
-  /// NULO = o SISTEMA mudou o status, não uma pessoa.
+  /// NULO = o SISTEMA mudou o estado, não uma pessoa.
   ///
-  /// Só acontece na virada automática para COMPROU, quando um pedido aparece
+  /// Só acontece na virada automática da compra, quando um pedido aparece
   /// ligado ao cadastro da lojista (`reconciliarCompras`). Atribuir essa
   /// mudança a quem por acaso abriu a tela seria mentira num diário de
   /// auditoria — e é justamente o diário que existe para não mentir.

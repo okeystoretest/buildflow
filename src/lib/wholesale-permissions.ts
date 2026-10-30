@@ -55,22 +55,36 @@ export function canDecideLead(
   return canSeeLead(actor, lead);
 }
 
-const STATUSES = ["EM_ANALISE", "APROVADO", "REPROVADO", "CUIDADO", "COMPROU"] as const;
+/**
+ * OS STATUS QUE O SISTEMA ESCREVE, e a lista única deles.
+ *
+ * `WholesaleLeadStatus` tem um sexto valor, `COMPROU`, que é LEGADO: ele existe
+ * no enum do Postgres só para o `WholesaleLeadEvent` histórico continuar
+ * verdadeiro, e nenhum caminho de código o escreve desde que a compra virou
+ * eixo próprio (`WholesalePurchaseState`). Ver a nota no schema.
+ *
+ * Por isso NÃO se itera `Object.values(WholesaleLeadStatus)` para montar lista
+ * de opções, balde de contagem ou validação: o valor legado vazaria em todos.
+ * Quem precisa dos status vivos usa esta const — ela é a fonte, e antes dela a
+ * mesma lista estava escrita à mão em quatro lugares que divergiam sozinhos.
+ */
+export const STATUS_VIVOS = ["EM_ANALISE", "APROVADO", "REPROVADO", "CUIDADO"] as const;
+
+/**
+ * Os três estados do eixo de COMPRA, na ordem do funil.
+ *
+ * `CADENCIA` é onde toda aprovada começa: está na régua de contato e ainda não
+ * comprou. `NAO_COMPROU` é decisão humana — a reconciliação automática
+ * (`wholesale-compra.ts`) nunca a desfaz.
+ */
+export const PURCHASE_STATES = ["CADENCIA", "COMPROU", "NAO_COMPROU"] as const;
+
+export type PurchaseState = (typeof PURCHASE_STATES)[number];
 
 export interface DecisionInput {
   toStatus: string;
   rejectionCode?: string | null;
   cautionReason?: string | null;
-  /**
-   * O status ATUAL da candidatura, lido do banco por quem chama.
-   *
-   * Existe só por causa do COMPROU, que é a única transição com origem
-   * restrita. Vem de fora porque esta função é pura — e porque o valor tem de
-   * ser o do banco, não o que a tela diz que era: o modal pode estar aberto há
-   * meia hora, e a candidatura pode ter sido decidida nesse meio-tempo por
-   * outra pessoa.
-   */
-  fromStatus?: string | null;
 }
 
 export type DecisionResult =
@@ -86,7 +100,7 @@ export type DecisionResult =
  * informação continuaria lá, errada, e ninguém saberia que ela é resto.
  */
 export function resolveDecision(input: DecisionInput): DecisionResult {
-  if (!STATUSES.includes(input.toStatus as (typeof STATUSES)[number])) {
+  if (!STATUS_VIVOS.includes(input.toStatus as (typeof STATUS_VIVOS)[number])) {
     return { error: "Status inválido." };
   }
 
@@ -103,25 +117,38 @@ export function resolveDecision(input: DecisionInput): DecisionResult {
     return { ok: true, rejectionCode: null, cautionReason: reason };
   }
 
-  // COMPROU SÓ SE ALCANÇA A PARTIR DE APROVADO.
-  //
-  // Única transição com origem restrita, e a restrição é do negócio, não da
-  // tela: comprar sem ter sido aprovada não é um caminho que exista. Marcar
-  // "Comprou" direto de EM_ANALISE pularia a análise — e a taxa de aprovação
-  // passaria a ter no denominador uma venda que nunca foi julgada.
-  //
-  // Conferido AQUI, e não só escondendo a opção no modal: a tela esconder é
-  // conveniência, e esta função é a autoridade. Marcar de novo quem já está em
-  // COMPROU é aceito (é reafirmar, não pular etapa) — mas não muda nada, e
-  // `decideLead` já não grava evento quando o status não muda.
-  if (input.toStatus === "COMPROU") {
-    const atual = input.fromStatus?.trim();
-    if (atual !== "APROVADO" && atual !== "COMPROU") {
-      return { error: "Só uma candidatura aprovada pode ser marcada como Comprou." };
-    }
-    return { ok: true, rejectionCode: null, cautionReason: null };
-  }
-
   // APROVADO e EM_ANALISE não carregam motivo nenhum.
   return { ok: true, rejectionCode: null, cautionReason: null };
+}
+
+export type PurchaseResult = { error: string } | { ok: true; purchaseState: PurchaseState };
+
+/**
+ * A invariante do eixo de compra: ELE SÓ EXISTE PARA QUEM FOI APROVADA.
+ *
+ * "Comprou" sem análise não é um caminho que o negócio tenha — e marcar compra
+ * numa candidatura reprovada colocaria no numerador da conversão uma venda que
+ * nunca foi julgada. A regra é a mesma que `resolveDecision` guardava enquanto
+ * COMPROU era status; mudou de lugar junto com o dado.
+ *
+ * O `status` vem de FORA, lido do banco por quem chama, porque esta função é
+ * pura — e porque o valor tem de ser o do banco, não o que a tela diz que era:
+ * a lista pode estar aberta há meia hora e a candidatura ter sido reprovada
+ * nesse meio-tempo por outra pessoa.
+ *
+ * Conferido AQUI, e não só escondendo o dropdown na linha não-aprovada: a tela
+ * esconder é conveniência, esta função é a autoridade.
+ */
+export function resolvePurchase(input: {
+  purchaseState: string;
+  status: string;
+}): PurchaseResult {
+  const estado = input.purchaseState?.trim();
+  if (!PURCHASE_STATES.includes(estado as PurchaseState)) {
+    return { error: "Estado de compra inválido." };
+  }
+  if (input.status?.trim() !== "APROVADO") {
+    return { error: "Só uma candidatura aprovada tem estado de compra." };
+  }
+  return { ok: true, purchaseState: estado as PurchaseState };
 }

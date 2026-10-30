@@ -173,6 +173,46 @@ check("auxiliar sobe para maiusculas", leadDe({ ...base, auxiliar: "mariana" }).
 check("auxiliar vazio fica nulo", leadDe(base).assistantName, null);
 check("decidido_por chega inteiro", leadDe({ ...base, decidido_por: "gestao@empresa.com" }).decidedByRef, "gestao@empresa.com");
 
+// --- compra: o eixo que entrou em 30/10/2026 -------------------------------
+// Antes era o status "COMPROU". Virou coluna propria, e esta secao prende as
+// tres coisas que a importacao tem de acertar: o default, a grafia que a Gestao
+// de fato digita, e a planilha incoerente.
+const aprovada = { marca: "OKEY", nome: "Ana", status: "APROVADO" };
+// Planilha ANTIGA nao tem a coluna. Le "" e cai em CADENCIA, que e onde toda
+// aprovada comeca — nao em COMPROU, e nao em nulo.
+check("compra vazia vira CADENCIA", leadDe(base).purchaseState, "CADENCIA");
+check("compra vazia em aprovada tambem vira CADENCIA", leadDe(aprovada).purchaseState, "CADENCIA");
+// Quem preenche COPIA O ROTULO DA TELA, com acento e espaco — nao o nome do
+// enum. Recusar "Nao comprou" seria recusar a grafia certa.
+check("compra com acento e espaco e aceita", leadDe({ ...aprovada, compra: "Não comprou" }).purchaseState, "NAO_COMPROU");
+check("compra em caixa baixa e aceita", leadDe({ ...aprovada, compra: "comprou" }).purchaseState, "COMPROU");
+check("compra com hifen e aceita", leadDe({ ...aprovada, compra: "nao-comprou" }).purchaseState, "NAO_COMPROU");
+check("compra inventada recusa", erroDe({ ...aprovada, compra: "TALVEZ" }), 'compra inválido ("TALVEZ"). Use: CADENCIA, COMPROU, NAO_COMPROU.');
+// A MESMA invariante de `resolvePurchase`, na porta da importacao. Recusada com
+// o motivo, e nao normalizada: escolher um dos dois lados por ela seria um
+// palpite nosso sobre o negocio de uma empresa real.
+check(
+  "compra em candidatura nao aprovada recusa",
+  erroDe({ marca: "OKEY", nome: "Ana", compra: "COMPROU" }),
+  'compra "COMPROU" exige status APROVADO (veio "EM_ANALISE"). Corrija a linha: ou a candidatura foi aprovada, ou ela não tem compra.',
+);
+check(
+  "compra em reprovada recusa",
+  erroDe({ marca: "OKEY", nome: "Ana", status: "REPROVADO", motivo_reprovacao: "11", compra: "NAO_COMPROU" }),
+  'compra "NAO_COMPROU" exige status APROVADO (veio "REPROVADO"). Corrija a linha: ou a candidatura foi aprovada, ou ela não tem compra.',
+);
+// CADENCIA explicito NAO e incoerencia: e o default escrito a mao, e recusa-lo
+// faria o proprio modelo baixado ser recusado quando a linha nao e aprovada.
+check("CADENCIA explicito passa em qualquer status", leadDe({ marca: "OKEY", nome: "Ana", compra: "CADENCIA" }).purchaseState, "CADENCIA");
+// O VALOR LEGADO NA COLUNA ERRADA. Planilha antiga com "COMPROU" em `status` e
+// recusada COM MENSAGEM. Aceitar em silencio cairia no default EM_ANALISE e
+// zeraria a compra de uma lojista que comprou — sem ninguem notar.
+check(
+  "COMPROU na coluna status recusa (saiu do eixo)",
+  erroDe({ marca: "OKEY", nome: "Ana", status: "COMPROU" }),
+  'status inválido ("COMPROU"). Use: EM_ANALISE, APROVADO, REPROVADO, CUIDADO.',
+);
+
 // --- a regra de casamento por nome (usada pela action) ---------------------
 // Espaco duplo e acento sao invisiveis em planilha: comparar cru faria a
 // importacao recusar o nome certo.

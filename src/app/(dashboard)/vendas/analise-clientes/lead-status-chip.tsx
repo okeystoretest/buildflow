@@ -1,5 +1,6 @@
 import type { WholesaleLeadStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
+import { STATUS_VIVOS, type PurchaseState } from "@/lib/wholesale-permissions";
 
 /**
  * Chip de status de uma candidatura de atacado.
@@ -46,10 +47,23 @@ export const LEAD_STATUS_META: Record<
   WholesaleLeadStatus,
   { label: string; chip: string; dot: string }
 > = {
+  /**
+   * AMARELO desde 30/10/2026, a pedido do dono: era `bg-secondary`, o cinza do
+   * card, e numa coluna de status o estado mais comum ficava justamente o único
+   * sem cor — "ainda não decidida" lia como "sem informação".
+   *
+   * Texto ESCURO sobre o amarelo, pela conta de contraste no topo deste
+   * arquivo: yellow-950 sobre yellow-300 dá ~11:1, folgado para 12px.
+   *
+   * FICA PERTO DO CUIDADO (amber-400), e isso é sabido: são dois amarelos
+   * vizinhos na mesma coluna. `Cuidado` é raro e some do painel, então o par
+   * convive — mas se um dia confundir, é o Cuidado que muda para laranja, não
+   * este, porque "em análise" é o estado que se procura de relance.
+   */
   EM_ANALISE: {
     label: "Em análise",
-    chip: "bg-secondary text-secondary-foreground",
-    dot: "bg-slate-400",
+    chip: "bg-yellow-300 text-yellow-950",
+    dot: "bg-yellow-400",
   },
   APROVADO: { label: "Aprovado", chip: "bg-emerald-700 text-white", dot: "bg-emerald-600" },
   REPROVADO: {
@@ -59,35 +73,60 @@ export const LEAD_STATUS_META: Record<
   },
   CUIDADO: { label: "Cuidado", chip: "bg-amber-400 text-amber-950", dot: "bg-amber-400" },
   /**
-   * COMPROU é a etapa DEPOIS de aprovado, e a cor diz isso: o mesmo verde da
-   * família, um passo mais escuro e mais saturado (emerald-800 / emerald-700).
+   * LEGADO, e por isso FORA de `LEAD_STATUS_ORDER`: ninguém pode escolher este
+   * status, e ele não é balde de contagem.
    *
-   * Não é azul nem violeta de propósito. Uma cor de outra família leria como
-   * "outro tipo de coisa", quando é o mesmo caminho adiante — e a barra
-   * empilhada do painel ficaria contando duas histórias com a mesma fatia.
-   *
-   * Branco sobre emerald-800 dá ~7:1, acima do 4,5:1 que o WCAG AA pede para
-   * texto normal — a mesma conta que fez APROVADO ser emerald-700 e não 600.
+   * A entrada fica aqui de propósito. O diário de auditoria tem linhas reais
+   * `APROVADO -> COMPROU` de quando a compra era status, e sem este `meta` elas
+   * cairiam no chip neutro exibindo o texto cru `COMPROU`. Renderizar o
+   * histórico é o único uso que resta.
    */
   COMPROU: { label: "Comprou", chip: "bg-emerald-800 text-white", dot: "bg-emerald-700" },
 };
 
 /**
- * Os cinco status NA ORDEM DO FLUXO, para o seletor do modal e para a barra
- * empilhada do painel.
+ * Os status VIVOS na ORDEM DO FLUXO, para o seletor do modal, para o filtro da
+ * lista e para a barra empilhada do painel.
  *
- * COMPROU vem logo depois de APROVADO, não no fim: a ordem desta lista é a
- * ordem em que as coisas acontecem com uma candidatura, e é também a ordem em
- * que os cartões e as fatias aparecem na tela. Jogá-lo para o fim poria a etapa
- * final do funil depois de REPROVADO e CUIDADO, que são saídas dele.
+ * Derivado de `STATUS_VIVOS` em vez de escrito à mão: era a quarta cópia da
+ * mesma lista, e é a única que a tela mostra. Perder o COMPROU daqui é o que
+ * tira a opção do filtro (`filtros-client.tsx` itera esta lista) sem editar
+ * mais nada.
  */
-export const LEAD_STATUS_ORDER: WholesaleLeadStatus[] = [
-  "EM_ANALISE",
-  "APROVADO",
-  "COMPROU",
-  "REPROVADO",
-  "CUIDADO",
-];
+export const LEAD_STATUS_ORDER: WholesaleLeadStatus[] = [...STATUS_VIVOS];
+
+/**
+ * O eixo de COMPRA, na ordem do funil: amarelo, verde, vermelho.
+ *
+ * AS CORES SÃO AS PEDIDAS (30/10/2026) e revertem duas decisões anteriores,
+ * registradas aqui porque cada uma tinha um motivo:
+ *
+ *  - A família era teal/sky/slate, SÓ deste eixo, para "Aprovado" e "Comprou"
+ *    não lerem como a mesma informação dita duas vezes nas colunas vizinhas.
+ *    Agora Comprou é o mesmo verde de Aprovado — na prática as duas colunas
+ *    concordam quase sempre (quem comprou está aprovada), então a repetição
+ *    confirma em vez de confundir.
+ *  - `NAO_COMPROU` era neutro, não vermelho, para não pôr quem simplesmente não
+ *    comprou no mesmo visual de quem foi recusada por risco. Em vermelho ele
+ *    agora lê como resultado ruim, que é a leitura pedida: a coluna existe para
+ *    a Gestão ver de longe onde a venda não aconteceu.
+ *
+ * Contrastes pela mesma régua do chip de status: yellow-950 sobre yellow-300
+ * ~11:1, branco sobre emerald-700 ~5,5:1 e o `destructive` do tema, todos acima
+ * do 4,5:1 do WCAG AA para texto pequeno.
+ */
+export const PURCHASE_META: Record<
+  PurchaseState,
+  { label: string; chip: string; dot: string }
+> = {
+  CADENCIA: { label: "Cadência", chip: "bg-yellow-300 text-yellow-950", dot: "bg-yellow-400" },
+  COMPROU: { label: "Comprou", chip: "bg-emerald-700 text-white", dot: "bg-emerald-600" },
+  NAO_COMPROU: {
+    label: "Não comprou",
+    chip: "bg-destructive text-destructive-foreground",
+    dot: "bg-destructive",
+  },
+};
 
 /**
  * O status chega como `string` porque é assim que as consultas o devolvem

@@ -5,7 +5,12 @@
 // o que o veredito grava). Esta checagem prende a ORDEM delas: permissão
 // primeiro, invariante depois. Invertido, a mensagem de erro revelaria a
 // existência e o estado de um lead a quem não pode vê-lo.
-import { canDecideLead, resolveDecision, type WholesaleActor } from "../../src/lib/wholesale-permissions";
+import {
+  canDecideLead,
+  resolveDecision,
+  resolvePurchase,
+  type WholesaleActor,
+} from "../../src/lib/wholesale-permissions";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -16,21 +21,35 @@ function check(nome: string, obtido: unknown, esperado: unknown) {
   }
 }
 
-// Reproduz a ordem da action, sem banco.
-//
-// `lead.status` entra junto do `sellerId` porque a action lê os dois na MESMA
-// consulta de permissão, e o veredito passa a depender do status atual (o
-// COMPROU só vem de APROVADO). A ordem segue intacta: permissão primeiro,
-// invariante depois.
+// Reproduz a ordem da action, sem banco: permissão primeiro, invariante depois.
 function simular(
   actor: WholesaleActor,
   lead: { sellerId: string | null; status?: string },
   entrada: { toStatus: string; rejectionCode?: string | null; cautionReason?: string | null },
 ) {
   if (!canDecideLead(actor, lead)) return { error: "negado" };
-  const d = resolveDecision({ ...entrada, fromStatus: lead.status ?? null });
+  const d = resolveDecision(entrada);
   if ("error" in d) return { error: d.error };
   return { gravar: { status: entrada.toStatus, ...d } };
+}
+
+/**
+ * A MESMA ordem em `setLeadPurchase`, que é onde ela passou a importar mais.
+ *
+ * `lead.status` entra junto do `sellerId` porque a action lê os dois na MESMA
+ * consulta de permissão, e a invariante da compra depende do status. Invertida,
+ * "Só uma candidatura aprovada tem estado de compra." contaria a quem NÃO pode
+ * ver o lead que ele existe e que não está aprovado.
+ */
+function simularCompra(
+  actor: WholesaleActor,
+  lead: { sellerId: string | null; status: string },
+  purchaseState: string,
+) {
+  if (!canDecideLead(actor, lead)) return { error: "negado" };
+  const p = resolvePurchase({ purchaseState, status: lead.status });
+  if ("error" in p) return { error: p.error };
+  return { gravar: { purchaseState: p.purchaseState } };
 }
 
 const atacado: WholesaleActor = { userId: "u1", role: "VENDAS", salesModel: "ATACADO" };
@@ -56,24 +75,38 @@ check(
   { gravar: { status: "APROVADO", ok: true, rejectionCode: null, cautionReason: null } },
 );
 
-// COMPROU: a permissão continua vindo ANTES da origem do status. Uma
-// candidatura de OUTRA vendedora recebe "negado", e não "só aprovada pode" —
-// a segunda mensagem confirmaria a quem não pode ver o lead que ele existe e
-// que não está aprovado.
+// COMPROU como STATUS não existe mais: é "Status inválido.", igual a qualquer
+// valor desconhecido. A compra tem eixo próprio, logo abaixo.
 check(
-  "comprou em lead de outra vendedora: nega ANTES de olhar a origem",
-  simular(atacado, { sellerId: "u9", status: "EM_ANALISE" }, { toStatus: "COMPROU" }),
+  "comprou como status: recusa igual a status inventado",
+  simular(atacado, { sellerId: "u1", status: "APROVADO" }, { toStatus: "COMPROU" }),
+  { error: "Status inválido." },
+);
+
+// --- A compra, e a MESMA ordem ----------------------------------------------
+// Esta é a asserção que o script existe para travar: a permissão vem ANTES da
+// invariante. Uma candidatura de OUTRA vendedora recebe "negado", e não
+// "só aprovada tem compra" — a segunda confirmaria a quem não pode ver o lead
+// que ele existe e que não está aprovado.
+check(
+  "compra em lead de outra vendedora: nega ANTES de olhar o status",
+  simularCompra(atacado, { sellerId: "u9", status: "EM_ANALISE" }, "COMPROU"),
   { error: "negado" },
 );
 check(
-  "comprou em lead próprio ainda em análise: o erro é do veredito",
-  simular(atacado, { sellerId: "u1", status: "EM_ANALISE" }, { toStatus: "COMPROU" }),
-  { error: "Só uma candidatura aprovada pode ser marcada como Comprou." },
+  "compra em lead próprio ainda em análise: o erro é da invariante",
+  simularCompra(atacado, { sellerId: "u1", status: "EM_ANALISE" }, "COMPROU"),
+  { error: "Só uma candidatura aprovada tem estado de compra." },
 );
 check(
-  "comprou em lead próprio já aprovado: grava",
-  simular(atacado, { sellerId: "u1", status: "APROVADO" }, { toStatus: "COMPROU" }),
-  { gravar: { status: "COMPROU", ok: true, rejectionCode: null, cautionReason: null } },
+  "compra em lead próprio já aprovado: grava",
+  simularCompra(atacado, { sellerId: "u1", status: "APROVADO" }, "COMPROU"),
+  { gravar: { purchaseState: "COMPROU" } },
+);
+check(
+  "não comprou em lead próprio aprovado: grava",
+  simularCompra(atacado, { sellerId: "u1", status: "APROVADO" }, "NAO_COMPROU"),
+  { gravar: { purchaseState: "NAO_COMPROU" } },
 );
 
 if (falhas > 0) {

@@ -17,13 +17,12 @@ import {
   MAX_MESES_NO_GRAFICO,
   MESES_NO_GRAFICO,
   agrupaPorMotivo,
-  APROVADAS,
   agrupaPorVendedora,
   bucketsDeMes,
   escopoDoAtor,
   taxaDeConversao,
 } from "../../src/lib/wholesale-dashboard";
-import { filtroDePeriodo, marcaValida } from "../../src/lib/wholesale-queries";
+import { filtroDePeriodo, marcaValida, mesVigente } from "../../src/lib/wholesale-queries";
 import type { WholesaleActor } from "../../src/lib/wholesale-permissions";
 
 let falhas = 0;
@@ -72,15 +71,23 @@ check("base zero é 0, não NaN", taxaDeConversao(0, 0), 0);
 check("as em análise contam no denominador", taxaDeConversao(2, 10), 20);
 
 // --- conversão por vendedora ------------------------------------------------
-// O painel "Taxa de conversão por vendedora" soma linhas (vendedora × status)
-// do groupBy. Dois erros moram aqui: contar o status errado no numerador e
-// perder a linha sem dona, que tem `sellerId: null` e também aparece no painel.
+// O painel "Taxa de conversão por vendedora" soma linhas
+// (vendedora × estado de compra) do groupBy. Dois erros moram aqui: contar o
+// estado errado no numerador e perder a linha sem dona, que tem
+// `sellerId: null` e também aparece no painel.
 //
 // O NUMERADOR É COMPROU, e só ele. O painel por vendedora falava de APROVAÇÃO
 // até 29/10/2026, e esta é a diferença que os checks abaixo prendem: uma
 // vendedora com três aprovadas e nenhuma venda converteu ZERO.
-const linha = (sellerId: string | null, status: string, n: number) =>
-  ({ sellerId, status, _count: { _all: n } }) as Parameters<typeof agrupaPorVendedora>[0][number];
+//
+// AGRUPA POR `purchaseState` desde 30/10/2026, não por status: toda candidatura
+// tem um (a coluna é NOT NULL com default CADENCIA), então o `total` continua
+// sendo tudo que ela recebeu — inclusive o que nem foi analisado, que entra
+// como CADENCIA.
+const linha = (sellerId: string | null, purchaseState: string, n: number) =>
+  ({ sellerId, purchaseState, _count: { _all: n } }) as Parameters<
+    typeof agrupaPorVendedora
+  >[0][number];
 
 const nomes = new Map([
   ["v1", "Ana"],
@@ -88,12 +95,12 @@ const nomes = new Map([
 ]);
 const grupos = agrupaPorVendedora(
   [
-    linha("v1", "APROVADO", 3),
-    linha("v1", "REPROVADO", 1),
-    linha("v1", "EM_ANALISE", 1),
-    linha("v2", "EM_ANALISE", 2),
-    linha(null, "APROVADO", 1),
-    linha("v9", "APROVADO", 1),
+    // Um par (vendedora, estado) por linha, como o groupBy devolve.
+    linha("v1", "CADENCIA", 4),
+    linha("v1", "NAO_COMPROU", 1),
+    linha("v2", "CADENCIA", 2),
+    linha(null, "CADENCIA", 1),
+    linha("v9", "CADENCIA", 1),
   ],
   nomes,
 );
@@ -104,19 +111,19 @@ check(
   ["Ana:0/5=0", "Bia:0/2=0", "Sem vendedora:0/1=0", "Vendedora removida:0/1=0"],
 );
 
-// APROVADO NÃO CONTA NO NUMERADOR, e este é o check que separa as duas taxas.
+// SÓ COMPROU CONTA NO NUMERADOR, e este é o check que separa as duas taxas.
 //
-// Aqui Ana tem 2 aprovadas e 2 que compraram em 5 recebidas. A conversão é
-// 2/5 = 40%, não 4/5: ser aprovada não é ter comprado. Trocar um pelo outro dá
-// um número maior e igualmente plausível na tela, que é o que faz esse defeito
-// sobreviver a uma revisão.
+// Aqui Ana tem 2 que compraram em 5 recebidas: 2/5 = 40%. As outras 3 estão em
+// cadência ou marcadas como não-compra, e nenhuma delas é venda. Somar
+// cadência ao numerador dá um número maior e igualmente plausível na tela, que
+// é o que faz esse defeito sobreviver a uma revisão.
 check(
-  "aprovadas não entram na conversão",
+  "cadência e não-compra não entram na conversão",
   agrupaPorVendedora(
     [
-      linha("v1", "APROVADO", 2),
+      linha("v1", "CADENCIA", 2),
       linha("v1", "COMPROU", 2),
-      linha("v1", "EM_ANALISE", 1),
+      linha("v1", "NAO_COMPROU", 1),
     ],
     nomes,
   ).map((g) => `${g.nome}:${g.comprou}/${g.total}=${g.conversao}`),
@@ -128,22 +135,30 @@ check(
   agrupaPorVendedora([linha("v1", "COMPROU", 3)], nomes).map((g) => g.conversao),
   [100],
 );
-// Só aprovadas, nenhuma venda: conversão ZERO. É o caso que a taxa de
-// aprovação mostraria como 100% — as duas contas respondem perguntas
-// diferentes, e o painel por vendedora responde a da venda.
+// Nenhuma venda: conversão ZERO, mesmo que as três estejam aprovadas e em
+// cadência. É o caso que a taxa de aprovação mostraria como 100% — as duas
+// contas respondem perguntas diferentes, e o painel por vendedora responde a
+// da venda.
 check(
-  "só aprovadas: conversão é 0",
-  agrupaPorVendedora([linha("v1", "APROVADO", 3)], nomes).map((g) => g.conversao),
+  "só em cadência: conversão é 0",
+  agrupaPorVendedora([linha("v1", "CADENCIA", 3)], nomes).map((g) => g.conversao),
   [0],
 );
-// APROVADAS continua governando a taxa de aprovação do TOTAL (o cartão do
-// topo). Prendê-la aqui porque o defeito nasce de alguém "simplificar" esta
-// lista para um só status, e aí fechar uma venda derrubaria a aprovação.
-check("APROVADAS tem exatamente APROVADO e COMPROU", [...APROVADAS].sort(), [
-  "APROVADO",
-  "COMPROU",
-]);
-// Nenhuma venda em `grupos`: o numerador é zero mesmo com 3 aprovadas.
+// "NÃO COMPROU" É DENOMINADOR, NÃO NUMERADOR, e também não desaparece.
+//
+// Marcar à mão que a lojista não comprou não pode tirá-la das recebidas: a
+// conversão é compraram ÷ RECEBIDAS, e sumir com o denominador faria a taxa
+// SUBIR quando alguém registra uma venda perdida — o indicador melhoraria
+// justamente ao receber má notícia.
+check(
+  "não-compra fica no denominador",
+  agrupaPorVendedora(
+    [linha("v1", "COMPROU", 1), linha("v1", "NAO_COMPROU", 3)],
+    nomes,
+  ).map((g) => `${g.comprou}/${g.total}=${g.conversao}`),
+  ["1/4=25"],
+);
+// Nenhuma venda em `grupos`: o numerador é zero mesmo com 5 recebidas.
 check("sem COMPROU, o numerador é zero", grupos[0].comprou, 0);
 // `null` não pode ser descartado nem casar com outra vendedora: é a candidatura
 // que chegou pelo link geral sem dona, e o painel precisa mostrá-la.
@@ -259,6 +274,55 @@ check(
 // As parcelas TEM de fechar com o total: e a conta que o painel mostra ao lado
 // de cada linha, em percentual.
 check("as parcelas somam o total de reprovacoes", motivos.reduce((n, m) => n + m.total, 0), 20);
+
+// --- o recorte PADRAO: o mes vigente ----------------------------------------
+// Entrou em 30/10/2026: a tela abria no acumulado de todo o historico. O que
+// esta em jogo aqui e o FUSO. `filtroDePeriodo` monta as pontas como meia-noite
+// LOCAL (`new Date("2026-10-01T00:00:00")`), e `mesVigente` tem de falar a mesma
+// lingua: montado em UTC, o recorte andaria tres horas no Brasil e a candidatura
+// que chegou as 22h do dia 31 cairia fora do mes dela — sem erro nenhum para
+// denunciar isso, so um numero menor no painel.
+check(
+  "outubro de 2026 vai do dia 1 ao 31",
+  mesVigente(new Date(2026, 9, 19, 12, 0)),
+  { de: "2026-10-01", ate: "2026-10-31" },
+);
+// Dia 0 do mes seguinte e o ultimo do atual: fevereiro sai certo sem tabela.
+check("fevereiro de ano bissexto termina no 29", mesVigente(new Date(2024, 1, 10)).ate, "2024-02-29");
+check("fevereiro comum termina no 28", mesVigente(new Date(2025, 1, 10)).ate, "2025-02-28");
+// Dezembro: `new Date(ano, 12, 0)` vira o ultimo dia de dezembro, nao janeiro.
+check(
+  "dezembro nao vaza para o ano seguinte",
+  mesVigente(new Date(2026, 11, 3)),
+  { de: "2026-12-01", ate: "2026-12-31" },
+);
+// O mes vigente no primeiro e no ultimo instante do mes e o MESMO mes.
+check(
+  "primeiro e ultimo dia caem no mesmo recorte",
+  [mesVigente(new Date(2026, 9, 1, 0, 1)), mesVigente(new Date(2026, 9, 31, 23, 59))],
+  [
+    { de: "2026-10-01", ate: "2026-10-31" },
+    { de: "2026-10-01", ate: "2026-10-31" },
+  ],
+);
+// A asserção que o fuso quebraria: 22h30 do dia 31 e DESTE mes.
+const outubro = mesVigente(new Date(2026, 9, 15));
+const janela = filtroDePeriodo(outubro.de, outubro.ate).createdAt as { gte: Date; lte: Date };
+const noiteDoDia31 = new Date(2026, 9, 31, 22, 30);
+const primeiroInstante = new Date(2026, 9, 1, 0, 0, 0);
+check(
+  "22h30 do ultimo dia ainda esta no mes",
+  janela.gte <= noiteDoDia31 && noiteDoDia31 <= janela.lte,
+  true,
+);
+check(
+  "a meia-noite do dia 1 tambem esta",
+  janela.gte <= primeiroInstante && primeiroInstante <= janela.lte,
+  true,
+);
+// E o que esta fora, fica fora: o dia 1 do mes seguinte nao entra.
+const mesSeguinte = new Date(2026, 10, 1, 0, 30);
+check("o mes seguinte nao entra", mesSeguinte <= janela.lte, false);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

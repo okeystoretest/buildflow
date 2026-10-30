@@ -13,11 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Prisma } from "@prisma/client";
 import { formatCnpj, normalizeCnpj, phoneMatchKeys } from "@/lib/wholesale-identity";
-import { classifyDuplicateMatch, listLeadsFor } from "@/lib/wholesale-queries";
+import { classifyDuplicateMatch, listLeadsFor, mesVigente } from "@/lib/wholesale-queries";
 import { findRejectionCode } from "@/lib/wholesale-rejection-codes";
 import { LeadStatusCell } from "./lead-status-cell";
+import { LeadPurchaseCell } from "./lead-purchase-cell";
 import { LeadRowActions } from "./lead-row-actions";
 import { AnaliseClientesFiltros } from "./filtros-client";
+import { AnaliseClientesBusca } from "./busca-client";
 import { CsvImport } from "@/components/shared/csv-import";
 import { importWholesaleLeadsCsv } from "@/lib/actions/import";
 import { COLUNAS_IMPORT } from "@/lib/wholesale-import";
@@ -79,6 +81,9 @@ export default async function AnaliseClientesPage(
       de?: string;
       ate?: string;
       motivo?: string;
+      compra?: string;
+      /** `tudo` desliga o recorte padrão do mês vigente. Ver abaixo. */
+      periodo?: string;
     }>;
   }
 ) {
@@ -104,9 +109,33 @@ export default async function AnaliseClientesPage(
   // GESTAO: para quem é de Vendas o escopo já fixa o `sellerId` no próprio id,
   // e um `?vendedora=<outro>` na barra de endereços não alarga nada.
   const vendedora = searchParams?.vendedora?.trim() || "";
-  const de = searchParams?.de?.trim() || "";
-  const ate = searchParams?.ate?.trim() || "";
   const motivo = searchParams?.motivo?.trim() || "";
+  const compra = searchParams?.compra?.trim() || "";
+
+  // PERÍODO: o padrão é o MÊS VIGENTE (30/10/2026, a pedido do dono). A tela
+  // abria no acumulado de todo o histórico.
+  //
+  // O comentário de `filtros-client.tsx` avisava contra exatamente isto: um
+  // recorte que cai no mês atual sozinho esconde o histórico sem avisar. As duas
+  // coisas que respondem ao aviso:
+  //
+  //  - É VISÍVEL. O botão de período abre mostrando "01/10/26 – 31/10/26", e o
+  //    painel escreve o mês em palavras acima dos números.
+  //  - É DESFAZÍVEL. "Limpar período" não volta ao padrão: ele marca
+  //    `?periodo=tudo`, e é só o que distingue "não escolhi nada" (aplica o mês)
+  //    de "quero tudo" (não aplica). Sem a marca, a página reaplicaria o mês e o
+  //    botão de limpar não teria efeito nenhum.
+  //
+  // O recorte é UM para o painel e para a tabela, como todos os outros: números
+  // de um mês acima de uma lista do histórico inteiro são dois recortes na mesma
+  // tela, e ninguém descobre qual dos dois está certo.
+  const dePedido = searchParams?.de?.trim() || "";
+  const atePedido = searchParams?.ate?.trim() || "";
+  const periodo = searchParams?.periodo?.trim() || "";
+  const padraoDoMes = !dePedido && !atePedido && periodo !== "tudo";
+  const mes = mesVigente();
+  const de = padraoDoMes ? mes.de : dePedido;
+  const ate = padraoDoMes ? mes.ate : atePedido;
   const page = Math.max(1, Number(searchParams?.page) || 1);
 
   // ANTES das duas consultas, e não dentro de uma delas: uma aprovada pode ter
@@ -132,10 +161,11 @@ export default async function AnaliseClientesPage(
       de,
       ate,
       motivo,
+      compra,
     }),
-    // STATUS, BUSCA e MOTIVO não entram no painel de propósito: filtrar por
-    // status deixaria "Status das análises" com uma fatia só, e a taxa de
-    // aprovação de um recorte "só aprovadas" seria sempre 100%. Período,
+    // STATUS, COMPRA, BUSCA e MOTIVO não entram no painel de propósito: a taxa
+    // de aprovação de um recorte "só aprovadas" seria sempre 100%, e a de
+    // conversão de um recorte "só comprou" também. Período,
     // vendedora, marca, UF e cidade entram — são recortes do CONJUNTO, e é
     // sobre o conjunto que o painel fala.
     resumoDoAtacado(actor, { de, ate, vendedora, marca: brand, estado, cidade }),
@@ -337,21 +367,43 @@ export default async function AnaliseClientesPage(
   // ACENTO NÃO É TRATADO: "São Paulo" e "Sao Paulo" seguem como duas opções.
   // Resolver isso exige normalizar a coluna na gravação, que é outra mudança —
   // e o filtro de cada uma funciona.
+  //
+  // VEM COM A UF JUNTO desde 30/10/2026: o seletor de Cidade passou a mostrar
+  // só os municípios do Estado escolhido (`distinct` nos DOIS campos, para a
+  // mesma cidade de duas UFs não se perder). A lista completa continua saindo
+  // daqui — é a que vale quando o Estado está em "Todos".
+  const paresUfCidade = (
+    await prisma.wholesaleLead.findMany({
+      where: ehGestao ? {} : { sellerId: actor.userId },
+      distinct: ["state", "city"],
+      select: { state: true, city: true },
+      orderBy: { city: "asc" },
+    })
+  )
+    .map((l) => ({ uf: l.state?.trim().toUpperCase() ?? "", cidade: l.city?.trim() ?? "" }))
+    .filter((x) => x.cidade);
+
+  // A lista sem recorte, deduplicada pelo NOME: o filtro compara só a cidade
+  // (`city equals`, sem caixa), então a mesma cidade em duas UFs produziria duas
+  // opções que filtram exatamente igual.
   const cidades = [
     ...new Map(
-      (
-        await prisma.wholesaleLead.findMany({
-          where: ehGestao ? {} : { sellerId: actor.userId },
-          distinct: ["city"],
-          select: { city: true },
-          orderBy: { city: "asc" },
-        })
-      )
-        .map((l) => l.city?.trim())
-        .filter((c): c is string => Boolean(c))
-        .map((c) => [c.toLocaleLowerCase("pt-BR"), c] as const),
+      paresUfCidade.map((x) => [x.cidade.toLocaleLowerCase("pt-BR"), x.cidade] as const),
     ).values(),
   ];
+
+  // E as cidades de cada UF. Aqui a cidade sem UF (`uf` vazia) fica de fora de
+  // propósito: escolhido um estado, o filtro manda `state = UF` e essa linha
+  // não voltaria de todo modo — oferecê-la daria uma opção que devolve zero.
+  const cidadesPorUf: Record<string, string[]> = {};
+  for (const { uf, cidade } of paresUfCidade) {
+    if (!uf) continue;
+    const lista = (cidadesPorUf[uf] ??= []);
+    // Mesma deduplicação por caixa, agora dentro da UF.
+    if (!lista.some((c) => c.toLocaleLowerCase("pt-BR") === cidade.toLocaleLowerCase("pt-BR"))) {
+      lista.push(cidade);
+    }
+  }
 
   // Vendedoras: só a Gestão escolhe, então a consulta só acontece para ela.
   // Inclui as INATIVAS de propósito — candidatura antiga continua apontando
@@ -373,8 +425,14 @@ export default async function AnaliseClientesPage(
     if (estado) sp.set("estado", estado);
     if (cidade) sp.set("cidade", cidade);
     if (vendedora) sp.set("vendedora", vendedora);
-    if (de) sp.set("de", de);
-    if (ate) sp.set("ate", ate);
+    if (compra) sp.set("compra", compra);
+    // As pontas PEDIDAS, não as resolvidas: o padrão do mês se reaplica sozinho
+    // na página 2, e gravar `de`/`ate` aqui fixaria outubro num link que deveria
+    // continuar dizendo "o mês atual". `periodo=tudo` precisa viajar junto, ou a
+    // segunda página volta ao mês.
+    if (dePedido) sp.set("de", dePedido);
+    if (atePedido) sp.set("ate", atePedido);
+    if (periodo) sp.set("periodo", periodo);
     if (motivo) sp.set("motivo", motivo);
     if (p > 1) sp.set("page", String(p));
     const qs = sp.toString();
@@ -382,11 +440,14 @@ export default async function AnaliseClientesPage(
   };
 
   // Colunas: 8 para a vendedora, 9 para a Gestão (ela também vê "Vendedora").
-  // Cidade e UF viraram duas colunas, e depois entrou "Marca": 11 para a
-  // Gestao (que tambem ve "Vendedora"), 10 para a vendedora.
-  const colunas = ehGestao ? 11 : 10;
+  // Cidade e UF viraram duas colunas, depois entrou "Marca", e em 30/10/2026
+  // "Compra": 12 para a Gestao (que tambem ve "Vendedora"), 11 para a vendedora.
+  const colunas = ehGestao ? 12 : 11;
+  // O padrão do mês NÃO conta como filtro: é o estado de repouso da tela, e a
+  // mensagem de lista vazia precisa distinguir "base vazia" de "você filtrou".
   const temFiltro = Boolean(
-    status || brand || busca || estado || cidade || vendedora || de || ate || motivo,
+    status || compra || brand || busca || estado || cidade || vendedora ||
+      dePedido || atePedido || motivo,
   );
   const nomeVendedora = vendedoras.find((v) => v.id === vendedora)?.name ?? null;
 
@@ -399,9 +460,11 @@ export default async function AnaliseClientesPage(
       <h1 className="text-2xl font-bold text-vendas-text">Análise de Clientes</h1>
 
       <AnaliseClientesFiltros
-        defaults={{ busca, status, brand, estado, cidade, vendedora, de, ate, motivo }}
+        defaults={{ status, brand, estado, cidade, vendedora, de, ate, motivo, compra, periodo }}
+        mesPadrao={mes}
         estados={estados}
         cidades={cidades}
+        cidadesPorUf={cidadesPorUf}
         vendedoras={vendedoras}
         ehGestao={ehGestao}
       />
@@ -412,7 +475,7 @@ export default async function AnaliseClientesPage(
       <AnaliseClientesPainel
         resumo={resumo}
         ehGestao={ehGestao}
-        filtros={{ de, ate, temFiltro }}
+        filtros={{ de, ate, temFiltro, padraoDoMes }}
         nomeVendedora={nomeVendedora}
       />
 
@@ -481,8 +544,14 @@ export default async function AnaliseClientesPage(
       )}
 
       <Card>
-        <CardHeader>
+        {/* A BUSCA POR NOME MORA AQUI desde 30/10/2026, e não na barra de
+            filtros: procurar uma candidata pelo nome é o que se faz olhando a
+            lista, e com a barra escondida atrás de um botão ela ficava a dois
+            cliques do que filtra. Empilha no telefone e vai para a direita do
+            título a partir de `sm`. */}
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle>{ehGestao ? "Candidaturas" : "Minhas candidaturas"}</CardTitle>
+          <AnaliseClientesBusca defaultBusca={busca} />
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -510,6 +579,13 @@ export default async function AnaliseClientesPage(
                   </th>
                   <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
                     Status
+                  </th>
+                  {/* Logo depois de Status porque a compra é a pergunta
+                      SEGUINTE sobre a mesma candidatura: foi aprovada? comprou?
+                      Separá-las por Auxiliar e Vendedora faria a leitura pular
+                      colunas para juntar as duas metades do funil. */}
+                  <th className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
+                    Compra
                   </th>
                   <th className="border-r border-border py-2 pl-4 pr-4">Auxiliar</th>
                   {ehGestao && (
@@ -580,6 +656,13 @@ export default async function AnaliseClientesPage(
                       </td>
                       <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
                         <LeadStatusCell status={l.status} motivo={motivoReprovacao} />
+                      </td>
+                      <td className="w-px whitespace-nowrap border-r border-border py-2 pl-4 pr-4">
+                        <LeadPurchaseCell
+                          leadId={l.id}
+                          status={l.status}
+                          purchaseState={l.purchaseState}
+                        />
                       </td>
                       {/* Exibida em maiúsculas (decisão 19). A action já grava
                           assim; o `uppercase` aqui cobre registro antigo que

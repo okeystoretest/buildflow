@@ -4,11 +4,15 @@
 // O que está em jogo: quem pode ver e decidir sobre a candidatura de um
 // negócio real, e se um veredito pode ficar sem motivo. A limpeza de campo
 // órfão também vive aqui — sem ela a tela mostra um motivo que não vale mais.
+import { WholesaleLeadStatus } from "@prisma/client";
 import {
   canSeeLead,
   canDecideLead,
   canUseWholesaleTool,
   resolveDecision,
+  resolvePurchase,
+  PURCHASE_STATES,
+  STATUS_VIVOS,
   type WholesaleActor,
 } from "../../src/lib/wholesale-permissions";
 
@@ -76,53 +80,24 @@ check(
   { ok: true, rejectionCode: null, cautionReason: "CNPJ de terceiros" },
 );
 
-// --- COMPROU: a única transição com origem restrita -------------------------
-// Comprar sem ter sido aprovada não é um caminho do negócio. A regra é
-// conferida aqui porque o modal esconder a opção é conveniência, não controle:
-// o `toStatus` chega do navegador e pode vir montado à mão.
+// --- COMPROU saiu do eixo do status -----------------------------------------
+// Era o quinto status, e a única transição com origem restrita. Virou eixo
+// próprio em 30/10/2026 (`resolvePurchase`, mais abaixo). O valor sobrou no
+// enum do Postgres como legado, para o diário histórico seguir verdadeiro, mas
+// `STATUS_VIVOS` não o lista — então pedi-lo como status é um pedido inválido
+// como qualquer outro.
+//
+// Esta é a asserção que importa: um `?toStatus=COMPROU` montado à mão, ou uma
+// planilha antiga, NÃO pode voltar a escrever o valor legado na coluna de
+// status.
 check(
-  "comprou a partir de aprovado: aceita",
-  resolveDecision({ toStatus: "COMPROU", fromStatus: "APROVADO" }),
-  { ok: true, rejectionCode: null, cautionReason: null },
-);
-check(
-  "comprou direto de em análise: recusa",
-  resolveDecision({ toStatus: "COMPROU", fromStatus: "EM_ANALISE" }),
-  { error: "Só uma candidatura aprovada pode ser marcada como Comprou." },
-);
-check(
-  "comprou a partir de reprovado: recusa",
-  resolveDecision({ toStatus: "COMPROU", fromStatus: "REPROVADO" }),
-  { error: "Só uma candidatura aprovada pode ser marcada como Comprou." },
-);
-check(
-  "comprou a partir de cuidado: recusa",
-  resolveDecision({ toStatus: "COMPROU", fromStatus: "CUIDADO" }),
-  { error: "Só uma candidatura aprovada pode ser marcada como Comprou." },
-);
-// Sem `fromStatus` NÃO passa. É o caso que importa: se um dia alguém chamar
-// `resolveDecision` esquecendo de ler o status atual, a regra tem de FECHAR, e
-// não liberar o COMPROU por omissão.
-check(
-  "comprou sem status de origem: recusa",
+  "comprou como status: recusa (saiu do eixo)",
   resolveDecision({ toStatus: "COMPROU" }),
-  { error: "Só uma candidatura aprovada pode ser marcada como Comprou." },
+  { error: "Status inválido." },
 );
-// Reafirmar quem já comprou é aceito: não é pular etapa, e a action não grava
-// evento quando o status não muda.
-check(
-  "comprou a partir de comprou: aceita",
-  resolveDecision({ toStatus: "COMPROU", fromStatus: "COMPROU" }),
-  { ok: true, rejectionCode: null, cautionReason: null },
-);
-// O motivo de reprovação anterior é apagado, como em todo outro veredito.
-check(
-  "ao marcar comprou, código de reprovação anterior é apagado",
-  resolveDecision({ toStatus: "COMPROU", fromStatus: "APROVADO", rejectionCode: "11" }),
-  { ok: true, rejectionCode: null, cautionReason: null },
-);
-// Os outros status NÃO ganharam origem restrita: `fromStatus` é indiferente
-// para eles, e exigi-lo quebraria toda chamada que não o passa.
+// Nenhum status tem origem restrita agora, e é isso que permitiu a
+// `resolveDecision` voltar a ser função só da entrada — e a `decideLead`
+// deixar de reconferir dentro da transação.
 check(
   "aprovar não depende da origem",
   resolveDecision({ toStatus: "APROVADO" }),
@@ -154,6 +129,83 @@ check(
   "status inexistente: recusa",
   resolveDecision({ toStatus: "ARQUIVADO" }),
   { error: "Status inválido." },
+);
+
+// --- a premissa dos dois eixos ----------------------------------------------
+// `COMPROU` existe no enum do Postgres (para o diário histórico seguir
+// verdadeiro) e NÃO existe em `STATUS_VIVOS`. Esse par é o que sustenta o
+// desenho inteiro, e é frágil de um jeito específico: alguém "arrumando" a
+// lista para ficar igual ao enum reabriria o status como destino de escrita, e
+// aí `decideLead` voltaria a produzir o valor legado — em silêncio, porque o
+// Prisma aceita.
+//
+// A cura em `wholesale-compra.ts` existe para o caso de o valor REAPARECER. Se
+// esta asserção cair, não é a cura que está errada: é a lista.
+check("STATUS_VIVOS tem exatamente os quatro status vivos", [...STATUS_VIVOS], [
+  "EM_ANALISE",
+  "APROVADO",
+  "REPROVADO",
+  "CUIDADO",
+]);
+check(
+  "COMPROU não é status vivo, mas segue no enum do Prisma",
+  [
+    (STATUS_VIVOS as readonly string[]).includes("COMPROU"),
+    Object.keys(WholesaleLeadStatus).includes("COMPROU"),
+  ],
+  [false, true],
+);
+// Os dois enums têm um valor de MESMO NOME em eixos diferentes, e é por isso
+// que `resolvePurchase` e `resolveDecision` não podem compartilhar validador.
+check("COMPROU é estado de compra válido", (PURCHASE_STATES as readonly string[]).includes("COMPROU"), true);
+
+// --- resolvePurchase: o eixo de compra --------------------------------------
+// A invariante que `resolveDecision` guardava enquanto COMPROU era status, no
+// lugar novo. Conferida aqui porque esconder o dropdown na linha não-aprovada é
+// conveniência, não controle: o `purchaseState` chega do navegador e pode vir
+// montado à mão.
+for (const estado of ["CADENCIA", "COMPROU", "NAO_COMPROU"] as const) {
+  check(`compra ${estado} em aprovada: aceita`, resolvePurchase({ purchaseState: estado, status: "APROVADO" }), {
+    ok: true,
+    purchaseState: estado,
+  });
+}
+// Os três recusados pelo status, e não só o COMPROU: marcar "não comprou" numa
+// reprovada também afirmaria que ela chegou a ter a chance de comprar.
+for (const status of ["EM_ANALISE", "REPROVADO", "CUIDADO"] as const) {
+  check(
+    `compra em ${status}: recusa`,
+    resolvePurchase({ purchaseState: "COMPROU", status }),
+    { error: "Só uma candidatura aprovada tem estado de compra." },
+  );
+}
+check(
+  "compra inexistente: recusa",
+  resolvePurchase({ purchaseState: "TALVEZ", status: "APROVADO" }),
+  { error: "Estado de compra inválido." },
+);
+// Vazio não é "deixa como está": a action sempre manda um dos três, e um ""
+// chegando aqui é pedido malformado. Fecha, não libera.
+check(
+  "compra vazia: recusa",
+  resolvePurchase({ purchaseState: "", status: "APROVADO" }),
+  { error: "Estado de compra inválido." },
+);
+// A ORDEM da conferência: estado inválido é reportado ANTES de olhar o status.
+// Invertida, a mensagem "só aprovada tem compra" contaria o status da
+// candidatura a quem mandou lixo no outro campo.
+check(
+  "estado inválido é reportado antes do status",
+  resolvePurchase({ purchaseState: "TALVEZ", status: "REPROVADO" }),
+  { error: "Estado de compra inválido." },
+);
+// O valor legado do enum de status NÃO é um estado de compra válido por
+// acidente de nome: "COMPROU" existe nos dois enums, e `resolvePurchase` só
+// conhece o do seu eixo.
+check(
+  "status legado não vira estado de compra",
+  resolvePurchase({ purchaseState: "APROVADO", status: "APROVADO" }),
+  { error: "Estado de compra inválido." },
 );
 
 if (falhas > 0) {

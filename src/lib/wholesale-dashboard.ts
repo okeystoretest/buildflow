@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { WholesaleLeadStatus, type Prisma } from "@prisma/client";
-import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permissions";
+import { WholesaleLeadStatus, WholesalePurchaseState, type Prisma } from "@prisma/client";
+import {
+  canUseWholesaleTool,
+  STATUS_VIVOS,
+  type WholesaleActor,
+} from "@/lib/wholesale-permissions";
 import { filtroDePeriodo, marcaValida } from "@/lib/wholesale-queries";
 import { findRejectionCode } from "@/lib/wholesale-rejection-codes";
 
@@ -54,23 +58,6 @@ export interface ContagemPorVendedora {
    */
   conversao: number;
 }
-
-/**
- * OS STATUS QUE CONTAM COMO APROVADA.
- *
- * COMPROU está aqui, e esquecê-lo é o defeito mais caro desta tela. O status é
- * um só por candidatura, então quem compra DEIXA de estar em APROVADO. Contar
- * aprovadas como `status === APROVADO` faria a taxa de aprovação CAIR a cada
- * venda fechada — aprovar e vender pioraria o indicador de quem vendeu, e o
- * número ainda pareceria plausível na tela.
- *
- * Quem comprou foi aprovada: o COMPROU é a etapa seguinte do funil, não um
- * desvio dele.
- */
-export const APROVADAS: WholesaleLeadStatus[] = [
-  WholesaleLeadStatus.APROVADO,
-  WholesaleLeadStatus.COMPROU,
-];
 
 export interface EntradaNoMes {
   /** "2026-10" — chave estável para ordenar. */
@@ -137,7 +124,15 @@ export interface ResumoDoAtacado {
    * fácil de fazer sem ninguém notar.
    */
   aprovacao: number;
-  /** APROVADO + COMPROU — ver `APROVADAS`. */
+  /**
+   * Quantas estão em APROVADO.
+   *
+   * Era `APROVADO + COMPROU` até 30/10/2026, somados à mão por uma constante
+   * `APROVADAS`, porque quem comprava deixava de estar em APROVADO e esquecer a
+   * soma fazia a taxa de aprovação CAIR a cada venda fechada. Com a compra em
+   * eixo próprio a armadilha deixou de existir: aprovada continua aprovada
+   * depois de comprar, e a contagem é direta.
+   */
   aprovadas: number;
   /**
    * TAXA DE CONVERSÃO: quem COMPROU ÷ total recebido, em 0–100.
@@ -194,8 +189,14 @@ export function taxaDeConversao(numerador: number, total: number): number {
 }
 
 /**
- * As linhas (vendedora × status) do `groupBy` viram uma linha por vendedora,
- * com total, quantas compraram e a taxa de conversão dela.
+ * As linhas (vendedora × estado de compra) do `groupBy` viram uma linha por
+ * vendedora, com total, quantas compraram e a taxa de conversão dela.
+ *
+ * AGRUPA POR `purchaseState`, E NÃO POR `status`: a compra saiu do eixo do
+ * status em 30/10/2026. O `total` segue correto porque TODA candidatura tem um
+ * `purchaseState` (a coluna é NOT NULL com default), então somar as linhas de
+ * uma vendedora ainda dá tudo que ela recebeu — inclusive o que nem foi
+ * analisado.
  *
  * PURO e exportado pelo mesmo motivo que `taxaDeConversao`: é a conta que o
  * painel mostra, e conta que nenhum script confere é conta que se perde numa
@@ -203,7 +204,11 @@ export function taxaDeConversao(numerador: number, total: number): number {
  * `lider` ("quem mais recebeu") depende desta ordem.
  */
 export function agrupaPorVendedora(
-  linhas: { sellerId: string | null; status: WholesaleLeadStatus; _count: { _all: number } }[],
+  linhas: {
+    sellerId: string | null;
+    purchaseState: WholesalePurchaseState;
+    _count: { _all: number };
+  }[],
   nomes: Map<string, string>,
 ): ContagemPorVendedora[] {
   // Chave de string porque `null` (sem dona) também é uma linha do painel.
@@ -212,9 +217,7 @@ export function agrupaPorVendedora(
     const chave = l.sellerId ?? "";
     const acc = porDona.get(chave) ?? { total: 0, comprou: 0 };
     acc.total += l._count._all;
-    // COMPROU é um status só, e aqui não há a armadilha de `APROVADAS`: quem
-    // comprou está em COMPROU e em nenhum outro lugar.
-    if (l.status === WholesaleLeadStatus.COMPROU) acc.comprou += l._count._all;
+    if (l.purchaseState === WholesalePurchaseState.COMPROU) acc.comprou += l._count._all;
     porDona.set(chave, acc);
   }
   return [...porDona.entries()]
@@ -365,19 +368,20 @@ export async function resumoDoAtacado(
     ? new Date(Date.UTC(Number(anoJanela), Number(mesJanela) - 1, 1))
     : new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), 1));
 
-  const [total, statusRaw, vendedoraRaw, naJanela, recentesRaw, motivoRaw] = await Promise.all([
+  const [total, statusRaw, vendedoraRaw, naJanela, recentesRaw, motivoRaw, comprou] =
+    await Promise.all([
     prisma.wholesaleLead.count({ where }),
     prisma.wholesaleLead.groupBy({ by: ["status"], where, _count: { _all: true } }),
-    // Agrupado por vendedora E status na MESMA consulta: a conversão dela é
-    // aprovadas ÷ recebidas, e separar isso em duas queries daria duas idas ao
-    // banco para cruzar números que já vêm juntos.
+    // Agrupado por vendedora E estado de COMPRA na MESMA consulta: a conversão
+    // dela é compraram ÷ recebidas, e separar isso em duas queries daria duas
+    // idas ao banco para cruzar números que já vêm juntos.
     //
     // Roda para todo papel, e isso NÃO alarga nada: o `where` acima já começa
     // pelo escopo, então para quem não é Gestão este groupBy só pode devolver a
     // linha do próprio `sellerId`. É o que deixa a vendedora ver a conversão
     // dela sem ver a das colegas.
     prisma.wholesaleLead.groupBy({
-      by: ["sellerId", "status"],
+      by: ["sellerId", "purchaseState"],
       where,
       _count: { _all: true },
     }),
@@ -412,14 +416,26 @@ export async function resumoDoAtacado(
       where: { ...where, status: WholesaleLeadStatus.REPROVADO },
       _count: { _all: true },
     }),
+    // O numerador da conversão TOTAL, no eixo da compra.
+    //
+    // Consulta própria em vez de sair do `groupBy` por status: são eixos
+    // diferentes desde 30/10/2026, e espremer os dois num `groupBy` de duas
+    // colunas só para economizar uma contagem daria uma matriz
+    // status × purchaseState que ninguém mais usa.
+    prisma.wholesaleLead.count({
+      where: { ...where, purchaseState: WholesalePurchaseState.COMPROU },
+    }),
   ]);
 
-  // Todos os status aparecem, inclusive os zerados e o CUIDADO. Mostrar só os
-  // três pedidos faria as parcelas não fecharem com o total, e a diferença
-  // inexplicada é pior que a linha a mais.
+  // Todos os status VIVOS aparecem, inclusive os zerados e o CUIDADO. Mostrar
+  // só os três pedidos faria as parcelas não fecharem com o total, e a
+  // diferença inexplicada é pior que a linha a mais.
+  //
+  // `STATUS_VIVOS` e não `Object.values(WholesaleLeadStatus)`: o enum ainda
+  // carrega o COMPROU legado, que entraria aqui como balde eternamente zerado.
   const contagem = new Map(statusRaw.map((s) => [s.status, s._count._all]));
-  const porStatus = (Object.values(WholesaleLeadStatus) as WholesaleLeadStatus[]).map((status) => ({
-    status,
+  const porStatus = STATUS_VIVOS.map((status) => ({
+    status: status as WholesaleLeadStatus,
     total: contagem.get(status) ?? 0,
   }));
 
@@ -446,11 +462,13 @@ export async function resumoDoAtacado(
     if (i != null) entradasPorMes[i].total++;
   }
 
-  // APROVADO + COMPROU: quem comprou foi aprovada, e o status é um só. Sem o
-  // COMPROU aqui, fechar uma venda derrubaria a taxa de aprovação.
-  const aprovadas = APROVADAS.reduce((n, s) => n + (contagem.get(s) ?? 0), 0);
+  // Contagem DIRETA de APROVADO. Até 30/10/2026 era preciso somar
+  // APROVADO + COMPROU à mão porque comprar tirava a candidatura de APROVADO, e
+  // esquecer a soma derrubava esta taxa a cada venda fechada. A compra virou
+  // eixo próprio: aprovada continua aprovada, e a armadilha não existe mais.
+  const aprovadas = contagem.get(WholesaleLeadStatus.APROVADO) ?? 0;
   const aprovacao = taxaDeConversao(aprovadas, total);
-  const comprou = contagem.get(WholesaleLeadStatus.COMPROU) ?? 0;
+  // `comprou` vem da sua própria contagem, no eixo da compra.
   const conversao = taxaDeConversao(comprou, total);
 
   return {

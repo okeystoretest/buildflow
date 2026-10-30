@@ -1,8 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { Prisma, WholesaleBrand, WholesaleLeadStatus } from "@prisma/client";
+import { Prisma, WholesaleBrand, WholesaleLeadStatus, WholesalePurchaseState } from "@prisma/client";
 import { normalizeCnpj, phoneMatchKeys } from "@/lib/wholesale-identity";
 import { donaDoRodizio, voltasDoRodizio } from "@/lib/wholesale-rodizio";
-import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permissions";
+import {
+  canUseWholesaleTool,
+  PURCHASE_STATES,
+  STATUS_VIVOS,
+  type WholesaleActor,
+} from "@/lib/wholesale-permissions";
 import { isValidRejectionCode } from "@/lib/wholesale-rejection-codes";
 
 /**
@@ -51,6 +56,32 @@ export function filtroDePeriodo(de?: string, ate?: string): Prisma.WholesaleLead
   if (inicio) createdAt.gte = new Date(`${inicio}T00:00:00`);
   if (fim) createdAt.lte = new Date(`${fim}T23:59:59`);
   return { createdAt };
+}
+
+/**
+ * O primeiro e o último dia do mês de `agora`, como "YYYY-MM-DD".
+ *
+ * É o recorte PADRÃO da Análise de Clientes desde 30/10/2026, a pedido do dono:
+ * a tela abria no acumulado de todo o histórico, e a pergunta do dia a dia é
+ * "como está este mês". O padrão é VISÍVEL (o botão de período mostra o
+ * intervalo) e DESFAZÍVEL (limpar o período marca `?periodo=tudo`) — um recorte
+ * implícito que esconde o histórico sem avisar é o defeito que o Histórico de
+ * Pedidos já teve, e o que o comentário desta tela pedia para não repetir.
+ *
+ * DATA LOCAL, e não UTC, porque é assim que `filtroDePeriodo` lê as pontas
+ * (`new Date("2026-10-01T00:00:00")` é meia-noite local). Montar em UTC
+ * deslocaria o recorte em três horas no Brasil: uma candidatura que chegou às
+ * 22h do dia 31 cairia fora do mês dela.
+ *
+ * O último dia sai de `new Date(ano, mes + 1, 0)` — dia 0 do mês seguinte é o
+ * último do atual. Fevereiro e ano bissexto saem certos sem tabela nenhuma.
+ */
+export function mesVigente(agora: Date = new Date()): { de: string; ate: string } {
+  const ano = agora.getFullYear();
+  const mes = agora.getMonth();
+  const dois = (n: number) => String(n).padStart(2, "0");
+  const ultimo = new Date(ano, mes + 1, 0).getDate();
+  return { de: `${ano}-${dois(mes + 1)}-01`, ate: `${ano}-${dois(mes + 1)}-${dois(ultimo)}` };
 }
 
 /**
@@ -191,6 +222,8 @@ export interface LeadRow {
   id: string;
   brand: WholesaleBrand;
   status: string;
+  /** O eixo de compra. Só é exibido quando `status === "APROVADO"`. */
+  purchaseState: string;
   contactName: string;
   city: string;
   state: string;
@@ -298,6 +331,8 @@ export async function listLeadsFor(
     ate?: string;
     /** Código do motivo de reprovação (os 34 da planilha). */
     motivo?: string;
+    /** Estado de compra (`CADENCIA` | `COMPROU` | `NAO_COMPROU`). */
+    compra?: string;
   } = {},
 ): Promise<{ leads: LeadRow[]; total: number; totalPages: number }> {
   if (!canUseWholesaleTool(actor)) return { leads: [], total: 0, totalPages: 1 };
@@ -315,13 +350,25 @@ export async function listLeadsFor(
   //
   // `reconciliarCompras` NÃO fica aqui, e sim na página. O motivo é a tela: o
   // painel e a tabela leem em paralelo, e uma reconciliação disparada DENTRO de
-  // uma das duas consultas não é vista pela outra — a tabela mostraria COMPROU
-  // e o painel contaria a mesma candidatura como aprovada, na mesma tela.
+  // uma das duas consultas não é vista pela outra — a tabela mostraria a compra
+  // em "Cadência" e o painel já contaria a mesma candidatura na conversão, na
+  // mesma tela.
   await reconciliarRodizio();
 
   const brand = marcaValida(opts.brand);
-  const status = (Object.values(WholesaleLeadStatus) as string[]).includes(opts.status ?? "")
+  // `STATUS_VIVOS` e não `Object.values` do enum: o COMPROU legado ainda está no
+  // tipo, e um `?status=COMPROU` guardado num favorito antigo passaria a
+  // validação para devolver uma lista sempre vazia. Fora da lista, o filtro é
+  // ignorado — a tela abre completa, que é o comportamento já documentado aqui.
+  const status = (STATUS_VIVOS as readonly string[]).includes(opts.status ?? "")
     ? (opts.status as WholesaleLeadStatus)
+    : undefined;
+  // O eixo de COMPRA, validado do mesmo jeito e pelo mesmo motivo: chega como
+  // texto livre da URL, e valor fora da lista é IGNORADO em vez de devolver
+  // lista vazia. Um `?compra=COMPROU` escrito à mão não pode cair no enum de
+  // status, que tem um valor de mesmo nome — ver a nota em `resolvePurchase`.
+  const compra = (PURCHASE_STATES as readonly string[]).includes(opts.compra ?? "")
+    ? (opts.compra as WholesalePurchaseState)
     : undefined;
 
   const busca = (opts.busca ?? "").trim();
@@ -344,6 +391,23 @@ export async function listLeadsFor(
       : { sellerId: actor.userId }),
     ...(brand ? { brand } : {}),
     ...(status ? { status } : {}),
+    // COMPRA IMPLICA APROVADA, e a cláusula vai num `AND`.
+    //
+    // A coluna é NOT NULL com default `CADENCIA`, então TODA candidatura tem um
+    // valor nela — inclusive as 277 reprovadas. Sem o `status: APROVADO`,
+    // filtrar por "Cadência" devolveria a base quase inteira, e a tabela
+    // mostraria `—` na coluna Compra em quase toda linha do resultado. Só
+    // aprovada tem estado de compra (a invariante está em `resolvePurchase`), e
+    // o filtro diz a mesma coisa que a escrita.
+    //
+    // `AND` e não uma chave solta: com `?status=REPROVADO&compra=COMPROU` um
+    // `status:` a mais no mesmo objeto SOBRESCREVERIA o filtro de status em
+    // silêncio, e a tela mostraria aprovadas para quem pediu reprovadas. No
+    // `AND`, dois filtros que se contradizem devolvem zero linha — que é o que
+    // eles de fato pedem.
+    ...(compra
+      ? { AND: [{ purchaseState: compra }, { status: WholesaleLeadStatus.APROVADO }] }
+      : {}),
     // Busca parcial no nome, sem diferenciar maiúsculas: é o nome que a
     // vendedora tem na cabeça quando a lojista liga, não o id.
     ...(busca ? { contactName: { contains: busca, mode: "insensitive" as const } } : {}),
@@ -390,6 +454,7 @@ export async function listLeadsFor(
       id: r.id,
       brand: r.brand,
       status: r.status,
+      purchaseState: r.purchaseState,
       contactName: r.contactName,
       city: r.city,
       state: r.state,

@@ -9,7 +9,9 @@ import {
   canDecideLead,
   canUseWholesaleTool,
   resolveDecision,
+  resolvePurchase,
   WHOLESALE_DENIED_MSG,
+  type PurchaseState,
   type WholesaleActor,
 } from "@/lib/wholesale-permissions";
 import { apagarCandidatura } from "@/lib/wholesale-retention";
@@ -103,12 +105,18 @@ export async function decideLead(input: {
     rejectionCode: asText(input.rejectionCode),
     cautionReason: asText(input.cautionReason),
   };
-  // PRIMEIRA passada, com o status lido aqui fora: recusa logo o pedido
-  // inválido, com a mensagem exata, sem abrir transação nenhuma. A que VALE é
-  // a segunda, dentro da transação, com o status que a escrita vai usar — ver
-  // a nota lá embaixo.
-  const decisaoPrevia = resolveDecision({ ...entrada, fromStatus: lead.status });
-  if ("error" in decisaoPrevia) return actionError(decisaoPrevia.error);
+  // UMA passada, e aqui fora.
+  //
+  // Havia uma segunda conferência dentro da transação enquanto COMPROU era
+  // status: ele era a única transição com ORIGEM restrita (só de APROVADO), e
+  // essa regra tinha de ver o status que a escrita ia sobrescrever, não o lido
+  // antes. Com a compra em eixo próprio (30/10/2026) nenhuma regra de
+  // `resolveDecision` depende mais do status atual — ela é função apenas da
+  // entrada —, então reconferir dentro da transação devolveria exatamente este
+  // resultado. A leitura de `atual` CONTINUA lá dentro, porque dela saem o
+  // `fromStatus` do diário e o `customerId`.
+  const decisao = resolveDecision(entrada);
+  if ("error" in decisao) return actionError(decisao.error);
 
   // Só chega aqui um status que `resolveDecision` reconheceu.
   const toStatus = toStatusRaw as WholesaleLeadStatus;
@@ -141,25 +149,13 @@ export async function decideLead(input: {
     // A linha sumiu entre a checagem de permissão e a transação: não grava nada.
     if (!atual) return false;
 
-    // SEGUNDA passada, e é esta que vale: o COMPROU só é alcançável a partir de
-    // APROVADO, e quem governa essa regra tem de ser o status que a escrita vai
-    // sobrescrever — não o lido antes da transação. Entre as duas leituras a
-    // candidatura pode ter voltado para EM_ANALISE por outra pessoa (a
-    // vendedora dona e a Gestão têm o mesmo acesso), e sem esta conferência o
-    // COMPROU entraria pulando a análise. Mesma função pura, nenhuma regra
-    // escrita duas vezes.
-    const decisao = resolveDecision({ ...entrada, fromStatus: atual.status });
-    if ("error" in decisao) return decisao.error;
-
     // O CADASTRO DA LOJISTA, quando ela passa a ser cliente.
     //
-    // Em COMPROU também, e não só em APROVADO: as candidaturas aprovadas ANTES
-    // desta mudança não têm cadastro, e marcar uma delas como Comprou é
-    // exatamente o momento em que ele passa a fazer falta. `customerId` já
+    // Só em APROVADO: com a compra fora do eixo do status, aprovar é o único
+    // momento em que a candidatura passa a ser cliente. `customerId` já
     // preenchido não é tocado — o cadastro é criado uma vez.
-    const criaCadastro = toStatus === "APROVADO" || toStatus === "COMPROU";
     const customerId =
-      criaCadastro && !atual.customerId
+      toStatus === "APROVADO" && !atual.customerId
         ? await cadastrarClienteDaCandidatura(tx, atual)
         : null;
 
@@ -190,9 +186,6 @@ export async function decideLead(input: {
     });
     return true;
   });
-  // A transação recusou a transição com o status fresco (COMPROU fora de
-  // APROVADO): a mensagem é a mesma da primeira passada.
-  if (typeof gravou === "string") return actionError(gravou);
   // O ator já passou por canDecideLead para este lead: dizer "sem permissão"
   // seria falso. A verdade é que o registro sumiu, e não há o que esconder de
   // quem já está autorizado a vê-lo.
@@ -234,6 +227,88 @@ export async function setAssistantName(input: {
 
   revalidatePath("/vendas/analise-clientes");
   return actionOk({ assistantName: nome });
+}
+
+/**
+ * O EIXO DE COMPRA de uma candidatura aprovada: Cadência, Comprou, Não Comprou.
+ *
+ * Mesma ordem de `decideLead`, pelo mesmo motivo de segurança: permissão
+ * primeiro, invariante depois. Invertida, "Só uma candidatura aprovada tem
+ * estado de compra." contaria a quem não pode ver o lead que ele existe e que
+ * não foi aprovado.
+ *
+ * GRAVA EVENTO, e por isso update e insert vivem na MESMA transação: isto é uma
+ * decisão comercial sobre uma lojista real, e o diário é o que a torna
+ * auditável em vez de silenciosa. É também o que permite distinguir depois a
+ * compra que a reconciliação encontrou (sem ator) da que alguém marcou à mão.
+ *
+ * Diferente de `decideLead` em um ponto: aqui a conferência de invariante VALE
+ * dentro da transação, porque `resolvePurchase` depende do `status` — e entre a
+ * leitura de fora e a escrita a candidatura pode ter sido reprovada por outra
+ * pessoa (a vendedora dona e a Gestão têm o mesmo acesso). Sem ela, "Comprou"
+ * entraria numa reprovada.
+ */
+export async function setLeadPurchase(input: {
+  leadId: string;
+  purchaseState: string;
+}): Promise<ActionResult<{ purchaseState: PurchaseState }>> {
+  const actor = await atorAtual();
+  if (!actor || !canUseWholesaleTool(actor)) return actionError(WHOLESALE_DENIED_MSG);
+
+  const leadId = asText(input.leadId);
+  if (!leadId) return actionError(WHOLESALE_DENIED_MSG);
+
+  const lead = await prisma.wholesaleLead.findUnique({
+    where: { id: leadId },
+    select: { id: true, sellerId: true, status: true },
+  });
+  if (!lead || !canDecideLead(actor, lead)) return actionError(WHOLESALE_DENIED_MSG);
+
+  // Não-textual chega como "" e cai em "Estado de compra inválido.", nunca numa
+  // exceção. Mesmo limite de confiança de `decideLead`.
+  const pedido = asText(input.purchaseState) ?? "";
+  const previa = resolvePurchase({ purchaseState: pedido, status: lead.status });
+  if ("error" in previa) return actionError(previa.error);
+
+  const gravou = await prisma.$transaction(async (tx) => {
+    const atual = await tx.wholesaleLead.findUnique({
+      where: { id: lead.id },
+      select: { status: true, purchaseState: true },
+    });
+    // A linha sumiu entre a checagem de permissão e a transação.
+    if (!atual) return false;
+
+    // A conferência que VALE, com o status que a escrita vai usar.
+    const decidido = resolvePurchase({ purchaseState: pedido, status: atual.status });
+    if ("error" in decidido) return decidido.error;
+
+    // ESTADO IGUAL NÃO GRAVA NADA. Mesmo motivo do `decisaoMudou` no modal:
+    // chamar isto sem mudança encheria o diário de linhas
+    // "CADENCIA -> CADENCIA", e um diário cheio de não-eventos é um diário que
+    // ninguém consegue ler.
+    if (atual.purchaseState === decidido.purchaseState) return true;
+
+    await tx.wholesaleLead.update({
+      where: { id: lead.id },
+      data: { purchaseState: decidido.purchaseState },
+    });
+    await tx.wholesaleLeadEvent.create({
+      data: {
+        leadId: lead.id,
+        // Evento de COMPRA: o par de status fica nulo, como o CHECK
+        // `evento_e_status_ou_compra` exige.
+        fromPurchase: atual.purchaseState,
+        toPurchase: decidido.purchaseState,
+        actorId: actor.userId,
+      },
+    });
+    return true;
+  });
+  if (typeof gravou === "string") return actionError(gravou);
+  if (!gravou) return actionError("Candidatura não encontrada.");
+
+  revalidatePath("/vendas/analise-clientes");
+  return actionOk({ purchaseState: previa.purchaseState });
 }
 
 /**

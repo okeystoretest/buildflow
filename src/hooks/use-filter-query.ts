@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 /**
  * Sincroniza filtros de uma listagem com a URL (query string), aplicando de
@@ -31,6 +31,7 @@ export function useFilterQuery<
 ) {
   const router = useRouter();
   const pathname = usePathname();
+  const search = useSearchParams();
   const delay = opts?.delay ?? 400;
 
   const [text, setTextState] = useState<T>(textDefaults);
@@ -40,11 +41,31 @@ export function useFilterQuery<
   const applied = useRef<Record<string, string>>({ ...textDefaults, ...(opts?.instant ?? {}) });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * Reescreve a URL com os campos deste hook, PRESERVANDO os params que ele nao
+   * gerencia.
+   *
+   * Antes a URL era montada do zero, e so as chaves daqui sobreviviam. Isso
+   * fazia com que DOIS controles na mesma tela fossem impossiveis: cada
+   * navegacao apagava o que o outro tinha escrito. E uma tela so passou a ter
+   * dois (Analise de Clientes, 30/10/2026: a busca saiu da barra de filtros e
+   * foi para o bloco de Candidaturas).
+   *
+   * Preservar tambem e o comportamento certo sozinho: um hook que gerencia
+   * `busca` nao tem por que apagar `status`.
+   *
+   * `limparOutros` existe para o `clearAll`, que significa "nenhum filtro nesta
+   * tela" e nao "nenhum dos meus": com ele a URL volta a ser montada do zero.
+   */
   const navigate = useCallback(
-    (merged: Record<string, string>) => {
-      const params = new URLSearchParams();
+    (merged: Record<string, string>, limparOutros = false) => {
+      const params = new URLSearchParams(limparOutros ? "" : (search?.toString() ?? ""));
       for (const [k, v] of Object.entries(merged)) {
-        if (v && v.trim()) params.set(k, v.trim());
+        const limpo = (v ?? "").trim();
+        // O `delete` do vazio e obrigatorio agora: partindo da URL atual, nao
+        // escrever a chave deixaria o valor ANTIGO dela em pe.
+        if (limpo) params.set(k, limpo);
+        else params.delete(k);
       }
       // Nova busca/filtro sempre volta para a primeira pagina.
       params.delete("page");
@@ -52,7 +73,7 @@ export function useFilterQuery<
       applied.current = merged;
       router.push(qs ? `${pathname}?${qs}` : pathname);
     },
-    [pathname, router],
+    [pathname, router, search],
   );
 
   // Aplica campos de TEXTO com debounce.
@@ -113,5 +134,38 @@ export function useFilterQuery<
     [navigate, instant],
   );
 
-  return { text, instant, setText, setInstant, setInstantMany, clear };
+  /**
+   * Zera TODOS os campos numa navegacao so.
+   *
+   * Existe porque `clear` + `setInstantMany` em sequencia NAO resolve: cada um
+   * navega com a sua metade lida do closure do render atual, entao o segundo
+   * reescreve na URL o valor que o primeiro acabou de apagar. E mesmo sem isso
+   * seriam duas entradas no historico, e o Voltar precisaria de dois cliques
+   * para desfazer um clique.
+   *
+   * `patch` existe para o campo que tem um estado de REPOUSO diferente de
+   * vazio: na Analise de Clientes, limpar os filtros devolve o periodo ao mes
+   * vigente, nao ao nada. Sem isso o controle ficaria dizendo "sem periodo"
+   * enquanto o servidor aplica o mes.
+   */
+  const clearAll = useCallback(
+    (patch?: Partial<I>) => {
+      const textZerado = Object.fromEntries(
+        Object.keys(text).map((k) => [k, ""]),
+      ) as T;
+      const instantZerado = {
+        ...(Object.fromEntries(Object.keys(instant).map((k) => [k, ""])) as I),
+        ...(patch ?? {}),
+      } as I;
+      if (timer.current) clearTimeout(timer.current);
+      setTextState(textZerado);
+      setInstantState(instantZerado);
+      // `true`: limpar os filtros limpa os da TELA, inclusive os de um controle
+      // que viva fora deste hook (a busca da Analise de Clientes).
+      navigate({ ...textZerado, ...instantZerado }, true);
+    },
+    [navigate, text, instant],
+  );
+
+  return { text, instant, setText, setInstant, setInstantMany, clear, clearAll };
 }

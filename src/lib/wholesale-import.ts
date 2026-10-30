@@ -11,6 +11,7 @@ import {
   normalizarInstagram,
   storeImageKindFor,
 } from "@/lib/wholesale-apply-validation";
+import { PURCHASE_STATES, STATUS_VIVOS } from "@/lib/wholesale-permissions";
 
 /**
  * Importação das candidaturas ANTIGAS, que viviam numa planilha.
@@ -80,13 +81,15 @@ export const COLUNAS_IMPORT: readonly ColunaImport[] = [
   { nome: "tempo_que_segue", exemplo: "2 anos" },
   { nome: "faixa_investimento", exemplo: "DE_3_A_5K", aceita: INVESTMENT_BANDS },
   { nome: "quer_visita", exemplo: "sim", aceita: ["sim", "nao"] },
-  // COMPROU entrou em 28/10/2026. O modelo baixado lista os valores aceitos a
-  // partir deste `aceita`, entao a planilha que a Gestao baixa ja o oferece.
-  {
-    nome: "status",
-    exemplo: "APROVADO",
-    aceita: ["EM_ANALISE", "APROVADO", "REPROVADO", "CUIDADO", "COMPROU"],
-  },
+  // `aceita` sai da MESMA const que o parser usa, como `modelo_atendimento` ja
+  // faz com SERVICE_MODELS. Nao e enfeite: `aceita` nao e lido por ninguem (o
+  // modelo baixado leva so `nome` e `exemplo`), e a validacao de verdade vem do
+  // `fechado(...)` la embaixo — escrever a lista duas vezes a mao e como as
+  // duas divergem.
+  { nome: "status", exemplo: "APROVADO", aceita: STATUS_VIVOS },
+  // A COMPRA, que ate 30/10/2026 era um status. Planilha antiga nao tem esta
+  // coluna e le "" — cai no default CADENCIA, que e onde toda aprovada comeca.
+  { nome: "compra", exemplo: "CADENCIA", aceita: PURCHASE_STATES },
   { nome: "motivo_reprovacao", exemplo: "" },
   { nome: "motivo_cuidado", exemplo: "" },
   // A VENDEDORA DONA da candidatura, por NOME ou e-mail. O cabecalho se chama
@@ -104,7 +107,14 @@ export const COLUNAS_IMPORT: readonly ColunaImport[] = [
 /** Linha pronta para o `prisma.wholesaleLead.create`, menos o que vem do banco. */
 export interface LeadImportado {
   brand: "OKEY" | "LOV_CLUB";
-  status: "EM_ANALISE" | "APROVADO" | "REPROVADO" | "CUIDADO" | "COMPROU";
+  status: (typeof STATUS_VIVOS)[number];
+  /**
+   * O eixo de compra. O nome é o da COLUNA DO PRISMA de propósito:
+   * `importWholesaleLeadsCsv` espalha este objeto inteiro no `upsert`, então um
+   * campo com nome divergente derrubaria o arquivo todo com um erro opaco em
+   * vez de uma recusa por linha.
+   */
+  purchaseState: (typeof PURCHASE_STATES)[number];
   createdAt: Date | null;
   contactName: string;
   email: string;
@@ -247,10 +257,28 @@ export function converterLinha(
   if (erro(foundUs)) return { error: foundUs.error };
   const investmentBand = fechado("faixa_investimento", INVESTMENT_BANDS);
   if (erro(investmentBand)) return { error: investmentBand.error };
-  const status =
-    fechado("status", ["EM_ANALISE", "APROVADO", "REPROVADO", "CUIDADO", "COMPROU"] as const) ??
-    "EM_ANALISE";
-  if (erro(status)) return { error: status.error };
+  // `STATUS_VIVOS` recusa `COMPROU` COM MENSAGEM, e isso é de propósito:
+  // planilha antiga que ainda traga "COMPROU" na coluna de status precisa ser
+  // corrigida para a coluna `compra`. Aceitar em silêncio cairia no `??` abaixo
+  // e gravaria EM_ANALISE — zerando a compra de uma lojista que comprou, sem
+  // ninguém notar.
+  const statusLido = fechado("status", STATUS_VIVOS);
+  if (erro(statusLido)) return { error: statusLido.error };
+  const status = statusLido ?? "EM_ANALISE";
+
+  const compraLida = fechado("compra", PURCHASE_STATES);
+  if (erro(compraLida)) return { error: compraLida.error };
+  // A MESMA invariante de `resolvePurchase`, na porta da importação: compra só
+  // existe para aprovada. Esta é a única porta que grava candidatura sem
+  // ninguém do outro lado para corrigir, então a planilha incoerente é RECUSADA
+  // com o número da linha — não normalizada em silêncio para um dos dois lados,
+  // porque qualquer escolha nossa aqui seria um palpite sobre o negócio.
+  if (compraLida && compraLida !== "CADENCIA" && status !== "APROVADO") {
+    return {
+      error: `compra "${compraLida}" exige status APROVADO (veio "${status}"). Corrija a linha: ou a candidatura foi aprovada, ou ela não tem compra.`,
+    };
+  }
+  const purchaseState = compraLida ?? "CADENCIA";
 
   const visitaBruta = ler("quer_visita").toLowerCase();
   const wantsVisit =
@@ -329,6 +357,7 @@ export function converterLinha(
     lead: {
       brand: marca,
       status,
+      purchaseState,
       createdAt,
       contactName,
       email,

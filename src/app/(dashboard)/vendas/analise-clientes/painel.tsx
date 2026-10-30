@@ -1,11 +1,8 @@
-import type { WholesaleLeadStatus } from "@prisma/client";
 import {
   AlertTriangle,
-  CalendarDays,
   CheckCircle2,
   Clock,
   Inbox,
-  LayoutGrid,
   Percent,
   ShoppingBag,
   TrendingUp,
@@ -18,7 +15,7 @@ import {
 // duas versões da mesma linha para divergirem no arredondamento.
 import { pct } from "@/lib/transport/dashboard-math";
 import { cn, shortName } from "@/lib/utils";
-import { LEAD_STATUS_META, LEAD_STATUS_ORDER } from "./lead-status-chip";
+import { LEAD_STATUS_META, PURCHASE_META } from "./lead-status-chip";
 import type { ContagemPorVendedora, ResumoDoAtacado } from "@/lib/wholesale-dashboard";
 
 /**
@@ -56,35 +53,21 @@ function dataBR(iso: string): string {
 }
 
 /**
- * Os status que ganham CARTÃO na faixa de cima.
+ * O mês em palavras, a partir de "2026-10-01".
  *
- * CUIDADO saiu em 28/10/2026, a pedido do dono: é o estado mais raro dos
- * quatro, e o cartão dele ocupava a largura que o painel precisa para o que a
- * Gestão de fato acompanha. Ele NÃO desapareceu da tela — continua na barra
- * empilhada e na lista de "Status das análises" logo abaixo, onde as parcelas
- * têm de fechar com o total recebido.
+ * Só para o recorte PADRÃO (o mês vigente, desde 30/10/2026): "outubro de 2026"
+ * diz num relance o que "de 01/10/2026 a 31/10/2026" faz ler duas datas para
+ * concluir a mesma coisa. Período escolhido à mão continua mostrando as pontas,
+ * que é o que importa quando elas não são um mês fechado.
  */
-const STATUS_EM_CARTAO: WholesaleLeadStatus[] = LEAD_STATUS_ORDER.filter((s) => s !== "CUIDADO");
-
-/** Cor do número grande por status. Os fundos vêm do `LEAD_STATUS_META`. */
-const NUMERO: Record<WholesaleLeadStatus, string> = {
-  EM_ANALISE: "text-foreground",
-  APROVADO: "text-emerald-700 dark:text-emerald-300",
-  REPROVADO: "text-destructive",
-  CUIDADO: "text-amber-600 dark:text-amber-400",
-  COMPROU: "text-emerald-800 dark:text-emerald-200",
-};
-
-const ICONE: Record<WholesaleLeadStatus, React.ReactNode> = {
-  EM_ANALISE: <Clock className="h-5 w-5" />,
-  APROVADO: <CheckCircle2 className="h-5 w-5" />,
-  REPROVADO: <XCircle className="h-5 w-5" />,
-  // Sem cartão hoje (ver STATUS_EM_CARTAO), mas o ícone fica certo para o dia
-  // em que ele voltar — mapa incompleto é como um cartão nasce com o ícone de
-  // outro status.
-  CUIDADO: <AlertTriangle className="h-5 w-5" />,
-  COMPROU: <ShoppingBag className="h-5 w-5" />,
-};
+const MES_NOME = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
+function mesBR(iso: string): string {
+  const [ano, mes] = iso.split("-");
+  return `${MES_NOME[Number(mes) - 1] ?? mes} de ${ano}`;
+}
 
 /** Cores dos pontos das listas, cicladas por posição. */
 const PALETA = ["bg-sky-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500", "bg-rose-500"];
@@ -239,12 +222,13 @@ export function AnaliseClientesPainel({
 }: {
   resumo: ResumoDoAtacado;
   ehGestao: boolean;
-  filtros: { de: string; ate: string; temFiltro: boolean };
+  filtros: { de: string; ate: string; temFiltro: boolean; padraoDoMes: boolean };
   /** Nome da vendedora escolhida no filtro, quando há uma. */
   nomeVendedora: string | null;
 }) {
-  const rotuloPeriodo =
-    filtros.de && filtros.ate
+  const rotuloPeriodo = filtros.padraoDoMes
+    ? mesBR(filtros.de)
+    : filtros.de && filtros.ate
       ? `de ${dataBR(filtros.de)} a ${dataBR(filtros.ate)}`
       : filtros.de
         ? `desde ${dataBR(filtros.de)}`
@@ -253,7 +237,6 @@ export function AnaliseClientesPainel({
           : "todo o histórico";
 
   const porStatus = new Map(r.porStatus.map((s) => [s.status, s.total]));
-  const mesAtual = r.entradasPorMes[r.entradasPorMes.length - 1];
   const somaJanela = r.entradasPorMes.reduce((s, m) => s + m.total, 0);
   // A janela do gráfico varia com o período, então a média divide pelos meses
   // MOSTRADOS, não por uma constante — dividir por 6 um recorte de 2 meses
@@ -261,6 +244,18 @@ export function AnaliseClientesPainel({
   const mesesNaJanela = Math.max(1, r.entradasPorMes.length);
   const mediaMensal = Math.round((somaJanela / mesesNaJanela) * 10) / 10;
   const lider = r.porVendedora[0];
+  // O motivo que mais reprova NESTE recorte. `porMotivo` já vem ordenado do
+  // mais frequente para o menos (ver `agrupaPorMotivo`).
+  //
+  // O PRIMEIRO COM CÓDIGO, e não a primeira linha: o balde "Sem código" — as
+  // reprovadas de antes de o código ser obrigatório — é hoje o maior de todos,
+  // e um cartão anunciando que o motivo que mais reprova é "nenhum motivo
+  // registrado" não ensina nada a ninguém. Ele continua na LISTA embaixo, onde
+  // as parcelas têm de fechar com o total de reprovações; aqui, onde o número é
+  // manchete e não distribuição, ele cede o lugar ao primeiro motivo de
+  // verdade. Sobra como último recurso: um recorte só com reprovadas antigas
+  // mostra "Sem código" em vez de mentir que não houve reprovação.
+  const motivoLider = r.porMotivo.find((m) => m.code) ?? r.porMotivo[0];
   // Cópia antes de ordenar: `r.porVendedora` vem por VOLUME, e `lider` acima
   // depende dessa ordem. O painel de conversão lê melhor pela taxa.
   const conversoes = [...r.porVendedora].sort((a, b) => b.conversao - a.conversao);
@@ -273,10 +268,15 @@ export function AnaliseClientesPainel({
             distinção, um período mal escolhido parece base vazia. */}
         <span className="text-sm">
           {filtros.temFiltro
-            ? "Nenhuma candidatura neste recorte. Troque os filtros acima."
-            : ehGestao
-              ? "Nenhuma candidatura recebida ainda. O painel se preenche assim que a primeira lojista enviar o formulário."
-              : "Nenhuma candidatura na sua fila ainda. O painel se preenche quando uma lojista enviar o formulário pelo seu link."}
+            ? "Nenhuma candidatura neste recorte. Abra os filtros, na borda direita da tela, e troque o recorte."
+            : filtros.padraoDoMes
+              ? // A tela abre no mês vigente, então "nada aqui" quase sempre quer
+                // dizer "nada NESTE mês" — e o caminho para o histórico tem de
+                // estar escrito, ou o padrão esconde a base sem avisar.
+                `Nenhuma candidatura em ${mesBR(filtros.de)}. Abra os filtros, na borda direita da tela, e limpe o período para ver todo o histórico.`
+              : ehGestao
+                ? "Nenhuma candidatura recebida ainda. O painel se preenche assim que a primeira lojista enviar o formulário."
+                : "Nenhuma candidatura na sua fila ainda. O painel se preenche quando uma lojista enviar o formulário pelo seu link."}
         </span>
       </div>
     );
@@ -296,10 +296,21 @@ export function AnaliseClientesPainel({
         · {rotuloPeriodo}
       </p>
 
-      {/* Linha 1 — volume e status, na ordem do funil: recebidas, em análise,
-          aprovado, COMPROU, reprovado. "Comprou" fica logo à direita de
-          "Aprovado" porque é a etapa seguinte dele (a ordem sai de
-          LEAD_STATUS_ORDER). CUIDADO não tem cartão — ver STATUS_EM_CARTAO. */}
+      {/* Linha 1 — o funil: recebidas, em análise, aprovado, COMPROU,
+          reprovado. "Comprou" entra à DIREITA de "Aprovado" (30/10/2026, a
+          pedido do dono) porque é a etapa seguinte dele.
+          
+          CUIDADO não tem cartão, e desde 30/10/2026 não aparece em NENHUM
+          lugar do painel — saiu a pedido do dono, e a Compra ocupou o espaço.
+          Ele continua na tabela, no filtro e no modal de decisão: o que saiu é
+          a MÉTRICA, não o estado. A consequência aceita é que estes cartões não
+          somam o total recebido quando existe candidatura em Cuidado (o painel
+          não tem mais nenhuma soma que precise fechar, então a diferença não
+          contradiz nada na tela).
+          
+          Escritos um a um, e não por um `map` sobre o enum: a faixa mistura
+          DOIS eixos (três status e um estado de compra), e nenhuma lista de
+          status descreve essa ordem. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Kpi
           icon={<Inbox className="h-5 w-5" />}
@@ -308,17 +319,42 @@ export function AnaliseClientesPainel({
           label="Candidaturas recebidas"
           hint={rotuloPeriodo}
         />
-        {STATUS_EM_CARTAO.map((s) => (
-          <Kpi
-            key={s}
-            icon={ICONE[s]}
-            chip={LEAD_STATUS_META[s].chip}
-            valor={porStatus.get(s) ?? 0}
-            corValor={NUMERO[s]}
-            label={LEAD_STATUS_META[s].label}
-            hint={`${pct(porStatus.get(s) ?? 0, r.total)}% do total`}
-          />
-        ))}
+        <Kpi
+          icon={<Clock className="h-5 w-5" />}
+          chip={LEAD_STATUS_META.EM_ANALISE.chip}
+          valor={porStatus.get("EM_ANALISE") ?? 0}
+          label={LEAD_STATUS_META.EM_ANALISE.label}
+          hint={`${pct(porStatus.get("EM_ANALISE") ?? 0, r.total)}% do total`}
+        />
+        <Kpi
+          icon={<CheckCircle2 className="h-5 w-5" />}
+          chip={LEAD_STATUS_META.APROVADO.chip}
+          valor={porStatus.get("APROVADO") ?? 0}
+          corValor="text-emerald-700 dark:text-emerald-300"
+          label={LEAD_STATUS_META.APROVADO.label}
+          hint={`${pct(porStatus.get("APROVADO") ?? 0, r.total)}% do total`}
+        />
+        {/* COMPROU é o eixo de COMPRA, não um status, mas desde 30/10/2026 usa
+            o MESMO verde de "Aprovado" (ver `PURCHASE_META`). O número grande
+            vai um tom acima do cartão vizinho para os dois não empatarem na
+            leitura. A conta é a mesma de `r.conversao`: quem comprou sobre o
+            total recebido. */}
+        <Kpi
+          icon={<ShoppingBag className="h-5 w-5" />}
+          chip={PURCHASE_META.COMPROU.chip}
+          valor={r.comprou}
+          corValor="text-emerald-800 dark:text-emerald-200"
+          label="Comprou"
+          hint={`${pct(r.comprou, r.total)}% do total`}
+        />
+        <Kpi
+          icon={<XCircle className="h-5 w-5" />}
+          chip={LEAD_STATUS_META.REPROVADO.chip}
+          valor={porStatus.get("REPROVADO") ?? 0}
+          corValor="text-destructive"
+          label={LEAD_STATUS_META.REPROVADO.label}
+          hint={`${pct(porStatus.get("REPROVADO") ?? 0, r.total)}% do total`}
+        />
       </div>
 
       {/* Linha 2 — destaques. As DUAS taxas vêm juntas e na ordem em que se
@@ -346,13 +382,21 @@ export function AnaliseClientesPainel({
           // fechar uma venda derrubaria este número. Ver `APROVADAS`.
           hint={`${r.aprovadas} aprovadas ÷ ${r.total} recebidas`}
         />
+        {/* Era "Entradas no mês" até 30/10/2026. Trocado a pedido do dono
+            quando o recorte padrão passou a SER o mês vigente: o cartão
+            repetia o número de "Candidaturas recebidas" ao lado dele.
+            
+            O número grande é a CONTAGEM, como em todo cartão desta faixa, e o
+            motivo vai na dica — ela tem `truncate`, e um rótulo de motivo no
+            lugar do número quebraria a altura do cartão em duas linhas. A lista
+            completa está no painel "Reprovações por motivo", embaixo. */}
         <Kpi
-          icon={<CalendarDays className="h-5 w-5" />}
-          chip="bg-vendas/15 text-vendas-text"
-          valor={mesAtual?.total ?? 0}
-          corValor="text-vendas-text"
-          label="Entradas no mês"
-          hint={mesAtual?.rotulo ?? "—"}
+          icon={<AlertTriangle className="h-5 w-5" />}
+          chip="bg-destructive/15 text-destructive"
+          valor={motivoLider?.total ?? 0}
+          corValor="text-destructive"
+          label="Motivo que mais reprova"
+          hint={motivoLider?.rotulo ?? "nenhuma reprovação no recorte"}
         />
         <Kpi
           icon={<TrendingUp className="h-5 w-5" />}
@@ -380,34 +424,14 @@ export function AnaliseClientesPainel({
         )}
       </div>
 
-      {/* Linha 3 — distribuições. */}
-      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-        <Painel titulo="Status das análises" icon={<LayoutGrid className="h-3.5 w-3.5" />}>
-          {/* Barra empilhada: a proporção entre os quatro estados de uma
-              olhada, antes de ler qualquer número. CUIDADO entra aqui mesmo
-              sem cartão próprio — é aqui que as parcelas têm de fechar. */}
-          <div className="mb-3 flex h-2 w-full overflow-hidden rounded-full bg-secondary">
-            {LEAD_STATUS_ORDER.map((s) => (
-              <span
-                key={s}
-                className={LEAD_STATUS_META[s].dot}
-                style={{ width: `${pct(porStatus.get(s) ?? 0, r.total)}%` }}
-                aria-hidden
-              />
-            ))}
-          </div>
-          <Lista
-            fatias={LEAD_STATUS_ORDER.map((s) => ({
-              label: LEAD_STATUS_META[s].label,
-              count: porStatus.get(s) ?? 0,
-              // `dot`, não `chip`: o ponto se separa do FUNDO, o chip
-              // carrega texto. Ver a nota em `lead-status-chip.tsx`.
-              cor: LEAD_STATUS_META[s].dot,
-            }))}
-            total={r.total}
-          />
-        </Painel>
-
+      {/* Linha 3 — distribuições. O painel "Status das análises" (barra
+          empilhada + lista dos quatro status) saiu em 30/10/2026: era o único
+          lugar do painel onde o CUIDADO ainda aparecia, e tirar só a linha dele
+          deixaria uma barra cujas parcelas não fecham mais com o total — o
+          defeito exato que o comentário daquele painel existia para impedir.
+          Os três números que ele mostrava estão nos cartões da primeira linha,
+          cada um com o seu "% do total". */}
+      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
         <Painel titulo="Taxa de conversão por vendedora" icon={<Percent className="h-3.5 w-3.5" />}>
           <Conversoes linhas={conversoes} />
         </Painel>
