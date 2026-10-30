@@ -57,8 +57,19 @@ interface Opt { id: string; name: string; }
  */
 const VISIVEIS_POR_COLUNA = 3;
 
-/** Teto de comprovantes por pedido — mesmo limite aplicado no servidor. */
-const MAX_COMPROVANTES = 5;
+/**
+ * Teto de comprovantes por pedido — mesmo limite aplicado no servidor.
+ *
+ * Era 5 até 30/10/2026. Subiu a pedido do dono: pagamento parcelado ou dividido
+ * entre formas chega com mais de cinco comprovantes, e o que não cabia ficava
+ * fora do pedido, em conversa de WhatsApp.
+ *
+ * O NÚMERO ESTÁ ESCRITO NOS DOIS LADOS (aqui e em `uploadSecondPaymentProof`).
+ * Este aqui só desabilita o botão; quem recusa de verdade é o servidor. Mudar
+ * um sem o outro não abre brecha — dá uma tela que promete o que o servidor
+ * nega, ou que esconde o que ele aceitaria.
+ */
+const MAX_COMPROVANTES = 10;
 
 /**
  * Rotulo do card na coluna "Pagamento pendente": a comanda e o numero que o
@@ -490,8 +501,20 @@ function ProcessedCard({ card }: { card: FinanceCard }) {
         </span>
         <span className="font-data text-sm font-semibold">{card.total}</span>
       </div>
+      {/* O CÓDIGO DA CLIENTE ao lado do nome (30/10/2026, a pedido do dono): é
+          por ele que o Financeiro acha a cliente no sistema para conferir o
+          pagamento, e sem ele o card obrigava a abrir o pedido só para lê-lo.
+          Mesma etiqueta do card de pedido (`order-card.tsx`), para o código ter
+          uma aparência só no sistema inteiro. */}
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground" title={card.customerName}>
-        <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {shortName(card.sellerName)}
+        <User className="h-3 w-3 shrink-0" />
+        <span className="min-w-0 truncate">{shortName(card.customerName)}</span>
+        {card.customerCode && (
+          <span className="font-data shrink-0 rounded bg-secondary px-1 text-[10px] text-foreground/70">
+            {card.customerCode}
+          </span>
+        )}
+        <span className="min-w-0 truncate">· {shortName(card.sellerName)}</span>
       </p>
       <div className="mt-2 flex items-center justify-between">
         {aprovado ? (

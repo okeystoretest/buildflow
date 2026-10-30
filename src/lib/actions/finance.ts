@@ -49,13 +49,25 @@ export async function setOrderPaymentInfo(args: {
 }
 
 /**
+ * Teto de comprovantes por pedido. ESTA e a trava que vale — o kanban tem o
+ * mesmo numero (`MAX_COMPROVANTES` em `analise-kanban.tsx`) so para desabilitar
+ * o botao antes da viagem.
+ *
+ * Era 5 ate 30/10/2026, escrito a mao em tres lugares deste arquivo. Subiu a
+ * pedido do dono (pagamento parcelado passa de cinco comprovantes), e virou
+ * constante na mesma passada: tres literais do mesmo limite divergem na
+ * primeira vez que alguem muda um deles.
+ */
+const MAX_COMPROVANTES = 10;
+
+/**
  * Financeiro anexa o SEGUNDO comprovante de pagamento.
  * Regra do projeto: a imagem NUNCA vai para o banco. O Sharp converte para
  * .webp e grava no disco; no banco fica apenas a string do caminho.
  */
 export async function uploadSecondPaymentProof(args: {
   orderId: string;
-  // Um ou varios comprovantes (ate 5) em data URL base64.
+  // Um ou varios comprovantes (ate MAX_COMPROVANTES) em data URL base64.
   base64?: string;
   base64List?: string[];
 }): Promise<ActionResult<{ count: number; created: { id: string; filePath: string }[] }>> {
@@ -66,7 +78,7 @@ export async function uploadSecondPaymentProof(args: {
     // Aceita tanto o formato antigo (base64 unico) quanto a lista.
     const entradas = (args.base64List ?? (args.base64 ? [args.base64] : []))
       .filter(Boolean)
-      .slice(0, 5);
+      .slice(0, MAX_COMPROVANTES);
     if (entradas.length === 0) return actionError("Arquivo obrigatório.");
 
     const order = await prisma.order.findUnique({
@@ -75,9 +87,11 @@ export async function uploadSecondPaymentProof(args: {
     });
     if (!order) return actionError("Pedido não encontrado.");
 
-    // Respeita o teto de 5 no total (ja anexados + novos).
-    const espacoLivre = 5 - order.financeProofs.length;
-    if (espacoLivre <= 0) return actionError("Limite de 5 comprovantes atingido.");
+    // Respeita o teto no total (ja anexados + novos).
+    const espacoLivre = MAX_COMPROVANTES - order.financeProofs.length;
+    if (espacoLivre <= 0) {
+      return actionError(`Limite de ${MAX_COMPROVANTES} comprovantes atingido.`);
+    }
     const aProcessar = entradas.slice(0, espacoLivre);
 
     let salvos = 0;
