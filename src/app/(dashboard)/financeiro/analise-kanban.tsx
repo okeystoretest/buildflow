@@ -501,20 +501,8 @@ function ProcessedCard({ card }: { card: FinanceCard }) {
         </span>
         <span className="font-data text-sm font-semibold">{card.total}</span>
       </div>
-      {/* O CÓDIGO DA CLIENTE ao lado do nome (30/10/2026, a pedido do dono): é
-          por ele que o Financeiro acha a cliente no sistema para conferir o
-          pagamento, e sem ele o card obrigava a abrir o pedido só para lê-lo.
-          Mesma etiqueta do card de pedido (`order-card.tsx`), para o código ter
-          uma aparência só no sistema inteiro. */}
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground" title={card.customerName}>
-        <User className="h-3 w-3 shrink-0" />
-        <span className="min-w-0 truncate">{shortName(card.customerName)}</span>
-        {card.customerCode && (
-          <span className="font-data shrink-0 rounded bg-secondary px-1 text-[10px] text-foreground/70">
-            {card.customerCode}
-          </span>
-        )}
-        <span className="min-w-0 truncate">· {shortName(card.sellerName)}</span>
+        <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {shortName(card.sellerName)}
       </p>
       <div className="mt-2 flex items-center justify-between">
         {aprovado ? (
@@ -733,8 +721,20 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
         <span className="font-data text-sm font-semibold">{rotuloComanda(card)}</span>
         <span className="font-data text-sm font-semibold">{card.total}</span>
       </div>
+      {/* O CÓDIGO DA CLIENTE ao lado do nome: é por ele que o Financeiro acha
+          a cliente no sistema para conferir o pagamento, e sem ele o card
+          obrigava a abrir o pedido só para lê-lo. Mesma etiqueta do card de
+          pedido (`order-card.tsx`), para o código ter uma aparência só no
+          sistema inteiro. */}
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground" title={card.customerName}>
-        <User className="h-3 w-3 shrink-0" /> {shortName(card.customerName)} · {shortName(card.sellerName)}
+        <User className="h-3 w-3 shrink-0" />
+        <span className="min-w-0 truncate">{shortName(card.customerName)}</span>
+        {card.customerCode && (
+          <span className="font-data shrink-0 rounded bg-secondary px-1 text-[10px] text-foreground/70">
+            {card.customerCode}
+          </span>
+        )}
+        <span className="min-w-0 truncate">· {shortName(card.sellerName)}</span>
       </p>
       <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
         <Clock className="h-3 w-3" />
@@ -748,23 +748,6 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
           {anexos}/{MAX_COMPROVANTES} comprovante(s) anexado(s).
         </p>
       )}
-
-      {/* O botao existe sempre, mas so abre quando ha o que ver: um clique
-          num modal vazio nao diz nada que o rotulo "Sem comprovantes" ja
-          nao diga. A lista vem do servidor; apos anexar por este card o
-          router.refresh atualiza o card e o botao libera. */}
-      <Button
-        type="button"
-        onClick={onViewProofs}
-        size="sm"
-        variant="outline"
-        className="mt-3 w-full"
-        disabled={card.proof2List.length === 0}
-        title={card.proof2List.length === 0 ? "Nenhum comprovante inserido" : "Ver comprovantes inseridos"}
-      >
-        <Eye className="mr-1 h-4 w-4" />
-        {card.proof2List.length === 0 ? "Sem comprovantes" : `Ver comprovantes (${card.proof2List.length})`}
-      </Button>
 
       {/* Comentario ja registrado: aparece no card para nao exigir abrir o
           modal so para saber se ha alguma anotacao. */}
@@ -782,19 +765,50 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
       {err && <p className="mt-2 text-[11px] text-destructive">{err}</p>}
       {okMsg && <p className="mt-2 text-[11px] text-motorista-text">{okMsg}</p>}
 
-      <Button
-        type="button"
-        onClick={onComment}
-        size="sm"
-        variant="outline"
-        className="mt-2 w-full"
-        title={card.paymentPendingNote ? "Editar observação do pedido" : "Adicionar observação ao pedido"}
-      >
-        <MessageSquare className="mr-1 h-4 w-4" />
-        {card.paymentPendingNote ? "Editar comentário" : "Comentar"}
-      </Button>
+      {/* OS QUATRO BOTOES NUMA FILEIRA SO, cada um com a largura do proprio
+          rotulo. Eram quatro barras de largura inteira empilhadas, separadas
+          pela observacao e pelas mensagens: o card passava de 300px de altura e
+          cabiam menos de dois por tela. Numa coluna de kanban a altura e o
+          recurso caro — a largura sobra.
 
-      <div className="mt-2 flex items-center gap-2">
+          `flex-wrap` e nao um grid de colunas fixas: os rotulos mudam de
+          tamanho conforme o estado ("Comentar" vira "Editar comentario",
+          "Inserir comprovante" vira "Enviando..."), e uma grade daria sobra num
+          botao e aperto no vizinho a cada troca.
+
+          `h-8` por cima do `size="sm"` (que e h-9): o tamanho pedido e menor
+          que o menor que o Button oferece de fabrica. Segue acima do alvo de
+          toque de 32px, e como so esta tela usa, nao vira variante nova. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* O botao existe sempre, mas so abre quando ha o que ver: um clique
+            num modal vazio nao diz nada que o rotulo "Sem comprovantes" ja
+            nao diga. A lista vem do servidor; apos anexar por este card o
+            router.refresh atualiza o card e o botao libera. */}
+        <Button
+          type="button"
+          onClick={onViewProofs}
+          size="sm"
+          variant="outline"
+          className="h-8 px-2.5"
+          disabled={card.proof2List.length === 0}
+          title={card.proof2List.length === 0 ? "Nenhum comprovante inserido" : "Ver comprovantes inseridos"}
+        >
+          <Eye className="mr-1 h-3.5 w-3.5" />
+          {card.proof2List.length === 0 ? "Sem comprovantes" : `Ver comprovantes (${card.proof2List.length})`}
+        </Button>
+
+        <Button
+          type="button"
+          onClick={onComment}
+          size="sm"
+          variant="outline"
+          className="h-8 px-2.5"
+          title={card.paymentPendingNote ? "Editar observação do pedido" : "Adicionar observação ao pedido"}
+        >
+          <MessageSquare className="mr-1 h-3.5 w-3.5" />
+          {card.paymentPendingNote ? "Editar comentário" : "Comentar"}
+        </Button>
+
         {podeAnexar && (
           <>
             {/* Input escondido: o botao e quem dispara a selecao de arquivos. */}
@@ -812,22 +826,24 @@ function PaidPendingCard({ card, podeAnexar, onComment, onViewProofs }: {
               disabled={anexando || busy || cheio}
               size="sm"
               variant="outline"
-              className="flex-1"
+              className="h-8 px-2.5"
               title={cheio ? `Limite de ${MAX_COMPROVANTES} comprovantes atingido` : "Anexar comprovante"}
             >
-              <Paperclip className="mr-1 h-4 w-4" />
-              {anexando ? "Enviando..." : cheio ? "Limite atingido" : "Inserir Comprovante"}
+              <Paperclip className="mr-1 h-3.5 w-3.5" />
+              {anexando ? "Enviando..." : cheio ? "Limite atingido" : "Inserir comprovante"}
             </Button>
           </>
         )}
 
+        {/* "Pago" fecha o card, entao e o unico cheio e fica por ultimo —
+            depois de tudo que se faz ANTES de confirmar. */}
         <Button
           onClick={pay}
           disabled={busy || anexando}
           size="sm"
-          className={`${podeAnexar ? "flex-1" : "w-full"} bg-sky-500 text-white hover:bg-sky-600`}
+          className="h-8 bg-sky-500 px-3 text-white hover:bg-sky-600"
         >
-          <BadgeDollarSign className="mr-1 h-4 w-4" />
+          <BadgeDollarSign className="mr-1 h-3.5 w-3.5" />
           {busy ? "Confirmando..." : "Pago"}
         </Button>
       </div>
