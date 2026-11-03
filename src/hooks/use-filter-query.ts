@@ -144,9 +144,10 @@ export function useFilterQuery<
    * para desfazer um clique.
    *
    * `patch` existe para o campo que tem um estado de REPOUSO diferente de
-   * vazio: na Analise de Clientes, limpar os filtros devolve o periodo ao mes
-   * vigente, nao ao nada. Sem isso o controle ficaria dizendo "sem periodo"
-   * enquanto o servidor aplica o mes.
+   * vazio — sem ele o controle ficaria dizendo "vazio" enquanto o servidor
+   * aplica outra coisa. Nenhuma tela usa o patch hoje (a Analise de Clientes
+   * usava, para devolver o periodo ao mes vigente, e perdeu o padrao em
+   * 03/11/2026).
    */
   const clearAll = useCallback(
     (patch?: Partial<I>) => {

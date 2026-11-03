@@ -52,23 +52,6 @@ function dataBR(iso: string): string {
   return d && m && a ? `${d}/${m}/${a}` : iso;
 }
 
-/**
- * O mês em palavras, a partir de "2026-10-01".
- *
- * Só para o recorte PADRÃO (o mês vigente, desde 30/10/2026): "outubro de 2026"
- * diz num relance o que "de 01/10/2026 a 31/10/2026" faz ler duas datas para
- * concluir a mesma coisa. Período escolhido à mão continua mostrando as pontas,
- * que é o que importa quando elas não são um mês fechado.
- */
-const MES_NOME = [
-  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
-];
-function mesBR(iso: string): string {
-  const [ano, mes] = iso.split("-");
-  return `${MES_NOME[Number(mes) - 1] ?? mes} de ${ano}`;
-}
-
 /** Cores dos pontos das listas, cicladas por posição. */
 const PALETA = ["bg-sky-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500", "bg-rose-500"];
 
@@ -222,13 +205,12 @@ export function AnaliseClientesPainel({
 }: {
   resumo: ResumoDoAtacado;
   ehGestao: boolean;
-  filtros: { de: string; ate: string; temFiltro: boolean; padraoDoMes: boolean };
+  filtros: { de: string; ate: string; temFiltro: boolean };
   /** Nome da vendedora escolhida no filtro, quando há uma. */
   nomeVendedora: string | null;
 }) {
-  const rotuloPeriodo = filtros.padraoDoMes
-    ? mesBR(filtros.de)
-    : filtros.de && filtros.ate
+  const rotuloPeriodo =
+    filtros.de && filtros.ate
       ? `de ${dataBR(filtros.de)} a ${dataBR(filtros.ate)}`
       : filtros.de
         ? `desde ${dataBR(filtros.de)}`
@@ -269,14 +251,9 @@ export function AnaliseClientesPainel({
         <span className="text-sm">
           {filtros.temFiltro
             ? "Nenhuma candidatura neste recorte. Abra os filtros, na borda direita da tela, e troque o recorte."
-            : filtros.padraoDoMes
-              ? // A tela abre no mês vigente, então "nada aqui" quase sempre quer
-                // dizer "nada NESTE mês" — e o caminho para o histórico tem de
-                // estar escrito, ou o padrão esconde a base sem avisar.
-                `Nenhuma candidatura em ${mesBR(filtros.de)}. Abra os filtros, na borda direita da tela, e limpe o período para ver todo o histórico.`
-              : ehGestao
-                ? "Nenhuma candidatura recebida ainda. O painel se preenche assim que a primeira lojista enviar o formulário."
-                : "Nenhuma candidatura na sua fila ainda. O painel se preenche quando uma lojista enviar o formulário pelo seu link."}
+            : ehGestao
+              ? "Nenhuma candidatura recebida ainda. O painel se preenche assim que a primeira lojista enviar o formulário."
+              : "Nenhuma candidatura na sua fila ainda. O painel se preenche quando uma lojista enviar o formulário pelo seu link."}
         </span>
       </div>
     );

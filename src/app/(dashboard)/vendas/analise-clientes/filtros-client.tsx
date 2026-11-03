@@ -62,7 +62,6 @@ const mesmaCidade = (a: string, b: string) =>
  */
 export function AnaliseClientesFiltros({
   defaults,
-  mesPadrao,
   estados,
   cidades,
   cidadesPorUf,
@@ -81,11 +80,7 @@ export function AnaliseClientesFiltros({
     motivo: string;
     /** Eixo de compra (`?compra=`). Só vale para candidatura aprovada. */
     compra: string;
-    /** `tudo` desliga o recorte padrão do mês — ver `page.tsx`. */
-    periodo: string;
   };
-  /** O mês vigente, para saber se o período na URL é o padrão ou escolha. */
-  mesPadrao: { de: string; ate: string };
   estados: string[];
   /** Todas as cidades da base no escopo de quem olha — ver a página. */
   cidades: string[];
@@ -111,7 +106,6 @@ export function AnaliseClientesFiltros({
         de: defaults.de,
         ate: defaults.ate,
         motivo: defaults.motivo,
-        periodo: defaults.periodo,
       },
     },
   );
@@ -203,14 +197,8 @@ export function AnaliseClientesFiltros({
     f.setInstantMany({ estado: uf, cidade: mantem ? f.instant.cidade : "" });
   }
 
-  // O PERÍODO SÓ CONTA COMO FILTRO QUANDO NÃO É O PADRÃO. A URL sem `de`/`ate`
-  // recebe o mês vigente da página, então comparar com o mês é a única forma de
-  // distinguir "é o repouso da tela" de "alguém escolheu outubro de propósito".
-  // `periodo=tudo` é escolha também: é o que desliga o padrão.
-  const periodoEscolhido =
-    f.instant.periodo === "tudo" ||
-    f.instant.de !== mesPadrao.de ||
-    f.instant.ate !== mesPadrao.ate;
+  // Uma PONTA SÓ já é recorte ("desde 01/10"), então qualquer das duas conta.
+  const periodoEscolhido = Boolean(f.instant.de || f.instant.ate);
   const ativos =
     [
       f.instant.status,
@@ -294,27 +282,14 @@ export function AnaliseClientesFiltros({
             {/* Rola por dentro: com os nove campos empilhados a lista passa da
                 altura da tela em telefone. */}
             <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-              {/* 1. PERÍODO de CHEGADA da candidatura. O PADRÃO É O MÊS VIGENTE
-                  desde 30/10/2026 — ver a nota em `page.tsx`.
-                  `periodo` viaja junto do patch porque é só ele que separa
-                  "limpei para ver tudo" de "não escolhi nada": sem a marca, a
-                  página reaplicaria o mês e o botão de limpar ficaria inerte. */}
+              {/* 1. PERÍODO de CHEGADA da candidatura. SEM PADRÃO: vazio é o
+                  histórico inteiro — ver a nota em `page.tsx`. */}
               <div className="space-y-1.5">
                 <Label>Período</Label>
                 <PeriodoFiltro
                   de={f.instant.de}
                   ate={f.instant.ate}
-                  onChange={(p) => {
-                    // Decidido sobre o ESTADO RESULTANTE, e não sobre o patch:
-                    // `PeriodoFiltro` manda uma ponta só quando a pessoa edita
-                    // um dos dois campos, e esvaziar os dois à mão (em vez de
-                    // usar "Limpar período") chegaria aqui como dois patches
-                    // parciais. Olhando só o patch, o segundo não veria o
-                    // primeiro e a tela voltaria ao mês vigente sozinha.
-                    const de = p.de ?? f.instant.de;
-                    const ate = p.ate ?? f.instant.ate;
-                    f.setInstantMany({ ...p, periodo: !de && !ate ? "tudo" : "" });
-                  }}
+                  onChange={(p) => f.setInstantMany(p)}
                   setor="vendas"
                   titulo="Recebimento"
                   id="analise"
@@ -495,17 +470,12 @@ export function AnaliseClientesFiltros({
                 
                 Limpa a BUSCA junto, mesmo ela vivendo noutro componente:
                 `clearAll` monta a URL do zero, e "limpar filtros" quer dizer
-                "nenhum filtro nesta tela", não "nenhum dos meus".
-                
-                O PERÍODO VOLTA AO MÊS VIGENTE, não ao vazio: o mês é o estado
-                de repouso desta tela (ver `page.tsx`), e mandar vazio deixaria
-                o botão de período dizendo "Período" enquanto o servidor aplica
-                outubro — um controle mentindo sobre o próprio valor. */}
+                "nenhum filtro nesta tela", não "nenhum dos meus". */}
             {ativos > 0 && (
               <div className="border-t border-border px-4 py-3">
                 <button
                   type="button"
-                  onClick={() => f.clearAll({ de: mesPadrao.de, ate: mesPadrao.ate })}
+                  onClick={() => f.clearAll()}
                   className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-input text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-4 w-4" aria-hidden />

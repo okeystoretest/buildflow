@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Prisma } from "@prisma/client";
 import { formatCnpj, normalizeCnpj, phoneMatchKeys } from "@/lib/wholesale-identity";
-import { classifyDuplicateMatch, listLeadsFor, mesVigente } from "@/lib/wholesale-queries";
+import { classifyDuplicateMatch, listLeadsFor } from "@/lib/wholesale-queries";
 import { findRejectionCode } from "@/lib/wholesale-rejection-codes";
 import { LeadStatusCell } from "./lead-status-cell";
 import { LeadPurchaseCell } from "./lead-purchase-cell";
@@ -82,8 +82,6 @@ export default async function AnaliseClientesPage(
       ate?: string;
       motivo?: string;
       compra?: string;
-      /** `tudo` desliga o recorte padrão do mês vigente. Ver abaixo. */
-      periodo?: string;
     }>;
   }
 ) {
@@ -112,30 +110,20 @@ export default async function AnaliseClientesPage(
   const motivo = searchParams?.motivo?.trim() || "";
   const compra = searchParams?.compra?.trim() || "";
 
-  // PERÍODO: o padrão é o MÊS VIGENTE (30/10/2026, a pedido do dono). A tela
-  // abria no acumulado de todo o histórico.
+  // PERÍODO: SEM PADRÃO. A tela abre no histórico INTEIRO (03/11/2026, a pedido
+  // do dono). Entre 30/10 e 03/11 ela abria no mês vigente, e o recorte
+  // implícito era o problema que o comentário de `filtros-client.tsx` previa:
+  // números menores do que a base sem nada na tela dizendo por quê.
   //
-  // O comentário de `filtros-client.tsx` avisava contra exatamente isto: um
-  // recorte que cai no mês atual sozinho esconde o histórico sem avisar. As duas
-  // coisas que respondem ao aviso:
-  //
-  //  - É VISÍVEL. O botão de período abre mostrando "01/10/26 – 31/10/26", e o
-  //    painel escreve o mês em palavras acima dos números.
-  //  - É DESFAZÍVEL. "Limpar período" não volta ao padrão: ele marca
-  //    `?periodo=tudo`, e é só o que distingue "não escolhi nada" (aplica o mês)
-  //    de "quero tudo" (não aplica). Sem a marca, a página reaplicaria o mês e o
-  //    botão de limpar não teria efeito nenhum.
+  // Sem padrão, `periodo=tudo` perdeu a função — era só a marca que distinguia
+  // "não escolhi nada" de "quero tudo", e agora as duas coisas são a mesma. URL
+  // antiga com a marca continua funcionando: ela não aplica recorte nenhum.
   //
   // O recorte é UM para o painel e para a tabela, como todos os outros: números
   // de um mês acima de uma lista do histórico inteiro são dois recortes na mesma
   // tela, e ninguém descobre qual dos dois está certo.
-  const dePedido = searchParams?.de?.trim() || "";
-  const atePedido = searchParams?.ate?.trim() || "";
-  const periodo = searchParams?.periodo?.trim() || "";
-  const padraoDoMes = !dePedido && !atePedido && periodo !== "tudo";
-  const mes = mesVigente();
-  const de = padraoDoMes ? mes.de : dePedido;
-  const ate = padraoDoMes ? mes.ate : atePedido;
+  const de = searchParams?.de?.trim() || "";
+  const ate = searchParams?.ate?.trim() || "";
   const page = Math.max(1, Number(searchParams?.page) || 1);
 
   // ANTES das duas consultas, e não dentro de uma delas: uma aprovada pode ter
@@ -426,13 +414,8 @@ export default async function AnaliseClientesPage(
     if (cidade) sp.set("cidade", cidade);
     if (vendedora) sp.set("vendedora", vendedora);
     if (compra) sp.set("compra", compra);
-    // As pontas PEDIDAS, não as resolvidas: o padrão do mês se reaplica sozinho
-    // na página 2, e gravar `de`/`ate` aqui fixaria outubro num link que deveria
-    // continuar dizendo "o mês atual". `periodo=tudo` precisa viajar junto, ou a
-    // segunda página volta ao mês.
-    if (dePedido) sp.set("de", dePedido);
-    if (atePedido) sp.set("ate", atePedido);
-    if (periodo) sp.set("periodo", periodo);
+    if (de) sp.set("de", de);
+    if (ate) sp.set("ate", ate);
     if (motivo) sp.set("motivo", motivo);
     if (p > 1) sp.set("page", String(p));
     const qs = sp.toString();
@@ -443,11 +426,10 @@ export default async function AnaliseClientesPage(
   // Cidade e UF viraram duas colunas, depois entrou "Marca", e em 30/10/2026
   // "Compra": 12 para a Gestao (que tambem ve "Vendedora"), 11 para a vendedora.
   const colunas = ehGestao ? 12 : 11;
-  // O padrão do mês NÃO conta como filtro: é o estado de repouso da tela, e a
-  // mensagem de lista vazia precisa distinguir "base vazia" de "você filtrou".
+  // A mensagem de lista vazia precisa distinguir "base vazia" de "você filtrou".
   const temFiltro = Boolean(
     status || compra || brand || busca || estado || cidade || vendedora ||
-      dePedido || atePedido || motivo,
+      de || ate || motivo,
   );
   const nomeVendedora = vendedoras.find((v) => v.id === vendedora)?.name ?? null;
 
@@ -460,8 +442,7 @@ export default async function AnaliseClientesPage(
       <h1 className="text-2xl font-bold text-vendas-text">Análise de Clientes</h1>
 
       <AnaliseClientesFiltros
-        defaults={{ status, brand, estado, cidade, vendedora, de, ate, motivo, compra, periodo }}
-        mesPadrao={mes}
+        defaults={{ status, brand, estado, cidade, vendedora, de, ate, motivo, compra }}
         estados={estados}
         cidades={cidades}
         cidadesPorUf={cidadesPorUf}
@@ -475,7 +456,7 @@ export default async function AnaliseClientesPage(
       <AnaliseClientesPainel
         resumo={resumo}
         ehGestao={ehGestao}
-        filtros={{ de, ate, temFiltro, padraoDoMes }}
+        filtros={{ de, ate, temFiltro }}
         nomeVendedora={nomeVendedora}
       />
 

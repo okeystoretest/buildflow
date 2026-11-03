@@ -22,7 +22,7 @@ import {
   escopoDoAtor,
   taxaDeConversao,
 } from "../../src/lib/wholesale-dashboard";
-import { filtroDePeriodo, marcaValida, mesVigente } from "../../src/lib/wholesale-queries";
+import { filtroDePeriodo, marcaValida } from "../../src/lib/wholesale-queries";
 import type { WholesaleActor } from "../../src/lib/wholesale-permissions";
 
 let falhas = 0;
@@ -275,54 +275,28 @@ check(
 // de cada linha, em percentual.
 check("as parcelas somam o total de reprovacoes", motivos.reduce((n, m) => n + m.total, 0), 20);
 
-// --- o recorte PADRAO: o mes vigente ----------------------------------------
-// Entrou em 30/10/2026: a tela abria no acumulado de todo o historico. O que
-// esta em jogo aqui e o FUSO. `filtroDePeriodo` monta as pontas como meia-noite
-// LOCAL (`new Date("2026-10-01T00:00:00")`), e `mesVigente` tem de falar a mesma
-// lingua: montado em UTC, o recorte andaria tres horas no Brasil e a candidatura
-// que chegou as 22h do dia 31 cairia fora do mes dela — sem erro nenhum para
-// denunciar isso, so um numero menor no painel.
-check(
-  "outubro de 2026 vai do dia 1 ao 31",
-  mesVigente(new Date(2026, 9, 19, 12, 0)),
-  { de: "2026-10-01", ate: "2026-10-31" },
-);
-// Dia 0 do mes seguinte e o ultimo do atual: fevereiro sai certo sem tabela.
-check("fevereiro de ano bissexto termina no 29", mesVigente(new Date(2024, 1, 10)).ate, "2024-02-29");
-check("fevereiro comum termina no 28", mesVigente(new Date(2025, 1, 10)).ate, "2025-02-28");
-// Dezembro: `new Date(ano, 12, 0)` vira o ultimo dia de dezembro, nao janeiro.
-check(
-  "dezembro nao vaza para o ano seguinte",
-  mesVigente(new Date(2026, 11, 3)),
-  { de: "2026-12-01", ate: "2026-12-31" },
-);
-// O mes vigente no primeiro e no ultimo instante do mes e o MESMO mes.
-check(
-  "primeiro e ultimo dia caem no mesmo recorte",
-  [mesVigente(new Date(2026, 9, 1, 0, 1)), mesVigente(new Date(2026, 9, 31, 23, 59))],
-  [
-    { de: "2026-10-01", ate: "2026-10-31" },
-    { de: "2026-10-01", ate: "2026-10-31" },
-  ],
-);
-// A asserção que o fuso quebraria: 22h30 do dia 31 e DESTE mes.
-const outubro = mesVigente(new Date(2026, 9, 15));
-const janela = filtroDePeriodo(outubro.de, outubro.ate).createdAt as { gte: Date; lte: Date };
+// --- as PONTAS do periodo e o FUSO ------------------------------------------
+// A Analise de Clientes nao tem recorte padrao (03/11/2026): sem `de`/`ate` a
+// tela mostra o historico inteiro, e isso e o `{}` checado acima. O que sobra
+// para proteger e o periodo ESCOLHIDO a mao: `filtroDePeriodo` monta as pontas
+// como meia-noite LOCAL, e montadas em UTC o recorte andaria tres horas no
+// Brasil — a candidatura que chegou as 22h do dia 31 cairia fora de um recorte
+// que termina no dia 31, sem erro nenhum para denunciar isso.
+const janela = filtroDePeriodo("2026-10-01", "2026-10-31").createdAt as { gte: Date; lte: Date };
 const noiteDoDia31 = new Date(2026, 9, 31, 22, 30);
-const primeiroInstante = new Date(2026, 9, 1, 0, 0, 0);
 check(
-  "22h30 do ultimo dia ainda esta no mes",
+  "22h30 do ultimo dia ainda esta no recorte",
   janela.gte <= noiteDoDia31 && noiteDoDia31 <= janela.lte,
   true,
 );
 check(
   "a meia-noite do dia 1 tambem esta",
-  janela.gte <= primeiroInstante && primeiroInstante <= janela.lte,
+  janela.gte <= new Date(2026, 9, 1, 0, 0, 0),
   true,
 );
 // E o que esta fora, fica fora: o dia 1 do mes seguinte nao entra.
-const mesSeguinte = new Date(2026, 10, 1, 0, 30);
-check("o mes seguinte nao entra", mesSeguinte <= janela.lte, false);
+check("o dia seguinte ao fim nao entra", new Date(2026, 10, 1, 0, 30) <= janela.lte, false);
+
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

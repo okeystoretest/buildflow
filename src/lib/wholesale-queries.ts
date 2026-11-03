@@ -59,32 +59,6 @@ export function filtroDePeriodo(de?: string, ate?: string): Prisma.WholesaleLead
 }
 
 /**
- * O primeiro e o último dia do mês de `agora`, como "YYYY-MM-DD".
- *
- * É o recorte PADRÃO da Análise de Clientes desde 30/10/2026, a pedido do dono:
- * a tela abria no acumulado de todo o histórico, e a pergunta do dia a dia é
- * "como está este mês". O padrão é VISÍVEL (o botão de período mostra o
- * intervalo) e DESFAZÍVEL (limpar o período marca `?periodo=tudo`) — um recorte
- * implícito que esconde o histórico sem avisar é o defeito que o Histórico de
- * Pedidos já teve, e o que o comentário desta tela pedia para não repetir.
- *
- * DATA LOCAL, e não UTC, porque é assim que `filtroDePeriodo` lê as pontas
- * (`new Date("2026-10-01T00:00:00")` é meia-noite local). Montar em UTC
- * deslocaria o recorte em três horas no Brasil: uma candidatura que chegou às
- * 22h do dia 31 cairia fora do mês dela.
- *
- * O último dia sai de `new Date(ano, mes + 1, 0)` — dia 0 do mês seguinte é o
- * último do atual. Fevereiro e ano bissexto saem certos sem tabela nenhuma.
- */
-export function mesVigente(agora: Date = new Date()): { de: string; ate: string } {
-  const ano = agora.getFullYear();
-  const mes = agora.getMonth();
-  const dois = (n: number) => String(n).padStart(2, "0");
-  const ultimo = new Date(ano, mes + 1, 0).getDate();
-  return { de: `${ano}-${dois(mes + 1)}-01`, ate: `${ano}-${dois(mes + 1)}-${dois(ultimo)}` };
-}
-
-/**
  * O filtro do aviso de cadastro repetido (decisão 9), separado e PURO para
  * poder ser conferido por script.
  *
