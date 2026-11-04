@@ -169,14 +169,24 @@ export async function listBoard(): Promise<TransportView[]> {
 }
 
 /** Historico: finais (concluidos e cancelados), mais recentes primeiro. */
-export async function listHistory(limit = 100): Promise<TransportView[]> {
-  const rows = await prisma.transportRequest.findMany({
-    where: { status: { in: ["CONCLUIDO", "CANCELADO"] } },
-    orderBy: { finishedAt: "desc" },
-    take: limit,
-    select: TRANSPORT_VIEW_SELECT,
-  });
-  return rows.map(toView);
+export async function listHistory(
+  opts: { driverId?: string; skip?: number; take?: number } = {},
+): Promise<{ items: TransportView[]; total: number }> {
+  const where = {
+    status: { in: ["CONCLUIDO" as const, "CANCELADO" as const] },
+    ...(opts.driverId ? { driverId: opts.driverId } : {}),
+  };
+  const [rows, total] = await Promise.all([
+    prisma.transportRequest.findMany({
+      where,
+      orderBy: { finishedAt: "desc" },
+      skip: opts.skip ?? 0,
+      take: opts.take ?? 100,
+      select: TRANSPORT_VIEW_SELECT,
+    }),
+    prisma.transportRequest.count({ where }),
+  ]);
+  return { items: rows.map(toView), total };
 }
 
 export async function getTransportByConnectId(connectId: string): Promise<TransportView | null> {
