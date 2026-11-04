@@ -24,11 +24,26 @@ import { canUseWholesaleTool, type WholesaleActor } from "@/lib/wholesale-permis
  */
 export async function atorDaFerramenta(): Promise<WholesaleActor | null> {
   const session = await requireRole(["VENDAS", "GESTAO"]);
+  return atorDeUsuario(session.userId);
+}
 
+/**
+ * O mesmo ator, a partir de um id JÁ AUTENTICADO.
+ *
+ * Existe para a rota do relatório em PDF, que responde JSON a um `fetch`: o
+ * `requireRole` de `atorDaFerramenta` redireciona, e um 307 para a tela de
+ * login chegaria ao navegador como "falha ao gerar o PDF" sem dizer por quê.
+ *
+ * Não é um atalho na autorização: `canUseWholesaleTool` cobre o papel inteiro
+ * (Gestão, ou Vendas no escopo Atacado), então negar quando ele devolve false é
+ * a mesma porta que a tela usa — e é por isso que a regra fica numa função só.
+ * Quem chamar daqui ainda precisa ter uma sessão nas mãos.
+ */
+export async function atorDeUsuario(userId: string): Promise<WholesaleActor | null> {
   // Sem `!`: se o usuário da sessão não existe mais (desativado, removido), o
   // caminho é negar, não estourar um 500 por acesso a `undefined`.
   const user = await prisma.user.findUnique({
-    where: { id: session.userId },
+    where: { id: userId },
     select: { id: true, role: true, salesModel: true },
   });
   if (!user) return null;

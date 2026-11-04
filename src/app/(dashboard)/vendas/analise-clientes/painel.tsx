@@ -1,10 +1,13 @@
 import {
   AlertTriangle,
+  BarChart3,
   CheckCircle2,
   Clock,
   Inbox,
+  MapPin,
   Percent,
   ShoppingBag,
+  Timer,
   TrendingUp,
   User,
   Users,
@@ -16,7 +19,8 @@ import {
 import { pct } from "@/lib/transport/dashboard-math";
 import { cn, shortName } from "@/lib/utils";
 import { LEAD_STATUS_META, PURCHASE_META } from "./lead-status-chip";
-import type { ContagemPorVendedora, ResumoDoAtacado } from "@/lib/wholesale-dashboard";
+import { DIAS_PARADA } from "@/lib/wholesale-dashboard";
+import type { EntradaNoMes, ResumoDoAtacado, TempoDeResposta } from "@/lib/wholesale-dashboard";
 
 /**
  * PAINEL DA ANÁLISE DE CLIENTES — os números que ficam ACIMA da tabela.
@@ -153,20 +157,37 @@ function Lista({
  *
  * O DENOMINADOR VAI EM CADA LINHA de propósito: 1 de 1 também é 100%, e sem o
  * "1/1" ao lado ela empata na leitura com quem converteu 30 de 40.
+ *
+ * SERVE A DOIS PAINÉIS desde 04/11/2026 — vendedora e praça (UF) —, por isso a
+ * linha chega genérica em vez de `ContagemPorVendedora`: é a mesma pergunta
+ * ("quanto deste grupo comprou") com outro agrupamento, e uma segunda cópia
+ * desta barra divergiria da primeira na próxima correção.
  */
-function Conversoes({ linhas }: { linhas: ContagemPorVendedora[] }) {
+interface LinhaDeConversao {
+  /** Chave de lista — id da vendedora, UF. */
+  chave: string;
+  /** O que aparece na barra, já encurtado se for o caso. */
+  rotulo: string;
+  /** Texto inteiro, para o `title` e o rótulo acessível. */
+  titulo: string;
+  total: number;
+  comprou: number;
+  conversao: number;
+}
+
+function Conversoes({ linhas }: { linhas: LinhaDeConversao[] }) {
   if (linhas.length === 0) {
     return <p className="text-xs text-muted-foreground">Sem dados.</p>;
   }
   return (
     <ul className="space-y-2.5">
       {linhas.map((v) => (
-        <li key={v.sellerId ?? "sem-dona"} className="space-y-1">
+        <li key={v.chave} className="space-y-1">
           <div className="flex items-baseline gap-2 text-sm">
-            {/* Nome curto na barra, inteiro no `title`: a barra identifica a
-                vendedora, e o nome completo continua a um apontar de mouse. */}
-            <span className="min-w-0 flex-1 truncate" title={v.nome}>
-              {shortName(v.nome)}
+            {/* Rótulo curto na barra, inteiro no `title`: a barra identifica a
+                linha, e o nome completo continua a um apontar de mouse. */}
+            <span className="min-w-0 flex-1 truncate" title={v.titulo}>
+              {v.rotulo}
             </span>
             {/* Mesmo verde do cartão "Taxa de Conversão" e do chip COMPROU:
                 a cor amarra o número ao estado que ele conta. */}
@@ -180,7 +201,7 @@ function Conversoes({ linhas }: { linhas: ContagemPorVendedora[] }) {
           <div
             className="h-1.5 w-full overflow-hidden rounded-full bg-secondary"
             role="img"
-            aria-label={`${v.nome}: ${v.conversao}% de conversão, ${v.comprou} compraram de ${v.total} recebidas`}
+            aria-label={`${v.titulo}: ${v.conversao}% de conversão, ${v.comprou} compraram de ${v.total} recebidas`}
           >
             <span
               className="block h-full rounded-full bg-emerald-700"
@@ -189,6 +210,104 @@ function Conversoes({ linhas }: { linhas: ContagemPorVendedora[] }) {
               style={{ width: `${v.conversao}%` }}
             />
           </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * ENTRADA POR MÊS — a série que já vinha no resumo e nunca era desenhada.
+ *
+ * Até 04/11/2026 `entradasPorMes` só alimentava o cartão "Média mensal": a
+ * tela dizia a média e escondia a TENDÊNCIA, que é a parte que muda o que o
+ * gestor comercial faz. A média de 8 por mês cai igual vindo de 12→4 ou de
+ * 4→12, e são duas situações opostas.
+ *
+ * Colunas e não linha: os meses são poucos (6 sem período, no máximo 12) e
+ * cada um é uma contagem fechada, não uma medida contínua. Mesmo motivo de
+ * sempre para não haver biblioteca de gráfico aqui — `div` com altura em
+ * porcentagem desenha isto.
+ */
+function Meses({ meses }: { meses: EntradaNoMes[] }) {
+  // Pelo MAIOR mês, não pelo total: a altura compara os meses entre si.
+  const maior = Math.max(...meses.map((m) => m.total), 1);
+  return (
+    <div className="flex items-end gap-1.5" style={{ height: "7rem" }}>
+      {meses.map((m) => (
+        <div key={m.chave} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+          <span className="font-data text-[11px] font-semibold tabular-nums">{m.total}</span>
+          <div className="flex w-full flex-1 items-end">
+            <span
+              className={cn(
+                "block w-full rounded-t-sm",
+                // Mês ZERADO fica como trilho vazio, não como barra de 1px:
+                // "ninguém chegou" é a informação, e um traço de cortesia a
+                // esconderia. Ver o mesmo cuidado em `Conversoes`.
+                m.total > 0 ? "bg-vendas/70" : "bg-secondary",
+              )}
+              style={{ height: m.total > 0 ? `${(m.total / maior) * 100}%` : "2px" }}
+              role="img"
+              aria-label={`${m.rotulo}: ${m.total} candidatura(s)`}
+            />
+          </div>
+          <span className="w-full truncate text-center text-[10px] text-muted-foreground">
+            {m.rotulo}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * TEMPO DE RESPOSTA — quanto a equipe demora, e o que está parado.
+ *
+ * As duas metades não se misturam, e o painel diz isso em palavras: a média
+ * olha para trás (só as já decididas) e as paradas olham para agora. Sem a
+ * distinção, a média subiria sozinha todo dia que ninguém decidisse nada e
+ * pareceria que alguém demorou mais.
+ *
+ * As PARADAS ficam em vermelho quando existem: é o único número do painel que
+ * cobra uma ação hoje, e não um ajuste de estratégia.
+ */
+function Tempo({ tempo }: { tempo: TempoDeResposta }) {
+  const linhas: { label: string; valor: string; alerta?: boolean }[] = [
+    {
+      label: "Tempo médio para decidir",
+      valor: tempo.decididas > 0 ? `${tempo.mediaDias.toLocaleString("pt-BR")} dias` : "—",
+    },
+    {
+      label: "Decisões na média",
+      valor: tempo.decididas.toLocaleString("pt-BR"),
+    },
+    {
+      label: `Em análise há mais de ${DIAS_PARADA} dias`,
+      valor: tempo.paradas.toLocaleString("pt-BR"),
+      alerta: tempo.paradas > 0,
+    },
+    {
+      label: "Espera mais antiga",
+      valor:
+        tempo.maisAntigaDias > 0 ? `${tempo.maisAntigaDias.toLocaleString("pt-BR")} dias` : "—",
+      alerta: tempo.paradas > 0,
+    },
+  ];
+  return (
+    <ul className="space-y-2">
+      {linhas.map((l) => (
+        <li key={l.label} className="flex items-baseline gap-2 text-sm">
+          <span className="min-w-0 flex-1 truncate" title={l.label}>
+            {l.label}
+          </span>
+          <span
+            className={cn(
+              "shrink-0 font-data font-semibold tabular-nums",
+              l.alerta && "text-destructive",
+            )}
+          >
+            {l.valor}
+          </span>
         </li>
       ))}
     </ul>
@@ -410,7 +529,47 @@ export function AnaliseClientesPainel({
           cada um com o seu "% do total". */}
       <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
         <Painel titulo="Taxa de conversão por vendedora" icon={<Percent className="h-3.5 w-3.5" />}>
-          <Conversoes linhas={conversoes} />
+          <Conversoes
+            linhas={conversoes.map((v) => ({
+              chave: v.sellerId ?? "sem-dona",
+              rotulo: shortName(v.nome),
+              titulo: v.nome,
+              total: v.total,
+              comprou: v.comprou,
+              conversao: v.conversao,
+            }))}
+          />
+        </Painel>
+
+        {/* POR PRAÇA — a pergunta "onde vale investir", que a tela não
+            respondia: UF já era filtro, mas descobrir QUAL escolher exigia
+            tentar uma por uma. Mesma barra da conversão por vendedora, de
+            propósito: é a mesma conta com outro agrupamento.
+
+            Oito UFs: a cauda de praça com uma candidatura não muda decisão, e
+            o rodapé diz quantas ficaram de fora. */}
+        <Painel titulo="Conversão por praça (UF)" icon={<MapPin className="h-3.5 w-3.5" />}>
+          <Conversoes
+            linhas={r.porUf.slice(0, 8).map((u) => ({
+              chave: u.uf,
+              rotulo: u.uf,
+              // "—" é a UF em branco (cadastro que chegou sem o estado); sem
+              // isto o rótulo acessível leria "UF —: 0% de conversão".
+              titulo: u.uf === "—" ? "Sem UF informada" : `UF ${u.uf}`,
+              total: u.total,
+              comprou: u.comprou,
+              conversao: u.conversao,
+            }))}
+          />
+          {r.porUf.length > 8 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Mais {r.porUf.length - 8} UF(s) fora deste corte — o PDF traz 12.
+            </p>
+          )}
+        </Painel>
+
+        <Painel titulo="Tempo de resposta" icon={<Timer className="h-3.5 w-3.5" />}>
+          <Tempo tempo={r.tempo} />
         </Painel>
 
         {/* Distribuição por vendedora só existe para a Gestão: para a
@@ -444,6 +603,19 @@ export function AnaliseClientesPainel({
           />
         </Painel>
       </div>
+
+      {/* Linha 4 — a TENDÊNCIA, no fim e em largura cheia. É a única coisa no
+          painel que fala de tempo, e as colunas precisam de largura para não
+          virarem listras. Um mês só não é tendência: aí o gráfico não aparece
+          e o cartão "Média mensal" já disse o que havia para dizer. */}
+      {r.entradasPorMes.length > 1 && (
+        <Painel
+          titulo="Entrada de candidaturas por mês"
+          icon={<BarChart3 className="h-3.5 w-3.5" />}
+        >
+          <Meses meses={r.entradasPorMes} />
+        </Painel>
+      )}
     </div>
   );
 }

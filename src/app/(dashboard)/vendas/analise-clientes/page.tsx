@@ -21,6 +21,7 @@ import { LeadPurchaseCell } from "./lead-purchase-cell";
 import { LeadRowActions } from "./lead-row-actions";
 import { AnaliseClientesFiltros } from "./filtros-client";
 import { AnaliseClientesBusca } from "./busca-client";
+import { RelatorioDaAnalise } from "./relatorio-client";
 import { CsvImport } from "@/components/shared/csv-import";
 import { importWholesaleLeadsCsv } from "@/lib/actions/import";
 import { COLUNAS_IMPORT } from "@/lib/wholesale-import";
@@ -440,7 +441,14 @@ export default async function AnaliseClientesPage(
 
       {/* Título em `text-vendas-text`: a tela é de Vendas. Os CHIPS de status, não —
           estado não é setor (ver `lead-status-chip.tsx`). */}
-      <PageHeader titulo="Qualificação de Clientes" descricao="Candidaturas de atacado e a decisão de cada uma." corTitulo="text-vendas-text" />
+      {/* O botão do relatório fica no CABEÇALHO, e não junto do painel: o PDF é
+          do recorte inteiro da tela (painel e fila), não de um bloco dele. */}
+      <PageHeader
+        titulo="Qualificação de Clientes"
+        descricao="Candidaturas de atacado e a decisão de cada uma."
+        corTitulo="text-vendas-text"
+        acoes={<RelatorioDaAnalise />}
+      />
 
       <AnaliseClientesFiltros
         defaults={{ status, brand, estado, cidade, vendedora, de, ate, motivo, compra }}

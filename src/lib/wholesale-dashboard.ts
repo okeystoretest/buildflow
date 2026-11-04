@@ -85,6 +85,44 @@ export interface ContagemPorMotivo {
   total: number;
 }
 
+export interface ContagemPorUf {
+  /** UF em maiúsculas, ou "—" quando a candidata não informou. */
+  uf: string;
+  total: number;
+  /** Quantas candidaturas daquela UF já compraram. */
+  comprou: number;
+  /** Compraram ÷ recebidas DAQUELA UF, em 0–100 — `taxaDeConversao`. */
+  conversao: number;
+}
+
+/**
+ * Dias de espera em que uma candidatura em análise passa a ser "parada".
+ *
+ * Sete dias, e não um número redondo maior: a lojista preencheu um formulário
+ * esperando resposta, e uma semana é o limite em que ela ainda lembra de ter
+ * mandado. Mexer aqui muda o cartão da tela E a linha do PDF de uma vez.
+ */
+export const DIAS_PARADA = 7;
+
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+export interface TempoDeResposta {
+  /**
+   * Média de dias entre chegar e ser decidida, só das JÁ DECIDIDAS do recorte.
+   *
+   * As pendentes ficam FORA da média de propósito: elas não têm duração ainda,
+   * e contá-las com a idade atual faria o tempo médio subir todo dia sem
+   * ninguém ter demorado mais. O que elas têm é `paradas` e `maisAntigaDias`.
+   */
+  mediaDias: number;
+  /** Quantas decisões entraram na média — o denominador dela. */
+  decididas: number;
+  /** Em análise há mais de `DIAS_PARADA` dias. É o número que cobra ação. */
+  paradas: number;
+  /** Idade em dias da mais antiga ainda em análise. 0 quando não há nenhuma. */
+  maisAntigaDias: number;
+}
+
 export interface FiltrosDoPainel {
   de?: string;
   ate?: string;
@@ -107,6 +145,44 @@ export interface FiltrosDoPainel {
   cidade?: string;
 }
 
+/**
+ * O recorte em palavras, para a capa do relatório.
+ *
+ * O PDF SAI DA MESMA URL DA TELA, então sem esta linha dois arquivos com o
+ * mesmo título trazem números diferentes e ninguém descobre por quê — é a
+ * mesma razão pela qual o relatório de vendas imprime os filtros aplicados.
+ *
+ * "Todo o histórico" quando não há período, e não um intervalo inventado: a
+ * tela abre sem recorte desde 03/11/2026, e um PDF que anunciasse o mês vigente
+ * estaria mentindo sobre o que somou.
+ *
+ * `nomeVendedora` chega resolvido de fora (quem consulta o nome é quem tem o
+ * banco à mão); o id sozinho não diz nada a quem lê o papel.
+ */
+export function descreverRecorte(
+  filtros: FiltrosDoPainel,
+  nomeVendedora?: string | null,
+): string {
+  const de = (filtros.de ?? "").trim();
+  const ate = (filtros.ate ?? "").trim();
+  const br = (iso: string) => iso.split("-").reverse().join("/");
+
+  const partes: string[] = [
+    de && ate ? `de ${br(de)} a ${br(ate)}`
+    : de ? `desde ${br(de)}`
+    : ate ? `até ${br(ate)}`
+    : "todo o histórico",
+  ];
+  if (nomeVendedora) partes.push(`vendedora: ${nomeVendedora}`);
+  const marca = marcaValida(filtros.marca);
+  if (marca) partes.push(`marca: ${marca}`);
+  const estado = (filtros.estado ?? "").trim();
+  if (estado.length === 2) partes.push(`UF: ${estado.toUpperCase()}`);
+  const cidade = (filtros.cidade ?? "").trim();
+  if (cidade) partes.push(`cidade: ${cidade}`);
+  return partes.join(" · ");
+}
+
 export interface ResumoDoAtacado {
   total: number;
   porStatus: ContagemPorStatus[];
@@ -115,6 +191,16 @@ export interface ResumoDoAtacado {
   recentes: CandidaturaRecente[];
   /** As reprovações desta fatia, por motivo, da mais frequente para a menos. */
   porMotivo: ContagemPorMotivo[];
+  /**
+   * Volume e conversão por UF da loja, da que mais recebeu para a que menos.
+   *
+   * É a pergunta "onde vale investir" — a única do relatório gerencial que a
+   * tela não respondia: UF e cidade já eram FILTRO desde 29/10/2026, mas a
+   * Gestão tinha de adivinhar qual escolher para achar a praça que converte.
+   */
+  porUf: ContagemPorUf[];
+  /** Quanto a equipe demora para decidir, e o que está parado. */
+  tempo: TempoDeResposta;
   /**
    * TAXA DE APROVAÇÃO: aprovadas ÷ total recebido, em 0–100.
    *
@@ -153,6 +239,8 @@ const VAZIO: ResumoDoAtacado = {
   entradasPorMes: [],
   recentes: [],
   porMotivo: [],
+  porUf: [],
+  tempo: { mediaDias: 0, decididas: 0, paradas: 0, maisAntigaDias: 0 },
   aprovacao: 0,
   aprovadas: 0,
   conversao: 0,
@@ -232,6 +320,96 @@ export function agrupaPorVendedora(
       conversao: taxaDeConversao(comprou, total),
     }))
     .sort((a, b) => b.total - a.total);
+}
+
+/**
+ * As linhas (UF × estado de compra) do `groupBy` viram uma linha por UF, com
+ * total, quantas compraram e a conversão da praça.
+ *
+ * Mesma forma de `agrupaPorVendedora`, e pelo mesmo motivo: é a conta que a
+ * tela e o PDF mostram, e conta que script nenhum confere é conta que se perde
+ * numa refatoração.
+ *
+ * UF VAZIA vira "—" em vez de sumir: a LP grava `state` como texto e cadastro
+ * antigo chegou sem ele. Escondendo a linha, as parcelas não fechariam com o
+ * total recebido, e diferença inexplicada é pior que a linha a mais.
+ *
+ * Ordenado por VOLUME — a Gestão lê "de onde vem gente" antes de "onde
+ * converte", e a conversão de uma UF com uma candidatura só seria 0% ou 100%
+ * no topo de uma lista ordenada por taxa.
+ */
+export function agrupaPorUf(
+  linhas: {
+    state: string;
+    purchaseState: WholesalePurchaseState;
+    _count: { _all: number };
+  }[],
+): ContagemPorUf[] {
+  const porUf = new Map<string, { total: number; comprou: number }>();
+  for (const l of linhas) {
+    const chave = (l.state ?? "").trim().toUpperCase() || "—";
+    const acc = porUf.get(chave) ?? { total: 0, comprou: 0 };
+    acc.total += l._count._all;
+    if (l.purchaseState === WholesalePurchaseState.COMPROU) acc.comprou += l._count._all;
+    porUf.set(chave, acc);
+  }
+  return [...porUf.entries()]
+    .map(([uf, { total, comprou }]) => ({
+      uf,
+      total,
+      comprou,
+      conversao: taxaDeConversao(comprou, total),
+    }))
+    .sort((a, b) => b.total - a.total || a.uf.localeCompare(b.uf, "pt-BR"));
+}
+
+/**
+ * Tempo de resposta do recorte: média das decididas, e o que está parado.
+ *
+ * DOIS GRUPOS, nunca misturados. A média olha para trás (quanto demorou de
+ * fato) e só conta quem tem `decidedAt`. O que está parado olha para agora
+ * (quem espera há mais de `DIAS_PARADA` dias) e só conta quem está em
+ * EM_ANALISE — CUIDADO é uma decisão tomada, e tratá-lo como fila faria o
+ * número cobrar ação sobre candidatura já julgada.
+ *
+ * `decidedAt` ausente numa decidida é ignorado em silêncio: são as decisões de
+ * antes da coluna existir, e somá-las como zero dia puxaria a média para baixo
+ * exatamente onde ela precisa ser confiável.
+ *
+ * PURA e exportada para poder ser conferida por script, como as demais contas
+ * do painel. `agora` entra por parâmetro pelo mesmo motivo — teste de tempo
+ * com `new Date()` dentro da função não existe.
+ */
+export function tempoDeResposta(
+  linhas: { createdAt: Date; decidedAt: Date | null; status: WholesaleLeadStatus }[],
+  agora: Date,
+): TempoDeResposta {
+  let somaDias = 0;
+  let decididas = 0;
+  let paradas = 0;
+  let maisAntigaDias = 0;
+
+  for (const l of linhas) {
+    if (l.decidedAt) {
+      // Negativo não existe em dado são (decidir antes de chegar), mas um
+      // `decidedAt` importado errado jogaria a média para baixo sem aviso.
+      const dias = Math.max(0, (l.decidedAt.getTime() - l.createdAt.getTime()) / MS_POR_DIA);
+      somaDias += dias;
+      decididas++;
+      continue;
+    }
+    if (l.status !== WholesaleLeadStatus.EM_ANALISE) continue;
+    const idade = Math.max(0, (agora.getTime() - l.createdAt.getTime()) / MS_POR_DIA);
+    if (idade > DIAS_PARADA) paradas++;
+    if (idade > maisAntigaDias) maisAntigaDias = idade;
+  }
+
+  return {
+    mediaDias: decididas === 0 ? 0 : Math.round((somaDias / decididas) * 10) / 10,
+    decididas,
+    paradas,
+    maisAntigaDias: Math.floor(maisAntigaDias),
+  };
 }
 
 function mesDe(d: Date): Date {
@@ -368,8 +546,17 @@ export async function resumoDoAtacado(
     ? new Date(Date.UTC(Number(anoJanela), Number(mesJanela) - 1, 1))
     : new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), 1));
 
-  const [total, statusRaw, vendedoraRaw, naJanela, recentesRaw, motivoRaw, comprou] =
-    await Promise.all([
+  const [
+    total,
+    statusRaw,
+    vendedoraRaw,
+    naJanela,
+    recentesRaw,
+    motivoRaw,
+    comprou,
+    ufRaw,
+    prazos,
+  ] = await Promise.all([
     prisma.wholesaleLead.count({ where }),
     prisma.wholesaleLead.groupBy({ by: ["status"], where, _count: { _all: true } }),
     // Agrupado por vendedora E estado de COMPRA na MESMA consulta: a conversão
@@ -424,6 +611,30 @@ export async function resumoDoAtacado(
     // status × purchaseState que ninguém mais usa.
     prisma.wholesaleLead.count({
       where: { ...where, purchaseState: WholesalePurchaseState.COMPROU },
+    }),
+    // UF × compra na MESMA consulta, como o groupBy por vendedora: a conversão
+    // da praça é compraram ÷ recebidas dali, e separar em duas queries daria
+    // duas idas ao banco para cruzar números que já vêm juntos.
+    //
+    // Herda o `where`, escopo incluído: a vendedora vê as praças DELA, não o
+    // mapa de onde a equipe vende.
+    prisma.wholesaleLead.groupBy({
+      by: ["state", "purchaseState"],
+      where,
+      _count: { _all: true },
+    }),
+    // As DATAS do recorte, para o tempo de resposta. Três colunas pequenas e a
+    // conta em memória (`tempoDeResposta`), em vez de SQL cru: um AVG em
+    // `$queryRaw` obrigaria a reescrever este `where` à mão em SQL, e ele é o
+    // escopo de segurança — duplicá-lo é como se perde o escopo de verdade.
+    //
+    // shortcut: traz uma linha de 3 campos por candidatura do recorte, e sem
+    // período o recorte é a base inteira. Na ordem de grandeza desta fila
+    // (milhares) é barato; passando de ~50 mil candidaturas, troque por
+    // contagens agregadas com um corte de data.
+    prisma.wholesaleLead.findMany({
+      where,
+      select: { createdAt: true, decidedAt: true, status: true },
     }),
   ]);
 
@@ -488,6 +699,8 @@ export async function resumoDoAtacado(
       createdAtLabel: dataCurta(r.createdAt),
     })),
     porMotivo: agrupaPorMotivo(motivoRaw),
+    porUf: agrupaPorUf(ufRaw),
+    tempo: tempoDeResposta(prazos, agora),
     aprovacao,
     aprovadas,
     conversao,
