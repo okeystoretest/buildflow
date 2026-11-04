@@ -97,9 +97,14 @@ export default async function FinanceiroSelectPage(
       <BackButton href="/financeiro" />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-servico-text">
-          <Star className="h-6 w-6" /> Select
-        </h1>
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-servico-text">
+            <Star className="h-6 w-6" /> Contratos Select
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Todos os contratos vendidos, com as parcelas e a situação financeira de cada um.
+          </p>
+        </div>
         <Button asChild variant="servico">
           <Link href="/vendas/novo-select"><Plus className="h-4 w-4" /> Novo Select</Link>
         </Button>

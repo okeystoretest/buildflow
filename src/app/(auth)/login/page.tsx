@@ -32,7 +32,7 @@ export default function LoginPage() {
             <PackageCheck className="h-8 w-8" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Build<span className="text-primary">.Flow</span>
+            Build.<span className="text-primary">Flow</span>
           </h1>
           <p className="text-sm text-muted-foreground">Logística e controle de vendas</p>
         </div>

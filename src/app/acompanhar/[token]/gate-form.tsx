@@ -43,7 +43,7 @@ export function TrackingGate({ token }: { token: string }) {
             <PackageCheck className="h-8 w-8" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Build<span className="text-primary">.Flow</span>
+            Build.<span className="text-primary">Flow</span>
           </h1>
           <p className="text-sm text-muted-foreground">Acompanhe o seu pedido</p>
         </div>

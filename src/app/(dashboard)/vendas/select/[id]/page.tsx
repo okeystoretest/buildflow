@@ -37,7 +37,7 @@ export default async function VendasSelectDetailPage(props: {
   // Mesma largura do detalhe do Financeiro: sao os MESMOS dois cards, e a regua
   // precisa do espaco igual nos dois lugares.
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="space-y-6">
       <BackButton href="/vendas/select" />
 
       <div className="flex flex-wrap items-start justify-between gap-3">

@@ -2,7 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { premiacaoDoItem } from "@/lib/campaign-commission";
 import { janelaDoMes, janelaDaSemana, corteLegado, instanteNoFuso } from "@/lib/rank-window";
-import { computeRealizado, vendidoDoVendedor, selectCampaignRows } from "@/lib/rank-math";
+import { computeRealizado, vendidoDoVendedor, selectCampaignRows, selectSellerRows } from "@/lib/rank-math";
+import type { SelectSellerRow } from "@/lib/rank-math";
 
 export interface RankRow {
   /** Necessário para o ajuste manual (a linha precisa saber a quem pertence). */
@@ -74,6 +75,14 @@ export interface RankData {
   rankGeral: RankRow[];
   rankVarejo: RankRow[];
   rankAtacado: RankRow[];
+  /**
+   * Venda de Select do mes por vendedora. Independe de campanha: conta todo
+   * contrato nao cancelado do mes, por isso o bloco funciona em mes sem
+   * campanha de Select vinculada (ao contrario de `campaignPerf[].select`).
+   */
+  rankSelect: SelectSellerRow[];
+  /** Soma dos contratos de `rankSelect`, para o rodape do bloco. */
+  selectTotal: number;
   campaigns: CampaignData[];
   campaignPerf: CampaignPerf[];
   updatedAt: string;
@@ -484,6 +493,16 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     return { id: c.id, name: c.name, rows };
   });
 
+  // Venda de Select do mes por vendedora, fora de qualquer campanha: o bloco do
+  // dashboard mede a venda do servico, nao o cumprimento de uma campanha.
+  const rankSelect = selectSellerRows(
+    selectsDoMes.map((v) => ({
+      sellerId: v.responsibleId,
+      sellerName: v.responsible.name,
+      valor: Number(v.totalAmount),
+    })),
+  );
+
   return {
     month, year, isCurrent,
     metaGeral, realizadoGeral, metaGeralPct, goalsCount: goalsGerais.length,
@@ -494,6 +513,7 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     ajustesCount: [...ajustePorUser.keys()].filter((id) => porVendedor.has(id)).length,
     maiorSemana: maior(daSemana), maiorMes: maior(doMes),
     rankGeral: buildRank(null), rankVarejo: buildRank("VAREJO"), rankAtacado: buildRank("ATACADO"),
+    rankSelect, selectTotal: rankSelect.reduce((a, r) => a + r.valor, 0),
     campaigns, campaignPerf, updatedAt: new Date().toISOString(),
   };
 }

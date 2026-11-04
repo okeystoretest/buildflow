@@ -204,3 +204,38 @@ export function selectCampaignRows(
     }))
     .sort((a, b) => b.pct - a.pct || b.qtd - a.qtd);
 }
+
+export interface SelectVendaDoMes {
+  sellerId: string;
+  sellerName: string;
+  /** Valor TOTAL do contrato (mensalidade x validade), como no resto do rank. */
+  valor: number;
+}
+
+export interface SelectSellerRow {
+  userId: string;
+  nome: string;
+  qtd: number;
+  valor: number;
+}
+
+/**
+ * Ranking de venda de Select do mes, por vendedora.
+ *
+ * Diferente de `selectCampaignRows`: aqui NAO ha campanha nem meta. Entra todo
+ * contrato do mes, e a ordem e pela CONTAGEM de contratos (o valor desempata,
+ * porque dois Selects de planos diferentes nao valem o mesmo). Empate final
+ * pelo nome, para a lista nao trocar de ordem a cada refresh.
+ */
+export function selectSellerRows(vendas: SelectVendaDoMes[]): SelectSellerRow[] {
+  const porVend = new Map<string, SelectSellerRow>();
+  for (const v of vendas) {
+    const cur = porVend.get(v.sellerId) ?? { userId: v.sellerId, nome: v.sellerName, qtd: 0, valor: 0 };
+    cur.qtd += 1;
+    cur.valor += v.valor;
+    porVend.set(v.sellerId, cur);
+  }
+  return [...porVend.values()].sort(
+    (a, b) => b.qtd - a.qtd || b.valor - a.valor || a.nome.localeCompare(b.nome, "pt-BR"),
+  );
+}

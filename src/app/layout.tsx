@@ -6,12 +6,11 @@ export const metadata: Metadata = {
   title: "Build.Flow",
   description: "Logística e controle de vendas",
   applicationName: "Build.Flow",
-  // Icone da ABA do navegador (favicon) e do APP instalado.
-  // E o mesmo simbolo exibido ao lado do nome no cabecalho (PackageCheck).
+  // Icone da ABA do navegador (favicon) e do APP instalado: a marca em F.
+  // Sem versao SVG — a logo e um desenho com degrade, nao um vetor simples.
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.svg", type: "image/svg+xml" },
       { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
       { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
     ],

@@ -1,9 +1,6 @@
-import Link from "next/link";
-import { PackageCheck, AlertTriangle, Shirt, Timer, Clock } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
 import { columnsForFlow } from "@/lib/order-flow";
 import { KanbanBoard, type KanbanCard } from "@/components/shared/kanban-board";
 import { StorePicker } from "@/components/shared/store-picker";
@@ -150,7 +147,7 @@ export default async function LogisticaPage(
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-distribuicao-text">
-            Fluxo de Pedidos → Fábrica (LOGÍSTICA)
+            Movimentação de Pedidos
           </h1>
           <p className="text-sm text-muted-foreground">
             Acompanhe o status dos pedidos e avance manualmente os que estão prontos para entrega.
@@ -158,35 +155,8 @@ export default async function LogisticaPage(
         </div>
         {/* Ferramentas do módulo: exclusivas de LOGISTICA/GESTAO. VENDAS com
             loja de fluxo simplificado acessa apenas o quadro. */}
-        {isLogisticaOuGestao && (
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline">
-              <Link href="/logistica/pendencias">
-                <AlertTriangle className="h-4 w-4" /> Relatório de Pendências
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/logistica/atrasos">
-                <Clock className="h-4 w-4" /> Relatório de Atrasos
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/logistica/controle-pecas">
-                <Shirt className="h-4 w-4" /> Controle de Peças
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/logistica/metricas">
-                <Timer className="h-4 w-4" /> Métricas
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/logistica/entregas">
-                <PackageCheck className="h-4 w-4" /> Histórico de Entregas
-              </Link>
-            </Button>
-          </div>
-        )}
+        {/* A fileira de atalhos saiu em 04/11/2026: os cinco relatorios sao
+            ferramentas da barra lateral. */}
       </div>
       <KanbanBoard
         cards={cards}

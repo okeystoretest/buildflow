@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageHeader } from "@/components/shared/page-header";
 import { Inbox } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { BackButton } from "@/components/shared/back-button";
@@ -439,7 +440,7 @@ export default async function AnaliseClientesPage(
 
       {/* Título em `text-vendas-text`: a tela é de Vendas. Os CHIPS de status, não —
           estado não é setor (ver `lead-status-chip.tsx`). */}
-      <h1 className="text-2xl font-bold text-vendas-text">Análise de Clientes</h1>
+      <PageHeader titulo="Qualificação de Clientes" descricao="Candidaturas de atacado e a decisão de cada uma." corTitulo="text-vendas-text" />
 
       <AnaliseClientesFiltros
         defaults={{ status, brand, estado, cidade, vendedora, de, ate, motivo, compra }}

@@ -7,7 +7,7 @@
  *
  * Rode com: npx tsx scripts/checks/rank-select.ts
  */
-import { computeRealizado, selectCampaignRows } from "../../src/lib/rank-math";
+import { computeRealizado, selectCampaignRows, selectSellerRows } from "../../src/lib/rank-math";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -100,6 +100,26 @@ check("Select NAO gera premiacao", linhas.map((l) => l.premiacao), [0, 0, 0]);
 // Sem meta o percentual e 0, entao a linha cai para o fim sem caso especial.
 check("ordena por percentual, com a quantidade desempatando", linhas.map((l) => l.nome), ["Ana", "Bia", "Cris"]);
 check("campanha sem venda e sem meta nao inventa linha", selectCampaignRows([], []), []);
+
+// --- bloco de Select do dashboard (sem campanha, sem meta) ------------------
+// Este bloco conta TODO contrato do mes, campanha ou nao. A ordem e pela
+// CONTAGEM; quem vendeu mais contratos lidera mesmo faturando menos.
+const doMes = [
+  { sellerId: "u1", sellerName: "Ana", valor: 3000 },
+  { sellerId: "u2", sellerName: "Bia", valor: 9000 },
+  { sellerId: "u1", sellerName: "Ana", valor: 3000 },
+  { sellerId: "u3", sellerName: "Carla", valor: 9000 },
+];
+const sel = selectSellerRows(doMes);
+
+check("agrupa por vendedora, somando contratos e valor", sel[0], { userId: "u1", nome: "Ana", qtd: 2, valor: 6000 });
+// Bia faturou 9.000 num contrato e Ana 6.000 em dois: o bloco mede VENDA DE
+// SELECT, entao a contagem manda e Ana lidera.
+check("ordena pela contagem de contratos, nao pelo valor", sel.map((r) => r.nome), ["Ana", "Bia", "Carla"]);
+// Bia e Carla tem 1 contrato cada; so o valor as separa.
+check("valor desempata quem tem a mesma contagem", [sel[1].valor, sel[2].valor], [9000, 9000]);
+check("empate total cai no nome, para a ordem nao oscilar", sel[1].nome < sel[2].nome, true);
+check("mes sem contrato nao inventa linha", selectSellerRows([]), []);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

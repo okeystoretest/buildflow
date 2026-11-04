@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/shared/back-button";
@@ -54,7 +55,7 @@ export default async function ControlePecasPage() {
     return (
       <div className="space-y-6">
         <BackButton href="/logistica" />
-        <h1 className="text-2xl font-bold text-distribuicao-text">Controle de Peças</h1>
+        <PageHeader titulo="Controle de Peças" descricao="Conferência de peças por pedido, da separação à expedição." corTitulo="text-distribuicao-text" />
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
             Nenhum Tipo de Pedido chamado <span className="font-semibold">&quot;{TIPO_PECAS_BLOGUEIRA}&quot;</span> está

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatBRL } from "@/lib/utils";
@@ -102,7 +103,7 @@ export default async function HistoricoPage(
       <BackButton href="/vendas" />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-vendas-text">Histórico de Pedidos</h1>
+        <PageHeader titulo="Vendas Realizadas" descricao="Pedidos já encerrados, com filtro por período e busca." corTitulo="text-vendas-text" />
         {/* O relatorio pede o periodo no proprio modal, entao o botao nao
             depende do que o filtro da tela esta mostrando agora. */}
         <RelatorioDeVendas defaultDe={de} defaultAte={ate} />

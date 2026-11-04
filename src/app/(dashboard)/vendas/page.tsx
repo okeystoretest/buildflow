@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { AlertTriangle, Users, ListTodo, History, Plus, BarChart3, MapPin, ClipboardCheck, Star } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import { EXCEPTION_STATUSES } from "@/lib/order-flow";
 import { VendaRowActions } from "./row-actions";
 import { VendasBusca } from "./busca-client";
 import { CopiarLinkAtacado, CopiarLinkGeral } from "./copiar-link-atacado";
-import { canUseWholesaleTool } from "@/lib/wholesale-permissions";
 import type { Prisma } from "@prisma/client";
 
 const PAGE_SIZE = 6; // exibe apenas as ultimas 6 vendas por pagina
@@ -35,12 +35,6 @@ export default async function VendasPage(
   // Copiar link: só VENDAS + ATACADO. Gestão usa a ferramenta, mas não é
   // destino de indicação (a candidatura precisa de uma vendedora como dona).
   const vendedoraAtacado = ator?.role === "VENDAS" && ator.salesModel === "ATACADO";
-  // Atalho da Análise de Clientes: VENDAS+ATACADO ou GESTAO (decisões 15-17);
-  // FINANCEIRO fica de fora.
-  const podeAnalisar = ator
-    ? canUseWholesaleTool({ userId: ator.id, role: ator.role, salesModel: ator.salesModel })
-    : false;
-
   const busca = searchParams?.busca?.trim() || "";
   const page = Math.max(1, Number(searchParams?.page) || 1);
   // Busca por Numero do Pedido, Comanda OU nome da cliente (case-insensitive,
@@ -87,14 +81,14 @@ export default async function VendasPage(
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-vendas-text">Comercial</h1>
-        {/* `flex-wrap`: sao dez botoes, e sem ele a fileira saia pela direita da
-            tela — o ultimo ("Novo pedido") ficava cortado. O pai ja envolvia,
-            mas envolvia o GRUPO inteiro; quem precisava quebrar eram os botoes
-            dentro dele. Alinhados a direita para as linhas quebradas ficarem
-            sob o grupo, e nao soltas no meio. */}
-        <div className="flex flex-wrap justify-end gap-2">
+      {/* Os atalhos de NAVEGACAO sairam daqui em 04/11/2026: cada um deles e
+          uma ferramenta da barra lateral, e repetir a lista no topo de cada
+          tela so roubava altura. Ficam as ACOES que a barra nao tem. */}
+      <PageHeader
+        titulo="Lançar Pedidos"
+        descricao="Seus pedidos registrados e os atalhos para abrir um novo."
+        corTitulo="text-vendas-text"
+        acoes={<>
           {/* Captação de revendedor: só a equipe de Atacado (decisão 15). São
               DOIS botões, um por marca (OKEY e Lov), que somem para VAREJO; a
               action confere o papel de novo no servidor. */}
@@ -103,20 +97,6 @@ export default async function VendasPage(
               origem e entra no rodízio. A vendedora segue com o link dela, que
               credita a candidatura a ela — os dois caminhos convivem. */}
           {session.role === "GESTAO" && <CopiarLinkGeral />}
-          {podeAnalisar && (
-            <Button asChild variant="outline"><Link href="/vendas/analise-clientes"><ClipboardCheck className="h-4 w-4" /> Análise de Clientes</Link></Button>
-          )}
-          {/* "Meus Selects": só VENDAS. Gestão e Financeiro têm a tela cheia em
-              /financeiro/select — esta é a versão da vendedora, com o roadmap
-              de entrega e o acompanhamento de compras e nada de financeiro. */}
-          {session.role === "VENDAS" && (
-            <Button asChild variant="outline"><Link href="/vendas/select"><Star className="h-4 w-4" /> Meus Selects</Link></Button>
-          )}
-          <Button asChild variant="outline"><Link href="/vendas/clientes"><Users className="h-4 w-4" /> Cadastrar Cliente</Link></Button>
-          <Button asChild variant="outline"><Link href="/vendas/excursoes"><MapPin className="h-4 w-4" /> Cadastrar Excursão</Link></Button>
-          <Button asChild variant="outline"><Link href="/vendas/tarefas"><ListTodo className="h-4 w-4" /> Tarefas Diárias</Link></Button>
-          <Button asChild variant="outline"><Link href="/vendas/relatorio-campanha"><BarChart3 className="h-4 w-4" /> Relatório de Campanha</Link></Button>
-          <Button asChild variant="outline"><Link href="/vendas/historico"><History className="h-4 w-4" /> Histórico de Vendas</Link></Button>
           {/* Novo Select: atalho só da Gestão. A tela em si aceita VENDAS e
               FINANCEIRO (eles chegam por link direto) — esconder o botão não
               decide nada, a action confere o papel no servidor. */}
@@ -124,8 +104,8 @@ export default async function VendasPage(
             <Button asChild variant="servico"><Link href="/vendas/novo-select"><Plus className="h-4 w-4" /> Novo Select</Link></Button>
           )}
           <Button asChild variant="vendas"><Link href="/vendas/novo"><Plus className="h-4 w-4" /> Novo pedido</Link></Button>
-        </div>
-      </div>
+        </>}
+      />
 
       <VendasBusca defaultBusca={busca} />
 

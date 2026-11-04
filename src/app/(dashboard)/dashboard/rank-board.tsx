@@ -97,7 +97,11 @@ function statusCampanha(r: CampaignPerfRow): { label: string; tone: Tone } {
 export function RankBoard({ initial, canEdit = false }: { initial: RankData; canEdit?: boolean }) {
   const [data, setData] = useState<RankData>(initial);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastSync, setLastSync] = useState<Date>(new Date());
+  // Nulo ate montar: `new Date()` no estado inicial roda no servidor e de novo
+  // no cliente, e o minuto virando entre os dois quebrava a hidratacao da tela
+  // inteira ("server rendered text didn't match"). O relogio so existe no
+  // cliente, entao nasce vazio e o efeito abaixo o preenche.
+  const [lastSync, setLastSync] = useState<Date | null>(null);
   const [campSel, setCampSel] = useState<string>(initial.campaignPerf[0]?.id ?? "");
   const [campRotating, setCampRotating] = useState(true);
   const [isFull, setIsFull] = useState(false);
@@ -121,6 +125,9 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
   }, []);
 
   const refresh = useCallback(() => fetchPeriod(selMonth, selYear), [fetchPeriod, selMonth, selYear]);
+
+  // Primeiro horario do relogio, ja no cliente (ver `lastSync`).
+  useEffect(() => { setLastSync(new Date()); }, []);
 
   // Ao trocar mes/ano nos seletores, recarrega o periodo.
   function changePeriod(month: number, year: number) {
@@ -246,6 +253,9 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
 
   // Concentracao do topo: quanto do volume do mes esta nas tres primeiras.
   // Com tres vendedoras ou menos a resposta e sempre 100% e nao informa nada.
+  const selectTotalContratos = data.rankSelect.reduce((a, r) => a + r.qtd, 0);
+  // Divisor da barra: a lider. Nunca zero — a lista vazia nem renderiza linha.
+  const selectLider = data.rankSelect[0]?.qtd || 1;
   const concentracaoTop3 = useMemo(() => {
     if (data.rankGeral.length <= 3) return null;
     const total = somaVendido(data.rankGeral);
@@ -406,7 +416,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
             <BarButton onClick={refresh} title="Atualizar agora">
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               <span className="font-data">
-                {lastSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                {lastSync ? lastSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
               </span>
             </BarButton>
 
@@ -461,25 +471,27 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
       </div>
 
       {/* Grade principal (2 linhas x 3 colunas no desktop):
-            col 1  -> Progresso Geral de Vendedoras, ocupando as DUAS linhas
-                      (preenche verticalmente todo o espaco disponivel);
+            col 1 linha 1 -> Progresso Geral de Vendedoras (so o top 3);
+            col 1 linha 2 -> Select, o espaco que o ranking liberou ao encolher;
             col 2/3 linha 1 -> Varejo e Atacado;
             col 2/3 linha 2 -> Performance na Campanha, alinhado a esquerda com
                       o bloco Varejo (portanto mais estreito) e mais baixo.
-          No mobile tudo empilha em coluna unica. */}
+          As posicoes sao explicitas (col-start/row-start) porque a ordem do
+          JSX segue o MOBILE, onde tudo empilha em coluna unica e o Select
+          precisa vir logo depois do ranking. */}
       {/* A 2a linha e `auto`: o bloco de Performance cresce conforme o numero
           de vendedores, sem barra de rolagem interna. Varejo/Atacado (1a linha)
           cedem altura — tem minimo de 160px e rolam internamente se preciso. */}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-3 lg:grid-rows-[minmax(160px,1fr)_auto]">
-        {/* Progresso Geral: ate 20 nomes, rola se passar disso. */}
-        <div className="flex min-h-0 lg:row-span-2">
+        {/* Progresso Geral: so as tres primeiras colocadas. */}
+        <div className="flex min-h-0 lg:col-start-1 lg:row-start-1">
           <RankPanel
             title="Progresso geral de vendedoras"
             rows={data.rankGeral}
             showTrophy
             hideValue
             destacarTop3
-            maxRows={20}
+            maxRows={3}
             className="flex-1"
             edicao={edicao}
             meta={
@@ -503,8 +515,67 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
           />
         </div>
 
+        {/* Venda do servico Select no mes, por vendedora. Fica colado no
+            ranking de propósito: e a mesma pergunta ("quem vendeu"), medida em
+            contratos em vez de reais. Sem campanha e sem meta — a barra e a
+            participacao de cada uma no total do mes, nao progresso de meta. */}
+        <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3.5 lg:col-start-1 lg:row-start-2">
+          <div className="mb-3 flex shrink-0 items-start justify-between gap-2">
+            <h2 className="flex min-w-0 items-center gap-2 pt-0.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+              <span className="truncate">Select</span>
+            </h2>
+            <span className="shrink-0 text-right text-[11px] uppercase leading-tight tracking-widest text-muted-foreground">
+              <span className="font-data block text-sm font-bold normal-case tracking-normal text-foreground">
+                {selectTotalContratos}
+              </span>
+              {selectTotalContratos === 1 ? "contrato" : "contratos"}
+            </span>
+          </div>
+          <div className="kanban-scroll flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+            {data.rankSelect.map((r, i) => (
+              <div key={r.userId} className="px-0.5 py-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="font-data w-4 shrink-0 text-center text-xs text-muted-foreground">{i + 1}</span>
+                    <span className="truncate text-sm font-medium lg:text-[0.9375rem]" title={r.nome}>
+                      {shortName(r.nome)}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2.5">
+                    <span className="font-data text-sm text-muted-foreground lg:text-[0.9375rem]">
+                      {formatBRL(r.valor)}
+                    </span>
+                    <span className="font-data w-11 shrink-0 text-right text-sm font-bold lg:text-[0.9375rem]">
+                      {r.qtd}
+                    </span>
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-emerald-400"
+                    style={{ width: `${(r.qtd / selectLider) * 100}%`, transition: "width .5s ease" }}
+                  />
+                </div>
+              </div>
+            ))}
+            {data.rankSelect.length === 0 && (
+              <p className="m-auto text-sm text-muted-foreground">Nenhum Select vendido no mês.</p>
+            )}
+          </div>
+          {data.rankSelect.length > 0 && (
+            <p className="mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-border pt-2.5 text-[11px] uppercase tracking-widest text-muted-foreground">
+              <span>Total contratado</span>
+              <span className="font-data font-bold normal-case tracking-normal text-foreground">
+                {formatBRL(data.selectTotal)}
+              </span>
+            </p>
+          )}
+        </div>
+
         <RankPanel
           title="Varejo"
+          className="lg:col-start-2 lg:row-start-1"
           dotClass="bg-cyan-400"
           rows={data.rankVarejo}
           showTrophy
@@ -530,6 +601,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
 
         <RankPanel
           title="Atacado"
+          className="lg:col-start-3 lg:row-start-1"
           dotClass="bg-violet-400"
           rows={data.rankAtacado}
           showTrophy
@@ -555,7 +627,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
 
         {/* Tabela de performance por campanha — ocupa apenas as colunas de
             Varejo/Atacado, na linha de baixo. Rola internamente. */}
-        <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3.5 lg:col-span-2">
+        <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3.5 lg:col-start-2 lg:col-span-2 lg:row-start-2">
           <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />

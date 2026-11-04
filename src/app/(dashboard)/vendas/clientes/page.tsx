@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { BackButton } from "@/components/shared/back-button";
+import { PageHeader } from "@/components/shared/page-header";
 import { SearchBox } from "@/components/shared/search-box";
 import { Pagination } from "@/components/shared/pagination";
 import { ClientesManager, type ClienteRow } from "./manager-client";
@@ -48,9 +49,15 @@ export default async function ClientesPage(
   }));
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div>
       <BackButton href="/vendas" />
-      <h1 className="mb-4 text-2xl font-bold text-vendas-text">Cadastro de Clientes</h1>
+      <div className="mb-4">
+        <PageHeader
+          titulo="Cadastro de Clientes"
+          descricao="Clientes da carteira, com endereço e contato para a entrega."
+          corTitulo="text-vendas-text"
+        />
+      </div>
 
       <div className="mb-4">
         <SearchBox placeholder="Buscar por nome ou código..." className="max-w-sm" />

@@ -1,7 +1,7 @@
+import { PageHeader } from "@/components/shared/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { formatBRL } from "@/lib/utils";
-import { FinanceiroFerramentas } from "./ferramentas-client";
 import { AnaliseKanban, type FinanceCard } from "./analise-kanban";
 import { PENDING_PAYMENT_STATUS_NAME, PAYMENT_CONFIRMED_NOTE } from "@/lib/finance-constants";
 
@@ -170,14 +170,16 @@ export default async function FinanceiroPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Financeiro</h1>
-        <p className="text-sm text-muted-foreground">Auditoria, faturamento e liberação de pedidos.</p>
-      </div>
+      <PageHeader
+        titulo="Gestão de Pedidos"
+        descricao="Auditoria, faturamento e liberação de pedidos."
+        corTitulo="text-financeiro-text"
+      />
 
       {/* Cada ferramenta tem rota propria: os paineis deixaram de abrir inline
           empurrando o Kanban tela abaixo. */}
-      <FinanceiroFerramentas />
+      {/* A fileira de atalhos saiu em 04/11/2026: as sete ferramentas do
+          Financeiro vivem na barra lateral. */}
 
       <AnaliseKanban
         pendentes={pendentes}

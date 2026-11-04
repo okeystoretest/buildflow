@@ -123,9 +123,17 @@ export function ClientesManager({ customers }: { customers: ClienteRow[] }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-border text-left text-foreground">
+                {/* Todas as colunas do cadastro: ate 04/11/2026 a tabela
+                    mostrava so codigo e nome, e para ver o endereco ou o
+                    contato era preciso abrir a edicao de cada cliente. */}
                 <tr>
                   <th className="py-2 pr-4">Código</th>
                   <th className="py-2 pr-4">Nome</th>
+                  <th className="py-2 pr-4">Contato</th>
+                  <th className="py-2 pr-4">Endereço</th>
+                  <th className="py-2 pr-4">Bairro</th>
+                  <th className="py-2 pr-4">Cidade/UF</th>
+                  <th className="py-2 pr-4">CEP</th>
                   <th className="py-2 pr-4 text-right">Ações</th>
                 </tr>
               </thead>
@@ -134,6 +142,13 @@ export function ClientesManager({ customers }: { customers: ClienteRow[] }) {
                   <tr key={c.id} className="border-b border-border last:border-0 transition-colors hover:bg-secondary/50">
                     <td className="py-2 pr-4 font-data">{c.code}</td>
                     <td className="py-2 pr-4 font-medium">{c.name}</td>
+                    <td className="py-2 pr-4">{c.contact || "—"}</td>
+                    <td className="py-2 pr-4">{c.street || "—"}</td>
+                    <td className="py-2 pr-4">{c.district || "—"}</td>
+                    <td className="py-2 pr-4">
+                      {c.city ? `${c.city}${c.state ? "/" + c.state : ""}` : "—"}
+                    </td>
+                    <td className="py-2 pr-4 font-data">{c.cep || "—"}</td>
                     <td className="py-2 pr-4">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(c)} aria-label="Editar">
@@ -154,7 +169,7 @@ export function ClientesManager({ customers }: { customers: ClienteRow[] }) {
                   </tr>
                 ))}
                 {customers.length === 0 && (
-                  <tr><td colSpan={3} className="py-6 text-center text-muted-foreground">
+                  <tr><td colSpan={8} className="py-6 text-center text-muted-foreground">
                     {customers.length === 0 ? "Nenhum cliente cadastrado." : "Nenhum cliente encontrado para a busca."}
                   </td></tr>
                 )}

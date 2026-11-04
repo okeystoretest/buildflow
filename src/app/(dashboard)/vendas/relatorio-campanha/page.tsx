@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
 import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
@@ -98,9 +99,9 @@ export default async function RelatorioCampanhaPage(
     : "";
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="space-y-4">
       <BackButton href="/vendas" />
-      <h1 className="text-2xl font-bold text-vendas-text">Relatório de Campanha</h1>
+      <PageHeader titulo="Resultados de Campanhas" descricao="Desempenho de cada campanha e o que cada vendedora fez nela." corTitulo="text-vendas-text" />
 
       <RelatorioCampanhaFiltros
         campaigns={campaigns}

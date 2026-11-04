@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackButton } from "@/components/shared/back-button";
@@ -74,7 +75,7 @@ export default async function MetricasPage(
     <div className="space-y-6">
       <BackButton href="/logistica" />
       <div>
-        <h1 className="text-2xl font-bold text-distribuicao-text">Métricas</h1>
+        <PageHeader titulo="Tempo de Preparação" descricao="Quanto tempo o pedido leva em cada etapa até sair para entrega." corTitulo="text-distribuicao-text" />
         <p className="text-sm text-muted-foreground">
           Tempo médio de permanência dos pedidos em cada etapa até a conclusão. Calculado a partir do
           histórico de mudanças de status.

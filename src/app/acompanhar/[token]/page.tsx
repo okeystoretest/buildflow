@@ -136,7 +136,7 @@ export default async function AcompanharPedidoPage(
             </div>
             <div>
               <p className="text-lg font-bold leading-tight tracking-tight">
-                Build<span className="text-primary">.Flow</span>
+                Build.<span className="text-primary">Flow</span>
               </p>
               <p className="text-xs text-muted-foreground">Olá, {order.customer.name}</p>
             </div>

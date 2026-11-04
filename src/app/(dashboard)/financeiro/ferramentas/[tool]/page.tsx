@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/shared/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { BackButton } from "@/components/shared/back-button";
@@ -18,26 +19,27 @@ import { CnpjPanel, SimplePanel, StatusPanel } from "../../paineis-client";
  * formulário não impede ninguém de chamar `finCreateBank` direto.
  */
 
-const TITULOS: Record<string, string> = {
-  pagamento: "Formas de Pagamento",
-  bancos: "Bancos",
-  status: "Status de Pagamento",
-  cnpj: "CNPJ",
+/** Titulo e descricao de cada cadastro, como no menu da barra lateral. */
+const TITULOS: Record<string, { titulo: string; descricao: string }> = {
+  pagamento: { titulo: "Meios de Pagamento", descricao: "As formas de pagamento que o pedido pode usar." },
+  bancos: { titulo: "Registro de Bancos", descricao: "Os bancos disponíveis para registrar um recebimento." },
+  status: { titulo: "Situação do Pagamento", descricao: "As situações que um pagamento pode assumir." },
+  cnpj: { titulo: "Empresas / CNPJs", descricao: "As empresas do grupo que podem emitir um pedido." },
 };
 
 export default async function FerramentaPage(props: { params: Promise<{ tool: string }> }) {
   const { tool } = await props.params;
   await requireRole(["FINANCEIRO", "GESTAO"]);
 
-  const titulo = TITULOS[tool];
+  const cabecalho = TITULOS[tool];
   // Rota inventada na barra de endereços é 404, não uma página vazia que
   // parece ferramenta quebrada.
-  if (!titulo) notFound();
+  if (!cabecalho) notFound();
 
   return (
     <div className="space-y-4">
       <BackButton href="/financeiro" />
-      <h1 className="text-2xl font-bold text-financeiro-text">{titulo}</h1>
+      <PageHeader titulo={cabecalho.titulo} descricao={cabecalho.descricao} corTitulo="text-financeiro-text" />
 
       <Card>
         <CardContent className="pt-6">

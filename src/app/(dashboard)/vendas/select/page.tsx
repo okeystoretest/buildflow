@@ -36,7 +36,7 @@ export default async function VendasSelectPage(props: {
   );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="space-y-6">
       <BackButton href="/vendas" />
 
       <div>

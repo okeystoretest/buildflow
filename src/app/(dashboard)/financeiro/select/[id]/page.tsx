@@ -25,7 +25,7 @@ export default async function SelectDetailPage(props: { params: Promise<{ id: st
   // 7xl, nao 6xl: quem manda na largura desta tela e a regua do roadmap — cada
   // 8rem a mais e mais uma etapa visivel sem rolar.
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="space-y-6">
       <BackButton href="/financeiro/select" />
       <SelectDetailClient
         detail={detail}
