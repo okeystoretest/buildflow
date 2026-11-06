@@ -20,6 +20,10 @@ import {
   rotuloDeStatus,
   ancoraDaQuery,
   corDoCard,
+  dataEHoraDaPeca,
+  filtrarPorMarca,
+  marcaDaQuery,
+  MARCAS,
   corDoFunil,
   corDoPonto,
   deslocar,
@@ -203,6 +207,61 @@ check("funil desconhecido ganha a cor neutra", corDoFunil("XOFU"), corDoFunil(""
 check("as tres etapas do funil tem cores distintas", new Set([corDoFunil("TOFU"), corDoFunil("MOFU"), corDoFunil("BOFU")]).size, 3);
 check("marca desconhecida ganha o cartao neutro", corDoCard("OUTRA"), corDoCard(null));
 check("as duas marcas tem cartoes diferentes", corDoCard("OKEY") === corDoCard("LOV_CLUB"), false);
+
+/* ------------------------------------------------------ detalhe da peca */
+
+// A HORA SAI EM UTC, igual a grade. Com o fuso de quem olha, uma peca de
+// 00:30Z viraria "21:30" do DIA ANTERIOR — dentro de um modal aberto pela
+// celula do dia seguinte. O modal se contradiria com a celula que o abriu.
+const detalhe = dataEHoraDaPeca("2026-09-05T13:45:00.000Z");
+check("hora sai em UTC, nao no fuso de quem olha", detalhe?.hora, "13:45");
+check("data contem o ano", detalhe?.data.includes("2026"), true);
+check("data comeca em maiuscula", detalhe?.data[0], detalhe?.data[0]?.toUpperCase());
+
+// A VIRADA DO DIA e o caso que o fuso quebraria: 00:30Z e dia 5, nao dia 4.
+const viradaCedo = dataEHoraDaPeca("2026-09-05T00:30:00.000Z");
+check("meia-noite e meia continua no dia 5", viradaCedo?.data.includes("05"), true);
+check("meia-noite e meia sai como 00:30", viradaCedo?.hora, "00:30");
+const viradaTarde = dataEHoraDaPeca("2026-09-05T23:30:00.000Z");
+check("23:30 continua no dia 5", viradaTarde?.data.includes("05"), true);
+
+// O MESMO DIA da grade: o modal nao pode discordar da celula que o abriu.
+const peca = post("x", "2026-09-05T23:30:00.000Z");
+check(
+  "o dia do modal e o mesmo dia da grade",
+  dataEHoraDaPeca(peca.scheduledAt)?.data.includes("05") &&
+    [...indexarPorDia([peca]).keys()][0] === "2026-09-05",
+  true,
+);
+
+// Data ilegivel diz que nao sabe, em vez de "Invalid Date" na tela.
+check("data ilegivel devolve nulo", dataEHoraDaPeca("amanha de tarde"), null);
+check("texto vazio devolve nulo", dataEHoraDaPeca(""), null);
+
+/* ------------------------------------------------------- filtro de marca */
+
+// A lista do filtro sai do MAPA DE ROTULOS: duas listas divergiriam no dia em
+// que o Connect ganhasse uma terceira marca, e o sintoma seria um filtro
+// escondendo pecas sem avisar ninguem.
+check("o filtro oferece as marcas conhecidas", MARCAS, ["OKEY", "LOV_CLUB"]);
+check("toda marca do filtro tem rotulo", MARCAS.every((m) => rotuloDeMarca(m) !== m || m === "OKEY"), true);
+
+check("marca ausente = todas", marcaDaQuery(undefined), null);
+check("marca inventada = todas", marcaDaQuery("ADIDAS"), null);
+check("marca conhecida e respeitada", marcaDaQuery("LOV_CLUB"), "LOV_CLUB");
+
+const okey = post("o", "2026-09-02T10:00:00.000Z", { brand: "OKEY" });
+const lov = post("l", "2026-09-03T10:00:00.000Z", { brand: "LOV_CLUB" });
+const semMarca = post("s", "2026-09-04T10:00:00.000Z", { brand: null });
+const acervo = [okey, lov, semMarca];
+
+check("todas traz tudo, inclusive sem marca", filtrarPorMarca(acervo, null).map((p) => p.id), ["o", "l", "s"]);
+check("OKEY traz so OKEY", filtrarPorMarca(acervo, "OKEY").map((p) => p.id), ["o"]);
+check("LOV_CLUB traz so LOV_CLUB", filtrarPorMarca(acervo, "LOV_CLUB").map((p) => p.id), ["l"]);
+// A SEM MARCA so aparece em "Todas", e isso e decisao: ela nao pertence a
+// nenhuma marca, entao nao pode aparecer no recorte de uma delas.
+check("peca sem marca nao entra em filtro de marca", filtrarPorMarca(acervo, "OKEY").some((p) => p.id === "s"), false);
+check("filtrar nao mexe na lista original", acervo.length, 3);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

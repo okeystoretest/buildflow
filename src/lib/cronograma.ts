@@ -258,3 +258,63 @@ export function corDoCard(brand: string | null): string {
     return "border-amber-300/70 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30";
   return "border-border bg-secondary/40";
 }
+
+/**
+ * A data e a hora da peça, para o detalhe do card.
+ *
+ * EM UTC, igual à grade e a `agruparPorDia`. Usar o fuso de quem olha faria
+ * uma peça de 00:30Z aparecer como "21:30" do DIA ANTERIOR — dentro de um
+ * modal aberto a partir da célula do dia seguinte. O modal se contradiria com
+ * a célula que o abriu, e as duas estariam "certas".
+ *
+ * Data ilegível devolve `null` em vez de "Invalid Date": ela vem de outro
+ * serviço, e o modal diz que não sabe em vez de mentir.
+ */
+export function dataEHoraDaPeca(scheduledAt: string): { data: string; hora: string } | null {
+  const d = new Date(scheduledAt);
+  if (Number.isNaN(d.getTime())) return null;
+  const data = d.toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return {
+    data: data.charAt(0).toUpperCase() + data.slice(1),
+    hora: d.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "UTC",
+    }),
+  };
+}
+
+/* --------------------------------------------------------- filtro de marca */
+
+/**
+ * As marcas que o filtro oferece, TIRADAS DO MAPA DE RÓTULOS e não escritas de
+ * novo: duas listas de marcas divergiriam no dia em que o Connect ganhasse uma
+ * terceira, e o sintoma seria um filtro que esconde peças sem avisar.
+ */
+export const MARCAS = Object.keys(MARCA);
+
+/** A marca pedida na URL. Ausente ou desconhecida = todas (a URL é digitável). */
+export function marcaDaQuery(valor: string | undefined): string | null {
+  return valor && MARCAS.includes(valor) ? valor : null;
+}
+
+/**
+ * As peças da marca pedida. `null` é TODAS, e todas inclui as SEM MARCA.
+ *
+ * Peça sem marca é estado válido no Connect, e some de qualquer filtro
+ * específico — é o que se espera de um filtro, mas vale dizer: ela só aparece
+ * em "Todas".
+ */
+export function filtrarPorMarca(
+  posts: PostDoCronograma[],
+  marca: string | null,
+): PostDoCronograma[] {
+  return marca === null ? posts : posts.filter((p) => p.brand === marca);
+}

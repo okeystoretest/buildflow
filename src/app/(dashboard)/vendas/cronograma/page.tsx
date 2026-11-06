@@ -1,32 +1,24 @@
 import Link from "next/link";
-import {
-  AlertTriangle,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Instagram,
-  Video,
-  Youtube,
-} from "lucide-react";
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { requireRole } from "@/lib/auth";
-import { buscarCronograma, type PostDoCronograma } from "@/lib/integration/connect-cronograma";
+import { buscarCronograma } from "@/lib/integration/connect-cronograma";
 import {
   ancoraDaQuery,
-  corDoCard,
-  corDoFunil,
-  corDoPonto,
   deslocar,
   diasDaVisao,
+  filtrarPorMarca,
   doMesDaAncora,
+  marcaDaQuery,
+  MARCAS,
   indexarPorDia,
   periodoDaQuery,
   recorteDaVisao,
   rotuloDaVisao,
   rotuloDeMarca,
-  seloDeFormatos,
   type Periodo,
 } from "@/lib/cronograma";
 import { cn } from "@/lib/utils";
+import { CardDaPeca } from "./card-client";
 
 /**
  * CRONOGRAMA DE CONTEÚDO — o calendário do Marketing, vindo do Build.Connect.
@@ -64,70 +56,8 @@ const ALTURA: Record<Periodo, string> = {
   dia: "min-h-[20rem]",
 };
 
-function IconeDaPlataforma({ plataformas }: { plataformas: string[] }) {
-  const Icone =
-    plataformas[0] === "YOUTUBE" ? Youtube : plataformas[0] === "INSTAGRAM" ? Instagram : Video;
-  return <Icone className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />;
-}
-
-function Card({ post }: { post: PostDoCronograma }) {
-  const formatos = seloDeFormatos(post.formats);
-  return (
-    <article className={cn("space-y-1 rounded-lg border p-2", corDoCard(post.brand))}>
-      <div className="flex items-center gap-1.5">
-        <span
-          className={cn("h-1.5 w-1.5 shrink-0 rounded-full", corDoPonto(post.status))}
-          aria-hidden
-        />
-        {post.platforms.length > 0 && <IconeDaPlataforma plataformas={post.platforms} />}
-        <h3
-          className="min-w-0 flex-1 truncate text-[0.6875rem] font-bold uppercase tracking-wide"
-          title={post.title}
-        >
-          {post.title}
-        </h3>
-      </div>
-
-      {/* line-clamp-2: a descrição é texto livre do Marketing e pode vir com um
-          parágrafo inteiro. Numa célula de sete colunas, duas linhas é o teto
-          antes de um card empurrar o resto do dia para fora da vista. */}
-      {post.notes && (
-        <p
-          className="line-clamp-2 text-[0.6875rem] leading-snug text-muted-foreground"
-          title={post.notes}
-        >
-          {post.notes}
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center gap-1">
-        {formatos && (
-          <span className="rounded bg-secondary px-1 py-px text-[0.625rem] font-semibold text-foreground">
-            {formatos}
-          </span>
-        )}
-        <span
-          className={cn("rounded px-1 py-px text-[0.625rem] font-semibold", corDoFunil(post.funnel))}
-        >
-          {post.funnel}
-        </span>
-        {post.brand && (
-          <span className="rounded px-1 py-px text-[0.625rem] font-semibold uppercase text-muted-foreground">
-            {rotuloDeMarca(post.brand)}
-          </span>
-        )}
-        {post.responsavel && (
-          <span className="rounded px-1 py-px text-[0.625rem] font-semibold uppercase text-muted-foreground">
-            {post.responsavel}
-          </span>
-        )}
-      </div>
-    </article>
-  );
-}
-
 export default async function CronogramaPage(props: {
-  searchParams: Promise<{ periodo?: string; data?: string }>;
+  searchParams: Promise<{ periodo?: string; data?: string; marca?: string }>;
 }) {
   await requireRole(["VENDAS", "GESTAO", "FINANCEIRO"]);
   const searchParams = await props.searchParams;
@@ -135,16 +65,20 @@ export default async function CronogramaPage(props: {
   const hoje = new Date();
   const periodo = periodoDaQuery(searchParams.periodo);
   const ancora = ancoraDaQuery(searchParams.data, hoje);
+  const marca = marcaDaQuery(searchParams.marca);
   const dias = diasDaVisao(periodo, ancora);
   const { de, ate } = recorteDaVisao(periodo, ancora);
   const resposta = await buscarCronograma(de, ate);
 
-  const porDia = resposta.ok
-    ? indexarPorDia(resposta.posts)
-    : new Map<string, PostDoCronograma[]>();
+  // Filtrado AQUI e nao no Connect: a janela ja esta limitada ao periodo
+  // visivel (no maximo 42 dias, teto de 200 linhas), entao um parametro novo
+  // na rota seria outra conta para manter dos dois lados sem ganho nenhum.
+  const pecas = resposta.ok ? filtrarPorMarca(resposta.posts, marca) : [];
+  const porDia = indexarPorDia(pecas);
   const chaveDeHoje = hoje.toISOString().slice(0, 10);
   const colunas = periodo === "dia" ? 1 : 7;
-  const href = (p: Periodo, d: string) => `/vendas/cronograma?periodo=${p}&data=${d}`;
+  const href = (p: Periodo, d: string, m: string | null) =>
+    `/vendas/cronograma?periodo=${p}&data=${d}${m ? `&marca=${m}` : ""}`;
 
   return (
     <div className="space-y-4">
@@ -154,7 +88,7 @@ export default async function CronogramaPage(props: {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Link
-            href={href(periodo, deslocar(periodo, ancora, -1))}
+            href={href(periodo, deslocar(periodo, ancora, -1), marca)}
             aria-label="Período anterior"
             className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
@@ -162,7 +96,7 @@ export default async function CronogramaPage(props: {
           </Link>
           <h2 className="min-w-[11rem] text-base font-bold">{rotuloDaVisao(periodo, ancora)}</h2>
           <Link
-            href={href(periodo, deslocar(periodo, ancora, 1))}
+            href={href(periodo, deslocar(periodo, ancora, 1), marca)}
             aria-label="Próximo período"
             className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
@@ -170,22 +104,57 @@ export default async function CronogramaPage(props: {
           </Link>
         </div>
 
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-          {PERIODOS.map((p) => (
+        <div className="flex flex-wrap items-center gap-2">
+          {/* MARCA e PERÍODO lado a lado, com a mesma moldura: são a mesma
+              pergunta feita duas vezes ("o que eu quero ver?"), e dar molduras
+              diferentes a controles irmãos obriga a reaprender cada um. */}
+          <div className="flex items-center gap-1 rounded-lg border border-border p-1">
             <Link
-              key={p.chave}
-              href={href(p.chave, ancora)}
-              aria-current={p.chave === periodo ? "page" : undefined}
+              href={href(periodo, ancora, null)}
+              aria-current={marca === null ? "page" : undefined}
               className={cn(
                 "rounded-md px-3 py-1 text-sm font-medium transition-colors",
-                p.chave === periodo
+                marca === null
                   ? "bg-servico text-servico-fg"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground",
               )}
             >
-              {p.rotulo}
+              Todas
             </Link>
-          ))}
+            {MARCAS.map((m) => (
+              <Link
+                key={m}
+                href={href(periodo, ancora, m)}
+                aria-current={m === marca ? "page" : undefined}
+                className={cn(
+                  "rounded-md px-3 py-1 text-sm font-medium transition-colors",
+                  m === marca
+                    ? "bg-servico text-servico-fg"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                )}
+              >
+                {rotuloDeMarca(m)}
+              </Link>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+            {PERIODOS.map((p) => (
+              <Link
+                key={p.chave}
+                href={href(p.chave, ancora, marca)}
+                aria-current={p.chave === periodo ? "page" : undefined}
+                className={cn(
+                  "rounded-md px-3 py-1 text-sm font-medium transition-colors",
+                  p.chave === periodo
+                    ? "bg-servico text-servico-fg"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                )}
+              >
+                {p.rotulo}
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -252,7 +221,7 @@ export default async function CronogramaPage(props: {
                       {Number(chave.slice(8, 10))}
                     </span>
                     {posts.map((p) => (
-                      <Card key={p.id} post={p} />
+                      <CardDaPeca key={p.id} post={p} />
                     ))}
                   </div>
                 );
@@ -260,11 +229,13 @@ export default async function CronogramaPage(props: {
             </div>
           </div>
 
-          {resposta.posts.length === 0 && (
+          {pecas.length === 0 && (
             <div className="rounded-xl border border-border bg-card p-6 text-center">
               <CalendarDays className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden />
               <p className="mt-2 text-sm text-muted-foreground">
-                Nada publicado pelo Marketing neste período.
+                {marca
+                  ? `Nada de ${rotuloDeMarca(marca)} neste período.`
+                  : "Nada publicado pelo Marketing neste período."}
               </p>
             </div>
           )}
