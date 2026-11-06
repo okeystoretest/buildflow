@@ -322,12 +322,12 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
       <header className="shrink-0 rounded-xl border border-border bg-card px-3.5 py-3">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-vendas/15 text-vendas-text">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rank/15 text-rank-text">
               <TrendingUp className="h-5 w-5" />
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-xl font-extrabold uppercase leading-none tracking-tight text-vendas-text sm:text-2xl lg:text-[1.7rem]">
+                <h1 className="truncate text-xl font-extrabold uppercase leading-none tracking-tight text-rank-text sm:text-2xl lg:text-[1.7rem]">
                   Ranking de Vendas
                 </h1>
                 {data.isCurrent ? (
@@ -385,7 +385,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
                   onClick={() => { setEditMode((v) => !v); setEditErro(null); }}
                   className={`flex h-full items-center gap-1.5 rounded-l-lg px-2.5 text-xs font-medium transition-colors ${
                     editMode
-                      ? "bg-vendas/15 text-vendas-text"
+                      ? "bg-rank/15 text-rank-text"
                       : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   }`}
                 >
@@ -435,7 +435,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
       )}
 
       {editMode && (
-        <p className="shrink-0 rounded-lg border border-vendas/40 bg-vendas/5 px-3 py-2 text-xs text-muted-foreground">
+        <p className="shrink-0 rounded-lg border border-rank/40 bg-rank/5 px-3 py-2 text-xs text-muted-foreground">
           Modo de edição ativo: clique no valor de uma vendedora para informar manualmente o
           realizado até agora. O valor digitado vale para os painéis Geral, Varejo e Atacado —
           e os pedidos registrados depois da edição continuam somando sobre ele.
@@ -669,7 +669,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
                   }
                   className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors ${
                     campRotating
-                      ? "border-vendas/40 bg-vendas/10 text-vendas-text hover:bg-vendas/20"
+                      ? "border-rank/40 bg-rank/10 text-rank-text hover:bg-rank/20"
                       : "border-border text-muted-foreground hover:bg-secondary"
                   }`}
                 >
@@ -686,7 +686,7 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
             {!campPerf?.select && campPremiacao > 0 && (
               <span className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground">
                 Total em premiações
-                <span className="font-data rounded-lg bg-secondary px-2 py-1 text-sm font-bold normal-case tracking-normal text-vendas-text">
+                <span className="font-data rounded-lg bg-secondary px-2 py-1 text-sm font-bold normal-case tracking-normal text-rank-text">
                   {formatBRL(campPremiacao)}
                 </span>
               </span>
@@ -805,7 +805,7 @@ function MetaGeralKpi({ meta, realizado, pct, pacing }: {
     <KpiShell label="Meta geral (mensal)" icon={<Target className="h-4 w-4" />} iconClass="bg-primary/15 text-primary">
       <ValorGrande valor={meta} />
       <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="font-data truncate text-sm text-vendas-text">{formatBRL(realizado)} no mês</span>
+        <span className="font-data truncate text-sm text-rank-text">{formatBRL(realizado)} no mês</span>
         <span className={`font-data shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs font-bold ${tierText(pct)}`}>
           {pct}%
         </span>
@@ -1190,7 +1190,7 @@ function PerfTable({ perf }: { perf: CampaignPerf | undefined }) {
                 <td className={`py-1.5 pr-2 text-right font-data ${apagada ? "" : "font-bold text-foreground"}`}>{r.qtd}</td>
                 {/* Coluna "Valor" removida a pedido do produto. */}
                 {!ehSelect && (
-                  <td className={`py-1.5 pr-2 text-right font-data ${apagada ? "" : "text-vendas-text"}`}>{formatBRL(r.premiacao)}</td>
+                  <td className={`py-1.5 pr-2 text-right font-data ${apagada ? "" : "text-rank-text"}`}>{formatBRL(r.premiacao)}</td>
                 )}
                 <td className="px-2 py-1.5">
                   <div className="flex items-center gap-2">

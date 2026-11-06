@@ -14,6 +14,7 @@ import {
   agrupaPorUf,
   descreverRecorte,
   tempoDeResposta,
+  temposPorVendedora,
   type ResumoDoAtacado,
 } from "../../src/lib/wholesale-dashboard";
 import { gerarAnaliseClientesPdf } from "../../src/lib/analise-clientes-pdf";
@@ -169,6 +170,7 @@ function textoVisivel(b: Buffer): string {
 
 const resumo: ResumoDoAtacado = {
   total: 40,
+  temposPorVendedora: [],
   porStatus: [
     { status: "EM_ANALISE", total: 9 },
     { status: "APROVADO", total: 22 },
@@ -238,6 +240,116 @@ check(
   textoVisivel(vazio).includes("Nenhuma candidatura neste recorte"),
   true,
 );
+
+/* ------------------------------------------ tempo por etapa, por vendedora */
+
+// Um erro aqui nao quebra tela nenhuma: produz um numero plausivel e errado
+// sobre o ritmo de uma pessoa, e vai para uma conversa de desempenho sem
+// ninguem conferir.
+
+const dia = (n: number) => new Date(Date.UTC(2026, 0, n));
+type LinhaTempo = Parameters<typeof temposPorVendedora>[0][number];
+const cand = (o: Partial<LinhaTempo> & { id: string }): LinhaTempo =>
+  ({
+    sellerId: "ana",
+    createdAt: dia(1),
+    decidedAt: null,
+    status: "EM_ANALISE",
+    purchaseState: "CADENCIA",
+    ...o,
+  }) as LinhaTempo;
+
+const nomesDeTempo = new Map([
+  ["ana", "Ana Paula Souza"],
+  ["bia", "Bia Martins"],
+]);
+
+const t1 = temposPorVendedora(
+  [
+    cand({ id: "1", createdAt: dia(1), decidedAt: dia(3), status: "APROVADO" }),
+    cand({ id: "2", createdAt: dia(1), decidedAt: dia(5), status: "REPROVADO" }),
+  ],
+  new Map(),
+  nomesDeTempo,
+);
+check("media de analise: (2 + 4) / 2", [t1[0].analiseDias, t1[0].analiseQtd], [3, 2]);
+
+// A PENDENTE NAO ENTRA. Se entrasse com a idade de hoje, a media subiria
+// sozinha todo dia em que ninguem decidisse nada.
+const t2 = temposPorVendedora(
+  [
+    cand({ id: "1", createdAt: dia(1), decidedAt: dia(3), status: "APROVADO" }),
+    cand({ id: "9", createdAt: dia(1), decidedAt: null, status: "EM_ANALISE" }),
+  ],
+  new Map(),
+  nomesDeTempo,
+);
+check("pendente fora da media de analise", [t2[0].analiseDias, t2[0].analiseQtd], [2, 1]);
+
+const t3 = temposPorVendedora(
+  [cand({ id: "1", createdAt: dia(10), decidedAt: dia(2), status: "APROVADO" })],
+  new Map(),
+  nomesDeTempo,
+);
+check("data invertida nao vira media negativa", t3[0].analiseDias, 0);
+
+const t4 = temposPorVendedora(
+  [cand({ id: "1", decidedAt: dia(1), status: "APROVADO", purchaseState: "COMPROU" })],
+  new Map([["1", dia(11)]]),
+  nomesDeTempo,
+);
+check("cadencia: aprovada em 1, comprou em 11", [t4[0].cadenciaDias, t4[0].cadenciaQtd], [10, 1]);
+
+// REPROVADA NAO TEM CADENCIA. `purchaseState` tem default CADENCIA, entao toda
+// candidatura nasce "em cadencia" no banco — mas a regua so existe depois do
+// sim. Sem o filtro de status, esta linha entraria na media.
+const t5 = temposPorVendedora(
+  [cand({ id: "1", decidedAt: dia(1), status: "REPROVADO", purchaseState: "NAO_COMPROU" })],
+  new Map([["1", dia(31)]]),
+  nomesDeTempo,
+);
+check("reprovada nao entra na cadencia", t5[0].cadenciaQtd, 0);
+
+const t6 = temposPorVendedora(
+  [cand({ id: "1", decidedAt: dia(1), status: "APROVADO", purchaseState: "CADENCIA" })],
+  new Map(),
+  nomesDeTempo,
+);
+check("aprovada ainda na regua fora da media", t6[0].cadenciaQtd, 0);
+
+// Saiu da regua mas o diario nao tem o evento (dado anterior ao diario):
+// ignorada em silencio, nunca somada como zero dia.
+const t7 = temposPorVendedora(
+  [cand({ id: "1", decidedAt: dia(1), status: "APROVADO", purchaseState: "COMPROU" })],
+  new Map(),
+  nomesDeTempo,
+);
+check("saida sem evento no diario e ignorada", [t7[0].cadenciaDias, t7[0].cadenciaQtd], [0, 0]);
+
+const t8 = temposPorVendedora(
+  [
+    cand({ id: "1", sellerId: null, decidedAt: dia(2), status: "APROVADO" }),
+    cand({ id: "2", sellerId: "fantasma", decidedAt: dia(2), status: "APROVADO" }),
+    cand({ id: "3", sellerId: "bia", decidedAt: dia(2), status: "APROVADO" }),
+    cand({ id: "4", sellerId: "bia", decidedAt: dia(2), status: "APROVADO" }),
+  ],
+  new Map(),
+  nomesDeTempo,
+);
+check(
+  "ordem por volume de decisoes, e os nomes de borda",
+  t8.map((v) => [v.nome, v.analiseQtd]),
+  [
+    ["Bia Martins", 2],
+    ["Sem vendedora", 1],
+    ["Vendedora removida", 1],
+  ],
+);
+
+// Zero concluidas devolve 0, e a tela troca por "—": zero dia le-se como
+// "resolveu na hora", o oposto de "ainda nao resolveu nenhuma".
+const t9 = temposPorVendedora([cand({ id: "1" })], new Map(), nomesDeTempo);
+check("nenhuma concluida: media 0 e qtd 0", [t9[0].analiseDias, t9[0].analiseQtd], [0, 0]);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

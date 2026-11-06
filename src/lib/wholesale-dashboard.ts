@@ -123,6 +123,33 @@ export interface TempoDeResposta {
   maisAntigaDias: number;
 }
 
+/**
+ * Quanto tempo um cadastro FICA em cada etapa, por vendedora.
+ *
+ * SÃO DOIS EIXOS DIFERENTES, não dois status: "em análise" é o eixo do STATUS
+ * (chegou → foi decidida) e "em cadência" é o eixo da COMPRA (foi aprovada →
+ * comprou ou não comprou). Desde 30/10/2026 a compra saiu do status, e tratar
+ * os dois como uma lista só de status daria um número que não existe.
+ *
+ * SÓ ENTRA QUEM JÁ SAIU DA ETAPA, a mesma regra de `TempoDeResposta` e pelo
+ * mesmo motivo: somar quem ainda está lá com a idade de hoje faria a média
+ * subir sozinha todo dia em que ninguém decidisse nada, e pareceria que alguém
+ * demorou mais. Quem não concluiu nenhuma aparece com `qtd: 0`, e a tela mostra
+ * "—" em vez de um zero que se lê como "instantâneo".
+ */
+export interface TempoPorVendedora {
+  sellerId: string | null;
+  nome: string;
+  /** Média de dias entre chegar e ser decidida. */
+  analiseDias: number;
+  /** Quantas decisões entraram na média da análise — o denominador dela. */
+  analiseQtd: number;
+  /** Média de dias entre ser aprovada e sair da régua (comprou / não comprou). */
+  cadenciaDias: number;
+  /** Quantas saídas entraram na média da cadência — o denominador dela. */
+  cadenciaQtd: number;
+}
+
 export interface FiltrosDoPainel {
   de?: string;
   ate?: string;
@@ -202,6 +229,13 @@ export interface ResumoDoAtacado {
   /** Quanto a equipe demora para decidir, e o que está parado. */
   tempo: TempoDeResposta;
   /**
+   * Quanto um cadastro fica em análise e em cadência, por vendedora.
+   *
+   * Responde "quem está segurando a fila", que o `tempo` agregado não responde:
+   * uma média de equipe boa esconde uma vendedora com tudo parado.
+   */
+  temposPorVendedora: TempoPorVendedora[];
+  /**
    * TAXA DE APROVAÇÃO: aprovadas ÷ total recebido, em 0–100.
    *
    * Chamava-se `conversao` até 28/10/2026. Foi renomeada porque a tela passou a
@@ -241,6 +275,7 @@ const VAZIO: ResumoDoAtacado = {
   porMotivo: [],
   porUf: [],
   tempo: { mediaDias: 0, decididas: 0, paradas: 0, maisAntigaDias: 0 },
+  temposPorVendedora: [],
   aprovacao: 0,
   aprovadas: 0,
   conversao: 0,
@@ -412,6 +447,95 @@ export function tempoDeResposta(
   };
 }
 
+/**
+ * O tempo em cada etapa, por vendedora.
+ *
+ * SÓ CONTA QUEM JÁ SAIU DA ETAPA, e por isso NÃO recebe `agora`: não há nada
+ * aqui que dependa de que horas são. É a mesma regra de `tempoDeResposta` — as
+ * pendentes não têm duração ainda, e contá-las com a idade de hoje faria a
+ * média subir sozinha todo dia em que ninguém decidisse nada.
+ *
+ * CADÊNCIA SÓ PARA APROVADA. `purchaseState` tem default CADENCIA e portanto
+ * TODA candidatura nasce "em cadência" no banco, inclusive a reprovada e a que
+ * nem foi analisada — mas a régua de contato só existe depois do sim. Sem este
+ * filtro, o tempo de cadência de uma reprovada entraria na média.
+ *
+ * A SAÍDA DA CADÊNCIA VEM DO DIÁRIO (`WholesaleLeadEvent`), não do cadastro: o
+ * lead guarda só o estado ATUAL da compra, sem a data em que ele mudou. Lead
+ * que saiu da régua e não tem evento (dado anterior ao diário) é ignorado em
+ * silêncio, como `tempoDeResposta` faz com `decidedAt` ausente — somá-lo como
+ * zero dia puxaria a média para baixo justamente onde ela precisa ser confiável.
+ *
+ * PURA e exportada para ser conferida por script, como as demais contas do
+ * painel.
+ */
+export function temposPorVendedora(
+  linhas: {
+    id: string;
+    sellerId: string | null;
+    createdAt: Date;
+    decidedAt: Date | null;
+    status: WholesaleLeadStatus;
+    purchaseState: WholesalePurchaseState;
+  }[],
+  /** `leadId` → quando ele saiu da cadência, do diário de eventos. */
+  saidaDaCadencia: Map<string, Date>,
+  nomes: Map<string, string>,
+): TempoPorVendedora[] {
+  // Chave de string porque `null` (sem dona) também é uma linha do painel.
+  const porDona = new Map<
+    string,
+    { somaAnalise: number; qtdAnalise: number; somaCadencia: number; qtdCadencia: number }
+  >();
+
+  for (const l of linhas) {
+    const chave = l.sellerId ?? "";
+    const acc = porDona.get(chave) ?? {
+      somaAnalise: 0,
+      qtdAnalise: 0,
+      somaCadencia: 0,
+      qtdCadencia: 0,
+    };
+
+    if (l.decidedAt) {
+      // Negativo não existe em dado são (decidir antes de chegar), mas uma data
+      // importada errada puxaria a média para baixo sem aviso.
+      acc.somaAnalise += Math.max(0, (l.decidedAt.getTime() - l.createdAt.getTime()) / MS_POR_DIA);
+      acc.qtdAnalise++;
+    }
+
+    if (
+      l.status === WholesaleLeadStatus.APROVADO &&
+      l.decidedAt &&
+      l.purchaseState !== WholesalePurchaseState.CADENCIA
+    ) {
+      const saida = saidaDaCadencia.get(l.id);
+      if (saida) {
+        acc.somaCadencia += Math.max(0, (saida.getTime() - l.decidedAt.getTime()) / MS_POR_DIA);
+        acc.qtdCadencia++;
+      }
+    }
+
+    porDona.set(chave, acc);
+  }
+
+  const media = (soma: number, qtd: number) => (qtd === 0 ? 0 : Math.round((soma / qtd) * 10) / 10);
+
+  return [...porDona.entries()]
+    .map(([chave, a]) => ({
+      sellerId: chave || null,
+      nome: chave ? (nomes.get(chave) ?? "Vendedora removida") : "Sem vendedora",
+      analiseDias: media(a.somaAnalise, a.qtdAnalise),
+      analiseQtd: a.qtdAnalise,
+      cadenciaDias: media(a.somaCadencia, a.qtdCadencia),
+      cadenciaQtd: a.qtdCadencia,
+    }))
+    // Por VOLUME de decisões, como `agrupaPorVendedora` ordena por volume: o
+    // bloco fica ao lado do "Por vendedora" e as linhas precisam bater na
+    // leitura. Ordenar pela demora poria no topo quem decidiu uma só.
+    .sort((a, b) => b.analiseQtd - a.analiseQtd || a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
 function mesDe(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 }
@@ -556,6 +680,7 @@ export async function resumoDoAtacado(
     comprou,
     ufRaw,
     prazos,
+    saidasDaCadencia,
   ] = await Promise.all([
     prisma.wholesaleLead.count({ where }),
     prisma.wholesaleLead.groupBy({ by: ["status"], where, _count: { _all: true } }),
@@ -634,7 +759,35 @@ export async function resumoDoAtacado(
     // contagens agregadas com um corte de data.
     prisma.wholesaleLead.findMany({
       where,
-      select: { createdAt: true, decidedAt: true, status: true },
+      select: {
+        id: true,
+        createdAt: true,
+        decidedAt: true,
+        status: true,
+        // Para `temposPorVendedora`. Três colunas a mais na MESMA consulta, e
+        // não uma segunda: é a mesma linha, já trazida, já no escopo.
+        sellerId: true,
+        purchaseState: true,
+      },
+    }),
+    // QUANDO cada aprovada saiu da régua de contato. O cadastro guarda só o
+    // estado ATUAL da compra, sem a data da mudança — a data está no diário.
+    //
+    // `lead: where` e não um `where` próprio: o escopo do ator e o período
+    // precisam valer aqui também, senão uma vendedora veria, pelo tempo de
+    // cadência, o ritmo de fechamento das colegas.
+    //
+    // Ordenado do mais ANTIGO para o mais novo porque o Map guarda a primeira
+    // gravação de cada lead: quem voltou para a régua e saiu de novo conta pela
+    // primeira saída, que é a que responde "quanto durou a régua".
+    prisma.wholesaleLeadEvent.findMany({
+      where: {
+        lead: where,
+        fromPurchase: WholesalePurchaseState.CADENCIA,
+        toPurchase: { not: WholesalePurchaseState.CADENCIA },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { leadId: true, createdAt: true },
     }),
   ]);
 
@@ -665,6 +818,13 @@ export async function resumoDoAtacado(
     }
   }
   const porVendedora = agrupaPorVendedora(vendedoraRaw, nomes);
+
+  // Primeira saída de cada lead: o `orderBy` acima traz em ordem crescente, e
+  // `set` só na primeira vez preserva isso.
+  const saidaPorLead = new Map<string, Date>();
+  for (const e of saidasDaCadencia) {
+    if (!saidaPorLead.has(e.leadId)) saidaPorLead.set(e.leadId, e.createdAt);
+  }
 
   const indice = new Map(entradasPorMes.map((b, i) => [b.chave, i]));
   for (const { createdAt } of naJanela) {
@@ -701,6 +861,7 @@ export async function resumoDoAtacado(
     porMotivo: agrupaPorMotivo(motivoRaw),
     porUf: agrupaPorUf(ufRaw),
     tempo: tempoDeResposta(prazos, agora),
+    temposPorVendedora: temposPorVendedora(prazos, saidaPorLead, nomes),
     aprovacao,
     aprovadas,
     conversao,

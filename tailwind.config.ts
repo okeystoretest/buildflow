@@ -16,8 +16,8 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        sans: ["IBM Plex Sans", "system-ui", "sans-serif"],
-        mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
+        sans: ["var(--font-outfit)", "system-ui", "sans-serif"],
+        mono: ["var(--font-jetbrains)", "ui-monospace", "monospace"],
       },
       colors: {
         // ---- Paleta Build.Flow: cor por setor (DEFAULT) + tom claro (soft) ----
@@ -30,31 +30,52 @@ const config: Config = {
         // ESCURECIDA em 16/10/2026 porque o texto branco por cima reprovava em
         // WCAG AA (2,87:1 no verde, 3,15:1 no azul, 3,62:1 no rosa, onde 14px
         // pede 4,5:1). Hue e saturacao intactas: a marca e a mesma, o botao e
-        // legivel. Os quatro agora dao ~4,7:1, e distribuicao (que usa texto
-        // escuro) seguia passando com 6,34:1.
+        // legivel.
+        //
+        // 05/11/2026: os quatro setores TROCARAM de cor entre si, a pedido do
+        // dono — rosa para o Comercial, ambar para o Financeiro, verde para a
+        // Logistica, azul para o Motorista. Cada setor levou o TRIO INTEIRO
+        // (cor, tom claro e texto por cima), entao o ajuste de contraste de
+        // 16/10 viajou junto e nada foi recalculado. O `fg` escuro acompanha o
+        // ambar, nao o setor: e a cor clara que exige texto escuro.
+        //
+        // COR REPETIDA E PERMITIDA (decisao do dono, 06/11/2026). O azul serve
+        // Motorista e `brand`, o verde serve Logistica e `servico`, e isso nao
+        // e defeito: a leitura vem do CONTEXTO (um botao de Select aparece
+        // dentro de Vendas, nunca ao lado de um de Logistica). A regra anterior
+        // — "nenhuma cor em dois lugares" — custava repintar 91 usos nas telas
+        // de Select para resolver uma ambiguidade que ninguem relatou.
         //
         // scripts/checks/cor-de-setor.ts recalcula os dois pares a cada rodada.
         vendas: {
-          DEFAULT: "#9b59b6", soft: "#f3eafa", text: "hsl(var(--vendas-text))", fg: "#ffffff",
+          DEFAULT: "#dc1e6b", soft: "#fceaf2", text: "hsl(var(--vendas-text))", fg: "#ffffff",
         },
         financeiro: {
-          DEFAULT: "#dc1e6b", soft: "#fceaf2", text: "hsl(var(--financeiro-text))", fg: "#ffffff",
+          DEFAULT: "#f39c12", soft: "#fdf2e0", text: "hsl(var(--financeiro-text))", fg: "#3a2a00",
         },
         distribuicao: {
-          DEFAULT: "#f39c12", soft: "#fdf2e0", text: "hsl(var(--distribuicao-text))", fg: "#3a2a00",
+          DEFAULT: "#1e8449", soft: "#e6f6ed", text: "hsl(var(--distribuicao-text))", fg: "#ffffff",
         },
         motorista: {
-          DEFAULT: "#1e8449", soft: "#e6f6ed", text: "hsl(var(--motorista-text))", fg: "#ffffff",
+          DEFAULT: "#2079b4", soft: "#e8f3fb", text: "hsl(var(--motorista-text))", fg: "#ffffff",
         },
         brand: {
           DEFAULT: "#2079b4", soft: "#e8f3fb", text: "hsl(var(--brand-text))", fg: "#ffffff",
         },
         // Select (venda de SERVICO). Nao e um setor: e uma natureza de venda
-        // que aparece dentro de Vendas e do Financeiro. Token proprio, e nao
-        // reuso do verde de "motorista", porque a paleta e lida por setor —
-        // um botao "motorista" no meio de Vendas leria como engano.
+        // que aparece dentro de Vendas e do Financeiro. Token PROPRIO mesmo
+        // tendo o mesmo verde da Logistica: o nome e que diz a quem a cor
+        // pertence, e separar o token agora deixa a porta aberta para repintar
+        // um sem mexer no outro.
         servico: {
           DEFAULT: "#1e8449", soft: "#e6f6ed", text: "hsl(var(--servico-text))", fg: "#ffffff",
+        },
+        // Rank de Vendas. Tela unica, nao setor: fica fora da paleta dos quatro
+        // para o roxo nao parecer um setor que ninguem encontra no menu. E o
+        // mesmo roxo que era do Comercial antes do remanejo de 05/11 — o Rank
+        // sempre foi roxo, e so virou rosa porque herdava `vendas`.
+        rank: {
+          DEFAULT: "#9b59b6", soft: "#f3eafa", text: "hsl(var(--rank-text))", fg: "#ffffff",
         },
         // ---- Cor de MARCA (nao e setor) ----
         //
@@ -121,23 +142,10 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
-      keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
-      },
-      animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-      },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  // Sem plugins: as animacoes do app sao escritas a mao em globals.css.
+  plugins: [],
 };
 
 export default config;

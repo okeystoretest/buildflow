@@ -1,5 +1,11 @@
 "use client";
 
+// NAO troque por `useActionState`: ele e o nome do React 19 e NAO EXISTE no
+// 18.3.1 que esta instalado — a troca quebra o login, e quebra silenciosamente
+// (o hook vira `undefined` e a pagina so para de montar). `useFormState` do
+// `react-dom` e o nome CORRENTE nesta versao, nao um nome aposentado, e o Next
+// 15.5 aceita `react: ^18.2.0` nas peer deps: nao ha upgrade pendente aqui.
+// Quando o projeto subir para o React 19, as duas linhas mudam juntas.
 import { useFormState, useFormStatus } from "react-dom";
 import { PackageCheck } from "lucide-react";
 import { login } from "@/lib/actions/auth";
