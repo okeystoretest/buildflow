@@ -1,8 +1,6 @@
 import { notFound } from "next/navigation";
-import { PageHeader } from "@/components/shared/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { BackButton } from "@/components/shared/back-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { finCreateBank, finCreatePaymentMethod } from "@/lib/actions/finance";
 import { CnpjPanel, SimplePanel, StatusPanel } from "../../paineis-client";
@@ -38,8 +36,6 @@ export default async function FerramentaPage(props: { params: Promise<{ tool: st
 
   return (
     <div className="space-y-4">
-      <BackButton href="/financeiro" />
-      <PageHeader titulo={cabecalho.titulo} descricao={cabecalho.descricao} corTitulo="text-financeiro-text" />
 
       <Card>
         <CardContent className="pt-6">

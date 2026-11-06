@@ -1,7 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
 import {
   carregarPendencias,
@@ -49,11 +47,9 @@ export default async function RelatorioPendenciasPage(
 
   return (
     <div className="space-y-6">
-      <BackButton href="/logistica" />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <PageHeader titulo="Controle de Pendências" descricao="Pedidos parados na preparação e há quanto tempo." corTitulo="text-distribuicao-text" />
           <p className="text-sm text-muted-foreground">
             Todos os pedidos que atingiram o status Pendente, com a descrição de cada pendência e o
             respectivo histórico de tratativas e resolução.

@@ -1,7 +1,8 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BackButton } from "@/components/shared/back-button";
 import { NovoSelectForm } from "./form";
 
 /**
@@ -27,6 +28,14 @@ export default async function NovoSelectPage() {
   // perguntas distintas desta tela — confirmar troca e escolher responsável —
   // que hoje têm a mesma resposta.
   const privilegiado = session.role === "GESTAO" || session.role === "FINANCEIRO";
+  // DE QUE LISTA A PESSOA VEIO. Esta tela tem DUAS portas de entrada ("Novo
+  // Select" em /vendas e em /financeiro/select), entao um destino fixo mandaria
+  // metade das pessoas para a lista da outra metade. /financeiro/select e so de
+  // Gestao e Financeiro, por isso quem e de Vendas nunca vai para la.
+  const voltar =
+    session.role === "VENDAS"
+      ? { href: "/vendas", rotulo: "Lançar Pedidos" }
+      : { href: "/financeiro/select", rotulo: "Contratos Select" };
 
   const [plans, sellers] = await Promise.all([
     prisma.selectPlan.findMany({
@@ -45,7 +54,15 @@ export default async function NovoSelectPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <BackButton href="/vendas" />
+      {/* VOLTAR: rota fora do menu, entao o menu nao traz de volta. O porque
+          da regra inteira esta em financeiro/select/[id]/page.tsx. */}
+      <Link
+        href={voltar.href}
+        className="mb-4 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        {voltar.rotulo}
+      </Link>
       <h1 className="mb-4 text-2xl font-bold text-servico-text">Novo Select</h1>
       <Card>
         <CardHeader><CardTitle>Dados do serviço</CardTitle></CardHeader>

@@ -1,8 +1,6 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/shared/page-header";
 import { Inbox } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { BackButton } from "@/components/shared/back-button";
 import { atorDaFerramenta } from "@/lib/wholesale-actor";
 import { AcessoNegadoAtacado } from "./tabs";
 import { AnaliseClientesPainel } from "./painel";
@@ -437,18 +435,14 @@ export default async function AnaliseClientesPage(
 
   return (
     <div className="space-y-6">
-      <BackButton />
 
       {/* Título em `text-vendas-text`: a tela é de Vendas. Os CHIPS de status, não —
           estado não é setor (ver `lead-status-chip.tsx`). */}
       {/* O botão do relatório fica no CABEÇALHO, e não junto do painel: o PDF é
           do recorte inteiro da tela (painel e fila), não de um bloco dele. */}
-      <PageHeader
-        titulo="Qualificação de Clientes"
-        descricao="Candidaturas de atacado e a decisão de cada uma."
-        corTitulo="text-vendas-text"
-        acoes={<RelatorioDaAnalise />}
-      />
+      <div className="flex flex-wrap justify-end gap-2">
+        <RelatorioDaAnalise />
+      </div>
 
       <AnaliseClientesFiltros
         defaults={{ status, brand, estado, cidade, vendedora, de, ate, motivo, compra }}

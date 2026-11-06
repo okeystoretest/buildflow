@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
-import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
 import { EntregasList } from "@/components/shared/entregas-list";
 import { entregaInclude, toEntregaItem } from "@/components/shared/entrega-map";
@@ -97,8 +95,6 @@ export default async function FinanceiroEntregasPage(
 
   return (
     <div className="space-y-6">
-      <BackButton href="/financeiro" />
-      <PageHeader titulo="Repasse a Motoristas" descricao="Entregas a pagar e os comprovantes de cada motorista." corTitulo="text-financeiro-text" />
       <p className="text-sm text-muted-foreground">
         Entregas efetuadas pelos motoristas. Clique em uma para ver a ficha completa e registrar o pagamento da entrega.
       </p>

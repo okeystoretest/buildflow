@@ -18,6 +18,11 @@ import {
   MESES_NO_GRAFICO,
   agrupaPorMotivo,
   agrupaPorVendedora,
+  agruparPorCanal,
+  agruparPorCidade,
+  mediaDeAcompanhamento,
+  mediaDeFuncionarios,
+  mediaDeInvestimento,
   bucketsDeMes,
   escopoDoAtor,
   taxaDeConversao,
@@ -296,6 +301,105 @@ check(
 );
 // E o que esta fora, fica fora: o dia 1 do mes seguinte nao entra.
 check("o dia seguinte ao fim nao entra", new Date(2026, 10, 1, 0, 30) <= janela.lte, false);
+
+
+/* ---------------------------------------------- blocos do relatorio gerencial */
+
+const linhaCidade = (city: string | null, state: string | null, compra: "COMPROU" | "CADENCIA", qtd: number) =>
+  ({ city, state, purchaseState: compra as never, _count: { _all: qtd } });
+
+// A ORDEM E A PERGUNTA: o relatorio pede "maior volume de COMPRAS", nao "mais
+// candidaturas". Fortaleza tem o dobro de inscricoes e vende menos.
+check(
+  "cidade ordena por compras, nao por candidaturas",
+  agruparPorCidade([
+    linhaCidade("Fortaleza", "CE", "CADENCIA", 20),
+    linhaCidade("Fortaleza", "CE", "COMPROU", 2),
+    linhaCidade("Imperatriz", "MA", "CADENCIA", 4),
+    linhaCidade("Imperatriz", "MA", "COMPROU", 6),
+  ]).map((c) => c.cidade),
+  ["Imperatriz/MA", "Fortaleza/CE"],
+);
+// Existem sete Santa Luzia no Brasil: somar as duas criaria uma praca que nao
+// existe, com uma conversao que nao e de lugar nenhum.
+check(
+  "mesma cidade em UFs diferentes nao se mistura",
+  agruparPorCidade([
+    linhaCidade("Santa Luzia", "MA", "COMPROU", 3),
+    linhaCidade("Santa Luzia", "PB", "COMPROU", 1),
+  ]).map((c) => c.cidade),
+  ["Santa Luzia/MA", "Santa Luzia/PB"],
+);
+// O texto vem digitado a mao pela candidata.
+check(
+  "caixa e espaco sobrando sao a mesma cidade",
+  agruparPorCidade([
+    linhaCidade("imperatriz", "ma", "COMPROU", 2),
+    linhaCidade("  IMPERATRIZ ", "MA", "COMPROU", 3),
+  ]),
+  [{ cidade: "Imperatriz/MA", total: 5, comprou: 5, conversao: 100 }],
+);
+check("cidade em branco nao vira praca", agruparPorCidade([linhaCidade("", "MA", "COMPROU", 9)]), []);
+check("preposicao fica minuscula", agruparPorCidade([linhaCidade("boa vista do gurupi", "MA", "COMPROU", 1)])[0].cidade, "Boa Vista do Gurupi/MA");
+
+// A FATIA E SOBRE QUEM INFORMOU: candidatura importada nao tem o campo, e
+// deixa-la no denominador faria o Instagram "cair" quando entra um lote antigo.
+const canais = agruparPorCanal([
+  { foundUs: "INSTAGRAM", _count: { _all: 24 } },
+  { foundUs: "INDICACAO", _count: { _all: 6 } },
+  { foundUs: null, _count: { _all: 70 } },
+]);
+check("a fatia do canal ignora quem nao informou", canais.canais[0].fatia, 80);
+check("quem nao informou e contado a parte", [canais.informaram, canais.ignorados], [30, 70]);
+check("canal desconhecido cai no valor cru", agruparPorCanal([{ foundUs: "TIKTOK", _count: { _all: 1 } }]).canais[0].rotulo, "TIKTOK");
+check("sem canal nenhum nao quebra", agruparPorCanal([]), { canais: [], informaram: 0, ignorados: 0 });
+
+// O campo e TEXTO LIVRE: chegam "2", "Eu", "Dois", "Nenhum".
+check("le o numero e ignora o resto", mediaDeFuncionarios(["2", "4", "6"]), { media: 4, considerados: 3, ignorados: 0 });
+check("palavra sem numero fica de fora", mediaDeFuncionarios(["2", "Eu", "Dois", "4"]), { media: 3, considerados: 2, ignorados: 2 });
+check("nulo fica de fora", mediaDeFuncionarios([null, "10"]), { media: 10, considerados: 1, ignorados: 1 });
+// Um "20000" digitado por engano moveria a media da base inteira sozinho.
+check("valor absurdo nao entra", mediaDeFuncionarios(["20000", "3"]), { media: 3, considerados: 1, ignorados: 1 });
+check("base vazia da zero, nunca NaN", mediaDeFuncionarios([]), { media: 0, considerados: 0, ignorados: 0 });
+
+// O cadastro guarda a FAIXA; a media so pode ser a media dos meios dela.
+check(
+  "media do investimento usa o meio de cada faixa",
+  mediaDeInvestimento([
+    { investmentBand: "ATE_3K", _count: { _all: 1 } },      // 1500
+    { investmentBand: "DE_5_A_10K", _count: { _all: 1 } },  // 7500
+  ]),
+  { media: 4500, considerados: 2, ignorados: 0 },
+);
+// Ponderada pela quantidade, nao media das faixas: 9 na faixa baixa e 1 na
+// alta nao dao o mesmo que 1 e 1.
+check(
+  "a media do investimento e ponderada",
+  mediaDeInvestimento([
+    { investmentBand: "ATE_3K", _count: { _all: 9 } },
+    { investmentBand: "ACIMA_10K", _count: { _all: 1 } },
+  ]).media,
+  2350,
+);
+check("faixa ausente fica de fora", mediaDeInvestimento([{ investmentBand: null, _count: { _all: 5 } }]), { media: 0, considerados: 0, ignorados: 5 });
+
+// Ponderada pela quantidade de cada dona: quem tem uma aprovada nao pesa igual
+// a quem tem cinquenta.
+check(
+  "o acompanhamento e ponderado pela quantidade",
+  mediaDeAcompanhamento([
+    { sellerId: "a", nome: "A", analiseDias: 0, analiseQtd: 0, cadenciaDias: 10, cadenciaQtd: 9 },
+    { sellerId: "b", nome: "B", analiseDias: 0, analiseQtd: 0, cadenciaDias: 100, cadenciaQtd: 1 },
+  ]),
+  { media: 19, considerados: 10, ignorados: 0 },
+);
+// Enquanto ninguem sair da regua o bloco fica vazio, e isso e correto: somar
+// quem ainda esta sendo acompanhado faria a media subir sozinha todo dia.
+check(
+  "ninguem saiu da regua ainda da zero",
+  mediaDeAcompanhamento([{ sellerId: "a", nome: "A", analiseDias: 3, analiseQtd: 5, cadenciaDias: 0, cadenciaQtd: 0 }]),
+  { media: 0, considerados: 0, ignorados: 0 },
+);
 
 
 if (falhas > 0) {

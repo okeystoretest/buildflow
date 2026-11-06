@@ -7,7 +7,7 @@
 // 15.5 aceita `react: ^18.2.0` nas peer deps: nao ha upgrade pendente aqui.
 // Quando o projeto subir para o React 19, as duas linhas mudam juntas.
 import { useFormState, useFormStatus } from "react-dom";
-import { PackageCheck } from "lucide-react";
+import { MarcaBuildFlow } from "@/components/shared/build-flow-logo";
 import { login } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,14 +33,12 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-vendas/10 blur-3xl" />
 
       <div className="w-full max-w-sm animate-fade-in-up">
-        <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30">
-            <PackageCheck className="h-8 w-8" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Build.<span className="text-primary">Flow</span>
-          </h1>
-          <p className="text-sm text-muted-foreground">Logística e controle de vendas</p>
+        {/* A MARCA, nao um icone generico: a tela de entrada mostrava um
+            `PackageCheck` dentro de um quadrado colorido, que nao e a logo do
+            produto. Mesmo componente da barra lateral, no tamanho de login
+            (56px) da especificacao (06/11/2026). */}
+        <div className="mb-8 flex justify-center">
+          <MarcaBuildFlow tamanho="login" />
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-6 shadow-xl">

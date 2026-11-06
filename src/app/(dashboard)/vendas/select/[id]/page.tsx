@@ -1,7 +1,7 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Star } from "lucide-react";
+import { ArrowLeft, Star } from "lucide-react";
 import { requireRole } from "@/lib/auth";
-import { BackButton } from "@/components/shared/back-button";
 import { Badge } from "@/components/ui/badge";
 import { SelectRoadmapCard } from "@/components/shared/select-roadmap-card";
 import { NomeDoCliente } from "@/components/shared/customer-card-modal";
@@ -38,7 +38,15 @@ export default async function VendasSelectDetailPage(props: {
   // precisa do espaco igual nos dois lugares.
   return (
     <div className="space-y-6">
-      <BackButton href="/vendas/select" />
+      {/* VOLTAR: rota fora do menu, entao o menu nao traz de volta. O porque
+          da regra inteira esta em financeiro/select/[id]/page.tsx. */}
+      <Link
+        href="/vendas/select"
+        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Meus Selects
+      </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

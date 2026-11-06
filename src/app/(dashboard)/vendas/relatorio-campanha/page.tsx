@@ -1,7 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
-import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBRL } from "@/lib/utils";
@@ -100,8 +98,6 @@ export default async function RelatorioCampanhaPage(
 
   return (
     <div className="space-y-4">
-      <BackButton href="/vendas" />
-      <PageHeader titulo="Resultados de Campanhas" descricao="Desempenho de cada campanha e o que cada vendedora fez nela." corTitulo="text-vendas-text" />
 
       <RelatorioCampanhaFiltros
         campaigns={campaigns}

@@ -70,12 +70,23 @@ const config: Config = {
         servico: {
           DEFAULT: "#1e8449", soft: "#e6f6ed", text: "hsl(var(--servico-text))", fg: "#ffffff",
         },
-        // Rank de Vendas. Tela unica, nao setor: fica fora da paleta dos quatro
-        // para o roxo nao parecer um setor que ninguem encontra no menu. E o
-        // mesmo roxo que era do Comercial antes do remanejo de 05/11 — o Rank
-        // sempre foi roxo, e so virou rosa porque herdava `vendas`.
+        // Ranking de Vendas. Tela unica, nao setor: fica fora da paleta dos
+        // quatro para o roxo nao parecer um setor que ninguem encontra no
+        // menu. E o mesmo roxo que era do Comercial antes do remanejo de
+        // 05/11 — o Ranking sempre foi roxo, e so virou rosa porque herdava
+        // `vendas`.
         rank: {
           DEFAULT: "#9b59b6", soft: "#f3eafa", text: "hsl(var(--rank-text))", fg: "#ffffff",
+        },
+        // Fluxo de Pedidos: branco acinzentado (pedido do dono, 06/11/2026).
+        // Tambem nao e setor — o Fluxo ATRAVESSA Comercial, Financeiro e
+        // Logistica, e vestir a cor de um deles dizia a coisa errada. Um
+        // quase-branco acende como os outros sem reivindicar setor nenhum.
+        //
+        // O `fg` e escuro, como o do Financeiro e pelo mesmo motivo: e a cor
+        // CLARA que decide o texto por cima, nao o setor.
+        fluxo: {
+          DEFAULT: "#e2e8f0", soft: "#f1f5f9", text: "hsl(var(--fluxo-text))", fg: "#1e293b",
         },
         // ---- Cor de MARCA (nao e setor) ----
         //

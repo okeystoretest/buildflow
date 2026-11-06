@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BackButton } from "@/components/shared/back-button";
 import { STATUS_LABEL, STATUS_STYLE } from "@/lib/order-flow";
 import { loadStageLimits } from "@/lib/stage-limits";
 import { calcularMetricas, formatMin, type HistPonto } from "@/lib/sla-metrics";
@@ -73,9 +71,7 @@ export default async function MetricasPage(
 
   return (
     <div className="space-y-6">
-      <BackButton href="/logistica" />
       <div>
-        <PageHeader titulo="Tempo de Preparação" descricao="Quanto tempo o pedido leva em cada etapa até sair para entrega." corTitulo="text-distribuicao-text" />
         <p className="text-sm text-muted-foreground">
           Tempo médio de permanência dos pedidos em cada etapa até a conclusão. Calculado a partir do
           histórico de mudanças de status.

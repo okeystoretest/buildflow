@@ -5,7 +5,6 @@ import { requireRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
 import { formatBRL, shortName } from "@/lib/utils";
 import { SELECT_BRAND_LABEL, SELECT_BRANDS } from "@/lib/select-brand";
@@ -94,7 +93,6 @@ export default async function FinanceiroSelectPage(
 
   return (
     <div className="space-y-6">
-      <BackButton href="/financeiro" />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>

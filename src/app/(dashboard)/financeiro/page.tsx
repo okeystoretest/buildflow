@@ -1,4 +1,3 @@
-import { PageHeader } from "@/components/shared/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { formatBRL } from "@/lib/utils";
@@ -170,11 +169,6 @@ export default async function FinanceiroPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        titulo="Gestão de Pedidos"
-        descricao="Auditoria, faturamento e liberação de pedidos."
-        corTitulo="text-financeiro-text"
-      />
 
       {/* Cada ferramenta tem rota propria: os paineis deixaram de abrir inline
           empurrando o Kanban tela abaixo. */}

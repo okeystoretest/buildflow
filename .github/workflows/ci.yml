@@ -30,17 +30,11 @@ jobs:
       - name: tsc --noEmit
         run: npx tsc --noEmit
 
-      # Um laco, e nao 39 passos: cada script propaga a falha pelo exit code, e
-      # `bash -e` (o padrao do runner) aborta no primeiro que falhar. Vira uma
-      # linha no dia em que existir um `npm run check`.
+      # A linha que o laco de bash prometia. Mesmo comportamento (aborta na
+      # primeira falha); a diferenca e que agora roda igual na maquina do dev,
+      # inclusive no Windows, onde o laco de bash nunca rodou.
       - name: scripts/checks
-        shell: bash
-        run: |
-          for f in scripts/checks/*.ts; do
-            echo "::group::$f"
-            npx tsx "$f"
-            echo "::endgroup::"
-          done
+        run: npm run check
 
       - name: build
         run: npm run build

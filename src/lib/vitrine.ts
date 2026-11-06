@@ -63,23 +63,16 @@ export function totalDeItens(v: Vitrine): number {
 }
 
 /**
- * As vitrines que têm algo para mostrar, na ordem que o Connect mandou.
- *
- * VITRINE VAZIA SAI DA LISTA: um subsetor marcado como vitrine e ainda sem
- * material viraria um card vazio que a pessoa clica, não encontra nada e
- * conclui que a tela está quebrada. A ordem NÃO é recalculada aqui — ela vem de
- * `sector.order` + `order` do Connect, que é a ordem que as pessoas já conhecem
- * da barra lateral de lá.
- */
-export function vitrinesComAcervo(vitrines: Vitrine[]): Vitrine[] {
-  return vitrines.filter((v) => totalDeItens(v) > 0);
-}
-
-/**
  * Resumo de uma vitrine em uma linha: "12 fotos · 3 vídeos · 1 documento".
  *
  * Tipo com zero item é OMITIDO, e o singular é tratado: "1 fotos" é o tipo de
  * descuido que faz a pessoa duvidar do resto do número na tela.
+ *
+ * VITRINE VAZIA DIZ QUE ESTÁ VAZIA, e não some da lista. A marca existe no
+ * Connect tenha ela material ou não, e esconder a marca enquanto ninguém
+ * publicou faria o seletor aparecer sozinho, meio vazio ou nem aparecer —
+ * a pessoa clica em "Vitrine" e conclui que a tela quebrou. Dizer "nada
+ * publicado ainda" responde a pergunta; sumir cria outra.
  */
 export function resumoDoAcervo(v: Vitrine): string {
   const partes: string[] = [];
@@ -89,7 +82,7 @@ export function resumoDoAcervo(v: Vitrine): string {
   conta(v.fotos.length, "foto", "fotos");
   conta(v.videos.length, "vídeo", "vídeos");
   conta(v.documentos.length, "documento", "documentos");
-  return partes.join(" · ");
+  return partes.length === 0 ? "Nada publicado ainda" : partes.join(" · ");
 }
 
 /** Data curta (`dd/mm/aaaa`) de um ISO do Connect. Ilegível vira vazio. */

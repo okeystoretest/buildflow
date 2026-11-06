@@ -11,7 +11,9 @@ import {
   Menu, X, LogOut, ChevronDown, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MarcaBuildFlow } from "@/components/shared/build-flow-logo";
 import {
+  corDoModulo as cor,
   moduloAtivo,
   ferramentaAtiva,
   CONFIG,
@@ -69,27 +71,6 @@ const ICON: Record<string, React.ReactNode> = {
  * saber onde esta sem ler o rotulo.
  */
 /**
- * A cor de cada modulo em tres usos.
- *
- * `chipSuave` e o contorno do icone quando o item NAO esta aberto: a propria
- * cor do setor a 15%, nao um cinza neutro. O cinza (`bg-secondary`) ficava a 13
- * pontos de RGB do fundo do card no tema escuro — existia no HTML e sumia no
- * olho, e o menu parecia ter dois padroes de icone (05/11/2026).
- */
-const ACCENT: Record<string, { faixa: string; chip: string; chipSuave: string; texto: string }> = {
-  "/dashboard":  { faixa: "bg-rank",         chip: "bg-rank text-rank-fg",                 chipSuave: "bg-rank/15 text-rank-text",                 texto: "text-rank-text" },
-  // NEUTRO de proposito (pedido do dono, 06/11/2026): o Fluxo de Pedidos
-  // atravessa Comercial, Financeiro e Logistica, entao vestir a cor de um deles
-  // dizia a coisa errada. Cinza aqui nao e ausencia de cor, e a informacao de
-  // que o Fluxo nao pertence a um setor so.
-  "/fluxo":      { faixa: "bg-slate-400",    chip: "bg-slate-200 text-slate-900",          chipSuave: "bg-foreground/10 text-foreground",          texto: "text-foreground" },
-  "/vendas":     { faixa: "bg-vendas",       chip: "bg-vendas text-vendas-fg",             chipSuave: "bg-vendas/15 text-vendas-text",             texto: "text-vendas-text" },
-  "/financeiro": { faixa: "bg-financeiro",   chip: "bg-financeiro text-financeiro-fg",     chipSuave: "bg-financeiro/15 text-financeiro-text",     texto: "text-financeiro-text" },
-  "/logistica":  { faixa: "bg-distribuicao", chip: "bg-distribuicao text-distribuicao-fg", chipSuave: "bg-distribuicao/15 text-distribuicao-text", texto: "text-distribuicao-text" },
-  "/motorista":  { faixa: "bg-motorista",    chip: "bg-motorista text-motorista-fg",       chipSuave: "bg-motorista/15 text-motorista-text",       texto: "text-motorista-text" },
-  "/gestao":     { faixa: "bg-brand",        chip: "bg-brand text-brand-fg",               chipSuave: "bg-brand/15 text-brand-text",               texto: "text-brand-text" },
-};
-/**
  * Contorno do icone de MODULO quando ele nao esta aberto.
  *
  * NEUTRO de proposito (pedido do dono, 05/11/2026): o menu nao fica colorido o
@@ -102,14 +83,6 @@ const ACCENT: Record<string, { faixa: string; chip: string; chipSuave: string; t
  * aparece nos dois temas sem carregar cor de setor.
  */
 const CHIP_NEUTRO = "bg-foreground/10 text-muted-foreground";
-
-const SEM_COR = {
-  faixa: "bg-transparent",
-  chip: "bg-primary text-primary-foreground",
-  chipSuave: "bg-primary/15 text-primary",
-  texto: "text-primary",
-};
-const cor = (href: string | null) => (href && ACCENT[href]) || SEM_COR;
 
 /** Ferramenta acesa: o prefixo mais longo, como no modulo. */
 
@@ -256,7 +229,16 @@ export function Sidebar({
           // O ROTULO VAI EM ALTO CONTRASTE, nao na cor do setor: a cor ja esta
           // no icone ao lado, e repeti-la no texto custa legibilidade sem
           // acrescentar informacao (pedido do dono, 05/11/2026).
-          eAtivo ? "font-semibold text-foreground" : "font-medium text-muted-foreground hover:text-foreground",
+          //
+          // ABERTO GANHA FUNDO ELEVADO COM CONTORNO, o mesmo das ferramentas
+          // (pedido do dono, 06/11/2026). Ranking de Vendas e Fluxo de Pedidos
+          // sao modulos de tela unica: sem isto eles eram os dois unicos itens
+          // do menu que nao davam sinal nenhum de estarem selecionados.
+          // Retraida nao leva fundo — a 4.5rem ele vira um retangulo em volta
+          // do quadrado do icone.
+          eAtivo
+            ? cn("font-semibold text-foreground", !colapsada && "bg-card shadow-md ring-1 ring-border")
+            : "font-medium text-muted-foreground hover:text-foreground",
         )}
       >
         <span className={cn(
@@ -288,10 +270,14 @@ export function Sidebar({
                 aria-current={acesa ? "page" : undefined}
                 className={cn(
                   "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[0.8125rem] transition-colors",
-                  // Rotulo em alto contraste e estado no quadrado do icone,
-                  // como nos modulos acima.
                   acesa
-                    ? "font-semibold text-foreground"
+                    // FUNDO COM SOMBRA em volta do icone E do rotulo (pedido do
+                    // dono, 06/11/2026). Nao e a faixa solida que saiu em
+                    // 05/11: aquela pintava a cor do setor na largura inteira e
+                    // lia como retangulo ao lado dos icones. Esta e a propria
+                    // superficie de card, elevada — a cor continua so no
+                    // quadrado do icone.
+                    ? "bg-card font-semibold text-foreground shadow-md ring-1 ring-border"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -347,31 +333,53 @@ export function Sidebar({
           aberta ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        {/* Faixa da cor do setor ativo: a sinalizacao de onde a pessoa esta. */}
-        <div className={cn("h-1 shrink-0 transition-colors", cor(ativo).faixa)} />
+        {/* A faixa da cor do setor saiu daqui: ela atravessa a JANELA INTEIRA
+            agora, desenhada pela barra superior (pedido do dono, 06/11/2026).
+            Presa a largura da coluna, ela parecia enfeite da barra lateral em
+            vez de dizer em que setor a pessoa esta. */}
+        {/* RECOLHER: na BORDA da barra, nao no rodape (pedido do dono,
+            06/11/2026, conforme o Build.Connect).
+            Monta na propria divisa porque e ali que a acao acontece — arrastar
+            a parede. No rodape ele disputava a lista com Gestao e Sair, que
+            sao destinos, e este nao leva a lugar nenhum.
+            `absolute` funciona porque a `aside` e `sticky`/`fixed`, e as duas
+            criam contexto de posicionamento; o `-translate-y` nao passa por
+            cima de nada porque so o `<nav>` tem overflow, nao a `aside`.
+            So no desktop: no celular a gaveta fecha, nao encolhe. */}
+        <button
+          onClick={alternarColapso}
+          aria-label={colapsada ? "Expandir menu" : "Recolher menu"}
+          title={colapsada ? "Expandir menu" : "Recolher menu"}
+          // `top-16 -translate-y-1/2`: o centro do botao fica EXATAMENTE em
+          // 64px, que e onde a regua embaixo da logo encontra a borda direita
+          // da coluna — o cruzamento das duas linhas. Sem o `-translate-y-1/2`
+          // o botao comecaria na linha em vez de ficar sentado nela.
+          className="absolute -right-3 top-16 z-10 hidden h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-md transition-colors hover:text-foreground lg:flex"
+        >
+          {colapsada ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </button>
 
-        <div className={cn("flex shrink-0 items-center gap-2 px-3 py-3", colapsada && "lg:justify-center lg:px-2")}>
-          <Link href="/" onClick={fechar} className="flex min-w-0 items-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="" width={36} height={36} className="h-9 w-9 shrink-0 object-contain" />
-            {!colapsada && (
-              <span className="min-w-0 leading-tight">
-                <span className="block text-base font-bold tracking-tight">
-                  Build.<span className="text-primary">Flow</span>
-                </span>
-                <span className="block truncate text-[0.6875rem] text-muted-foreground">
-                  Logística e controle de vendas
-                </span>
-              </span>
-            )}
+        {/* ALTURA FIXA `h-16` E BORDA EMBAIXO, e os dois numeros nao sao
+            escolha de gosto: a barra superior tambem tem `h-16` com
+            `border-b`, entao as duas reguas horizontais caem no MESMO y (64px)
+            e viram uma linha so atravessando a tela. E e nesse cruzamento com
+            a borda vertical da coluna que o botao de recolher se apoia
+            (pedido do dono, 06/11/2026, conforme o Build.Connect).
+            Mexer em uma das duas alturas quebra o encontro das linhas. */}
+        <div className={cn("flex h-16 shrink-0 items-center gap-2 border-b border-border px-3", colapsada && "lg:justify-center lg:px-2")}>
+          {/* Tamanhos pela especificacao: 40px aberta, 36px recolhida. */}
+          <Link href="/" onClick={fechar} className="min-w-0">
+            <MarcaBuildFlow tamanho={colapsada ? "compacto" : "padrao"} semTexto={colapsada} />
           </Link>
           <button onClick={fechar} className="ml-auto rounded-md p-1 text-muted-foreground hover:text-foreground lg:hidden" aria-label="Fechar menu">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Cartao do usuario, no topo como na referencia. */}
-        <div className={cn("shrink-0 px-3 pb-3", colapsada && "lg:px-2")}>
+        {/* Cartao do usuario. `pt-3` para NAO encostar na regua da logo: sem
+            ele os dois ficavam colados e a regua lia como borda do cartao, nao
+            como divisa da area (pedido do dono, 06/11/2026). */}
+        <div className={cn("shrink-0 px-3 pb-3 pt-3", colapsada && "lg:px-2")}>
           <div className={cn(
             "flex items-center gap-2.5 rounded-xl bg-secondary p-2",
             colapsada && "lg:justify-center lg:p-1.5",
@@ -401,8 +409,7 @@ export function Sidebar({
               vazia pedindo explicacao. */}
           {favoritos.length > 0 && (
             <>
-              {!colapsada && <p className="px-2 pb-1 pt-2 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground">Favoritos</p>}
-              {colapsada && <div className="mb-2 mt-1 border-t border-border" />}
+              {!colapsada && <p className="px-2 pb-1 pt-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground">Favoritos</p>}
               {favoritos.map(({ tool: t, modulo: m }) => {
                 const c = cor(m.base);
                 const acesa = t.href === ferramentaAberta;
@@ -418,9 +425,13 @@ export function Sidebar({
                     className={cn(
                       "flex items-center gap-2.5 rounded-lg py-1.5 text-sm transition-colors",
                       colapsada ? "justify-center px-1.5" : "px-2",
-                      // Mesma regra do modulo: estado no quadrado, rotulo em
-                      // alto contraste, sem faixa na linha.
-                      acesa ? "font-semibold text-foreground" : "font-medium text-muted-foreground hover:text-foreground",
+                      // Mesmo fundo elevado da ferramenta acesa na lista do
+                      // setor: o atalho e a mesma ferramenta, tem de acender
+                      // igual. Retraida nao leva sombra — a 4.5rem o fundo
+                      // vira um retangulo em volta do quadrado do icone.
+                      acesa
+                        ? cn("font-semibold text-foreground", !colapsada && "bg-card shadow-md ring-1 ring-border")
+                        : "font-medium text-muted-foreground hover:text-foreground",
                     )}
                   >
                     <span className={cn(
@@ -441,20 +452,25 @@ export function Sidebar({
 
           {geral.length > 0 && (
             <>
-              {!colapsada && <p className="px-2 pb-1 pt-2 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground">Geral</p>}
-              {colapsada && <div className="my-2 border-t border-border" />}
+              <div className="my-2 border-t border-border" />
+              {!colapsada && <p className="px-2 pb-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground">Geral</p>}
               {geral.map((m) => <LinkModulo key={m.base} m={m} eAtivo={m.base === ativo} />)}
             </>
           )}
 
           {setores.length > 0 && (
             <>
-              {!colapsada && <p className="px-2 pb-1 pt-3 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground">Setores</p>}
-              {colapsada && <div className="my-2 border-t border-border" />}
+              <div className="my-2 border-t border-border" />
+              {!colapsada && <p className="px-2 pb-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground">Setores</p>}
               {setores.map((m) => {
-                const eAtivo = m.base === ativo;
                 const c = cor(m.base);
                 const aberto = expandido === m.base;
+                // ABRIR A GAVETA JA ACENDE O ICONE (pedido do dono,
+                // 06/11/2026), mesmo sem navegar para o setor: enquanto a
+                // lista esta aberta, ela e o que a pessoa esta olhando, e um
+                // icone apagado em cima de uma lista aberta nao diz de quem e
+                // a lista. Estar NO setor acende do mesmo jeito.
+                const eAtivo = m.base === ativo || aberto;
 
                 // Colapsada: o icone abre um flyout com as ferramentas, porque
                 // a lista indentada nao cabe em 4.5rem de largura.
@@ -583,22 +599,6 @@ export function Sidebar({
               {!colapsada && <span>{CONFIG.label}</span>}
             </Link>
           )}
-
-          {/* Colapsar: so faz sentido no desktop; no mobile a gaveta fecha. */}
-          <button
-            onClick={alternarColapso}
-            className={cn(
-              "hidden w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground lg:flex",
-              colapsada && "lg:justify-center lg:px-1.5",
-            )}
-            aria-label={colapsada ? "Expandir menu" : "Recolher menu"}
-            title={colapsada ? "Expandir menu" : "Recolher menu"}
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary">
-              {colapsada ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            </span>
-            {!colapsada && <span>Recolher menu</span>}
-          </button>
 
           <form action={logoutAction}>
             <button

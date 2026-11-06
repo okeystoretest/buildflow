@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { BackButton } from "@/components/shared/back-button";
 import { getSelectDetail } from "@/lib/select-queries";
 import { SelectDetailClient } from "./detail-client";
 
@@ -26,7 +27,21 @@ export default async function SelectDetailPage(props: { params: Promise<{ id: st
   // 8rem a mais e mais uma etapa visivel sem rolar.
   return (
     <div className="space-y-6">
-      <BackButton href="/financeiro/select" />
+      {/* VOLTAR, só aqui (pedido do dono, 06/11/2026). Os botões de voltar
+          saíram do sistema porque cada FERRAMENTA tem página própria e o
+          caminho de volta é o menu — mas um contrato não é ferramenta: não
+          está no menu, e sem isto só o botão do navegador traz de volta.
+          `<Link>` para a lista, e não `router.back()`: a lista é o único
+          caminho de entrada, o destino é previsível e não precisa de
+          componente cliente para trocar de URL. */}
+      <Link
+        href="/financeiro/select"
+        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Contratos Select
+      </Link>
+
       <SelectDetailClient
         detail={detail}
         paymentMethods={paymentMethods}

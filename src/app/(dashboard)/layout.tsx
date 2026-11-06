@@ -3,10 +3,9 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logout } from "@/lib/actions/auth";
 import { RealtimeProvider } from "@/components/shared/realtime-provider";
-import { NotificationBell } from "@/components/shared/notification-bell";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { navParaSessao, CONFIG, type NavFlags } from "./nav";
 import { Sidebar } from "./sidebar";
+import { BarraSuperior } from "./barra-superior";
 import type { Role } from "@prisma/client";
 
 const ROLE_LABEL: Record<Role, string> = {
@@ -57,14 +56,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         logoutAction={logout}
       />
       <div className="flex w-full min-w-0 flex-1 flex-col">
-        {/* Canto superior direito: notificacoes e tema, onde sempre estiveram.
-            Sem fundo nem borda — a barra superior saiu, isto e so a ancora
-            desses dois controles sobre o conteudo. */}
-        <div className="flex shrink-0 items-center justify-end gap-1 px-4 pt-4 lg:px-8">
-          <NotificationBell />
-          <ThemeToggle />
-        </div>
-        <main className="min-w-0 flex-1 px-4 pb-6 pt-2 lg:px-8 animate-fade-in">
+        <BarraSuperior modulos={modulos} podeConfigurar={CONFIG.roles.includes(session.role)} />
+        <main className="min-w-0 flex-1 px-4 pb-6 pt-4 lg:px-8 animate-fade-in">
           {children}
         </main>
       </div>

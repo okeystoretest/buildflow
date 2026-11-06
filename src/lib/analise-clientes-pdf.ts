@@ -62,6 +62,9 @@ function fmtDataHora(d: Date): string {
 }
 
 const n = (v: number) => v.toLocaleString("pt-BR");
+/** Reais sem centavos: a media de uma FAIXA nao tem precisao de centavo. */
+const moeda = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const pctTexto = (v: number) => `${v.toLocaleString("pt-BR")}%`;
 
 /** Corta com reticências para caber na largura, medindo de verdade. */
@@ -200,6 +203,51 @@ export function gerarAnaliseClientesPdf(
     },
   ]);
 
+  /* --------------------------------------------------------- perfil da base */
+
+  // AS MEDIAS VEM COM A BASE DELAS na nota de cada cartao, e isso nao e
+  // detalhe: "4,2 funcionarios" sobre 11 cadastros e outra informacao que o
+  // mesmo numero sobre 900. Tres destes campos sao opcionais ou texto livre,
+  // entao a base quase nunca e o total do recorte.
+  secao(doc, "Perfil da base de clientes");
+  cartoes(doc, [
+    {
+      rotulo: "Funcionários (média)",
+      valor: r.funcionarios.considerados > 0 ? n(r.funcionarios.media) : "—",
+      nota:
+        r.funcionarios.considerados > 0
+          ? `${n(r.funcionarios.considerados)} com número · ${n(r.funcionarios.ignorados)} sem`
+          : "nenhum cadastro com número",
+    },
+    {
+      rotulo: "Investimento pretendido",
+      // "estimado" NO ROTULO, nao numa nota de rodape que ninguem le: o
+      // cadastro guarda a FAIXA, e a media so pode ser a media dos meios
+      // delas. Quem levar este numero a uma reuniao precisa saber disso.
+      valor: r.investimento.considerados > 0 ? `${moeda(r.investimento.media)} (est.)` : "—",
+      nota:
+        r.investimento.considerados > 0
+          ? `${n(r.investimento.considerados)} com faixa · média dos meios`
+          : "nenhuma faixa informada",
+    },
+    {
+      rotulo: "Tempo de acompanhamento",
+      valor: r.acompanhamento.considerados > 0 ? `${n(r.acompanhamento.media)} d` : "—",
+      nota:
+        r.acompanhamento.considerados > 0
+          ? `${n(r.acompanhamento.considerados)} que saíram da régua`
+          : "nenhuma saiu da régua ainda",
+    },
+    {
+      rotulo: "Canal mais comum",
+      valor: r.canais.canais[0]?.rotulo ?? "—",
+      nota:
+        r.canais.canais[0]
+          ? `${pctTexto(r.canais.canais[0].fatia)} de ${n(r.canais.informaram)} que informaram`
+          : "nenhum canal informado",
+    },
+  ]);
+
   /* ------------------------------------------------------------- vendedoras */
 
   if (r.porVendedora.length > 1) {
@@ -227,6 +275,50 @@ export function gerarAnaliseClientesPdf(
     r.porUf.slice(0, 12).map((u) => [u.uf, n(u.total), n(u.comprou), pctTexto(u.conversao)]),
     { barraNaUltima: true, maxBarra: 100, resto: r.porUf.length - 12, unidade: "UF(s)" },
   );
+
+  /* ------------------------------------------------------------- cidades */
+
+  if (r.porCidade.length > 0) {
+    secao(doc, "Cidades com maior volume de compras");
+    tabela(
+      doc,
+      ["Cidade", "Recebidas", "Compraram", "Conversão"],
+      // Ordenadas por COMPRAS na origem (`agruparPorCidade`), nao por
+      // candidaturas: a pergunta e onde se vende, nao de onde chegam
+      // inscricoes. Doze linhas, como as UFs.
+      r.porCidade.slice(0, 12).map((c) => [c.cidade, n(c.total), n(c.comprou), pctTexto(c.conversao)]),
+      {
+        barraNaUltima: true,
+        maxBarra: 100,
+        resto: r.porCidade.length - 12,
+        unidade: "cidade(s)",
+      },
+    );
+  }
+
+  /* --------------------------------------------------------------- canais */
+
+  if (r.canais.canais.length > 0) {
+    secao(doc, "Como as candidatas nos acharam");
+    tabela(
+      doc,
+      ["Canal", "Candidaturas", "% de quem informou"],
+      r.canais.canais.map((c) => [c.rotulo, n(c.total), pctTexto(c.fatia)]),
+      { barraNaUltima: true, maxBarra: 100 },
+    );
+    if (r.canais.ignorados > 0) {
+      // A base do percentual DITA no papel: sem isto, somar as fatias da 100%
+      // e quem le conclui que todo mundo informou o canal.
+      doc.y -= 4;
+      doc.drawText(
+        `${n(r.canais.ignorados)} candidatura(s) sem canal informado ficaram fora deste percentual.`,
+        doc.marginX,
+        doc.y,
+        { size: 7.5, color: COR.suave },
+      );
+      doc.y -= 8;
+    }
+  }
 
   /* ---------------------------------------------------------------- motivos */
 

@@ -1,7 +1,5 @@
 import { AlertTriangle, CalendarDays } from "lucide-react";
 import { requireRole } from "@/lib/auth";
-import { PageHeader } from "@/components/shared/page-header";
-import { BackButton } from "@/components/shared/back-button";
 import { buscarCronograma } from "@/lib/integration/connect-cronograma";
 import {
   agruparPorDia,
@@ -49,12 +47,6 @@ export default async function CronogramaPage() {
   return (
     <div className="space-y-4">
       <div>
-        <BackButton href="/vendas" />
-        <PageHeader
-          titulo="Cronograma de Conteúdo"
-          descricao="O que o Marketing vai publicar, e quando."
-          corTitulo="text-vendas-text"
-        />
       </div>
 
       {!resposta.ok ? (

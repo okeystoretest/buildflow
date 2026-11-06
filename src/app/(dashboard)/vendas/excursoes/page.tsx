@@ -1,7 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
-import { BackButton } from "@/components/shared/back-button";
 import { SearchBox } from "@/components/shared/search-box";
 import { Pagination } from "@/components/shared/pagination";
 import { ExcursoesManager, type ExcursaoRow } from "./manager-client";
@@ -55,9 +53,7 @@ export default async function ExcursoesPage(
 
   return (
     <div>
-      <BackButton href="/vendas" />
       <div className="mb-4">
-        <PageHeader titulo="Gestão de Excursões" descricao="Excursões cadastradas e os clientes vinculados a cada uma." corTitulo="text-vendas-text" />
       </div>
 
       <div className="mb-4">

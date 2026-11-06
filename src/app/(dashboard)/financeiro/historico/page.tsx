@@ -1,9 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatBRL } from "@/lib/utils";
-import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
 import { FinHistoricoFiltros } from "./filtros-client";
 import { FinHistoricoList, type FinHistItem } from "./historico-list";
@@ -131,8 +129,6 @@ export default async function FinanceiroHistoricoPage(
 
   return (
     <div className="space-y-6">
-      <BackButton href="/financeiro" />
-      <PageHeader titulo="Registo de Pedidos" descricao="Todo pedido que passou pelo Financeiro, com filtro por período." corTitulo="text-financeiro-text" />
       <p className="text-sm text-muted-foreground">
         Todos os pedidos já processados (aprovados, pagos ou interrompidos), com as informações completas.
       </p>

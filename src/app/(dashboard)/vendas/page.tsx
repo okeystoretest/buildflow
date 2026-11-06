@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AlertTriangle, Plus } from "lucide-react";
-import { PageHeader } from "@/components/shared/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -84,28 +83,23 @@ export default async function VendasPage(
       {/* Os atalhos de NAVEGACAO sairam daqui em 04/11/2026: cada um deles e
           uma ferramenta da barra lateral, e repetir a lista no topo de cada
           tela so roubava altura. Ficam as ACOES que a barra nao tem. */}
-      <PageHeader
-        titulo="Lançar Pedidos"
-        descricao="Seus pedidos registrados e os atalhos para abrir um novo."
-        corTitulo="text-vendas-text"
-        acoes={<>
+      <div className="flex flex-wrap justify-end gap-2">
           {/* Captação de revendedor: só a equipe de Atacado (decisão 15). São
               DOIS botões, um por marca (OKEY e Lov), que somem para VAREJO; a
               action confere o papel de novo no servidor. */}
-          {vendedoraAtacado && <CopiarLinkAtacado />}
+        {vendedoraAtacado && <CopiarLinkAtacado />}
           {/* O link GERAL é da Gestão: quem chega por ele não tem vendedora de
               origem e entra no rodízio. A vendedora segue com o link dela, que
               credita a candidatura a ela — os dois caminhos convivem. */}
-          {session.role === "GESTAO" && <CopiarLinkGeral />}
+        {session.role === "GESTAO" && <CopiarLinkGeral />}
           {/* Novo Select: atalho só da Gestão. A tela em si aceita VENDAS e
               FINANCEIRO (eles chegam por link direto) — esconder o botão não
               decide nada, a action confere o papel no servidor. */}
-          {session.role === "GESTAO" && (
-            <Button asChild variant="servico"><Link href="/vendas/novo-select"><Plus className="h-4 w-4" /> Novo Select</Link></Button>
-          )}
-          <Button asChild variant="vendas"><Link href="/vendas/novo"><Plus className="h-4 w-4" /> Novo pedido</Link></Button>
-        </>}
-      />
+        {session.role === "GESTAO" && (
+          <Button asChild variant="servico"><Link href="/vendas/novo-select"><Plus className="h-4 w-4" /> Novo Select</Link></Button>
+        )}
+        <Button asChild variant="vendas"><Link href="/vendas/novo"><Plus className="h-4 w-4" /> Novo pedido</Link></Button>
+      </div>
 
       <VendasBusca defaultBusca={busca} />
 

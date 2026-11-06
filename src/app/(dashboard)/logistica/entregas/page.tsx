@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
-import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
 import { ComandaList, type ComandaListItem } from "@/components/shared/comanda-list";
 import { EntregasLogFiltros } from "./filtros-client";
@@ -106,8 +104,6 @@ export default async function LogisticaEntregasPage(
 
   return (
     <div className="space-y-6">
-      <BackButton href="/logistica" />
-      <PageHeader titulo="Histórico de Entregas" descricao="Entregas concluídas, com motorista, data e comprovante." corTitulo="text-distribuicao-text" />
       <p className="text-sm text-muted-foreground">
         Pedidos concluídos (entregues). Clique em uma comanda para abrir a ficha completa da venda e da entrega.
       </p>

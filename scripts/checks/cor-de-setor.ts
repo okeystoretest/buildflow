@@ -86,7 +86,7 @@ check("leu o card do tema escuro", cardEscuro !== null, true);
 
 // `rank` nao e setor (e a cor da tela unica Rank de Vendas), mas passa pelos
 // mesmos dois usos — fundo de botao e cor de texto —, entao mede junto.
-const SETORES = ["vendas", "financeiro", "distribuicao", "motorista", "brand", "servico", "rank"] as const;
+const SETORES = ["vendas", "financeiro", "distribuicao", "motorista", "brand", "servico", "rank", "fluxo"] as const;
 const MINIMO = 4.5; // WCAG AA para texto abaixo de 18,66px negrito / 24px normal
 
 // Nenhuma divida aqui: os quatro setores que reprovavam no botao (financeiro

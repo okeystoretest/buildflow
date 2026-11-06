@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Star } from "lucide-react";
 import { requireRole } from "@/lib/auth";
-import { BackButton } from "@/components/shared/back-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Pagination } from "@/components/shared/pagination";
@@ -37,7 +36,6 @@ export default async function VendasSelectPage(props: {
 
   return (
     <div className="space-y-6">
-      <BackButton href="/vendas" />
 
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold text-servico-text">

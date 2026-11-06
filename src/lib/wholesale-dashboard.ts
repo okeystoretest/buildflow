@@ -95,6 +95,32 @@ export interface ContagemPorUf {
   conversao: number;
 }
 
+export interface ContagemPorCidade {
+  /** "Imperatriz/MA". A UF entra no rótulo porque cidade repete entre estados. */
+  cidade: string;
+  total: number;
+  comprou: number;
+  conversao: number;
+}
+
+export interface ContagemPorCanal {
+  /** O valor do enum, ou "—" quando a candidatura veio de importação. */
+  chave: string;
+  rotulo: string;
+  total: number;
+  /** Deste canal ÷ o total que informou canal, em 0–100. */
+  fatia: number;
+}
+
+/** Uma média com a base que a sustenta. Sem a base, o número engana. */
+export interface MediaComBase {
+  media: number;
+  /** Quantas candidaturas entraram na conta. */
+  considerados: number;
+  /** Quantas ficaram de fora por não ter o dado utilizável. */
+  ignorados: number;
+}
+
 /**
  * Dias de espera em que uma candidatura em análise passa a ser "parada".
  *
@@ -226,6 +252,20 @@ export interface ResumoDoAtacado {
    * Gestão tinha de adivinhar qual escolher para achar a praça que converte.
    */
   porUf: ContagemPorUf[];
+  /**
+   * As praças onde MAIS SE VENDEU, ordenadas por compras — não por
+   * candidaturas. "De onde chegam inscrições" e "onde vendemos" são perguntas
+   * diferentes, e o relatório gerencial pede a segunda.
+   */
+  porCidade: ContagemPorCidade[];
+  /** Por onde as candidatas nos acharam, e quantas não informaram. */
+  canais: { canais: ContagemPorCanal[]; informaram: number; ignorados: number };
+  /** Média de funcionários das lojas da base. Campo é texto livre: ver a base. */
+  funcionarios: MediaComBase;
+  /** Investimento pretendido médio, ESTIMADO pelo meio de cada faixa. */
+  investimento: MediaComBase;
+  /** Dias médios na régua de contato, da base inteira. */
+  acompanhamento: MediaComBase;
   /** Quanto a equipe demora para decidir, e o que está parado. */
   tempo: TempoDeResposta;
   /**
@@ -274,6 +314,11 @@ const VAZIO: ResumoDoAtacado = {
   recentes: [],
   porMotivo: [],
   porUf: [],
+  porCidade: [],
+  canais: { canais: [], informaram: 0, ignorados: 0 },
+  funcionarios: { media: 0, considerados: 0, ignorados: 0 },
+  investimento: { media: 0, considerados: 0, ignorados: 0 },
+  acompanhamento: { media: 0, considerados: 0, ignorados: 0 },
   tempo: { mediaDias: 0, decididas: 0, paradas: 0, maisAntigaDias: 0 },
   temposPorVendedora: [],
   aprovacao: 0,
@@ -399,6 +444,183 @@ export function agrupaPorUf(
 }
 
 /**
+ * As CIDADES, ordenadas por quem mais COMPROU — não por quem mais se
+ * candidatou.
+ *
+ * A ordem é a pergunta: "onde vendemos" e "de onde chegam candidaturas" são
+ * coisas diferentes, e a praça com 80 inscrições e nenhuma compra não é a
+ * cidade de maior volume. O total vai junto para a conversão poder ser lida.
+ *
+ * `cidade/UF` como chave, nunca a cidade sozinha: existem sete Santa Luzia no
+ * Brasil, e somá-las criaria uma praça que não existe. O texto é normalizado
+ * (espaços, caixa) porque vem digitado à mão pela candidata — "Imperatriz" e
+ * "imperatriz " são a mesma cidade.
+ */
+export function agruparPorCidade(
+  linhas: {
+    city: string | null;
+    state: string | null;
+    purchaseState: WholesalePurchaseState;
+    _count: { _all: number };
+  }[],
+): ContagemPorCidade[] {
+  const mapa = new Map<string, { total: number; comprou: number }>();
+  for (const l of linhas) {
+    const cid = (l.city ?? "").trim().replace(/\s+/g, " ");
+    const uf = (l.state ?? "").trim().toUpperCase();
+    // Sem cidade a linha não vira praça: "—/MA" não é lugar nenhum e só
+    // poluiria o topo da lista, que é justamente o que o relatório mostra.
+    if (!cid) continue;
+    const chave = uf ? `${titulo(cid)}/${uf}` : titulo(cid);
+    const acc = mapa.get(chave) ?? { total: 0, comprou: 0 };
+    acc.total += l._count._all;
+    if (l.purchaseState === WholesalePurchaseState.COMPROU) acc.comprou += l._count._all;
+    mapa.set(chave, acc);
+  }
+  return [...mapa.entries()]
+    .map(([cidade, { total, comprou }]) => ({
+      cidade,
+      total,
+      comprou,
+      conversao: taxaDeConversao(comprou, total),
+    }))
+    .sort((a, b) => b.comprou - a.comprou || b.total - a.total || a.cidade.localeCompare(b.cidade, "pt-BR"));
+}
+
+/** "boa vista do gurupi" -> "Boa Vista do Gurupi". */
+function titulo(s: string): string {
+  const minusculas = new Set(["de", "da", "do", "das", "dos", "e"]);
+  return s
+    .toLowerCase()
+    .split(" ")
+    .map((p, i) => (i > 0 && minusculas.has(p) ? p : p.charAt(0).toUpperCase() + p.slice(1)))
+    .join(" ");
+}
+
+const ROTULO_CANAL: Record<string, string> = {
+  INSTAGRAM: "Instagram",
+  SITE: "Site",
+  INDICACAO: "Indicação",
+  OUTRO: "Outro",
+};
+
+/**
+ * POR ONDE AS CANDIDATAS NOS ACHARAM, do mais comum ao menos.
+ *
+ * A fatia é sobre quem INFORMOU, não sobre o total: candidatura importada de
+ * planilha antiga não tem o campo, e deixá-la no denominador faria o Instagram
+ * "cair" só porque entrou um lote antigo. Quantas não informaram sai em
+ * `ignorados`, para a base continuar visível.
+ */
+export function agruparPorCanal(
+  linhas: { foundUs: string | null; _count: { _all: number } }[],
+): { canais: ContagemPorCanal[]; informaram: number; ignorados: number } {
+  let informaram = 0;
+  let ignorados = 0;
+  const mapa = new Map<string, number>();
+  for (const l of linhas) {
+    const n = l._count._all;
+    if (!l.foundUs) {
+      ignorados += n;
+      continue;
+    }
+    informaram += n;
+    mapa.set(l.foundUs, (mapa.get(l.foundUs) ?? 0) + n);
+  }
+  const canais = [...mapa.entries()]
+    .map(([chave, total]) => ({
+      chave,
+      // Cai no valor cru quando o enum ganhar um membro novo: "undefined" num
+      // relatório gerencial é pior que uma sigla sem tradução.
+      rotulo: ROTULO_CANAL[chave] ?? chave,
+      total,
+      fatia: taxaDeConversao(total, informaram),
+    }))
+    .sort((a, b) => b.total - a.total || a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+  return { canais, informaram, ignorados };
+}
+
+/**
+ * Quantas pessoas, em média, trabalham nas lojas da base.
+ *
+ * O CAMPO É TEXTO LIVRE no cadastro: chegam "2", "Eu", "Dois", "Nenhum",
+ * "estou começando agora". Lê-se o primeiro número inteiro e ignora-se o
+ * resto — traduzir "Dois" para 2 e "Eu" para 1 seria interpretar o que a
+ * candidata quis dizer, e um relatório gerencial não pode fazer isso em
+ * silêncio. Quantas ficaram de fora vai em `ignorados`, para a média ser lida
+ * com a base dela.
+ *
+ * Teto de 500: um "20000" digitado por engano move a média de toda a base
+ * sozinho, e nenhuma loja da carteira tem mais de 500 funcionários.
+ */
+const TETO_FUNCIONARIOS = 500;
+
+export function mediaDeFuncionarios(valores: (string | null)[]): MediaComBase {
+  let soma = 0;
+  let considerados = 0;
+  let ignorados = 0;
+  for (const v of valores) {
+    const m = /\d+/.exec(v ?? "");
+    const n = m ? Number(m[0]) : Number.NaN;
+    if (!Number.isFinite(n) || n > TETO_FUNCIONARIOS) {
+      ignorados += 1;
+      continue;
+    }
+    soma += n;
+    considerados += 1;
+  }
+  return {
+    media: considerados === 0 ? 0 : Math.round((soma / considerados) * 10) / 10,
+    considerados,
+    ignorados,
+  };
+}
+
+/**
+ * O MEIO de cada faixa de investimento, em reais.
+ *
+ * `ACIMA_10K` não tem teto, então entra pelo PISO (10.000). A média sai
+ * SUBESTIMADA de propósito: chutar um teto inventaria dinheiro que ninguém
+ * declarou, e um número conservador num relatório gerencial erra para o lado
+ * que não cria expectativa.
+ */
+const MEIO_DA_FAIXA: Record<string, number> = {
+  ATE_3K: 1_500,
+  DE_3_A_5K: 4_000,
+  DE_5_A_10K: 7_500,
+  ACIMA_10K: 10_000,
+};
+
+/**
+ * Quanto a base pretende investir, em média.
+ *
+ * É uma ESTIMATIVA, não uma medida: o cadastro guarda a FAIXA, não o valor, e
+ * a média de faixas só pode ser a média dos meios delas. Quem lê o relatório
+ * precisa saber disso — o rótulo no PDF diz "estimada".
+ */
+export function mediaDeInvestimento(
+  linhas: { investmentBand: string | null; _count: { _all: number } }[],
+): MediaComBase {
+  let soma = 0;
+  let considerados = 0;
+  let ignorados = 0;
+  for (const l of linhas) {
+    const meio = l.investmentBand ? MEIO_DA_FAIXA[l.investmentBand] : undefined;
+    if (meio === undefined) {
+      ignorados += l._count._all;
+      continue;
+    }
+    soma += meio * l._count._all;
+    considerados += l._count._all;
+  }
+  return {
+    media: considerados === 0 ? 0 : Math.round(soma / considerados),
+    considerados,
+    ignorados,
+  };
+}
+
+/**
  * Tempo de resposta do recorte: média das decididas, e o que está parado.
  *
  * DOIS GRUPOS, nunca misturados. A média olha para trás (quanto demorou de
@@ -469,6 +691,36 @@ export function tempoDeResposta(
  * PURA e exportada para ser conferida por script, como as demais contas do
  * painel.
  */
+/**
+ * O TEMPO DE ACOMPANHAMENTO da base inteira: quantos dias, em média, uma
+ * candidatura aprovada passa na régua de contato até a compra ser decidida.
+ *
+ * É a mesma conta de `cadenciaDias` em `temposPorVendedora`, sem separar por
+ * dona — e por isso reusa a função em vez de refazê-la: duas implementações da
+ * mesma média divergem na primeira correção que só uma delas recebe. A média
+ * é PONDERADA pela quantidade de cada dona, não a média das médias: a dona com
+ * uma aprovada pesaria igual à que tem cinquenta.
+ *
+ * SÓ ENTRA QUEM JÁ SAIU da régua, herdado da função de origem: somar quem
+ * ainda está sendo acompanhado faria a média subir sozinha todo dia em que
+ * ninguém decidisse nada.
+ */
+export function mediaDeAcompanhamento(porVendedora: TempoPorVendedora[]): MediaComBase {
+  let soma = 0;
+  let considerados = 0;
+  for (const v of porVendedora) {
+    soma += v.cadenciaDias * v.cadenciaQtd;
+    considerados += v.cadenciaQtd;
+  }
+  return {
+    media: considerados === 0 ? 0 : Math.round((soma / considerados) * 10) / 10,
+    considerados,
+    // Nada é "ignorado" aqui: quem não saiu da régua não é dado faltando, é
+    // acompanhamento em curso. Zerado para o tipo continuar o mesmo.
+    ignorados: 0,
+  };
+}
+
 export function temposPorVendedora(
   linhas: {
     id: string;
@@ -679,6 +931,9 @@ export async function resumoDoAtacado(
     motivoRaw,
     comprou,
     ufRaw,
+    cidadeRaw,
+    canalRaw,
+    investimentoRaw,
     prazos,
     saidasDaCadencia,
   ] = await Promise.all([
@@ -748,6 +1003,20 @@ export async function resumoDoAtacado(
       where,
       _count: { _all: true },
     }),
+    // CIDADE x compra, pelo mesmo motivo do UF acima: a praça de maior volume
+    // sai de quem comprou, e cruzar em duas consultas seria duas idas ao banco
+    // para juntar o que ja vem junto. Herda o `where`, escopo incluido.
+    prisma.wholesaleLead.groupBy({
+      by: ["city", "state", "purchaseState"],
+      where,
+      _count: { _all: true },
+    }),
+    // Canal de aquisicao e faixa de investimento: duas contagens simples, cada
+    // uma numa coluna so. Nao cabem numa consulta unica porque um groupBy das
+    // duas daria a matriz canal x faixa, que ninguem pediu e que multiplica
+    // linhas sem acrescentar resposta.
+    prisma.wholesaleLead.groupBy({ by: ["foundUs"], where, _count: { _all: true } }),
+    prisma.wholesaleLead.groupBy({ by: ["investmentBand"], where, _count: { _all: true } }),
     // As DATAS do recorte, para o tempo de resposta. Três colunas pequenas e a
     // conta em memória (`tempoDeResposta`), em vez de SQL cru: um AVG em
     // `$queryRaw` obrigaria a reescrever este `where` à mão em SQL, e ele é o
@@ -768,6 +1037,10 @@ export async function resumoDoAtacado(
         // não uma segunda: é a mesma linha, já trazida, já no escopo.
         sellerId: true,
         purchaseState: true,
+        // Tamanho da equipe: UMA coluna a mais na consulta que ja traz uma
+        // linha por candidatura do recorte, em vez de uma quinta ida ao banco
+        // para ler o mesmo conjunto de linhas.
+        teamSize: true,
       },
     }),
     // QUANDO cada aprovada saiu da régua de contato. O cadastro guarda só o
@@ -841,6 +1114,9 @@ export async function resumoDoAtacado(
   const aprovacao = taxaDeConversao(aprovadas, total);
   // `comprou` vem da sua própria contagem, no eixo da compra.
   const conversao = taxaDeConversao(comprou, total);
+  // Calculado UMA vez: a media de acompanhamento e a soma ponderada deste
+  // mesmo resultado, e recalcular a lista daria duas verdades para divergirem.
+  const tempos = temposPorVendedora(prazos, saidaPorLead, nomes);
 
   return {
     total,
@@ -860,8 +1136,13 @@ export async function resumoDoAtacado(
     })),
     porMotivo: agrupaPorMotivo(motivoRaw),
     porUf: agrupaPorUf(ufRaw),
+    porCidade: agruparPorCidade(cidadeRaw),
+    canais: agruparPorCanal(canalRaw),
+    funcionarios: mediaDeFuncionarios(prazos.map((l) => l.teamSize)),
+    investimento: mediaDeInvestimento(investimentoRaw),
     tempo: tempoDeResposta(prazos, agora),
-    temposPorVendedora: temposPorVendedora(prazos, saidaPorLead, nomes),
+    temposPorVendedora: tempos,
+    acompanhamento: mediaDeAcompanhamento(tempos),
     aprovacao,
     aprovadas,
     conversao,

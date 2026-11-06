@@ -1,34 +1,66 @@
-import type { SVGProps } from "react";
+import { cn } from "@/lib/utils";
 
 /**
- * Logotipo do Build.Flow: uma caixa (pacote) atravessada por uma seta
- * ascendente — logistica + crescimento. Monocromatico via currentColor: herda
- * a cor do contexto (ex.: text-primary-foreground sobre o quadrado primario do
- * cabecalho, ou text-primary numa tela clara), integrando-se a paleta oficial e
- * acompanhando o tema (claro/escuro). A caixa fica com opacidade menor para
- * destacar a seta.
+ * A MARCA Build.Flow: a logo e, ao lado, o nome com a assinatura embaixo.
  *
- * Uso: <BuildFlowLogo className="h-5 w-5 text-primary-foreground" />
+ * Existe como componente, e nao como par de tags copiado, porque os tamanhos
+ * sao uma ESPECIFICACAO (06/11/2026) e nao uma escolha de cada tela: a logo
+ * estava a 36px na barra lateral e a tela de login nem usava a logo — tinha um
+ * icone de pacote generico no lugar. Com as medidas soltas, a proxima tela
+ * nasce com um terceiro tamanho e ninguem nota.
+ *
+ * Os numeros, como especificados:
+ *
+ *   padrao     40x40  barra lateral aberta
+ *   compacto   36x36  barra lateral recolhida e cabecalhos
+ *   login      56x56  tela de entrada
+ *
+ *   titulo     17px, bold 700, tracking-tight, leading-none
+ *              "Build." na cor do texto, "Flow" na cor primaria
+ *   assinatura 11px, medium 500, cor muted, 4px acima
+ *   espaco     10px entre a imagem e o texto, centrados na vertical
+ *
+ * A fonte e a Outfit, que ja e a `font-sans` do app — nao ha classe aqui.
  */
-export function BuildFlowLogo(props: SVGProps<SVGSVGElement>) {
+
+const TAMANHO = {
+  padrao: "h-10 w-10",
+  compacto: "h-9 w-9",
+  login: "h-14 w-14",
+} as const;
+
+const PIXELS = { padrao: 40, compacto: 36, login: 56 } as const;
+
+export function MarcaBuildFlow({
+  tamanho = "padrao",
+  /** Só a imagem, sem o nome — a barra lateral recolhida e os cabeçalhos. */
+  semTexto = false,
+  className,
+}: {
+  tamanho?: keyof typeof TAMANHO;
+  semTexto?: boolean;
+  className?: string;
+}) {
   return (
-    <svg
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-label="Build.Flow"
-      {...props}
-    >
-      {/* Caixa isometrica (contorno) — currentColor esmaecido */}
-      <g stroke="currentColor" strokeLinejoin="round" strokeWidth="2.4" opacity="0.5">
-        <path d="M24 7 L39 15.5 V32.5 L24 41 L9 32.5 V15.5 Z" />
-        <path d="M9 15.5 L24 24 L39 15.5 M24 24 V41" />
-      </g>
-      {/* Seta ascendente (crescimento) — currentColor cheio */}
-      <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" fill="none">
-        <path d="M11 32 C 16 22, 26 16.5, 37 12.5" />
-        <path d="M29.5 11.5 L38 11 L37.5 19.5" />
-      </g>
-    </svg>
+    <span className={cn("flex min-w-0 items-center gap-2.5", className)}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo.png"
+        alt=""
+        width={PIXELS[tamanho]}
+        height={PIXELS[tamanho]}
+        className={cn("shrink-0 object-contain", TAMANHO[tamanho])}
+      />
+      {!semTexto && (
+        <span className="min-w-0">
+          <span className="block text-[17px] font-bold leading-none tracking-tight">
+            Build.<span className="text-primary">Flow</span>
+          </span>
+          <span className="mt-1 block truncate text-[11px] font-medium text-muted-foreground">
+            Logística e controle de vendas
+          </span>
+        </span>
+      )}
+    </span>
   );
 }

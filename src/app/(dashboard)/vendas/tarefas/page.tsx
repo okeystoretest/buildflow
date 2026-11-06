@@ -1,7 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { PageHeader } from "@/components/shared/page-header";
 import { prisma } from "@/lib/prisma";
-import { BackButton } from "@/components/shared/back-button";
 import { TasksBoard, type TaskCard } from "./tasks-board";
 
 // Tarefas Diarias: Kanban pessoal da vendedora.
@@ -31,8 +29,6 @@ export default async function TarefasPage() {
   return (
     <div className="space-y-4">
       <div>
-        <BackButton href="/vendas" />
-        <PageHeader titulo="Agenda de Tarefas" descricao="As tarefas do dia e o que já foi concluído." corTitulo="text-vendas-text" />
         <p className="text-sm text-muted-foreground">
           {isGestao
             ? "Quadro de tarefas de todas as vendedoras."

@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BackButton } from "@/components/shared/back-button";
 import { sortOperationsByCode } from "@/lib/utils";
 import { EditarPedidoForm } from "./form";
 
@@ -73,7 +74,15 @@ export default async function EditarPedidoPage(props: { params: Promise<{ id: st
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <BackButton />
+      {/* VOLTAR: rota fora do menu, entao o menu nao traz de volta. O porque
+          da regra inteira esta em financeiro/select/[id]/page.tsx. */}
+      <Link
+        href="/vendas"
+        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Lançar Pedidos
+      </Link>
       <Card>
         <CardHeader><CardTitle>Editar pedido {order.orderNumber}</CardTitle></CardHeader>
         <CardContent>

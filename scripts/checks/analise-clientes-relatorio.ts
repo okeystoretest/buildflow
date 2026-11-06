@@ -201,6 +201,21 @@ const resumo: ResumoDoAtacado = {
     { uf: "CE", total: 30, comprou: 12, conversao: 40 },
     { uf: "SP", total: 10, comprou: 1, conversao: 10 },
   ],
+  porCidade: [
+    { cidade: "Imperatriz/MA", total: 9, comprou: 6, conversao: 66.7 },
+    { cidade: "Fortaleza/CE", total: 21, comprou: 4, conversao: 19 },
+  ],
+  canais: {
+    canais: [
+      { chave: "INSTAGRAM", rotulo: "Instagram", total: 24, fatia: 80 },
+      { chave: "INDICACAO", rotulo: "Indicação", total: 6, fatia: 20 },
+    ],
+    informaram: 30,
+    ignorados: 10,
+  },
+  funcionarios: { media: 3.4, considerados: 28, ignorados: 12 },
+  investimento: { media: 4200, considerados: 30, ignorados: 10 },
+  acompanhamento: { media: 11.5, considerados: 7, ignorados: 0 },
   tempo: { mediaDias: 3.5, decididas: 31, paradas: 4, maisAntigaDias: 19 },
   aprovacao: 55,
   aprovadas: 22,
@@ -219,7 +234,25 @@ check("o arquivo fecha", arquivo.toString("latin1").trimEnd().endsWith("%%EOF"),
 check("a capa diz o escopo", visivel.includes("todas as vendedoras"), true);
 check("as seções pedidas estão no papel", [
   "Funil do", "Taxas e tempo", "Por vendedora", "Por pra", "Reprova", "por m",
+  // Pedidas pelo dono em 06/11/2026 para o relatório gerencial.
+  "Perfil da base", "Cidades com maior", "nos acharam",
 ].every((s) => visivel.includes(s)), true);
+
+// A CIDADE SAI ORDENADA POR COMPRAS, não por candidaturas: Imperatriz tem 9
+// recebidas contra 21 de Fortaleza, e vem primeiro porque vendeu mais. Se
+// alguém trocar a ordenação, a primeira linha muda e isto fica vermelho.
+const iImperatriz = visivel.indexOf("Imperatriz");
+const iFortaleza = visivel.indexOf("Fortaleza");
+check("a cidade que mais comprou vem primeiro", iImperatriz >= 0 && iImperatriz < iFortaleza, true);
+check("o canal mais comum aparece", visivel.includes("Instagram"), true);
+// A base do percentual de canal TEM de estar no papel: sem ela as fatias somam
+// 100% e quem lê conclui que todo mundo informou o canal.
+check("as 10 sem canal são declaradas", visivel.includes("sem canal informado"), true);
+check("a média de funcionários aparece", visivel.includes("3,4"), true);
+check("o tempo de acompanhamento aparece", visivel.includes("11,5 d"), true);
+// "est." no valor, não numa nota de rodapé: o cadastro guarda a FAIXA, e a
+// média é a média dos meios dela.
+check("o investimento é marcado como estimativa", visivel.includes("est."), true);
 check("os números do funil aparecem", visivel.includes("40") && visivel.includes("22"), true);
 check("as duas taxas aparecem", visivel.includes("55%") && visivel.includes("32,5%"), true);
 check("o tempo de resposta aparece", visivel.includes("3,5 d"), true);

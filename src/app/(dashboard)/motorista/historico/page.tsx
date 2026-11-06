@@ -1,8 +1,9 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatBRL } from "@/lib/utils";
-import { BackButton } from "@/components/shared/back-button";
 import { HistoricoFiltros } from "./filtros-client";
 import { ComandaList, type ComandaListItem } from "@/components/shared/comanda-list";
 import { isAnexoDispensavel } from "@/lib/validations/order";
@@ -100,7 +101,15 @@ export default async function MotoristaHistoricoPage(
 
   return (
     <div className="space-y-6">
-      <BackButton href="/motorista" />
+      {/* VOLTAR: rota fora do menu, entao o menu nao traz de volta. O porque
+          da regra inteira esta em financeiro/select/[id]/page.tsx. */}
+      <Link
+        href="/motorista"
+        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Entregas
+      </Link>
       <h1 className="text-2xl font-bold text-motorista-text">Histórico de Entregas</h1>
 
       <HistoricoFiltros defaultDe={de} defaultAte={ate} defaultBusca={busca} />

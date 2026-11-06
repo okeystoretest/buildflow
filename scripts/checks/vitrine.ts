@@ -21,7 +21,6 @@ import {
   rotuloDeTipoDeVideo,
   tamanhoLegivel,
   totalDeItens,
-  vitrinesComAcervo,
 } from "../../src/lib/vitrine";
 import type { Vitrine } from "../../src/lib/integration/connect-vitrine";
 
@@ -99,21 +98,9 @@ check("resumo com os três", resumoDoAcervo(vitrine(12, 3, 2)), "12 fotos · 3 v
 // "1 fotos" faz a pessoa duvidar do resto dos números da tela.
 check("singular de cada tipo", resumoDoAcervo(vitrine(1, 1, 1)), "1 foto · 1 vídeo · 1 documento");
 check("tipo com zero item é OMITIDO", resumoDoAcervo(vitrine(0, 4, 0)), "4 vídeos");
-check("vitrine vazia tem resumo vazio", resumoDoAcervo(vitrine(0, 0, 0)), "");
-
-// Card vazio é pior que card ausente: a pessoa clica, não acha nada e conclui
-// que a tela quebrou.
-check(
-  "vitrine sem acervo sai da lista",
-  vitrinesComAcervo([vitrine(0, 0, 0, "vazia"), vitrine(1, 0, 0, "cheia")]).map((v) => v.slug),
-  ["cheia"],
-);
-check(
-  "a ordem do Connect é preservada, não reordenada",
-  vitrinesComAcervo([vitrine(1, 0, 0, "b"), vitrine(0, 0, 1, "a")]).map((v) => v.slug),
-  ["b", "a"],
-);
-check("lista vazia não quebra", vitrinesComAcervo([]), []);
+// A marca vazia PERMANECE no seletor e diz que esta vazia: some-la enquanto
+// ninguem publicou faria a pessoa clicar em "Vitrine" e achar que quebrou.
+check("vitrine vazia diz que esta vazia", resumoDoAcervo(vitrine(0, 0, 0)), "Nada publicado ainda");
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

@@ -55,6 +55,10 @@
     /* Rank de Vendas: o roxo que era do Comercial antes do remanejo de
        05/11/2026. Valor recuperado do historico, ja calibrado — nao recalculado. */
     --rank-text: 283 39% 50%;
+    /* Fluxo de Pedidos. O TOKEN SOLIDO e quase branco (#e2e8f0), mas o de
+       TEXTO nao pode ser: quase-branco sobre o fundo claro nao se le. Aqui ele
+       e o mesmo cinza-azulado, escurecido ate passar em WCAG AA. */
+    --fluxo-text: 215 19% 35%;
 
     --border: 220 16% 85%;
     --input: 220 16% 85%;
@@ -99,6 +103,7 @@
     --brand-text: 204 70% 50%;
     --servico-text: 145 63% 50%;
     --rank-text: 283 39% 60%;
+    --fluxo-text: 215 20% 72%;
 
     --border: 222 16% 22%;
     --input: 222 16% 22%;

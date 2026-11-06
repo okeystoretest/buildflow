@@ -1,7 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { BackButton } from "@/components/shared/back-button";
 import { Pagination } from "@/components/shared/pagination";
 import {
   carregarAtrasos,
@@ -48,11 +46,9 @@ export default async function RelatorioAtrasosPage(
 
   return (
     <div className="space-y-6">
-      <BackButton href="/logistica" />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <PageHeader titulo="Monitor de Atrasos" descricao="Entregas fora do prazo combinado, com o motivo registrado." corTitulo="text-distribuicao-text" />
           <p className="text-sm text-muted-foreground">
             Todas as justificativas de atraso registradas no quadro, por pedido/comanda, com a
             etapa em que o pedido parou, quanto tempo atrasou e quem justificou.

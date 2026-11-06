@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { PageHeader } from "@/components/shared/page-header";
 import { requireRole } from "@/lib/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -126,7 +125,6 @@ export default async function MotoristaPage() {
     <div className="mx-auto max-w-md space-y-6 pb-8 sm:max-w-none">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <PageHeader titulo="Entregas" descricao="As entregas atribuídas a você e o andamento de cada uma." corTitulo="text-motorista-text" />
           <p className="text-sm text-muted-foreground">
             Pronto → Em Rota → Entregue. Pedido sem dono é seu ao tocar em “Iniciar”.
           </p>

@@ -1,5 +1,4 @@
 import type { TransportStatus } from "@prisma/client";
-import { PageHeader } from "@/components/shared/page-header";
 import {
   Inbox,
   Clock,
@@ -142,7 +141,6 @@ export default async function MotoristaDashboardPage(
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <PageHeader titulo="Dashboard" descricao="Volume de chamados, tempo de atendimento e quilometragem." corTitulo="text-motorista-text" />
           <p className="text-sm text-muted-foreground">
             {selecionado
               ? `Chamados de transporte de ${selecionado.name}.`
