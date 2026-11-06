@@ -26,3 +26,8 @@ service-account.json
 
 # Saida do graphify (grafo de conhecimento gerado) — artefato, nao fonte.
 graphify-out/
+
+# Handoffs: documentacao de sessao, nao faz parte da aplicacao. A regra do dono
+# e commitar so o codigo trabalhado. Cobre a raiz e docs/ (padrao sem barra
+# casa em qualquer nivel).
+handoff-*.md
