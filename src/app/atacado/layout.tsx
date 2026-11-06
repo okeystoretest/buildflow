@@ -64,10 +64,11 @@ export const viewport: Viewport = {
  * precisa mudar, e que alternar o tema do dashboard não atinge a LP.
  *
  * O que NÃO é token e por isso é aplicado por CSS: a família tipográfica. O
- * utilitário font-sans do Tailwind escreve "IBM Plex Sans" literal (não lê a
- * variável) e tailwind.config.ts não muda (decisão 30), então atacado.css
- * aplica `font-family` no próprio wrapper e a marcação desta página nunca usa
- * font-sans/font-serif.
+ * utilitário font-sans do Tailwind aponta para a fonte do PAINEL (Outfit,
+ * desde 05/11/2026 — era "IBM Plex Sans" literal), então atacado.css aplica
+ * `font-family` no próprio wrapper e a marcação desta página nunca usa
+ * font-sans/font-serif. Usar o utilitário aqui traria a fonte do painel para
+ * dentro da LP.
  *
  * TIPOGRAFIA AUTO-HOSPEDADA: as duas famílias da marca (Playfair Display e
  * Manrope, 63 KB somadas, eixo de peso 400–700) são servidas de

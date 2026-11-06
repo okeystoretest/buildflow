@@ -113,3 +113,4 @@ check("estagio 1 com 5 colunas", DASHBOARD_COLUMNS.slice(0, corte).length, 5);
 check("estagio 2 com 5 colunas", DASHBOARD_COLUMNS.slice(corte).length, 5);
 
 console.log(falhas === 0 ? "OK: order-flow" : `${falhas} falha(s) em order-flow`);
+process.exit(falhas === 0 ? 0 : 1);

@@ -61,3 +61,4 @@ check("so o fim", rotuloDePeriodo("", "2026-10-19", "P"), "até 19/10/26");
 check("valor fora do formato sai inteiro", dataCurtaBR("xxx"), "xxx");
 
 console.log(falhas === 0 ? "OK: utils" : `${falhas} falha(s) em utils`);
+process.exit(falhas === 0 ? 0 : 1);

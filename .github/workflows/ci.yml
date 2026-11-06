@@ -1,0 +1,46 @@
+# Os mesmos portoes que a regra de trabalho exige na maquina, rodando sozinhos:
+# `tsc`, os scripts de scripts/checks/ e o build. O quarto portao (abrir o
+# navegador) nao cabe aqui — continua sendo manual.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  portoes:
+    runs-on: ubuntu-latest
+    env:
+      # `prisma generate` (dentro de `npm run build`) exige a variavel PRESENTE,
+      # mas NAO conecta: nenhum passo aqui toca banco. Valor ficticio de proposito
+      # — um DATABASE_URL real em CI seria credencial de producao num log publico.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: tsc --noEmit
+        run: npx tsc --noEmit
+
+      # Um laco, e nao 39 passos: cada script propaga a falha pelo exit code, e
+      # `bash -e` (o padrao do runner) aborta no primeiro que falhar. Vira uma
+      # linha no dia em que existir um `npm run check`.
+      - name: scripts/checks
+        shell: bash
+        run: |
+          for f in scripts/checks/*.ts; do
+            echo "::group::$f"
+            npx tsx "$f"
+            echo "::endgroup::"
+          done
+
+      - name: build
+        run: npm run build

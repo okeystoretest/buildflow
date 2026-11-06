@@ -55,6 +55,10 @@ const PUBLIC_FILES = [
   "/icon.svg",
   "/icon-192.png",
   "/icon-512.png",
+  // O maskable e um ARQUIVO SEPARADO do icon-512 porque o Android recorta o
+  // icone em circulo e preenche o resto: fundo transparente viraria um disco
+  // preto, e a logo precisa caber na "safe zone".
+  "/icon-maskable-512.png",
   "/apple-icon.png",
 ];
 
