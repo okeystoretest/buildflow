@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logout } from "@/lib/actions/auth";
 import { RealtimeProvider } from "@/components/shared/realtime-provider";
-import { navParaSessao, CONFIG, type NavFlags } from "./nav";
+import { navParaSessao, CONFIG, FAVORITO_FIXO, type NavFlags } from "./nav";
 import { Sidebar } from "./sidebar";
 import { BarraSuperior } from "./barra-superior";
 import type { Role } from "@prisma/client";
@@ -53,6 +53,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         modulos={modulos}
         user={{ nome: session.name, papel: ROLE_LABEL[session.role], iniciais }}
         podeConfigurar={CONFIG.roles.includes(session.role)}
+        // Derivado aqui, como `podeConfigurar`: o papel nao desce para o cliente.
+        favoritoFixo={FAVORITO_FIXO[session.role]}
         logoutAction={logout}
       />
       <div className="flex w-full min-w-0 flex-1 flex-col">

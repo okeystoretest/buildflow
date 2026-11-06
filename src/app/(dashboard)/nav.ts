@@ -299,6 +299,33 @@ export const MAX_FAVORITOS = 4;
 export const MIN_USOS_FAVORITO = 3;
 
 /**
+ * A ferramenta que cada papel ja encontra em Favoritos no PRIMEIRO acesso, e
+ * que nunca sai de la (pedido do dono, 06/11/2026).
+ *
+ * Favoritos e, por construcao, "o que esta pessoa mais abre" — e por isso
+ * nasce VAZIO para quem acabou de receber o acesso, exatamente quando um
+ * atalho ajudaria mais. Este mapa cobre esse vao com a ferramenta principal
+ * de cada setor.
+ *
+ * FIXO, nao semente: ele nao grava uso nenhum no navegador da pessoa. Fingir
+ * aberturas que nao aconteceram sujaria para sempre o unico numero que o menu
+ * tem para ordenar, e nao daria como desfazer.
+ *
+ * GESTAO NAO TEM, de proposito: ela atravessa os quatro setores, nao tem uma
+ * ferramenta principal, e um palpite aqui gastaria uma das quatro vagas dela
+ * para sempre.
+ *
+ * O href tem de existir no NAV; scripts/checks/nav.ts confere, porque um erro
+ * de digitacao aqui simplesmente nao mostra atalho nenhum.
+ */
+export const FAVORITO_FIXO: Partial<Record<Role, string>> = {
+  VENDAS: "/vendas", // Lancar Pedidos
+  FINANCEIRO: "/financeiro", // Gestao de Pedidos
+  LOGISTICA: "/logistica", // Movimentacao de Pedidos
+  MOTORISTA: "/motorista/chamados", // Chamados
+};
+
+/**
  * A contagem de aberturas, higienizada.
  *
  * SEPARADA da leitura do localStorage para poder ser conferida por script: o
@@ -323,21 +350,28 @@ export function sanitizarUsos(cru: unknown): Record<string, number> {
  * ferramenta renomeada ou removida viraria link quebrado no lugar mais visivel
  * da tela.
  *
- * PURA e exportada para ser conferida por script: sao quatro regras (minimo,
- * teto, existencia, desempate) e todas quebram em silencio — o menu continua
- * abrindo, so com os atalhos errados.
+ * PURA e exportada para ser conferida por script: sao cinco regras (fixo,
+ * minimo, teto, existencia, desempate) e todas quebram em silencio — o menu
+ * continua abrindo, so com os atalhos errados.
  */
 export function escolherFavoritos(
   usos: Record<string, number>,
   modulos: NavModule[],
+  fixo?: string,
 ): { tool: NavTool; modulo: NavModule }[] {
   const porHref = new Map(
     modulos.flatMap((m) => m.tools.map((t) => [t.href, { tool: t, modulo: m }] as const)),
   );
-  return Object.entries(usos)
-    .filter(([href, n]) => n >= MIN_USOS_FAVORITO && porHref.has(href))
+  // O FIXO vem primeiro e nao depende de uso, mas passa pela MESMA checagem de
+  // existencia que o resto: papel que nao ve a ferramenta nao ganha o atalho,
+  // senao FAVORITO_FIXO viraria uma porta lateral para fora do menu da pessoa.
+  const preso = fixo && porHref.has(fixo) ? [porHref.get(fixo)!] : [];
+  const porUso = Object.entries(usos)
+    // `!== fixo` para a fixa nao aparecer duas vezes quando ela TAMBEM e usada.
+    .filter(([href, n]) => n >= MIN_USOS_FAVORITO && porHref.has(href) && href !== fixo)
     // Desempate pelo href para a ordem nao dancar entre renders com empate.
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, MAX_FAVORITOS)
     .map(([href]) => porHref.get(href)!);
+  // O teto CONTA a fixa: ela ocupa uma das quatro vagas, nao soma uma quinta.
+  return [...preso, ...porUso].slice(0, MAX_FAVORITOS);
 }

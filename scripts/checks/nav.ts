@@ -13,6 +13,7 @@ import {
   moduloAtivo,
   ferramentaAtiva,
   escolherFavoritos,
+  FAVORITO_FIXO,
   sanitizarUsos,
   MAX_FAVORITOS,
   MIN_USOS_FAVORITO,
@@ -20,6 +21,7 @@ import {
   CONFIG,
   type NavModule,
 } from "../../src/app/(dashboard)/nav";
+import type { Role } from "@prisma/client";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -198,6 +200,66 @@ check("ordem da lista nao decide", ferramentaAtiva("/vendas/clientes", [...parDe
 // Separa de verdade: /vendas-outra-coisa NAO e filha de /vendas.
 check("irma com nome parecido nao casa", ferramentaAtiva("/vendas-outra", parDeVendas), null);
 check("fora de todas devolve nulo", ferramentaAtiva("/financeiro", parDeVendas), null);
+
+/* ------------------------------------------------- favorito fixo por papel */
+
+// FAVORITO_FIXO quebra em silencio de DOIS jeitos, e nenhum aparece como bug:
+// href com erro de digitacao (nao mostra atalho nenhum) e ferramenta que o
+// papel deixou de ver (o atalho desaparece e ninguem liga uma coisa a outra).
+
+const todasAsFerramentas = NAV.flatMap((m) => m.tools.map((t) => t.href));
+for (const [papel, href] of Object.entries(FAVORITO_FIXO)) {
+  check(`${papel}: o href fixo existe no NAV`, todasAsFerramentas.includes(href!), true);
+  const doPapel = navParaSessao(papel as Role, {}).flatMap((m) => m.tools.map((t) => t.href));
+  check(`${papel}: o papel VE a propria ferramenta fixa`, doPapel.includes(href!), true);
+}
+
+// GESTAO fica de fora de proposito: atravessa os quatro setores, nao tem uma
+// ferramenta principal, e um palpite gastaria uma das quatro vagas dela.
+check("GESTAO nao tem fixo", FAVORITO_FIXO.GESTAO, undefined);
+
+const modsVendas = navParaSessao("VENDAS", {});
+const FIXO_VENDAS = "/vendas";
+const ferramentasVendas = modsVendas.flatMap((m) => m.tools.map((t) => t.href));
+const outras = ferramentasVendas.filter((h) => h !== FIXO_VENDAS);
+const favVendas = (usos: Record<string, number>) =>
+  escolherFavoritos(usos, modsVendas, FIXO_VENDAS).map((f) => f.tool.href);
+
+// Sem isto, a checagem do teto mais abaixo passaria sem testar nada.
+check("Vendas tem ferramentas suficientes para testar o teto", outras.length >= MAX_FAVORITOS + 2, true);
+
+// SEM USO NENHUM o fixo ja aparece: e exatamente o vao que ele existe para cobrir.
+check("fixo aparece com zero uso", favVendas({}), [FIXO_VENDAS]);
+
+// PRIMEIRO SEMPRE, mesmo perdendo no uso por muito.
+check(
+  "fixo fica em primeiro mesmo com outras muito mais usadas",
+  favVendas({ [outras[0]]: 99, [outras[1]]: 50 })[0],
+  FIXO_VENDAS,
+);
+
+// NAO DUPLICA quando a propria fixa tambem passa do minimo de usos.
+const comUso = favVendas({ [FIXO_VENDAS]: 20, [outras[0]]: 5 });
+check("fixo nao aparece duas vezes", comUso.filter((h) => h === FIXO_VENDAS).length, 1);
+check("fixo usada continua em primeiro", comUso[0], FIXO_VENDAS);
+
+// O TETO CONTA O FIXO: ele ocupa uma das quatro vagas, nao soma uma quinta.
+const lotado = favVendas(
+  Object.fromEntries(outras.slice(0, MAX_FAVORITOS + 2).map((h, i) => [h, 90 - i])),
+);
+check("teto continua valendo com o fixo dentro", lotado.length, MAX_FAVORITOS);
+check("com o teto lotado o fixo ainda e o primeiro", lotado[0], FIXO_VENDAS);
+
+// FIXO FORA DO MENU DA PESSOA nao entra: o mapa nao e porta lateral para uma
+// ferramenta que o papel nao ve. /financeiro e ferramenta do Financeiro.
+check(
+  "fixo que o papel nao ve nao entra",
+  escolherFavoritos({}, modsVendas, "/financeiro").map((f) => f.tool.href),
+  [],
+);
+
+// Papel SEM fixo (Gestao) segue so pelo uso, como antes.
+check("sem fixo, zero uso da lista vazia", escolherFavoritos({}, modsVendas, undefined), []);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

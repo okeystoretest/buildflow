@@ -115,12 +115,15 @@ export function Sidebar({
   modulos,
   user,
   podeConfigurar,
+  favoritoFixo,
   logoutAction,
 }: {
   modulos: NavModule[];
   user: SidebarUser;
   /** A pessoa ve o botao de Configuracoes (papel de Gestao). */
   podeConfigurar: boolean;
+  /** Href da ferramenta presa no topo de Favoritos; Gestao nao tem. */
+  favoritoFixo?: string;
   /** Server action; o form abaixo a executa no servidor. */
   logoutAction: () => void;
 }) {
@@ -188,7 +191,10 @@ export function Sidebar({
   // So entram ferramentas que AINDA existem no menu desta pessoa: um papel
   // que perdeu acesso nao pode continuar com o atalho no topo, e ferramenta
   // renomeada/removida sairia como link quebrado.
-  const favoritos = useMemo(() => escolherFavoritos(usos, modulos), [usos, modulos]);
+  const favoritos = useMemo(
+    () => escolherFavoritos(usos, modulos, favoritoFixo),
+    [usos, modulos, favoritoFixo],
+  );
 
 
   function alternarColapso() {
