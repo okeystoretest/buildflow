@@ -79,6 +79,12 @@ export const NAV: NavModule[] = [
       // financeiro). Gestao e Financeiro tem a tela cheia em /financeiro/select.
       // Fica no fim: nao estava na ordem que o dono passou.
       { href: "/vendas/select", label: "Meus Selects", roles: ["VENDAS"] },
+      // NO FIM, como "Meus Selects", e pelo mesmo motivo: nao estava na ordem
+      // que o dono passou. Entrar no meio seria decidir por ele a posicao de
+      // uma ferramenta nova numa lista que ele ordenou a mao.
+      { href: "/vendas/cronograma", label: "Cronograma de Conteúdo", roles: ["GESTAO", "VENDAS", "FINANCEIRO"] },
+      // Ao lado do Cronograma: as duas leem do Build.Connect e nenhuma escreve.
+      { href: "/vendas/vitrine", label: "Vitrine", roles: ["GESTAO", "VENDAS", "FINANCEIRO"] },
     ],
   },
   {
@@ -157,4 +163,83 @@ export function moduloAtivo(pathname: string, modulos: { base: string }[]): stri
     }
   }
   return melhor;
+}
+
+/**
+ * Qual ferramenta de `tools` esta aberta em `pathname`, pelo prefixo MAIS
+ * LONGO. `null` quando nenhuma.
+ *
+ * CHAME COM A LISTA INTEIRA, nunca com uma ferramenta por vez: a arbitragem E
+ * a comparacao entre as candidatas. Com `[t]` sozinha, toda ferramenta cujo
+ * href e prefixo de outra acende junto — em /vendas/clientes, "Lancar Pedidos"
+ * (/vendas) casava tambem, e os Favoritos mostravam duas acesas ao mesmo tempo
+ * (05/11/2026).
+ *
+ * Mesma regra de `moduloAtivo`, um nivel abaixo.
+ */
+export function ferramentaAtiva(pathname: string, tools: { href: string }[]): string | null {
+  let melhor: string | null = null;
+  for (const t of tools) {
+    if (pathname === t.href || pathname.startsWith(t.href + "/")) {
+      if (!melhor || t.href.length > melhor.length) melhor = t.href;
+    }
+  }
+  return melhor;
+}
+
+/* ------------------------------------------------------------- favoritos */
+
+/** Quantas ferramentas aparecem em Favoritos na barra lateral. */
+export const MAX_FAVORITOS = 4;
+/**
+ * Aberturas necessarias para uma ferramenta virar favorita.
+ *
+ * Abaixo disso a secao nem aparece: uma ferramenta aberta UMA vez e acaso, nao
+ * habito, e um atalho que se reordena a cada visita isolada obriga a reler o
+ * menu toda vez — custa mais do que o atalho economiza.
+ */
+export const MIN_USOS_FAVORITO = 3;
+
+/**
+ * A contagem de aberturas, higienizada.
+ *
+ * SEPARADA da leitura do localStorage para poder ser conferida por script: o
+ * valor vem do navegador da pessoa, onde pode ter sido editado a mao,
+ * corrompido, ou gravado por uma versao anterior com outro formato. Uma entrada
+ * estranha que passasse daqui iria parar na ordenacao do menu.
+ */
+export function sanitizarUsos(cru: unknown): Record<string, number> {
+  if (!cru || typeof cru !== "object" || Array.isArray(cru)) return {};
+  const limpo: Record<string, number> = {};
+  for (const [href, n] of Object.entries(cru as Record<string, unknown>)) {
+    if (typeof n === "number" && Number.isFinite(n) && n > 0) limpo[href] = n;
+  }
+  return limpo;
+}
+
+/**
+ * As ferramentas que vao para Favoritos, da mais aberta para a menos.
+ *
+ * SO ENTRA O QUE AINDA EXISTE no menu desta pessoa: um papel que perdeu acesso
+ * nao pode seguir com o atalho no topo (seria um vazamento pela navegacao), e
+ * ferramenta renomeada ou removida viraria link quebrado no lugar mais visivel
+ * da tela.
+ *
+ * PURA e exportada para ser conferida por script: sao quatro regras (minimo,
+ * teto, existencia, desempate) e todas quebram em silencio — o menu continua
+ * abrindo, so com os atalhos errados.
+ */
+export function escolherFavoritos(
+  usos: Record<string, number>,
+  modulos: NavModule[],
+): { tool: NavTool; modulo: NavModule }[] {
+  const porHref = new Map(
+    modulos.flatMap((m) => m.tools.map((t) => [t.href, { tool: t, modulo: m }] as const)),
+  );
+  return Object.entries(usos)
+    .filter(([href, n]) => n >= MIN_USOS_FAVORITO && porHref.has(href))
+    // Desempate pelo href para a ordem nao dancar entre renders com empate.
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, MAX_FAVORITOS)
+    .map(([href]) => porHref.get(href)!);
 }
