@@ -18,6 +18,18 @@ import {
   rotuloDeMarca,
   rotuloDePlataforma,
   rotuloDeStatus,
+  ancoraDaQuery,
+  corDoCard,
+  corDoFunil,
+  corDoPonto,
+  deslocar,
+  diasDaVisao,
+  doMesDaAncora,
+  indexarPorDia,
+  periodoDaQuery,
+  recorteDaVisao,
+  rotuloDaVisao,
+  seloDeFormatos,
 } from "../../src/lib/cronograma";
 import type { PostDoCronograma } from "../../src/lib/integration/connect-cronograma";
 
@@ -40,6 +52,8 @@ const post = (id: string, scheduledAt: string, extra: Partial<PostDoCronograma> 
   formats: [],
   platforms: [],
   brand: null,
+  notes: null,
+  responsavel: null,
   ...extra,
 });
 
@@ -108,6 +122,87 @@ check(
   janela(new Date("2026-11-05T12:00:00.000Z"), 30, 90),
   { de: "2026-10-06", ate: "2027-02-03" },
 );
+
+/* --------------------------------------------------------- calendario */
+
+// A URL e digitavel e a ancora vem dela: valor torto nao pode derrubar a tela.
+check("periodo ausente vira mes", periodoDaQuery(undefined), "mes");
+check("periodo inventado vira mes", periodoDaQuery("ano"), "mes");
+check("periodo valido e respeitado", periodoDaQuery("semana"), "semana");
+
+const HOJE = new Date("2026-11-06T15:00:00.000Z");
+check("ancora ausente vira hoje", ancoraDaQuery(undefined, HOJE), "2026-11-06");
+check("ancora ilegivel vira hoje", ancoraDaQuery("ontem", HOJE), "2026-11-06");
+check("ancora valida e mantida", ancoraDaQuery("2026-01-31", HOJE), "2026-01-31");
+
+// 06/11/2026 e uma SEXTA, e 01/11/2026 e um DOMINGO. Os numeros abaixo saem
+// dai; se alguem trocar a semana para comecar no domingo, todos caem juntos.
+check("visao de dia mostra um dia so", diasDaVisao("dia", "2026-11-06"), ["2026-11-06"]);
+const semana = diasDaVisao("semana", "2026-11-06");
+check("semana tem sete dias", semana.length, 7);
+check("semana comeca na segunda", semana[0], "2026-11-02");
+check("semana termina no domingo", semana[6], "2026-11-08");
+
+// GRADE DO MES: semanas INTEIRAS. Uma grade com buraco na primeira linha nao e
+// um calendario, e e por isso que aparecem dias do mes vizinho.
+const mes = diasDaVisao("mes", "2026-11-06");
+check("grade do mes so tem semanas inteiras", mes.length % 7, 0);
+check("grade do mes comeca numa segunda do mes anterior", mes[0], "2026-10-26");
+check("grade do mes termina num domingo do mes seguinte", mes[mes.length - 1], "2026-12-06");
+check("o mes inteiro cabe na grade", mes.includes("2026-11-01") && mes.includes("2026-11-30"), true);
+
+// O RECORTE PEDIDO AO CONNECT e exatamente o que a tela mostra: pedir menos
+// deixaria celula vazia com peca existindo, pedir mais gastaria o teto de 200.
+check("recorte casa com a grade", recorteDaVisao("mes", "2026-11-06"), { de: mes[0], ate: mes[mes.length - 1] });
+
+// O MES ANDA PELO DIA 1. Somar 30 dias faria 31/01 virar 02/03, pulando
+// fevereiro inteiro — e quem clica na seta espera o mes seguinte.
+check("mes seguinte de 31/01 e fevereiro", deslocar("mes", "2026-01-31", 1), "2026-02-01");
+check("mes anterior de 01/03 e fevereiro", deslocar("mes", "2026-03-01", -1), "2026-02-01");
+check("dia seguinte anda um dia", deslocar("dia", "2026-11-06", 1), "2026-11-07");
+check("semana seguinte anda sete dias", deslocar("semana", "2026-11-06", 1), "2026-11-13");
+
+// ROTULOS: conferidos pela FORMA, nao pelo texto exato — o nome do mes vem do
+// Intl, e prender a checagem a ele a quebraria numa atualizacao de ICU.
+const rotMes = rotuloDaVisao("mes", "2026-11-06");
+check("rotulo do mes termina no ano", rotMes.endsWith(" 2026"), true);
+check("rotulo do mes comeca em maiuscula", rotMes[0], rotMes[0].toUpperCase());
+// O padrao do Intl e "novembro de 2026"; o cabecalho pede "Novembro 2026".
+check("rotulo do mes nao traz o 'de' do Intl", rotMes.includes(" de "), false);
+check(
+  "semana que atravessa o mes nomeia os DOIS meses",
+  rotuloDaVisao("semana", "2026-10-26").includes("outubro") &&
+    rotuloDaVisao("semana", "2026-10-26").includes("novembro"),
+  true,
+);
+check(
+  "semana dentro do mes nomeia o mes uma vez so",
+  rotuloDaVisao("semana", "2026-11-06").split("novembro").length - 1,
+  1,
+);
+
+// A CHAVE DO DIA SAI DO MESMO LUGAR do agrupamento: duas contas de "que dia e
+// esta peca" divergiriam no primeiro fuso.
+check(
+  "indexa pela mesma chave do agrupamento",
+  [...indexarPorDia([post("a", "2026-11-06T10:00:00.000Z")]).keys()],
+  ["2026-11-06"],
+);
+check("dia do mes vizinho e reconhecido", doMesDaAncora("2026-10-26", "2026-11-06"), false);
+check("dia do proprio mes e reconhecido", doMesDaAncora("2026-11-30", "2026-11-06"), true);
+
+// SELO DE FORMATOS: listar todos estoura a largura de uma celula de sete
+// colunas, e a contagem avisa que ha mais sem fingir que nao ha.
+check("sem formato nao tem selo", seloDeFormatos([]), null);
+check("um formato sai sozinho", seloDeFormatos(["REEL"]), "REEL");
+check("formatos extras viram contagem", seloDeFormatos(["REEL", "STORY", "FEED"]), "REEL +2");
+
+// CORES: valor que o Connect inventar amanha cai no neutro, nunca em branco.
+check("ponto do publicado difere do rascunho", corDoPonto("PUBLICADO") === corDoPonto("IDEIA"), false);
+check("funil desconhecido ganha a cor neutra", corDoFunil("XOFU"), corDoFunil(""));
+check("as tres etapas do funil tem cores distintas", new Set([corDoFunil("TOFU"), corDoFunil("MOFU"), corDoFunil("BOFU")]).size, 3);
+check("marca desconhecida ganha o cartao neutro", corDoCard("OUTRA"), corDoCard(null));
+check("as duas marcas tem cartoes diferentes", corDoCard("OKEY") === corDoCard("LOV_CLUB"), false);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

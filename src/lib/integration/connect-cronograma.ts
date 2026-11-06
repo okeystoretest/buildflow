@@ -24,6 +24,12 @@ export interface PostDoCronograma {
   formats: string[];
   platforms: string[];
   brand: string | null;
+  /** Descricao livre do Marketing. E a linha que diz de QUAL lancamento o
+   *  card fala — "MAIS LANCAMENTOS" aparece tres vezes na mesma semana. */
+  notes: string | null;
+  /** PRIMEIRO NOME do responsavel, e so isso: o Connect corta do lado dele.
+   *  Nao ha id nem e-mail aqui, e nao deve passar a haver. */
+  responsavel: string | null;
 }
 
 export type RespostaDoCronograma =
