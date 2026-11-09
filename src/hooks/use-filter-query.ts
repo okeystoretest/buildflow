@@ -101,16 +101,20 @@ export function useFilterQuery<
   // por exemplo) navega DUAS vezes: a URL final fica certa, mas empilha duas
   // entradas no historico e o botao Voltar precisa de dois cliques para
   // desfazer uma acao.
+  //
+  // `navigate` FORA do updater do setState — igual ao `clearAll` mais abaixo.
+  // Dentro dele, o React executa a funcao durante o RENDER, e navegar durante o
+  // render do proprio componente e o aviso "Cannot update a component (Router)
+  // while rendering a different component". O estado novo sai do closure (como
+  // o clearAll ja faz), que e o do render atual.
   const setInstantMany = useCallback(
     (patch: Partial<I>) => {
-      setInstantState((prev) => {
-        const nextInstant = { ...prev, ...patch } as I;
-        if (timer.current) clearTimeout(timer.current);
-        navigate({ ...text, ...nextInstant });
-        return nextInstant;
-      });
+      const nextInstant = { ...instant, ...patch } as I;
+      if (timer.current) clearTimeout(timer.current);
+      setInstantState(nextInstant);
+      navigate({ ...text, ...nextInstant });
     },
-    [navigate, text],
+    [navigate, text, instant],
   );
 
   // Campos INSTANTANEOS aplicam na hora (sem esperar debounce).
@@ -122,16 +126,15 @@ export function useFilterQuery<
   );
 
   // Limpa um campo de texto (usado pelo "X"): aplica imediatamente.
+  // `navigate` fora do updater, pelo mesmo motivo do setInstantMany acima.
   const clear = useCallback(
     (key: keyof T) => {
-      setTextState((prev) => {
-        const next = { ...prev, [key]: "" } as T;
-        if (timer.current) clearTimeout(timer.current);
-        navigate({ ...next, ...instant });
-        return next;
-      });
+      const next = { ...text, [key]: "" } as T;
+      if (timer.current) clearTimeout(timer.current);
+      setTextState(next);
+      navigate({ ...next, ...instant });
     },
-    [navigate, instant],
+    [navigate, text, instant],
   );
 
   /**
