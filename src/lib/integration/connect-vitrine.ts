@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { signWebhook } from "./signature";
+import { caminhoDoArquivoDaVitrine, signWebhook } from "./signature";
 import { integrationEnv } from "./connect-auth";
 
 /**
@@ -13,19 +13,39 @@ import { integrationEnv } from "./connect-auth";
  *
  * SÓ LEITURA: nada nesta tela escreve no Connect. A vitrine é mantida lá.
  *
- * O ARQUIVO NÃO ATRAVESSA. O Connect serve `/uploads/...` por rota com sessão
- * PRÓPRIA, que confere papel e lotação a cada pedido — inclusive regras de
- * material sensível. Um proxy aqui teria de decidir sozinho quem pode baixar o
- * quê, e essa decisão já existe do outro lado: duplicá-la é a forma mais
- * silenciosa de furar o controle de acesso do Connect. Então esta tela mostra O
- * QUE EXISTE e leva ao Connect pelo link; quem tem login de lá abre o arquivo
- * lá, pelo portão de lá.
+ * O ARQUIVO ATRAVESSA, POR ID E SÓ DE VITRINE (pedido de 09/11/2026: baixar e
+ * assistir aqui). Antes não atravessava, e a razão era boa: `/uploads/...` do
+ * Connect é servido por caminho, atrás da sessão de lá, e um proxy por caminho
+ * daqui teria a superfície do disco inteiro — comprovante, documentação
+ * pessoal, evidência de denúncia.
+ *
+ * O que mudou foi a FORMA do pedido, não o rigor. A rota do Connect
+ * (`flow/vitrine/arquivo`) aceita ID DE ITEM e exige `subsector.kind: VITRINE`
+ * na própria consulta: o caminho vem do banco, nunca do cliente, e o alcance
+ * desta integração é exatamente o que a listagem já mostra — nada mais.
+ *
+ * A DIVISÃO DE PORTÕES, que é o que sustenta isso: o Connect garante o ESCOPO
+ * (só vitrine, só item existente) e o Flow garante QUEM (sessão e papel, na
+ * rota `api/vendas/vitrine/arquivo`). Nenhuma regra de papel foi
+ * copiada para cá — duas cópias, uma em cada repositório, divergiriam na
+ * primeira mudança.
  */
 
 /** Uma foto da vitrine. */
 export interface FotoDaVitrine {
   id: string;
   title: string;
+  /** Nulos fora da vitrine e no que foi enviado antes do recurso. */
+  temporada: string | null;
+  colecao: string | null;
+  /**
+   * Extensão REAL do arquivo ("jpg", "mp4"), vazia quando não há arquivo.
+   *
+   * Vem do Connect porque só lá existe: o `kind` é CATEGORIA e mente sobre o
+   * formato — um .jpg é cadastrado como `PNG`. Quem nomeia o download é esta
+   * tela, e um JPEG chamado ".png" é um download quebrado em silêncio.
+   */
+  extensao: string;
   /** ISO. Vem como texto do JSON — quem formata é a tela. */
   createdAt: string;
 }
@@ -37,6 +57,22 @@ export interface VideoDaVitrine {
   kind: string;
   isNew: boolean;
   tags: string[];
+  temporada: string | null;
+  colecao: string | null;
+  /**
+   * SE EXISTE arquivo, não onde ele está. Falso no vídeo cadastrado sem mídia:
+   * a tela mostra o item sem oferecer um player que não tocaria.
+   */
+  temArquivo: boolean;
+  temMiniatura: boolean;
+  /**
+   * Extensão REAL do arquivo ("jpg", "mp4"), vazia quando não há arquivo.
+   *
+   * Vem do Connect porque só lá existe: o `kind` é CATEGORIA e mente sobre o
+   * formato — um .jpg é cadastrado como `PNG`. Quem nomeia o download é esta
+   * tela, e um JPEG chamado ".png" é um download quebrado em silêncio.
+   */
+  extensao: string;
   createdAt: string;
 }
 
@@ -47,6 +83,16 @@ export interface DocumentoDaVitrine {
   kind: string;
   sizeBytes: number;
   tags: string[];
+  temporada: string | null;
+  colecao: string | null;
+  /**
+   * Extensão REAL do arquivo ("jpg", "mp4"), vazia quando não há arquivo.
+   *
+   * Vem do Connect porque só lá existe: o `kind` é CATEGORIA e mente sobre o
+   * formato — um .jpg é cadastrado como `PNG`. Quem nomeia o download é esta
+   * tela, e um JPEG chamado ".png" é um download quebrado em silêncio.
+   */
+  extensao: string;
   createdAt: string;
 }
 
@@ -154,4 +200,44 @@ export const buscarVitrine = unstable_cache(buscar, ["connect-vitrine"], {
 export function linkDaVitrine(slug: string): string | null {
   const env = integrationEnv();
   return env ? `${env.webhookUrl}/setores/${encodeURIComponent(slug)}` : null;
+}
+
+/** O que a rota de arquivo do Connect sabe servir. */
+export type TipoDeArquivoDaVitrine = "foto" | "video" | "miniatura" | "documento";
+
+/**
+ * Os bytes de um item, do Connect. Devolve a resposta CRUA para quem chama
+ * repassar — a rota daqui é um cano, e materializar um vídeo de 300 MB em
+ * memória para depois reenviá-lo derrubaria o processo em dois acessos.
+ *
+ * SEM O TIMEOUT DA LISTAGEM, de propósito: oito segundos cortariam o filme no
+ * meio. O que protege aqui é o Range (o navegador pede trechos) e o fato de o
+ * Connect estar na rede interna.
+ *
+ * `null` quando a integração não está configurada — a rota devolve 503, igual
+ * à listagem.
+ */
+export async function buscarArquivoDaVitrine(
+  tipo: TipoDeArquivoDaVitrine,
+  id: string,
+  range: string | null,
+): Promise<Response | null> {
+  const env = integrationEnv();
+  if (!env) return null;
+
+  // Montado no módulo puro ao lado: a query entra na assinatura, e a checagem
+  // confere lá que o que assinamos é exatamente o que o Connect reconstrói.
+  const caminho = caminhoDoArquivoDaVitrine(tipo, id);
+  const timestamp = Date.now();
+
+  return fetch(`${env.webhookUrl}${caminho}`, {
+    headers: {
+      "x-flow-timestamp": String(timestamp),
+      "x-flow-signature": signWebhook(env.webhookSecret, timestamp, caminho),
+      // Repassado para o vídeo tocar com seek em vez de baixar inteiro antes
+      // do primeiro frame.
+      ...(range ? { range } : {}),
+    },
+    cache: "no-store",
+  });
 }

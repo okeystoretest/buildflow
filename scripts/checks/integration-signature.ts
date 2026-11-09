@@ -1,7 +1,12 @@
 // Checagem da assinatura do webhook e da comparacao do token de servico.
 // Rodar com: npx tsx scripts/checks/integration-signature.ts
 import { createHmac } from "node:crypto";
-import { signWebhook, safeEqual, verifyBearer } from "../../src/lib/integration/signature";
+import {
+  caminhoDoArquivoDaVitrine,
+  signWebhook,
+  safeEqual,
+  verifyBearer,
+} from "../../src/lib/integration/signature";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -30,6 +35,39 @@ check("bearer errado", verifyBearer("Bearer tok-999", "tok-123"), false);
 check("bearer sem prefixo", verifyBearer("tok-123", "tok-123"), false);
 check("bearer ausente", verifyBearer(null, "tok-123"), false);
 check("bearer com esperado vazio nunca passa", verifyBearer("Bearer ", ""), false);
+
+// --- caminho assinado da rota de arquivo da vitrine -------------------------
+//
+// O Connect assina/verifica sobre `url.pathname + url.search` do pedido que
+// chegou. Se o que assinamos não for IDENTICAMENTE o que ele reconstrói, todo
+// arquivo da vitrine responde 401 — e o log só diz "assinatura inválida", sem
+// apontar a diferença. Esta checagem compara as duas contas.
+const caminhoArquivo = caminhoDoArquivoDaVitrine("documento", "ckx1abc");
+check(
+  "caminho assinado tem query estável",
+  caminhoArquivo,
+  "/api/integracao/flow/vitrine/arquivo?tipo=documento&id=ckx1abc",
+);
+const comoOConnectVe = new URL(`http://buildconnect:3000${caminhoArquivo}`);
+check(
+  "o Connect reconstrói exatamente o que foi assinado",
+  comoOConnectVe.pathname + comoOConnectVe.search,
+  caminhoArquivo,
+);
+// Id com caractere que precisa de escape continua batendo nas duas pontas.
+const caminhoEscapado = caminhoDoArquivoDaVitrine("foto", "a b/c");
+const escapadoComoOConnectVe = new URL(`http://buildconnect:3000${caminhoEscapado}`);
+check(
+  "id que precisa de escape bate nas duas pontas",
+  escapadoComoOConnectVe.pathname + escapadoComoOConnectVe.search,
+  caminhoEscapado,
+);
+check(
+  "o tipo pedido entra na assinatura",
+  signWebhook(secret, ts, caminhoDoArquivoDaVitrine("foto", "ckx1abc")) ===
+    signWebhook(secret, ts, caminhoDoArquivoDaVitrine("documento", "ckx1abc")),
+  false,
+);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);
