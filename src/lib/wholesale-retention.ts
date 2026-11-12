@@ -14,6 +14,25 @@
  * tipo de divergência que ninguém percebe porque as duas metades parecem certas
  * lidas em separado.
  *
+ * A IMPORTADA DA PLANILHA NÃO EXPURGA (decisão do dono, 12/11/2026).
+ *
+ * Os 90 dias são a promessa que o rodapé da LP faz a quem PREENCHE A LP:
+ * "guardados por até 90 dias a contar do envio". A candidatura que a Gestão
+ * carrega da planilha antiga não foi coletada por esse caminho e não tem essa
+ * promessa — o prazo dela é outro assunto, fora deste arquivo.
+ *
+ * E a regra antiga tornava a importação INÚTIL E DESTRUTIVA ao mesmo tempo:
+ * planilha histórica é, por definição, de mais de 90 dias, então toda linha
+ * carregada já nascia vencida e sumia na passada seguinte do expurgo — com as
+ * fotos — sem aviso nenhum. A Gestão importava, via os dados na tela, e na
+ * volta encontrava a tela como estava antes. Era isto o "os dados revertem
+ * para a versão anterior" reportado em 12/11/2026.
+ *
+ * O que NÃO mudou: a exclusão manual da Gestão continua alcançando qualquer
+ * candidatura, importada inclusive (`apagarCandidatura`, em
+ * actions/wholesale-leads.ts). O que saiu foi o automático, não o direito de
+ * apagar — se amanhã o prazo da planilha for decidido, ele entra aqui.
+ *
  * shortcut: candidatura APROVADA também é apagada no dia 90 contado do envio —
  * aprovada no dia 85, o contato da lojista desaparece em 5 dias, porque a
  * aprovação não cria Customer (decisão da spec) e o contato vive só aqui.
@@ -40,6 +59,25 @@ export const RETENCAO_DIAS = 90;
  */
 export function limiteDeRetencao(agora: Date): Date {
   return new Date(agora.getTime() - RETENCAO_DIAS * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * O WHERE do expurgo, separado para o script poder afirmá-lo sem subir banco.
+ *
+ * As duas cláusulas são a regra inteira, e cada uma tem um dono diferente:
+ * `createdAt` é o prazo da LGPD, `importKey: null` é o recorte de QUEM o prazo
+ * alcança. Deixá-las inline dentro do `findMany` foi o que permitiu a segunda
+ * faltar por um mês sem nada reclamar.
+ *
+ * `importKey` é nulo exatamente na candidatura que veio do formulário público
+ * e preenchido na que veio da planilha — ver `chaveDeImportacao`. Não há um
+ * terceiro caso.
+ */
+export function filtroDoExpurgo(agora: Date): {
+  createdAt: { lt: Date };
+  importKey: null;
+} {
+  return { createdAt: { lt: limiteDeRetencao(agora) }, importKey: null };
 }
 
 /**
@@ -88,6 +126,9 @@ export interface ResultadoDoExpurgo {
  * Apaga as candidaturas vencidas e as duas fotos de cada uma, por
  * `apagarCandidatura` — a mesma rotina que a exclusão manual da Gestão usa.
  *
+ * VENCIDA aqui é o que `filtroDoExpurgo` diz: velha o bastante E vinda do
+ * formulário público. A importada da planilha fica (ver o topo do arquivo).
+ *
  * Uma transação por candidatura, não uma para todas: o expurgo é higiene, e um
  * registro problemático não deve impedir os outros 300 de serem apagados. O
  * `catch` conta a falha em vez de derrubar a rotina.
@@ -95,9 +136,8 @@ export interface ResultadoDoExpurgo {
 export async function expurgarCandidaturasVencidas(
   agora: Date = new Date(),
 ): Promise<ResultadoDoExpurgo> {
-  const limite = limiteDeRetencao(agora);
   const vencidas = await prisma.wholesaleLead.findMany({
-    where: { createdAt: { lt: limite } },
+    where: filtroDoExpurgo(agora),
     select: { id: true, instagramImagePath: true, storeImagePath: true },
   });
 
@@ -110,7 +150,7 @@ export async function expurgarCandidaturasVencidas(
       apagados++;
     } catch {
       // Conta como não apagado e segue. A próxima execução tenta de novo:
-      // o WHERE por data continua casando enquanto a linha existir.
+      // o WHERE continua casando enquanto a linha existir.
     }
   }
 

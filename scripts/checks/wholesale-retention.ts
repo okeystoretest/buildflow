@@ -8,7 +8,8 @@
  *
  * Rode com: npx tsx scripts/checks/wholesale-retention.ts
  */
-import { RETENCAO_DIAS, limiteDeRetencao } from "../../src/lib/wholesale-retention";
+import { RETENCAO_DIAS, limiteDeRetencao, filtroDoExpurgo } from "../../src/lib/wholesale-retention";
+import { chaveDeImportacao } from "../../src/lib/wholesale-import";
 import { WHOLESALE_CONTENT } from "../../src/lib/wholesale-content";
 
 let falhas = 0;
@@ -64,6 +65,34 @@ for (const marca of ["OKEY", "LOV_CLUB"] as const) {
     RETENCAO_DIAS,
   );
 }
+
+
+// --- QUEM O PRAZO ALCANÇA (decisão do dono, 12/11/2026) --------------------
+// Os 90 dias valem para quem preencheu a LP. A candidatura carregada da
+// planilha antiga não passou por lá e não tem essa promessa.
+//
+// Por que isto é uma checagem e não só um comentário: planilha histórica é,
+// por definição, de mais de 90 dias. Enquanto o recorte não existia, TODA
+// linha importada nascia vencida e sumia — com as fotos — na passada seguinte
+// do expurgo. A Gestão importava e, na volta, encontrava a tela como antes.
+// Uma cláusula apagada aqui num refactor repõe exatamente esse defeito, e ele
+// é silencioso: ninguém reporta dado que desapareceu, só reimporta.
+const filtro = filtroDoExpurgo(agora);
+check("o expurgo olha so quem veio do formulario", filtro.importKey, null);
+check("o expurgo mantem o corte por data", filtro.createdAt.lt.getTime(), limite.getTime());
+
+// E as duas pontas têm de concordar sobre o que é "importada": `importKey`
+// nulo é a candidatura do formulário, preenchido é a da planilha. Se
+// `chaveDeImportacao` algum dia devolver vazio, o `importKey: null` acima
+// passaria a casar com a planilha também, e o expurgo voltaria a apagá-la.
+const chave = chaveDeImportacao({
+  brand: "OKEY",
+  cnpj: "11222333000181",
+  phone: "85988887777",
+  contactName: "Ana",
+});
+check("candidatura de planilha nasce COM chave", chave.length > 0, true);
+check("a chave e reconhecivel como de planilha", chave.startsWith("planilha:"), true);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);
