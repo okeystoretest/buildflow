@@ -5,6 +5,25 @@ import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 /**
+ * AS DUAS CAMADAS DE MODAL, e por que elas precisam estar escritas num lugar só.
+ *
+ * O app tem modal que abre DE DENTRO de outro modal: a ficha do pedido traz
+ * "Editar Entrega" e "Fazer devolução" no rodapé dela. Quando o segundo nasce
+ * numa camada ABAIXO do primeiro, o sintoma não parece um erro de z-index —
+ * o fundo escurece (o véu do segundo aparece), a ficha continua por cima e o
+ * painel de edição simplesmente não está em lugar nenhum. Foi o que acontecia
+ * no Histórico de Entregas (relatado em 12/11/2026): `EditProofsModal` estava
+ * em `z-50` e `ReturnModal` em `z-60`, os dois debaixo do `z-[100]` da ficha.
+ *
+ * Cada número solto no seu arquivo é como isso passa despercebido: ninguém
+ * compara `z-50` aqui com `z-[100]` três pastas adiante. Com as duas camadas
+ * nomeadas, escolher é responder a uma pergunta — "este modal abre sozinho ou
+ * por cima de outro?".
+ */
+export const CAMADA_MODAL = "z-[100]";
+export const CAMADA_SOBRE_MODAL = "z-[110]";
+
+/**
  * A moldura dos modais do histórico: fundo escuro, caixa rolável, ESC e portal.
  *
  * PORTAL no `<body>`, e não um `fixed` no lugar: os cards da grade usam
@@ -56,7 +75,10 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
+      className={cn(
+        "fixed inset-0 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in",
+        CAMADA_MODAL,
+      )}
       onClick={onClose}
     >
       <div

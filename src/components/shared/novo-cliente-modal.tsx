@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CustomerOpt } from "@/components/shared/customer-combobox";
+import { CAMADA_SOBRE_MODAL } from "@/components/shared/modal";
+import { cn } from "@/lib/utils";
 
 /**
  * NOVO CLIENTE — cadastro em modal, sem sair do formulário em andamento.
@@ -88,7 +90,12 @@ export function NovoClienteModal({
   if (!portalTarget) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
+    // Ja estava na camada certa (abre de dentro do formulario de Select), mas
+    // cravada: passa a ler a constante, como os outros.
+    <div className={cn(
+      "fixed inset-0 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm animate-fade-in",
+      CAMADA_SOBRE_MODAL,
+    )}>
       <div className="w-full max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">

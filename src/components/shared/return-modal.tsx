@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { PackageMinus, Plus, Trash2, X } from "lucide-react";
 import { registerOrderReturn } from "@/lib/actions/returns";
 import { validateReturnItems, MAX_RETURN_ITEMS } from "@/lib/order-returns";
-import { formatBRL } from "@/lib/utils";
+import { formatBRL, cn } from "@/lib/utils";
+import { CAMADA_SOBRE_MODAL } from "@/components/shared/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -120,7 +121,18 @@ export function ReturnModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
+      // MESMA CAMADA do modal de fotos, e pelo mesmo motivo: os dois saem do
+      // rodape da ficha do pedido, que esta em CAMADA_MODAL. Em `z-[60]` este
+      // nascia debaixo dela — o botao "Fazer devolucao" escurecia o fundo e
+      // nao mostrava nada. So o Historico de Entregas foi relatado (12/11), e
+      // era o botao vizinho; este nunca chegou a ser reportado.
+      //
+      // Subir nao quebra o outro chamador (`vendas/row-actions.tsx`), onde ele
+      // abre sozinho: acima de tudo continua acima de tudo.
+      className={cn(
+        "fixed inset-0 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in",
+        CAMADA_SOBRE_MODAL,
+      )}
       onClick={() => !saving && onClose()}
     >
       <div

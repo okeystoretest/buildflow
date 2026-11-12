@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { OrderFicha, type OrderDetail } from "@/components/shared/order-ficha";
+import { CAMADA_MODAL } from "@/components/shared/modal";
+import { cn } from "@/lib/utils";
 
 /**
  * MODAL DO FLUXO DE PEDIDOS — a moldura em volta da ficha da comanda.
@@ -85,7 +87,10 @@ export function OrderDetailModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
+      className={cn(
+        "fixed inset-0 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in",
+        CAMADA_MODAL,
+      )}
       onClick={onClose}
     >
       <div

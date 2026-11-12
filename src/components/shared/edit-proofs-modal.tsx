@@ -1,10 +1,13 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { Camera, Image as ImageIcon, X, Trash2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { shrinkImageToBase64 } from "@/lib/client-image";
 import { updateDeliveryProofs } from "@/lib/actions/delivery-proofs";
+import { CAMADA_SOBRE_MODAL } from "@/components/shared/modal";
+import { cn } from "@/lib/utils";
 
 const MAX_PHOTOS = 3;
 
@@ -43,6 +46,20 @@ export function EditProofsModal({
   const [novas, setNovas] = useState<NovaFoto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // PORTAL, como no `Modal` compartilhado. Este modal e renderizado DENTRO do
+  // card da lista, e os cards usam `card-hover`, que aplica `transform` — um
+  // ancestral com transform PRENDE o `position: fixed` e o veu deixa de cobrir
+  // a tela. Em tela cheia o alvo e o `fullscreenElement`, senao o modal existe
+  // e fica invisivel.
+  const [alvo, setAlvo] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const sync = () =>
+      setAlvo((document.fullscreenElement as HTMLElement | null) ?? document.body);
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -121,9 +138,17 @@ export function EditProofsModal({
     });
   }
 
-  return (
+  if (!alvo) return null;
+
+  // CAMADA_SOBRE_MODAL: este modal so existe aberto a partir da ficha do
+  // pedido, que esta em CAMADA_MODAL. Em `z-50` ele nascia DEBAIXO dela — o
+  // fundo escurecia e o painel nao aparecia (12/11/2026).
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+      className={cn(
+        "fixed inset-0 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4",
+        CAMADA_SOBRE_MODAL,
+      )}
       onClick={pending ? undefined : onClose}
     >
       <div
@@ -262,6 +287,7 @@ export function EditProofsModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    alvo,
   );
 }

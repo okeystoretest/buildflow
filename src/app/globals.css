@@ -364,6 +364,30 @@
     background-color: hsl(var(--muted-foreground) / 0.5);
   }
 
+  /* CAMPO NUMERICO SEM AS SETINHAS (pedido do dono, 12/11/2026).
+   *
+   * Uma regra aqui, e nao `[appearance:textfield]` repetido em cada campo: sao
+   * 17 `type="number"` hoje, e o proximo que alguem escrever ja nasce certo.
+   *
+   * As setas somam coisas erradas em dinheiro e quantidade. Em "Valor total no
+   * Pedido" o passo e 0,01: subir R$ 1,00 e cem cliques, e um clique sem querer
+   * altera o valor do pedido sem que ninguem perceba. O teclado continua
+   * funcionando igual (setas do teclado, digitacao, colar), e `min`/`max`/`step`
+   * seguem validando no envio — some o CONTROLE, nao a regra.
+   *
+   * Dois seletores porque sao dois motores: o WebKit/Blink desenha um
+   * pseudo-elemento, o Firefox desenha o proprio campo. `appearance` sem
+   * prefixo acompanha `-moz-` para os navegadores que ja o entendem. */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;

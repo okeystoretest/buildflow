@@ -7,6 +7,8 @@ import { STATUS_LABEL, formatOverdue } from "@/lib/order-flow";
 import { registerDelayReason } from "@/lib/actions/delays";
 import { Button } from "@/components/ui/button";
 import type { OrderCardData } from "@/components/shared/order-card";
+import { CAMADA_SOBRE_MODAL } from "@/components/shared/modal";
+import { cn } from "@/lib/utils";
 
 const MAX_REASON = 500;
 
@@ -78,7 +80,12 @@ export function DelayReasonModal({
   if (!portalTarget) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
+    <div className={cn(
+      "fixed inset-0 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in",
+      // Ja estava em 110 por conta propria; passa a ler a constante para que
+      // um ajuste de camada nao precise ser lembrado em quatro arquivos.
+      CAMADA_SOBRE_MODAL,
+    )}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
