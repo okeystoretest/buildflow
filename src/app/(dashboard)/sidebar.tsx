@@ -249,9 +249,12 @@ export function Sidebar({
       >
         <span className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors",
-          // Aberto: fundo SUAVE com o glifo na cor, como na referencia do dono
-          // — nao um bloco solido com icone branco.
-          eAtivo ? c.chipSuave : CHIP_NEUTRO,
+          // CHEIO quando aberto, e nao o tom suave de 05/11: Ranking e Fluxo
+          // sao modulos de tela unica, entao estar neles e a mesma coisa que
+          // ter uma ferramenta aberta num setor — e o pedido de 12/11 e que
+          // esse estado acenda COLORIDO. Dois pesos para o mesmo significado
+          // em menus vizinhos seria pior que a mudanca.
+          eAtivo ? c.chip : CHIP_NEUTRO,
         )}>
           {ICON[m.base]}
         </span>
@@ -287,9 +290,10 @@ export function Sidebar({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
+                {/* Mesma regra dos Favoritos acima: apagada e neutra. */}
                 <span className={cn(
                   "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-colors",
-                  acesa ? c.chip : c.chipSuave,
+                  acesa ? c.chip : CHIP_NEUTRO,
                 )}>
                   {ICON[t.href]}
                 </span>
@@ -440,9 +444,14 @@ export function Sidebar({
                         : "font-medium text-muted-foreground hover:text-foreground",
                     )}
                   >
+                    {/* NEUTRO quando apagado, e nao a cor do setor em 15%.
+                        Oito atalhos tingidos ao mesmo tempo faziam a lista
+                        inteira parecer selecionada, e a unica acesa se perdia
+                        no meio (pedido do dono, 12/11/2026). Cor aqui passou a
+                        significar uma coisa so: e esta que esta aberta. */}
                     <span className={cn(
                       "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors",
-                      acesa ? c.chip : c.chipSuave,
+                      acesa ? c.chip : CHIP_NEUTRO,
                     )}>
                       {ICON[t.href]}
                     </span>
@@ -478,6 +487,16 @@ export function Sidebar({
                 // a lista. Estar NO setor acende do mesmo jeito.
                 const eAtivo = m.base === ativo || aberto;
 
+                // TRES ESTADOS, e nao dois. Estar NO setor (uma ferramenta
+                // dele aberta) acende o icone CHEIO, igual ao da ferramenta —
+                // era o que faltava: em /vendas/clientes o quadrado do
+                // Comercial ficava em 15% e lia como apagado (pedido do dono,
+                // 12/11/2026). Gaveta so aberta continua no tom suave, que e a
+                // decisao de 06/11: ela sinaliza "estou olhando esta lista",
+                // nao "estou aqui". Fechada e longe: neutro.
+                const chipDoSetor =
+                  m.base === ativo ? c.chip : aberto ? c.chipSuave : CHIP_NEUTRO;
+
                 // Colapsada: o icone abre um flyout com as ferramentas, porque
                 // a lista indentada nao cabe em 4.5rem de largura.
                 if (colapsada) {
@@ -497,7 +516,7 @@ export function Sidebar({
                       >
                         <span className={cn(
                           "flex h-8 w-8 items-center justify-center rounded-xl transition-colors",
-                          eAtivo ? c.chipSuave : CHIP_NEUTRO,
+                          chipDoSetor,
                         )}>
                           {ICON[m.base]}
                         </span>
@@ -522,7 +541,7 @@ export function Sidebar({
                   <>
                     <span className={cn(
                       "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors",
-                      eAtivo ? c.chipSuave : CHIP_NEUTRO,
+                      chipDoSetor,
                     )}>
                       {ICON[m.base]}
                     </span>

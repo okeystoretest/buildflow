@@ -45,8 +45,12 @@ export function VitrineFiltros({
   const algumFiltro = Boolean(f.instant.temporada || f.instant.colecao || f.instant.ano);
 
   return (
-    <div className="flex flex-wrap items-end gap-3">
-      <div className="flex-1 space-y-1.5" style={{ minWidth: 220 }}>
+    /* `gap-2` e a busca com teto de largura: os dois numeros saem da barra do
+       Connect (`collection-filter-bar.tsx` e `content-toolbar.tsx`), que e o
+       padrao que esta tela segue. Sem o teto, a busca esticava ate o fim da
+       linha e empurrava os seletores para a borda direita. */
+    <div className="flex flex-wrap items-end gap-2">
+      <div className="flex-1 space-y-1 sm:max-w-xs" style={{ minWidth: 220 }}>
         <Label>{placeholder}</Label>
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -70,7 +74,7 @@ export function VitrineFiltros({
       </div>
 
       {campos.map((campo) => (
-        <div key={campo.chave} className="space-y-1.5">
+        <div key={campo.chave} className="space-y-1">
           <Label>{campo.label}</Label>
           <select
             className="h-10 rounded-lg border border-input bg-background px-2 text-sm"

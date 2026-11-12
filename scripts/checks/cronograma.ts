@@ -10,6 +10,7 @@
  * Rode com: npx tsx scripts/checks/cronograma.ts
  */
 import {
+  corDeMarca,
   agruparPorDia,
   corDoStatus,
   janela,
@@ -206,7 +207,15 @@ check("ponto do publicado difere do rascunho", corDoPonto("PUBLICADO") === corDo
 check("funil desconhecido ganha a cor neutra", corDoFunil("XOFU"), corDoFunil(""));
 check("as tres etapas do funil tem cores distintas", new Set([corDoFunil("TOFU"), corDoFunil("MOFU"), corDoFunil("BOFU")]).size, 3);
 check("marca desconhecida ganha o cartao neutro", corDoCard("OUTRA"), corDoCard(null));
-check("as duas marcas tem cartoes diferentes", corDoCard("OKEY") === corDoCard("LOV_CLUB"), false);
+// A INVARIANTE CONTINUA, so mudou de lugar: desde 12/11/2026 quem distingue as
+// duas marcas e a paleta (aplicada por `style`), e nao mais a classe. As duas
+// tem de seguir diferentes uma da outra — card de marca que nao diz QUAL marca
+// nao serve para nada num calendario que mistura as duas.
+check(
+  "as duas marcas tem cartoes diferentes",
+  corDeMarca("OKEY")?.fundo === corDeMarca("LOV_CLUB")?.fundo,
+  false,
+);
 
 /* ------------------------------------------------------ detalhe da peca */
 
@@ -262,6 +271,32 @@ check("LOV_CLUB traz so LOV_CLUB", filtrarPorMarca(acervo, "LOV_CLUB").map((p) =
 // nenhuma marca, entao nao pode aparecer no recorte de uma delas.
 check("peca sem marca nao entra em filtro de marca", filtrarPorMarca(acervo, "OKEY").some((p) => p.id === "s"), false);
 check("filtrar nao mexe na lista original", acervo.length, 3);
+
+
+// --- A PALETA DO CARD É A DO CONNECT, valor por valor ----------------------
+// Estes hexadecimais são uma CÓPIA de `BRAND` em src/lib/funnel.ts do
+// Build.Connect. É a mesma agenda nas duas ferramentas: duas paletas para a
+// mesma peça fazem a pessoa duvidar de qual está certa.
+//
+// Sem esta checagem a divergência é silenciosa — ninguém abre os dois
+// calendários lado a lado para conferir um tom de amarelo.
+check("OKEY: fundo do Connect", corDeMarca("OKEY")?.fundo, "#f0e6a8");
+check("OKEY: borda do Connect", corDeMarca("OKEY")?.borda, "#d9cc84");
+check("OKEY: tinta do Connect", corDeMarca("OKEY")?.texto, "#3d3410");
+check("LOV_CLUB: fundo do Connect", corDeMarca("LOV_CLUB")?.fundo, "#f8b4c4");
+check("LOV_CLUB: borda do Connect", corDeMarca("LOV_CLUB")?.borda, "#e895a8");
+check("LOV_CLUB: tinta do Connect", corDeMarca("LOV_CLUB")?.texto, "#4a1420");
+
+// Marca nova criada no Connect não pode pintar o card de nada: cai no neutro,
+// igual a `filtrarPorMarca` acima, que também não a inventa.
+check("marca desconhecida nao tem paleta", corDeMarca("MARCA_NOVA"), null);
+check("sem marca nao tem paleta", corDeMarca(null), null);
+
+// O CARD DE MARCA NÃO LEVA CLASSE DE FUNDO. Quem pinta é o `style` com os
+// valores acima; uma classe junto voltaria a trazer o tema de volta e o fundo
+// mudaria no escuro — que é exatamente o defeito corrigido em 12/11/2026.
+check("card de marca nao traz classe de fundo", corDoCard("OKEY"), "");
+check("card sem marca usa o neutro do tema", corDoCard(null), "border-border bg-secondary/40");
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

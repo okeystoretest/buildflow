@@ -250,13 +250,33 @@ export function seloDeFormatos(formats: string[]): string | null {
   return extras > 0 ? `${formats[0]} +${extras}` : formats[0];
 }
 
-/** O fundo do card, pela marca. Marca nova do Connect cai no neutro. */
+/**
+ * A PALETA DO CARD, copiada do Connect valor por valor (`src/lib/funnel.ts`,
+ * constante `BRAND`). A grade é a mesma agenda nas duas ferramentas; duas
+ * paletas para a mesma peça fariam a pessoa duvidar de qual está certa.
+ *
+ * IGUAL NOS DOIS TEMAS, e isto é a escolha do Connect, não um esquecimento: os
+ * dois tons de marca são claros e o texto sobre eles é fixo em escuro. Antes o
+ * Flow tinha variante `dark:` própria (fundo quase preto, tinta da marca em
+ * 30%), e no modo escuro os dois calendários não se pareciam em nada.
+ *
+ * Aplicada por `style` e não por classe, como lá: o valor é um hexadecimal
+ * exato que não existe na escala do Tailwind, e inline ele não pode divergir
+ * numa purga de CSS.
+ */
+export const CORES_DE_MARCA: Record<string, { fundo: string; borda: string; texto: string }> = {
+  OKEY: { fundo: "#f0e6a8", borda: "#d9cc84", texto: "#3d3410" },
+  LOV_CLUB: { fundo: "#f8b4c4", borda: "#e895a8", texto: "#4a1420" },
+};
+
+/** A paleta da marca, ou `null` — marca nova do Connect cai no card neutro. */
+export function corDeMarca(brand: string | null): { fundo: string; borda: string; texto: string } | null {
+  return (brand && CORES_DE_MARCA[brand]) || null;
+}
+
+/** Classes do card SEM marca. Com marca, quem pinta é `corDeMarca` por style. */
 export function corDoCard(brand: string | null): string {
-  if (brand === "LOV_CLUB")
-    return "border-pink-300/70 bg-pink-50 dark:border-pink-900/60 dark:bg-pink-950/30";
-  if (brand === "OKEY")
-    return "border-amber-300/70 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30";
-  return "border-border bg-secondary/40";
+  return corDeMarca(brand) ? "" : "border-border bg-secondary/40";
 }
 
 /**

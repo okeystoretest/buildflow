@@ -6,6 +6,7 @@ import { Modal } from "@/components/shared/modal";
 import type { PostDoCronograma } from "@/lib/integration/connect-cronograma";
 import {
   corDoCard,
+  corDeMarca,
   corDoFunil,
   corDoPonto,
   dataEHoraDaPeca,
@@ -45,6 +46,7 @@ function IconeDaPlataforma({ plataformas }: { plataformas: string[] }) {
 
 export function CardDaPeca({ post }: { post: PostDoCronograma }) {
   const [aberta, setAberta] = useState(false);
+  const marca = corDeMarca(post.brand);
   const formatos = seloDeFormatos(post.formats);
   const quando = dataEHoraDaPeca(post.scheduledAt);
 
@@ -59,6 +61,15 @@ export function CardDaPeca({ post }: { post: PostDoCronograma }) {
           "w-full space-y-1 rounded-lg border p-2 text-left transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           corDoCard(post.brand),
         )}
+        // Card de marca: fundo, borda e TINTA saem juntos da paleta do
+        // Connect. A tinta no elemento-pai e o que faz os filhos herdarem —
+        // sem ela, `text-foreground` viraria texto claro sobre o amarelo
+        // claro no modo escuro, e o card ficava ilegivel.
+        style={
+          marca
+            ? { backgroundColor: marca.fundo, borderColor: marca.borda, color: marca.texto }
+            : undefined
+        }
       >
         <div className="flex items-center gap-1.5">
           <span
@@ -76,32 +87,50 @@ export function CardDaPeca({ post }: { post: PostDoCronograma }) {
             um card empurrar o resto do dia para fora da vista — e é por isso
             que a ficha existe: lá ela aparece completa. */}
         {post.notes && (
-          <p className="line-clamp-2 text-[0.6875rem] leading-snug text-muted-foreground">
+          <p className={cn(
+            "line-clamp-2 text-[0.6875rem] leading-snug",
+            // Herda a tinta da marca em 75%, como o Connect faz: o cinza do
+            // tema nao tem contraste nenhum sobre o fundo da marca.
+            marca ? "opacity-75" : "text-muted-foreground",
+          )}>
             {post.notes}
           </p>
         )}
 
         <div className="flex flex-wrap items-center gap-1">
           {formatos && (
-            <span className="rounded bg-secondary px-1 py-px text-[0.625rem] font-semibold text-foreground">
+            <span className={cn(
+              "rounded px-1 py-px text-[0.625rem] font-semibold",
+              // Branco translucido sobre a marca, igual ao Connect.
+              marca ? "bg-white/55" : "bg-secondary text-foreground",
+            )}>
               {formatos}
             </span>
           )}
           <span
             className={cn(
               "rounded px-1 py-px text-[0.625rem] font-semibold",
-              corDoFunil(post.funnel),
+              // `corDoFunil` tem variante `dark:` e supoe o fundo do tema.
+              // Sobre a marca o fundo nao muda com o tema, entao o selo
+              // tambem nao pode mudar.
+              marca ? "bg-white/55" : corDoFunil(post.funnel),
             )}
           >
             {post.funnel}
           </span>
           {post.brand && (
-            <span className="rounded px-1 py-px text-[0.625rem] font-semibold uppercase text-muted-foreground">
+            <span className={cn(
+              "rounded px-1 py-px text-[0.625rem] font-semibold uppercase",
+              marca ? "opacity-70" : "text-muted-foreground",
+            )}>
               {rotuloDeMarca(post.brand)}
             </span>
           )}
           {post.responsavel && (
-            <span className="rounded px-1 py-px text-[0.625rem] font-semibold uppercase text-muted-foreground">
+            <span className={cn(
+              "rounded px-1 py-px text-[0.625rem] font-semibold uppercase",
+              marca ? "opacity-70" : "text-muted-foreground",
+            )}>
               {post.responsavel}
             </span>
           )}

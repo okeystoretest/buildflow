@@ -426,11 +426,16 @@ function Videos({ itens, aba }: { itens: VideoDaVitrine[]; aba: AbaDaVitrine }) 
                 Sem mídia anexada no Build.Connect.
               </div>
             )}
-            <div className="space-y-1 p-3">
-              <p className="flex items-start gap-1.5 text-sm font-medium">
-                <span className="min-w-0 break-words">{v.title}</span>
+            {/* Corpo na proporcao do cartao do Connect (`video-card.tsx`):
+                titulo em UMA linha truncada, e nao quebrado em tres. A caixa do
+                video ja era identica (`aspect-video` em `sm:grid-cols-2
+                lg:grid-cols-3`); o que fazia o cartao do Flow crescer era o
+                texto embaixo. */}
+            <div className="space-y-0.5 p-3">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <span className="truncate" title={v.title}>{v.title}</span>
                 {v.isNew && (
-                  <span className="mt-0.5 shrink-0 rounded-full bg-vendas/15 px-1.5 py-0.5 text-[0.625rem] font-medium uppercase text-vendas-text">
+                  <span className="shrink-0 rounded-full bg-vendas/15 px-1.5 py-0.5 text-[0.625rem] font-medium uppercase text-vendas-text">
                     Novo
                   </span>
                 )}
