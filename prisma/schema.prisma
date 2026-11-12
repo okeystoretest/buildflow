@@ -1476,6 +1476,23 @@ model WholesaleLead {
   /// NULO só em candidatura importada: `false` leria como "não quer visita".
   wantsVisit     Boolean?
 
+  /// "Você possui disponibilidade para uma apresentação?".
+  ///
+  /// NULO pelos MESMOS dois motivos da `wantsVisit` acima, mais um terceiro: a
+  /// pergunta nasceu em 12/11/2026, e toda candidatura anterior a ela também é
+  /// nula. `false` afirmaria à analista que a lojista disse "não" — ninguém
+  /// perguntou.
+  wantsPresentation Boolean?
+
+  /// Data e hora que a lojista escolheu, já ancorada no fuso do NEGÓCIO
+  /// (ver `instanteNoFuso` em src/lib/rank-window.ts). O formulário manda
+  /// "AAAA-MM-DDTHH:MM" sem fuso nenhum; interpretar isso com o relógio do
+  /// servidor poria a apresentação três horas fora do lugar.
+  ///
+  /// Só existe quando `wantsPresentation` é true — é a validação que garante o
+  /// par, e é esta data que vira a tarefa da vendedora.
+  presentationAt DateTime?
+
   // --- Seção 4: Validação Cadastro ---
   /// Só dígitos (14). SEM @unique: a repetição é informação, não erro — é ela
   /// que alimenta o aviso da decisão 9.

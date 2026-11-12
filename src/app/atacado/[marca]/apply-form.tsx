@@ -85,7 +85,8 @@ const OPCOES_INVESTIMENTO = INVESTMENT_BANDS.map((v) => ({
 
 // "sim"/"nao" explícitos: vazio é recusa no servidor, não "não" (decisão 20), e
 // só um par de radios distingue "não quero visita" de "não respondi".
-const OPCOES_VISITA = [
+// Servem às DUAS perguntas de sim/não da etapa 3 — daí o nome genérico.
+const OPCOES_SIM_NAO = [
   { valor: "sim", rotulo: "Sim" },
   { valor: "nao", rotulo: "Não" },
 ] as const;
@@ -110,6 +111,8 @@ const CAMPOS_VAZIOS: Record<CampoEsperado, string> = {
   followTime: "",
   investmentBand: "",
   wantsVisit: "",
+  wantsPresentation: "",
+  presentationAt: "",
   cnpj: "",
 };
 
@@ -663,10 +666,37 @@ export function ApplyForm({
               <GrupoRadio
                 nome="wantsVisit"
                 legenda="Gostaria de receber a visita de uma de nossas representantes em sua loja?"
-                opcoes={OPCOES_VISITA}
+                opcoes={OPCOES_SIM_NAO}
                 valor={campos.wantsVisit}
                 onChange={(v) => definir("wantsVisit", v)}
               />
+
+              {/* A data só é PEDIDA no "sim", e some no "não" — mesmo padrão dos
+                  dois campos de "Outro" desta etapa. O `definir` abaixo limpa a
+                  data ao trocar para "não": sem isso, a lojista que escolhe uma
+                  data, muda de ideia e responde "não" mandaria a data velha, e o
+                  campo escondido continuaria `required` travando a etapa num
+                  controle que ela não vê. */}
+              <GrupoRadio
+                nome="wantsPresentation"
+                legenda="Você possui disponibilidade para uma apresentação?"
+                opcoes={OPCOES_SIM_NAO}
+                valor={campos.wantsPresentation}
+                onChange={(v) => {
+                  definir("wantsPresentation", v);
+                  if (v !== "sim") definir("presentationAt", "");
+                }}
+              />
+              {campos.wantsPresentation === "sim" && (
+                <Campo
+                  campo="presentationAt"
+                  rotulo="Qual data e horário?"
+                  valor={campos.presentationAt}
+                  onChange={definir}
+                  type="datetime-local"
+                  min={agoraParaCampo()}
+                />
+              )}
             </>
           )}
 
@@ -784,6 +814,20 @@ function Bloco<T extends NomeDeCampo>({
  * sem ele, ela escreve 300 caracteres onde cabem 200 e descobre no envio, com
  * uma mensagem que nomeia o campo pelo nome interno dele.
  */
+/**
+ * "Agora" no formato que o `datetime-local` entende, para o atributo `min`.
+ *
+ * Existe para a recusa de data passada chegar no BALÃO DO NAVEGADOR, na etapa
+ * dona do campo, e não como texto do servidor depois da etapa 4 — é a mesma
+ * razão de `REGRAS_DA_ETAPA` logo abaixo. O relógio aqui é o do celular dela;
+ * quem decide de verdade é `validarApresentacao`, no servidor.
+ */
+function agoraParaCampo(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function Campo({
   campo,
   rotulo,

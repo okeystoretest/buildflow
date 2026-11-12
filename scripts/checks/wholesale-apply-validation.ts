@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
   validateApplyPayload,
+  validarApresentacao,
   UF_LIST,
   ROTULOS_DE_CAMPO,
 } from "../../src/lib/wholesale-apply-validation";
@@ -40,6 +41,11 @@ const valido = {
   followTime: "6 meses",
   investmentBand: "DE_3_A_5K",
   wantsVisit: "sim",
+  // "nao" no fixture base: a resposta padrão não pede data, então as ~60
+  // checagens que já existiam seguem exercitando o resto sem carregar uma
+  // data que envelheceria o arquivo.
+  wantsPresentation: "nao",
+  presentationAt: "",
   cnpj: "11.222.333/0001-81",
 };
 
@@ -197,6 +203,125 @@ for (const [nome, entrada] of [
   const r = validateApplyPayload({ ...valido, instagram: entrada });
   check(`instagram recusado (${nome})`, "error" in r, true);
 }
+
+
+// --- Apresentação: a pergunta nova e a data condicional -------------------
+// O que está em jogo: esta data vira TAREFA e NOTIFICAÇÃO da vendedora. Data
+// aceita errada produz compromisso no horário errado — e ela confia no card.
+
+// O teto de 24 meses torna impossível uma data futura FIXA: "2099" passaria
+// hoje e seria recusada por estar longe demais. Então a data do caminho feliz
+// é relativa (trinta dias à frente) e o resto — passado, teto, minuto corrente
+// — é exercitado por `validarApresentacao` com o "agora" injetado, onde as
+// constantes podem ser fixas sem envelhecer.
+function daquiAMeses(meses: number, hora = "14:30"): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + meses);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${hora}`;
+}
+const FUTURO = daquiAMeses(1);
+const PASSADO = "2020-03-10T14:30";
+
+check(
+  "wantsPresentation vazio: recusa",
+  validateApplyPayload({ ...valido, wantsPresentation: "" }),
+  { error: "Diga se você tem disponibilidade para uma apresentação." },
+);
+check(
+  "wantsPresentation inventado: recusa",
+  "error" in validateApplyPayload({ ...valido, wantsPresentation: "talvez" }),
+  true,
+);
+check(
+  "wantsPresentation nao: passa sem data",
+  "ok" in validateApplyPayload({ ...valido, wantsPresentation: "nao" }),
+  true,
+);
+
+const semData = validateApplyPayload({ ...valido, wantsPresentation: "sim", presentationAt: "" });
+check("sim SEM data: recusa", semData, {
+  error: "Informe a data e o horário da apresentação.",
+});
+
+const comData = validateApplyPayload({
+  ...valido,
+  wantsPresentation: "sim",
+  presentationAt: FUTURO,
+});
+check("sim com data: passa", "ok" in comData, true);
+check(
+  "wantsPresentation vira booleano",
+  "ok" in comData && comData.clean.wantsPresentation,
+  true,
+);
+
+// O ANCORAMENTO NO FUSO É O CORAÇÃO DESTA FEATURE.
+// "14:30" escolhido pela lojista é 14:30 em Brasília (UTC-3), ou seja 17:30Z.
+// Se alguém trocar `instanteNoFuso` por `new Date(texto)`, num container UTC
+// isto vira 14:30Z e a vendedora aparece três horas depois.
+const ancorada = validarApresentacao("2027-03-10T14:30", new Date("2026-11-12T12:00:00.000Z"));
+check(
+  "14:30 de Brasília é 17:30 UTC",
+  "quando" in ancorada && ancorada.quando.toISOString(),
+  "2027-03-10T17:30:00.000Z",
+);
+
+// "não" APAGA a data: respondeu sim, escolheu, voltou e trocou para não.
+const trocou = validateApplyPayload({
+  ...valido,
+  wantsPresentation: "nao",
+  presentationAt: FUTURO,
+});
+check("nao zera a data mesmo se ela vier no payload", "ok" in trocou && trocou.clean.presentationAt, null);
+
+// Passado e teto: tarefa que nasce vencida, e o seletor do celular que rola até 9999.
+check(
+  "data no passado: recusa",
+  validateApplyPayload({ ...valido, wantsPresentation: "sim", presentationAt: PASSADO }),
+  { error: "Escolha uma data e um horário que ainda não passaram." },
+);
+check(
+  "data além do teto: recusa",
+  "error" in validateApplyPayload({ ...valido, wantsPresentation: "sim", presentationAt: daquiAMeses(30) }),
+  true,
+);
+
+// Formato e calendário: o payload vem de um cliente HTTP, não do seletor.
+for (const [nome, entrada] of [
+  ["texto solto", "amanhã de tarde"],
+  ["só a data", "2027-03-10"],
+  ["com segundos", "2027-03-10T14:30:00"],
+  ["dia 31 de fevereiro", daquiAMeses(3).slice(0, 4) + "-02-31T10:00"],
+  ["mês 13", "2027-13-01T10:00"],
+  ["hora 25", "2027-03-10T25:00"],
+  ["dia zero", "2027-03-00T10:00"],
+] as const) {
+  check(
+    `presentationAt recusado (${nome})`,
+    "error" in validateApplyPayload({ ...valido, wantsPresentation: "sim", presentationAt: entrada }),
+    true,
+  );
+}
+
+// `validarApresentacao` direto, com o "agora" injetado: é o teto de 24 meses,
+// que não dá para exercitar por uma constante fixa sem o arquivo envelhecer.
+const agora = new Date("2026-11-12T12:00:00.000Z");
+check(
+  "26 meses à frente: recusa",
+  "error" in validarApresentacao("2029-01-12T10:00", agora),
+  true,
+);
+check(
+  "23 meses à frente: passa",
+  "quando" in validarApresentacao("2028-10-12T10:00", agora),
+  true,
+);
+check(
+  "o minuto corrente ainda vale",
+  "quando" in validarApresentacao("2026-11-12T09:00", agora),
+  true,
+);
 
 // --- o rotulo do erro existe na TELA ---------------------------------------
 // Por que ler o TSX como texto: o servidor recusa campo por campo e NOMEIA o

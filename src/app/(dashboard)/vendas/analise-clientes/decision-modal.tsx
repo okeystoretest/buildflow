@@ -68,6 +68,9 @@ export interface LeadAnswers {
   followTime: string;
   investmentBand: string | null;
   wantsVisit: boolean | null;
+  wantsPresentation: boolean | null;
+  /** Já formatado no fuso do negócio pela página. */
+  presentationLabel: string | null;
 
   // --- Seção 4: Validação Cadastro ---
   cnpj: string;
@@ -580,6 +583,13 @@ export function DecisionModal({
             </Resposta>
             <Resposta pergunta="Gostaria de receber a visita de uma de nossas representantes em sua loja?">
               {lead.wantsVisit === null ? "—" : lead.wantsVisit ? "Sim" : "Não"}
+            </Resposta>
+            <Resposta pergunta="Você possui disponibilidade para uma apresentação?">
+              {lead.wantsPresentation === null
+                ? "—"
+                : lead.wantsPresentation
+                  ? `Sim — ${lead.presentationLabel ?? "sem data informada"}`
+                  : "Não"}
             </Resposta>
           </Secao>
 

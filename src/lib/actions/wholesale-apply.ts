@@ -14,6 +14,8 @@ import {
 import { resolveReferral, brandSlug } from "@/lib/wholesale-referral";
 import { donaDoRodizio } from "@/lib/wholesale-rodizio";
 import { validateApplyPayload } from "@/lib/wholesale-apply-validation";
+import { textosDaApresentacao } from "@/lib/wholesale-presentation";
+import { sendPushToUser } from "@/lib/push";
 
 /**
  * A ÚNICA escrita sem sessão deste sistema.
@@ -299,8 +301,10 @@ export async function submitWholesaleApplication(
     );
   }
 
+  let leadId: string;
   try {
-    await prisma.wholesaleLead.create({
+    const lead = await prisma.wholesaleLead.create({
+      select: { id: true },
       data: {
         brand,
         sellerId,
@@ -314,6 +318,7 @@ export async function submitWholesaleApplication(
         submittedIp: ip === "desconhecido" ? null : ip,
       },
     });
+    leadId = lead.id;
   } catch (err) {
     console.error("[atacado] falha ao gravar o lead:", err);
     // Os dois arquivos foram gravados antes da linha; se ela falhar, eles não
@@ -327,6 +332,57 @@ export async function submitWholesaleApplication(
     // trocar); esta não oferece ação nenhuma, então dobrar no genérico não custa
     // nada a ela. O diagnóstico fica no `console.error`, onde pertence.
     return actionError(GENERICO);
+  }
+
+  // 7. Apresentação agendada: vira tarefa da vendedora + aviso.
+  //
+  // DEPOIS da linha e FORA do try que a grava, de propósito. A candidatura é o
+  // que não se pode perder: a lojista preencheu dezoito campos e duas fotos e
+  // vai embora da página. Falha aqui — quadro de tarefas, sininho ou push — não
+  // pode desfazer nem recusar o cadastro, então ela só é registrada no log.
+  //
+  // Sem dona não há a quem atribuir: só acontece quando não existe nenhuma
+  // vendedora de atacado ativa, porque o rodízio cobre o link geral. A resposta
+  // continua gravada no lead e a Gestão a lê na ficha ao distribuir.
+  if (v.clean.presentationAt && sellerId) {
+    const texto = textosDaApresentacao({
+      contactName: v.clean.contactName,
+      brand,
+      phone: v.clean.phone,
+      quando: v.clean.presentationAt,
+    });
+    try {
+      // Topo da coluna "A Fazer", como em `createTask`: compromisso com hora
+      // marcada embaixo de uma pilha é compromisso que ela vê tarde.
+      const min = await prisma.dailyTask.aggregate({
+        where: { userId: sellerId, status: "A_FAZER" },
+        _min: { position: true },
+      });
+      await prisma.dailyTask.create({
+        data: {
+          userId: sellerId,
+          title: texto.titulo,
+          startTime: texto.horario,
+          category: texto.categoria,
+          notes: texto.notas,
+          status: "A_FAZER",
+          position: (min._min.position ?? 0) - 1,
+        },
+      });
+      await prisma.notification.create({
+        data: { userId: sellerId, message: texto.notificacao },
+      });
+    } catch (err) {
+      console.error("[atacado] falha ao agendar a apresentação do lead", leadId, err);
+    }
+    // `void` e por último: `sendPushToUser` nunca lança (ver o próprio módulo),
+    // e esperar a rede do serviço de push atrasaria a resposta da lojista.
+    void sendPushToUser(sellerId, {
+      title: "Apresentação agendada",
+      body: texto.push,
+      url: "/vendas/tarefas",
+      tag: `apresentacao-${leadId}`,
+    });
   }
 
   return actionOk(undefined);

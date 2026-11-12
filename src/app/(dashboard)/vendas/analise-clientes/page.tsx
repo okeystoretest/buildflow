@@ -24,6 +24,7 @@ import { CsvImport } from "@/components/shared/csv-import";
 import { importWholesaleLeadsCsv } from "@/lib/actions/import";
 import { COLUNAS_IMPORT } from "@/lib/wholesale-import";
 import type { DuplicateAlertView, LeadAnswers } from "./decision-modal";
+import { dataDaApresentacao, horaDaApresentacao } from "@/lib/wholesale-presentation";
 
 /**
  * ANÁLISE DE CLIENTES — a fila de candidaturas a revenda de atacado.
@@ -290,6 +291,13 @@ export default async function AnaliseClientesPage(
         followTime: l.followTime,
         investmentBand: l.investmentBand,
         wantsVisit: l.wantsVisit,
+        wantsPresentation: l.wantsPresentation,
+        // Formatado AQUI e no fuso do negócio (ver wholesale-presentation.ts):
+        // é o mesmo instante que a vendedora já leu no card da tarefa, e as
+        // duas telas não podem discordar sobre a hora do compromisso.
+        presentationLabel: l.presentationAt
+          ? `${dataDaApresentacao(l.presentationAt)} às ${horaDaApresentacao(l.presentationAt)}`
+          : null,
         cnpj: l.cnpj,
         assistantName: l.assistantName,
         rejectionCode: l.rejectionCode,

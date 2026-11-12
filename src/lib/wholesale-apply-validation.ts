@@ -1,5 +1,6 @@
 import { normalizePhone, isValidPhone } from "@/lib/phone";
 import { isValidCnpj, normalizeCnpj } from "@/lib/wholesale-identity";
+import { instanteNoFuso, FUSO_NEGOCIO } from "@/lib/rank-window";
 
 /**
  * Validação do formulário público de atacado.
@@ -49,6 +50,9 @@ export interface CleanApply {
   followTime: string;
   investmentBand: (typeof INVESTMENT_BANDS)[number];
   wantsVisit: boolean;
+  wantsPresentation: boolean;
+  /// Instante ancorado no fuso do negócio; null quando a resposta foi "não".
+  presentationAt: Date | null;
   cnpj: string; // só dígitos, 14
 }
 
@@ -157,6 +161,8 @@ type CampoFechado =
   | "foundUsOther"
   | "investmentBand"
   | "wantsVisit"
+  | "wantsPresentation"
+  | "presentationAt"
   | "cnpj";
 
 /**
@@ -176,6 +182,72 @@ const MAX_OUTRO = 200;
 function texto(campos: Record<string, string>, chave: CampoEsperado): string {
   const valor: unknown = (campos as Record<string, unknown>)[chave];
   return typeof valor === "string" ? valor.trim() : "";
+}
+
+
+// ---------------------------------------------------------------------------
+// Data e hora da apresentação
+// ---------------------------------------------------------------------------
+
+/** Forma exata que `<input type="datetime-local">` envia. */
+const DATETIME_LOCAL = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
+/**
+ * Até onde se pode agendar. Dois anos não é regra de negócio, é teto de
+ * sanidade: o seletor do celular rola até 9999, e uma apresentação em 4021
+ * seria uma tarefa que nunca sai da coluna "A Fazer" da vendedora.
+ */
+const MAX_MESES_A_FRENTE = 24;
+
+/**
+ * Converte o texto do formulário no instante que a lojista quis dizer.
+ *
+ * O `datetime-local` manda "2026-11-20T14:00" SEM FUSO. `new Date(texto)` o
+ * interpretaria no relógio do processo — e o container roda em UTC, então
+ * "14:00" viraria 11:00 em Brasília e a vendedora apareceria três horas
+ * depois. Por isso o texto é quebrado em números e remontado por
+ * `instanteNoFuso`, a mesma função que ancora as janelas do ranking.
+ *
+ * Reconstruir e comparar é o que recusa 31/02 e 25:00: `instanteNoFuso` usa
+ * `Date.UTC`, que normaliza silenciosamente o dia inválido para o mês
+ * seguinte em vez de reclamar.
+ */
+export function validarApresentacao(
+  bruto: string,
+  agora: Date = new Date(),
+): { error: string } | { quando: Date } {
+  const m = DATETIME_LOCAL.exec(bruto);
+  if (!m) return { error: "Informe a data e o horário da apresentação." };
+
+  const [ano, mes, dia, hora, minuto] = m.slice(1).map(Number);
+  if (mes < 1 || mes > 12 || dia < 1 || dia > 31 || hora > 23 || minuto > 59) {
+    return { error: "Data ou horário inválido. Confira o que você escolheu." };
+  }
+
+  const quando = instanteNoFuso(ano, mes, dia, hora, minuto);
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: FUSO_NEGOCIO,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(quando);
+  if (partes !== `${m[1]}-${m[2]}-${m[3]}`) {
+    return { error: "Data ou horário inválido. Confira o que você escolheu." };
+  }
+
+  // Passado é recusado: a tarefa da vendedora nasceria vencida. O minuto
+  // corrente ainda vale — quem escolhe "agora" no seletor não está errada.
+  if (quando.getTime() < agora.getTime() - 60_000) {
+    return { error: "Escolha uma data e um horário que ainda não passaram." };
+  }
+
+  const teto = new Date(agora);
+  teto.setMonth(teto.getMonth() + MAX_MESES_A_FRENTE);
+  if (quando.getTime() > teto.getTime()) {
+    return { error: `Escolha uma data dentro dos próximos ${MAX_MESES_A_FRENTE} meses.` };
+  }
+
+  return { quando };
 }
 
 export function validateApplyPayload(campos: Record<string, string>): ApplyValidation {
@@ -273,6 +345,23 @@ export function validateApplyPayload(campos: Record<string, string>): ApplyValid
     return { error: "Diga se você gostaria de receber uma visita." };
   }
 
+  // Mesma forma da `wantsVisit`: valor fechado, vazio é pergunta sem resposta.
+  const wantsPresentationBruto = texto(fonte, "wantsPresentation").toLowerCase();
+  if (!SIM.includes(wantsPresentationBruto) && !NAO.includes(wantsPresentationBruto)) {
+    return { error: "Diga se você tem disponibilidade para uma apresentação." };
+  }
+  const querApresentacao = SIM.includes(wantsPresentationBruto);
+
+  // A data só é PEDIDA quando ela disse "sim" — e, dito "sim", é obrigatória:
+  // "tenho disponibilidade" sem quando é uma resposta que não agenda nada. É a
+  // mesma regra dos dois campos de "Outro" logo acima.
+  let presentationAt: Date | null = null;
+  if (querApresentacao) {
+    const erroData = validarApresentacao(texto(fonte, "presentationAt"));
+    if ("error" in erroData) return erroData;
+    presentationAt = erroData.quando;
+  }
+
   // 4. CNPJ: dígitos verificadores, não só comprimento. Os códigos de recusa
   // 02 e 05 descrevem conferência humana a partir de um número que já faça
   // sentido — não vale ocupar a analista com dígito digitado errado.
@@ -305,6 +394,10 @@ export function validateApplyPayload(campos: Record<string, string>): ApplyValid
       followTime: lidos.followTime,
       investmentBand: investmentBand as CleanApply["investmentBand"],
       wantsVisit: SIM.includes(wantsVisitBruto),
+      wantsPresentation: querApresentacao,
+      // "Não" apaga a data: respondido "sim", escolhida a data e trocada a
+      // resposta depois, a data velha viraria uma tarefa que ninguém pediu.
+      presentationAt: querApresentacao ? presentationAt : null,
       cnpj: normalizeCnpj(cnpjBruto),
     },
   };
