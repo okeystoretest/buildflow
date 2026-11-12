@@ -11,6 +11,7 @@ import { OrderDetailModal } from "@/components/shared/order-detail-modal";
 import { CompletePhotoModal } from "./complete-photo-modal";
 import { Truck, Camera, Eye, CheckCircle2, X, MapPin } from "lucide-react";
 import { shortName } from "@/lib/utils";
+import { shrinkImageToBase64 } from "@/lib/client-image";
 
 export interface DriverOrderView {
   id: string;
@@ -60,13 +61,36 @@ export function EntregaCard({ order, index = 0 }: { order: DriverOrderView; inde
 
   function concluirComFotos(files: File[], driverFee: number) {
     setError(null);
-    const fd = new FormData();
-    fd.append("orderId", order.id);
-    // Valor da entrega informado pelo motorista (obrigatório na action).
-    fd.append("driverFee", String(driverFee));
-    // Envia todas as fotos sob o mesmo campo "photos" (a action lê via getAll).
-    for (const f of files) fd.append("photos", f);
     start(async () => {
+      const fd = new FormData();
+      fd.append("orderId", order.id);
+      // Valor da entrega informado pelo motorista (obrigatório na action).
+      fd.append("driverFee", String(driverFee));
+
+      // ENCOLHER NO CELULAR ANTES DE ENVIAR.
+      //
+      // Foto de câmera de celular tem vários MB; três delas passam do
+      // `serverActions.bodySizeLimit` (12mb) do next.config. Esse estouro é
+      // recusado pelo Next ANTES da action rodar, então o try/catch do
+      // completeDelivery nunca o vê: o motorista recebia a tela branca de
+      // "Application error: a server-side exception has occurred".
+      // É o mesmo pré-processamento que os outros uploads do app já fazem.
+      let total = 0;
+      for (const f of files) {
+        const r = await shrinkImageToBase64(f);
+        if (!r.base64) { setError(r.error ?? "Não foi possível processar a foto."); return; }
+        const blob = await (await fetch(r.base64)).blob();
+        total += blob.size;
+        // Rede do caminhão: 8MB é o teto seguro abaixo do limite do Next.
+        // Só é alcançado quando o navegador não decodificou a imagem e o
+        // shrink devolveu o original (HEIC em Android, p.ex.).
+        if (total > 8 * 1024 * 1024) {
+          setError("Fotos muito grandes. Remova uma foto e tente novamente.");
+          return;
+        }
+        fd.append("photos", new File([blob], `comprovante.${blob.type === "image/png" ? "png" : "jpg"}`, { type: blob.type }));
+      }
+
       const res = await completeDelivery(fd);
       if (res.ok) {
         setPhotoModal(false);
