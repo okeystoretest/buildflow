@@ -10,7 +10,7 @@ import { EXCEPTION_STATUSES } from "@/lib/order-flow";
 import { VendaRowActions } from "./row-actions";
 import { VendasBusca } from "./busca-client";
 import { CopiarLinkAtacado, CopiarLinkGeral } from "./copiar-link-atacado";
-import type { Prisma } from "@prisma/client";
+import { buildVendasWhere } from "@/lib/vendas-query";
 
 const PAGE_SIZE = 6; // exibe apenas as ultimas 6 vendas por pagina
 
@@ -36,26 +36,14 @@ export default async function VendasPage(
   const vendedoraAtacado = ator?.role === "VENDAS" && ator.salesModel === "ATACADO";
   const busca = searchParams?.busca?.trim() || "";
   const page = Math.max(1, Number(searchParams?.page) || 1);
-  // Busca por Numero do Pedido, Comanda OU nome da cliente (case-insensitive,
-  // parcial). O nome entra porque e o que a vendedora tem na cabeca quando a
-  // cliente liga — numero e comanda ela precisa procurar.
-  const buscaFilter: Prisma.OrderWhereInput = busca
-    ? {
-        OR: [
-          { orderNumber: { contains: busca, mode: "insensitive" } },
-          { comandaNumber: { contains: busca, mode: "insensitive" } },
-          { customer: { name: { contains: busca, mode: "insensitive" } } },
-        ],
-      }
-    : {};
 
-  // Restricao de escopo: VENDAS so ve os proprios pedidos; GESTAO/FINANCEIRO
-  // veem todos. Pedidos CONCLUIDO saem daqui e ficam so no Historico.
-  const where: Prisma.OrderWhereInput = {
-    status: { not: "CONCLUIDO" },
-    ...(veTudo ? {} : { sellerId: session.userId }),
-    ...buscaFilter,
-  };
+  // Escopo + recorte de status, em src/lib/vendas-query.ts: SEM busca, a lista
+  // e o trabalho em aberto (sem CONCLUIDO); COM busca, procura em todos os
+  // status — senao a tela nega a existencia de um pedido ja concluido.
+  const where = buildVendasWhere({
+    busca,
+    sellerId: veTudo ? null : session.userId,
+  });
 
   // Paginacao: 10 por pagina (as ultimas vendas primeiro).
   const totalOrders = await prisma.order.count({ where });
@@ -104,7 +92,16 @@ export default async function VendasPage(
       <VendasBusca defaultBusca={busca} />
 
       <Card>
-        <CardHeader><CardTitle>{veTudo ? "Pedidos" : "Meus pedidos"}</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>{veTudo ? "Pedidos" : "Meus pedidos"}</CardTitle>
+          {/* A busca muda o que a lista mostra; dizer isso evita a leitura de
+              que um concluído "apareceu no lugar errado". */}
+          <p className="text-sm text-muted-foreground">
+            {busca
+              ? "Resultado da busca — inclui pedidos já concluídos, com o status de cada um."
+              : "Pedidos em andamento. Os concluídos aparecem ao buscar, e em Vendas Realizadas."}
+          </p>
+        </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
