@@ -17,7 +17,28 @@ import path from "node:path";
 // Pasta raiz absoluta dos uploads (configurada no .env).
 //   Producao VPS: /var/www/app/uploads
 //   Dev:          ./uploads
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "./uploads";
+/**
+ * Raiz dos uploads. Em PRODUCAO a variavel e obrigatoria.
+ *
+ * Antes havia um default silencioso de "./uploads": um deploy que esquecesse a
+ * variavel passava a gravar comprovante e nota fiscal DENTRO do container, fora
+ * do volume, e os arquivos morriam no redeploy seguinte sem um erro em lugar
+ * nenhum. Perder arquivo calado e pior que nao subir o arquivo.
+ *
+ * Checado AQUI, por chamada, e nao no topo do modulo: `next build` roda com
+ * NODE_ENV=production, e um throw no carregamento quebraria o build.
+ */
+export function raizDeUploads(): string {
+  const dir = process.env.UPLOAD_DIR;
+  if (dir) return dir;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "UPLOAD_DIR nao configurada. Em producao ela e obrigatoria: sem ela os " +
+        "arquivos seriam gravados dentro do container e perdidos no redeploy.",
+    );
+  }
+  return "./uploads";
+}
 
 // Base publica gravada no `filePath` dos registros novos.
 //
@@ -92,7 +113,7 @@ export async function processAndSaveImage(
   const month = String(now.getMonth() + 1).padStart(2, "0");
 
   // Pasta absoluta destino: <UPLOAD_DIR>/<folder>/<ano>/<mes>
-  const destDirAbs = path.join(UPLOAD_DIR, folder, year, month);
+  const destDirAbs = path.join(raizDeUploads(), folder, year, month);
   await mkdir(destDirAbs, { recursive: true });
 
   // Sanitiza nome e forca extensao .webp. Acrescenta um sufixo ALEATORIO
@@ -298,7 +319,7 @@ export async function saveDocument(
   const year = String(now.getFullYear());
   const month = String(now.getMonth() + 1).padStart(2, "0");
 
-  const destDirAbs = path.join(UPLOAD_DIR, folder, year, month);
+  const destDirAbs = path.join(raizDeUploads(), folder, year, month);
   await mkdir(destDirAbs, { recursive: true });
 
   const safeName = opts.fileName.replace(/[^a-zA-Z0-9_-]/g, "") || `doc_${Date.now()}`;
@@ -347,7 +368,7 @@ export function resolveUploadedFilePath(publicPath: string): string | null {
   rel = rel.replace(/^\/+/, "");
   if (!rel) return null;
 
-  const root = path.resolve(UPLOAD_DIR);
+  const root = path.resolve(raizDeUploads());
   const absolute = path.resolve(root, rel);
   if (absolute !== root && !absolute.startsWith(root + path.sep)) return null;
   return absolute;
