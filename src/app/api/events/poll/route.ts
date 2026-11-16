@@ -44,15 +44,29 @@ export async function GET(req: Request): Promise<Response> {
 
   try {
     const rows = await getEventsSince(safeSince);
-    events = rows.map((e) => ({
-      type: e.type,
-      orderId: e.orderId,
-      orderNumber: e.orderNumber,
-      customerName: e.customerName,
-      status: e.status,
-      notify: (e.notifyRoles ?? []).includes(role),
-      ts: e.ts,
-    }));
+    events = rows.map((e) => {
+      const notify = (e.notifyRoles ?? []).includes(role);
+      return {
+        type: e.type,
+        orderId: e.orderId,
+        // NUMERO E NOME DO CLIENTE SO VAO QUANDO ESTE PAPEL VAI EXIBI-LOS.
+        //
+        // O cliente ja ignora os dois quando `notify` e falso (ver
+        // realtime-provider: ele retorna antes de montar a mensagem), e
+        // `notifyRoles` hoje e sempre ["FINANCEIRO"] ou vazio. Mandar a todo
+        // papel era, portanto, vazar sem nenhum uso: um MOTORISTA — cuja
+        // navegacao sao duas telas, as entregas dele e os chamados — recebia a
+        // cada 4s o numero e o nome da cliente de cada pedido de cada loja.
+        //
+        // Omitir em vez de filtrar por lista de papeis: lista precisa ser
+        // mantida a cada papel novo, e quem esquecer de atualizar reabre o
+        // vazamento em silencio. Aqui a regra se amarra a quem EXIBE.
+        ...(notify ? { orderNumber: e.orderNumber, customerName: e.customerName } : {}),
+        status: e.status,
+        notify,
+        ts: e.ts,
+      };
+    });
   } catch (err) {
     console.error("[realtime] falha ao ler eventos:", err);
     // Em caso de erro de leitura, responde vazio (o cliente tenta no proximo tick).
