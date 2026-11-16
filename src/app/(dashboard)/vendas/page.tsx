@@ -16,7 +16,7 @@ const PAGE_SIZE = 6; // exibe apenas as ultimas 6 vendas por pagina
 
 export default async function VendasPage(
   props: {
-    searchParams?: Promise<{ busca?: string; page?: string }>;
+    searchParams?: Promise<{ busca?: string; page?: string; comprovanteFalhou?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -90,6 +90,14 @@ export default async function VendasPage(
       </div>
 
       <VendasBusca defaultBusca={busca} />
+
+      {Number(searchParams?.comprovanteFalhou) > 0 && (
+        <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+          O pedido foi salvo, mas <strong>{Number(searchParams!.comprovanteFalhou)}</strong>{" "}
+          comprovante(s) não subiram. Abra o pedido e anexe novamente — sem eles o
+          Financeiro não consegue aprovar.
+        </p>
+      )}
 
       <Card>
         <CardHeader>

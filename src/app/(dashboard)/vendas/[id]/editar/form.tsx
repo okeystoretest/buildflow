@@ -214,7 +214,17 @@ export function EditarPedidoForm({
         paymentProofsBase64: newProofs.length ? newProofs.map((p) => p.base64) : undefined,
         removeProofIds: removedIds.length ? removedIds : undefined,
       });
-      if (res.ok) { router.push(canEditFinance ? "/fluxo" : "/vendas"); router.refresh(); }
+      if (res.ok) {
+        const n = res.data.comprovantesFalhos;
+        const destino = canEditFinance ? "/fluxo" : "/vendas";
+        // O aviso de comprovante existe SO em /vendas, e /fluxo sem ?loja= abre o
+        // seletor de loja, que renavega com a query reescrita — o alerta se
+        // perderia no caminho. Quem tem comprovante falho vai para onde o aviso
+        // aparece e onde a busca deixa reabrir o pedido (GESTAO/FINANCEIRO veem
+        // todos os pedidos la). Sem falha, o destino por papel nao muda.
+        router.push(n > 0 ? `/vendas?comprovanteFalhou=${n}` : destino);
+        router.refresh();
+      }
       else setError(res.error);
     });
   }

@@ -207,7 +207,14 @@ export function NovoPedidoForm({
           : undefined,
         paymentProofsBase64: proofs.length ? proofs.map((p) => p.base64) : undefined,
       });
-      if (res.ok) { router.push("/vendas"); router.refresh(); }
+      if (res.ok) {
+        // O comprovante que nao subiu viaja na URL, como todo estado desta casa.
+        // Prender a vendedora no formulario a faria reenviar e bater na trava de
+        // numero duplicado — o pedido JA existe.
+        const n = res.data.comprovantesFalhos;
+        router.push(n > 0 ? `/vendas?comprovanteFalhou=${n}` : "/vendas");
+        router.refresh();
+      }
       else setError(res.error);
     });
   }

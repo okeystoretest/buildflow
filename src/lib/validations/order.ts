@@ -264,19 +264,56 @@ export type UpdateExcursaoInput = z.infer<typeof updateExcursaoSchema>;
 // (ou nao) e uma migration com UNIQUE falharia no deploy. A checagem vive na
 // aplicacao, onde pode ser explicada a quem esta cadastrando.
 //
+// O INDICE UNICO, QUANDO VIER, nao pode ser `UNIQUE (orderNumber)`: precisa ser
+// composto por loja E sobre a MESMA normalizacao que `chaveDeDuplicidade` faz
+// (caixa e zeros a esquerda), senao o banco aceita o que a tela recusa — e um
+// indice que discorda da aplicacao e pior que indice nenhum. Pre-voo em
+// `scripts/diag-duplicatas.ts`, que ja conta os dois casos. Atencao tambem a
+// `originStoreId` ser nulavel: no Postgres dois NULL nao colidem num indice
+// unico, mas a aplicacao OS trata como a mesma loja (null).
+//
 // ESCOPO DA UNICIDADE: por LOJA DE ORIGEM. Cada loja mantem a propria
 // numeracao, entao o mesmo numero em lojas diferentes e valido; repetido na
 // mesma loja e o mesmo pedido lancado duas vezes — que somaria em dobro no
 // Ranking e na meta.
 
 /**
- * Forma canonica do numero do pedido: sem espaco nas pontas.
+ * Forma canonica GRAVADA do numero do pedido: sem espaco nas pontas.
  *
- * A caixa e PRESERVADA (o numero e exibido como a pessoa digitou); quem ignora
- * caixa e a comparacao de duplicidade, feita no banco com `mode: "insensitive"`.
+ * A caixa e os zeros a esquerda sao PRESERVADOS — o numero aparece na tela
+ * como a pessoa digitou. Quem ignora caixa e zero e a COMPARACAO, e ela mora
+ * em `chaveDeDuplicidade`, abaixo. As duas funcoes existem separadas de
+ * proposito: uma e o que se guarda, a outra e o que se confronta.
  */
 export function normalizeOrderNumber(orderNumber?: string | null): string {
   return (orderNumber ?? "").trim();
+}
+
+/**
+ * Chave de COMPARACAO de duplicidade — o que o banco indexa e o que a
+ * aplicacao confronta. Nunca o que aparece na tela.
+ *
+ * Producao tinha um pedido gravado "008029" com comanda "8029". Enquanto a
+ * comparacao olhava o texto cru, lancar "8029" onde "008029" existe criava um
+ * SEGUNDO pedido, e a mesma venda somava duas vezes no Ranking e na meta.
+ *
+ * TRES NORMALIZACOES, e cada uma tem motivo:
+ *  - espaco nas pontas: ja vinha de `normalizeOrderNumber`;
+ *  - caixa: a comparacao sempre ignorou caixa (era `mode: "insensitive"` na
+ *    query). Dobrar aqui tira o `mode` do caminho e deixa o indice do banco
+ *    travar exatamente o que a aplicacao trava — sem isso os dois discordam,
+ *    e um indice que aceita o que a tela recusa e pior que indice nenhum;
+ *  - zeros a esquerda: o pedido deste comentario.
+ *
+ * ZERO INTERNO E FINAL NAO SE TOCAM ("8009", "80290"), e sobra sempre um
+ * caractere: "0" e "0000" sao o numero zero, e nao ausencia de numero —
+ * ausencia e string vazia, que significa "pedido sem numero".
+ */
+export function chaveDeDuplicidade(orderNumber?: string | null): string {
+  const limpo = normalizeOrderNumber(orderNumber).toLowerCase();
+  if (limpo === "") return "";
+  // O lookahead e o piso de um caractere: sem ele "0000" viraria "".
+  return limpo.replace(/^0+(?=.)/, "");
 }
 
 /** Erro devolvido quando o numero ja existe na mesma Loja de Origem. */

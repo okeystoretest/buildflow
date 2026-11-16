@@ -12,6 +12,7 @@ import {
   trocaValorTravado,
   TROCA_VALOR_TRAVADO_MSG,
   normalizeOrderNumber,
+  chaveDeDuplicidade,
   mensagemPedidoDuplicado,
 } from "@/lib/validations/order";
 import { processAndSaveImage, saveDocument, isPdfDataUrl, validateUploadDataUrl } from "@/lib/image";
@@ -25,9 +26,50 @@ import { Prisma } from "@prisma/client";
  * O valor total e informado diretamente (sem itens).
  * Ao enviar, status vai automaticamente para EM_ANALISE (retido ate o Financeiro).
  */
+
+/**
+ * Pedido JA EXISTENTE na mesma Loja de Origem cujo numero colide com este.
+ *
+ * Existe como funcao unica porque a trava mora em DOIS lugares (criacao e
+ * edicao) e a versao anterior comparava em cada um por conta propria — era so
+ * questao de tempo ate as duas discordarem.
+ *
+ * POR QUE NAO COMPARA NO BANCO: a regra de colisao (espaco, caixa e zeros a
+ * esquerda) vive em `chaveDeDuplicidade`, em TypeScript. Reescrever a mesma
+ * regra em SQL criaria DUAS implementacoes da mesma verdade, e divergencia
+ * entre elas e exatamente o tipo de falha que passa por `tsc` e pelo portao
+ * sem um ruido. Entao o banco faz um filtro BARATO (`contains`) e a decisao e
+ * tomada aqui, com a mesma funcao que a tela usa.
+ *
+ * `contains` e nao `endsWith`: "8029 " gravado com espaco no fim nao termina
+ * com "8029", e um pedido antigo assim escaparia da trava. O filtro largo
+ * custa alguns candidatos a mais — ja escopados por loja — e o `find` abaixo
+ * descarta quem nao colide de verdade ("18029" contem "8029" e e outro pedido).
+ */
+async function pedidoColidente(
+  orderNumber: string,
+  originStoreId: string | null,
+  ignorarId?: string,
+): Promise<{ id: string } | null> {
+  const chave = chaveDeDuplicidade(orderNumber);
+  // Sem numero nao ha o que colidir — e `contains: ""` casaria com tudo.
+  if (chave === "") return null;
+
+  const candidatos = await prisma.order.findMany({
+    where: {
+      ...(ignorarId ? { id: { not: ignorarId } } : {}),
+      originStoreId,
+      orderNumber: { contains: chave, mode: "insensitive" },
+    },
+    select: { id: true, orderNumber: true },
+  });
+
+  return candidatos.find((c) => chaveDeDuplicidade(c.orderNumber) === chave) ?? null;
+}
+
 export async function createOrder(
   raw: unknown,
-): Promise<ActionResult<{ id: string; orderNumber: string }>> {
+): Promise<ActionResult<{ id: string; orderNumber: string; comprovantesFalhos: number }>> {
   try {
     const session = await requireRoleAction(["VENDAS", "GESTAO", "FINANCEIRO"]);
 
@@ -144,16 +186,11 @@ export async function createOrder(
 
     // NUMERO DE PEDIDO DUPLICADO. O mesmo numero lancado duas vezes na mesma
     // Loja de Origem e o mesmo pedido contado em dobro no Ranking e na meta.
-    // Comparacao sem diferenciar caixa; escopo por Loja de Origem (cada loja
-    // tem a propria numeracao). Ver src/lib/validations/order.ts.
+    // Colisao ignora espaco, caixa E zeros a esquerda ("8029" == "008029");
+    // escopo por Loja de Origem (cada loja tem a propria numeracao). A regra
+    // esta em `chaveDeDuplicidade` e a busca em `pedidoColidente`, acima.
     const orderNumber = normalizeOrderNumber(input.orderNumber);
-    const jaExiste = await prisma.order.findFirst({
-      where: {
-        orderNumber: { equals: orderNumber, mode: "insensitive" },
-        originStoreId: input.originStoreId || null,
-      },
-      select: { id: true },
-    });
+    const jaExiste = await pedidoColidente(orderNumber, input.originStoreId || null);
     if (jaExiste) return actionError(mensagemPedidoDuplicado(orderNumber));
 
     const order = await prisma.order.create({
@@ -222,16 +259,22 @@ export async function createOrder(
 
     // Comprovantes de pagamento (ate 5). Cada imagem vira .webp no disco e
     // grava uma linha em OrderPaymentProof (no banco so o caminho).
+    // Comprovante que NAO entrou precisa ser dito. Os tres caminhos de pulo
+    // (vazio, formato recusado, erro de processamento) somavam aqui em silencio:
+    // o pedido nascia sem o anexo, a tela dizia "criado" e o Financeiro travava
+    // depois sem ninguem saber por que. O pedido continua sendo criado — o que
+    // muda e que a contagem volta para quem lancou.
+    let comprovantesFalhos = 0;
     const proofs = (input.paymentProofsBase64 ?? []).slice(0, 5);
     for (const [i, dataUrl] of proofs.entries()) {
       try {
         const base64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
         const buffer = Buffer.from(base64, "base64");
-        if (buffer.length === 0) continue;
+        if (buffer.length === 0) { comprovantesFalhos++; continue; }
         // Formato conferido por magic bytes antes do sharp (lib/image). O
         // comprovante invalido e PULADO, nao derruba o pedido: e a mesma
         // escolha que o catch deste laco ja faz para erro de processamento.
-        if (validateUploadDataUrl(dataUrl, buffer)) continue;
+        if (validateUploadDataUrl(dataUrl, buffer)) { comprovantesFalhos++; continue; }
         // Comprovante aceita imagem OU PDF. PDF vai direto ao disco (sem sharp);
         // imagem passa pelo pipeline .webp. No banco, so o caminho.
         const processed = isPdfDataUrl(dataUrl)
@@ -262,6 +305,7 @@ export async function createOrder(
         }
       } catch {
         // Nao derruba o pedido se um comprovante falhar; pode reenviar depois.
+        comprovantesFalhos++;
       }
     }
 
@@ -285,7 +329,7 @@ export async function createOrder(
       notifyFinance: initialStatus === "EM_ANALISE",
     });
 
-    return actionOk(order);
+    return actionOk({ ...order, comprovantesFalhos });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao criar pedido.";
     return actionError(msg);
@@ -332,7 +376,7 @@ export async function updateOrder(args: {
   // removendo os antigos via removeProofIds.
   paymentProofsBase64?: string[];
   removeProofIds?: string[];
-}): Promise<ActionResult<void>> {
+}): Promise<ActionResult<{ comprovantesFalhos: number }>> {
   try {
     // GESTAO edita qualquer pedido; VENDAS/FINANCEIRO seguem a trava de escopo.
     const session = await requireRoleAction(["GESTAO", "VENDAS", "FINANCEIRO"]);
@@ -455,14 +499,7 @@ export async function updateOrder(args: {
       finalOrderNumber !== order.orderNumber ||
       finalOriginStoreId !== order.originStoreId
     ) {
-      const colide = await prisma.order.findFirst({
-        where: {
-          id: { not: order.id },
-          orderNumber: { equals: finalOrderNumber, mode: "insensitive" },
-          originStoreId: finalOriginStoreId,
-        },
-        select: { id: true },
-      });
+      const colide = await pedidoColidente(finalOrderNumber, finalOriginStoreId, order.id);
       if (colide) return actionError(mensagemPedidoDuplicado(finalOrderNumber));
     }
 
@@ -563,6 +600,8 @@ export async function updateOrder(args: {
     }
 
     // Novos comprovantes: respeita o teto de 5 no total.
+    // Mesma contagem da criacao, pelo mesmo motivo. Ver o comentario la.
+    let comprovantesFalhos = 0;
     const novos = (args.paymentProofsBase64 ?? []).filter(Boolean);
     if (novos.length) {
       const jaTem = await prisma.orderPaymentProof.count({ where: { orderId: order.id } });
@@ -571,11 +610,11 @@ export async function updateOrder(args: {
         try {
           const base64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
           const buffer = Buffer.from(base64, "base64");
-          if (buffer.length === 0) continue;
+          if (buffer.length === 0) { comprovantesFalhos++; continue; }
           // Formato conferido por magic bytes antes do sharp (lib/image). O
           // comprovante invalido e PULADO, nao derruba o pedido: e a mesma
           // escolha que o catch deste laco ja faz para erro de processamento.
-          if (validateUploadDataUrl(dataUrl, buffer)) continue;
+          if (validateUploadDataUrl(dataUrl, buffer)) { comprovantesFalhos++; continue; }
           // Comprovante aceita imagem OU PDF (mesma regra da criacao).
           const processed = isPdfDataUrl(dataUrl)
             ? await saveDocument(buffer, {
@@ -596,7 +635,8 @@ export async function updateOrder(args: {
             },
           });
         } catch {
-          // ignora um anexo que falhe, sem derrubar a edicao
+          // ignora um anexo que falhe, sem derrubar a edicao (mas conta, ver acima)
+          comprovantesFalhos++;
         }
       }
     }
@@ -604,7 +644,7 @@ export async function updateOrder(args: {
     revalidatePath("/fluxo");
     revalidatePath("/logistica");
     emitOrderUpdated({ orderId: args.id });
-    return actionOk(undefined);
+    return actionOk({ comprovantesFalhos });
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao editar pedido.");
   }
