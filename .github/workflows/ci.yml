@@ -1,6 +1,17 @@
 # Os mesmos portoes que a regra de trabalho exige na maquina, rodando sozinhos:
 # `tsc`, os scripts de scripts/checks/ e o build. O quarto portao (abrir o
 # navegador) nao cabe aqui — continua sendo manual.
+#
+# ESTE PIPELINE NAO PUBLICA NADA. Nao ha passo de deploy: o verde aqui diz que o
+# codigo COMPILA e passa nos portoes, nunca que ele esta em producao. Publicar e
+# manual (imagem Docker, ver o Dockerfile na raiz; `output: standalone` no
+# next.config) e inclui aplicar as migrations pendentes com
+# `npx prisma migrate deploy`.
+#
+# Isto esta escrito aqui porque ja custou: o commit 92007c8, que conserta a
+# busca de pedido concluido, passou no CI, foi para o origin e ficou dias fora
+# de producao — com o defeito ainda na tela de quem usa — porque o verde foi
+# lido como "entregue".
 name: CI
 
 on:
