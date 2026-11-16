@@ -151,6 +151,36 @@ function resolvePhone(role: Role, raw: string | null | undefined): { value: stri
   return { value: digitos };
 }
 
+/**
+ * A LOJA DE ORIGEM PRINCIPAL, resolvida uma vez para criar e editar.
+ *
+ * Existe porque `originStores` e uma relacao N-N: ela diz QUAIS lojas a pessoa
+ * opera, nunca em que ordem. A apuracao da meta por loja precisa de UMA
+ * ("apenas a primeira loja de origem", 13/11/2026), e a segunda loja segue
+ * servindo so ao acompanhamento de pedidos.
+ *
+ * Com UMA loja nao ha escolha a fazer — ela E a principal, e perguntar seria
+ * um campo obrigatorio com uma opcao. Com DUAS, o sistema NAO escolhe: um
+ * palpite aqui joga o faturamento da vendedora na loja errada e nada quebra
+ * para avisar.
+ */
+function resolvePrimaryStore(
+  role: Role,
+  originStoreIds: string[],
+  primaryOriginStoreId?: string | null,
+): { value: string | null } | { error: string } {
+  if (role !== "VENDAS" || originStoreIds.length === 0) return { value: null };
+  if (originStoreIds.length === 1) return { value: originStoreIds[0] };
+  const escolhida = primaryOriginStoreId?.trim() || "";
+  if (!escolhida) {
+    return { error: "Marque qual das Lojas de Origem é a principal (a que responde pela meta)." };
+  }
+  if (!originStoreIds.includes(escolhida)) {
+    return { error: "A Loja de Origem principal precisa ser uma das lojas selecionadas." };
+  }
+  return { value: escolhida };
+}
+
 export async function createUser(args: {
   name: string;
   email: string;
@@ -158,6 +188,8 @@ export async function createUser(args: {
   role: Role;
   salesModel?: SalesModel | null;
   originStoreIds?: string[];
+  // Qual das Lojas de Origem responde pela META (ver resolvePrimaryStore).
+  primaryOriginStoreId?: string | null;
   // Chave PIX — só para MOTORISTA (ignorada nos demais perfis).
   pixKey?: string | null;
   // Telefone — só para MOTORISTA (ignorado nos demais perfis).
@@ -186,6 +218,8 @@ export async function createUser(args: {
     if (exists) return actionError("Já existe usuário com este login.");
     const phone = resolvePhone(args.role, args.phone);
     if ("error" in phone) return actionError(phone.error);
+    const principal = resolvePrimaryStore(args.role, originStoreIds, args.primaryOriginStoreId);
+    if ("error" in principal) return actionError(principal.error);
     await prisma.user.create({
       data: {
         name: args.name.trim(),
@@ -200,6 +234,7 @@ export async function createUser(args: {
         originStores: originStoreIds.length
           ? { connect: originStoreIds.map((id) => ({ id })) }
           : undefined,
+        primaryOriginStoreId: principal.value,
       },
     });
     revalidatePath("/gestao");
@@ -221,6 +256,8 @@ export async function updateUser(args: {
   role: Role;
   salesModel?: SalesModel | null;
   originStoreIds?: string[];
+  // Qual das Lojas de Origem responde pela META (ver resolvePrimaryStore).
+  primaryOriginStoreId?: string | null;
   // Chave PIX — só para MOTORISTA (ignorada nos demais perfis).
   pixKey?: string | null;
   // Telefone — só para MOTORISTA (ignorado nos demais perfis).
@@ -269,6 +306,8 @@ export async function updateUser(args: {
 
     const phone = resolvePhone(args.role, args.phone);
     if ("error" in phone) return actionError(phone.error);
+    const principal = resolvePrimaryStore(args.role, originStoreIds, args.primaryOriginStoreId);
+    if ("error" in principal) return actionError(principal.error);
 
     await prisma.user.update({
       where: { id: args.id },
@@ -283,6 +322,10 @@ export async function updateUser(args: {
         phone: phone.value,
         // Substitui todas as Lojas de Origem atreladas (set).
         originStores: { set: originStoreIds.map((id) => ({ id })) },
+        // Reescrito SEMPRE: tirar a loja principal da selecao tem de limpar o
+        // vinculo, senao a vendedora seguiria apurando numa loja que ela nao
+        // opera mais.
+        primaryOriginStoreId: principal.value,
         // Só regrava a senha quando uma nova foi informada.
         ...(novaSenha ? { password: await hashPassword(novaSenha) } : {}),
         ...(revogarSessoes ? { tokenVersion: { increment: 1 } } : {}),

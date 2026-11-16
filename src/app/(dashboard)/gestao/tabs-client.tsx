@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/management";
 import {
   createSalesGoal, deleteSalesGoal,
+  setStoreGoal, deleteStoreGoal,
   createCampaign, createSelectCampaign, renameCampaign, toggleCampaign, deleteCampaign,
 } from "@/lib/actions/goals";
 import { Button } from "@/components/ui/button";
@@ -33,11 +34,21 @@ import type { Role, SalesModel, OrderStatus } from "@prisma/client";
 
 interface Row { id: string; name: string; active: boolean; }
 interface OpRow { id: string; code: string; name: string; active: boolean; }
-interface UserRow { id: string; name: string; email: string; role: Role; active: boolean; salesModel: SalesModel | null; originStoreIds: string[]; pixKey: string | null; phone: string | null; }
+interface UserRow { id: string; name: string; email: string; role: Role; active: boolean; salesModel: SalesModel | null; originStoreIds: string[]; primaryOriginStoreId: string | null; pixKey: string | null; phone: string | null; }
 interface OriginStoreRow { id: string; name: string; active: boolean; simplifiedFlow: boolean; }
 interface SellerOpt { id: string; name: string; salesModel: SalesModel | null; }
 interface GoalRow { id: string; userName: string; amount: number; targetItems: number | null; month: number; year: number; scope: SalesModel; campaignName: string | null; }
 interface CampaignRow { id: string; name: string; active: boolean; selectBrand: string | null; }
+/** Uma loja no painel de Metas: o alvo da loja ao lado da soma das individuais. */
+interface StoreGoalRow {
+  storeId: string; storeName: string; active: boolean;
+  /** null = a loja ainda nao tem meta no periodo exibido. */
+  goalId: string | null;
+  amount: number;
+  /** Soma das metas GERAIS das vendedoras cuja loja principal e esta. */
+  somaIndividuais: number;
+  vendedoras: number;
+}
 interface CampaignOpt { id: string; name: string; }
 interface StageLimitRow { status: OrderStatus; limitMinutes: number; }
 
@@ -48,6 +59,7 @@ const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Planos", "Etapas",
 export function GestaoTabs(props: {
   users: UserRow[]; stores: Row[]; originStores: OriginStoreRow[]; orderTypes: Row[]; operations: OpRow[]; shippingMethods: Row[];
   sellers: SellerOpt[]; goals: GoalRow[]; campaigns: CampaignRow[]; activeCampaigns: CampaignOpt[];
+  storeGoals: StoreGoalRow[]; semLojaPrincipal: number;
   customers: ClienteRow[];
   currentMonth: number; currentYear: number;
   // Periodo das metas exibidas (pode ser um mes passado no modo historico).
@@ -70,7 +82,7 @@ export function GestaoTabs(props: {
 
       {tab === "Usuários" && <UsersPanel users={props.users} originStores={props.originStores} />}
       {tab === "Clientes" && <CustomersPanel customers={props.customers} />}
-      {tab === "Metas" && <GoalsPanel sellers={props.sellers} goals={props.goals} activeCampaigns={props.activeCampaigns} month={props.currentMonth} year={props.currentYear} periodMonth={props.goalPeriodMonth} periodYear={props.goalPeriodYear} isCurrentPeriod={props.isCurrentGoalPeriod} />}
+      {tab === "Metas" && <GoalsPanel sellers={props.sellers} goals={props.goals} activeCampaigns={props.activeCampaigns} month={props.currentMonth} year={props.currentYear} periodMonth={props.goalPeriodMonth} periodYear={props.goalPeriodYear} isCurrentPeriod={props.isCurrentGoalPeriod} storeGoals={props.storeGoals} semLojaPrincipal={props.semLojaPrincipal} />}
       {tab === "Campanhas" && <CampaignsPanel campaigns={props.campaigns} />}
       {tab === "Planos" && <PlanosPanel plans={props.selectPlans} />}
       {tab === "Etapas" && <EtapasPanel stageLimits={props.stageLimits} />}
@@ -217,6 +229,11 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
   const [f, setF] = useState(EMPTY);
   // Lojas de Origem selecionadas (max 2). Separado de `f` por ser lista.
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
+  // A loja PRINCIPAL: a que responde pela apuracao da meta. Com uma loja so
+  // nao ha escolha (ela e a principal); com duas, a Gestao marca — o sistema
+  // nao adivinha, porque adivinhar errado joga o faturamento da vendedora na
+  // loja errada sem nada quebrar para avisar.
+  const [primaryStore, setPrimaryStore] = useState("");
   // Quando != null, o formulario esta EDITANDO este usuario (em vez de criar).
   const [editId, setEditId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -230,9 +247,17 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
 
   function toggleStore(id: string) {
     setSelectedStores((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.includes(id)) {
+        const resto = prev.filter((x) => x !== id);
+        // Tirar a loja principal da selecao tem de tirar a marca com ela; com
+        // uma loja restante, ela assume (nao ha outra escolha possivel).
+        if (primaryStore === id) setPrimaryStore(resto.length === 1 ? resto[0] : "");
+        return resto;
+      }
       if (prev.length >= 2) return prev; // trava no maximo de 2
-      return [...prev, id];
+      const novo = [...prev, id];
+      if (novo.length === 1) setPrimaryStore(id);
+      return novo;
     });
   }
 
@@ -251,6 +276,7 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
       phone: formatPhone(u.phone ?? ""),
     });
     setSelectedStores(u.originStoreIds ?? []);
+    setPrimaryStore(u.primaryOriginStoreId ?? "");
     setError(null);
     setMsg(null);
     // Leva o usuario ate o formulario (ele fica no topo do painel).
@@ -261,6 +287,7 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
     setEditId(null);
     setF(EMPTY);
     setSelectedStores([]);
+    setPrimaryStore("");
     setError(null);
     setMsg(null);
   }
@@ -272,6 +299,10 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
       const salesModel = f.role === "VENDAS" ? f.salesModel : null;
       // Lojas de Origem so valem para VENDAS.
       const originStoreIds = f.role === "VENDAS" ? selectedStores : [];
+      // Com uma loja, ela E a principal — mandar o estado aqui evita depender
+      // da ordem dos cliques no formulario.
+      const primaryOriginStoreId =
+        originStoreIds.length === 1 ? originStoreIds[0] : (primaryStore || null);
       // Chave PIX so vale para MOTORISTA.
       const pixKey = f.role === "MOTORISTA" ? (f.pixKey.trim() || null) : null;
       // Telefone tambem so vale para MOTORISTA. Vai mascarado mesmo: quem
@@ -287,16 +318,18 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
             role: f.role,
             salesModel,
             originStoreIds,
+            primaryOriginStoreId,
             pixKey,
             phone,
           })
-        : await createUser({ ...f, salesModel, originStoreIds, pixKey, phone });
+        : await createUser({ ...f, salesModel, originStoreIds, primaryOriginStoreId, pixKey, phone });
 
       if (res.ok) {
         setMsg(editId ? "Usuário atualizado." : "Usuário criado.");
         setEditId(null);
         setF(EMPTY);
         setSelectedStores([]);
+        setPrimaryStore("");
         router.refresh();
       } else setError(res.error);
     });
@@ -431,6 +464,45 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
               </div>
             )}
             <FieldHint>Associe o vendedor a até duas lojas. Define quais lojas ele pode usar ao criar pedidos.</FieldHint>
+
+            {/* A LOJA PRINCIPAL so e uma PERGUNTA quando ha duas lojas: com uma
+                so, perguntar seria um campo obrigatorio de uma unica opcao.
+                Radio nativo, e nao mais um chip, para nao aninhar botao dentro
+                de botao (HTML invalido) e para o teclado navegar o grupo. */}
+            {selectedStores.length === 2 && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2">
+                <p className="mb-1 flex items-center gap-1 text-sm font-medium">
+                  <Star className="h-3.5 w-3.5" /> Loja principal (apuração da meta)
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {selectedStores.map((id) => {
+                    const loja = originStores.find((s) => s.id === id);
+                    return (
+                      <label key={id} className="flex items-center gap-1.5 text-sm">
+                        <input
+                          type="radio"
+                          name="loja-principal"
+                          checked={primaryStore === id}
+                          onChange={() => setPrimaryStore(id)}
+                        />
+                        {loja?.name ?? "Loja"}
+                      </label>
+                    );
+                  })}
+                </div>
+                <FieldHint>
+                  A venda do vendedor conta na meta DESTA loja. A segunda serve apenas ao
+                  acompanhamento de pedidos.
+                </FieldHint>
+              </div>
+            )}
+            {selectedStores.length === 1 && (
+              <FieldHint>
+                <Star className="mr-1 inline h-3 w-3" />
+                {originStores.find((s) => s.id === selectedStores[0])?.name} é a loja principal —
+                a que responde pela apuração da meta.
+              </FieldHint>
+            )}
           </div>
         )}
         <div>
@@ -463,11 +535,35 @@ function UsersPanel({ users, originStores }: { users: UserRow[]; originStores: O
               <td className="py-2 pr-4">{u.role}</td>
               <td className="py-2 pr-4">{u.salesModel ? (u.salesModel === "VAREJO" ? "Varejo" : "Atacado") : "—"}</td>
               <td className="py-2 pr-4">
-                {u.originStoreIds.length === 0
-                  ? "—"
-                  : u.originStoreIds
-                      .map((id) => originStores.find((s) => s.id === id)?.name ?? "?")
-                      .join(", ")}
+                {u.originStoreIds.length === 0 ? (
+                  "—"
+                ) : (
+                  <span className="flex flex-wrap items-center gap-x-1.5">
+                    {u.originStoreIds.map((id, i) => {
+                      const principal = u.primaryOriginStoreId === id;
+                      return (
+                        <span key={id} className="flex items-center gap-0.5 whitespace-nowrap">
+                          {/* A ESTRELA marca a loja que responde pela meta. Sem
+                              ela a coluna listava duas lojas sem dizer qual
+                              delas apura — e e exatamente essa a pergunta. */}
+                          {principal && (
+                            <Star
+                              className="h-3 w-3 text-amber-500"
+                              aria-label="Loja principal (apuração da meta)"
+                            />
+                          )}
+                          {originStores.find((s) => s.id === id)?.name ?? "?"}
+                          {i < u.originStoreIds.length - 1 && ","}
+                        </span>
+                      );
+                    })}
+                    {u.role === "VENDAS" && !u.primaryOriginStoreId && (
+                      <span className="text-xs text-amber-600 dark:text-amber-400">
+                        (sem loja principal)
+                      </span>
+                    )}
+                  </span>
+                )}
               </td>
               <td className="py-2 pr-4">{u.active ? <Badge variant="motorista">Sim</Badge> : <Badge variant="secondary">Não</Badge>}</td>
               <td className="py-2 pr-4">
@@ -620,9 +716,10 @@ function CustomersPanel({ customers }: { customers: ClienteRow[] }) {
 
 
 // ===== Painel de Metas financeiras =====
-function GoalsPanel({ sellers, goals, activeCampaigns, month, year, periodMonth, periodYear, isCurrentPeriod }: {
+function GoalsPanel({ sellers, goals, activeCampaigns, month, year, periodMonth, periodYear, isCurrentPeriod, storeGoals, semLojaPrincipal }: {
   sellers: SellerOpt[]; goals: GoalRow[]; activeCampaigns: CampaignOpt[]; month: number; year: number;
   periodMonth: number; periodYear: number; isCurrentPeriod: boolean;
+  storeGoals: StoreGoalRow[]; semLojaPrincipal: number;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -638,6 +735,26 @@ function GoalsPanel({ sellers, goals, activeCampaigns, month, year, periodMonth,
   // Seletores do periodo do HISTORICO (navegam via querystring, sem apagar nada).
   const [histM, setHistM] = useState(periodMonth);
   const [histY, setHistY] = useState(periodYear);
+
+  // --- meta da LOJA (bloco de cima) ---
+  const [lojaId, setLojaId] = useState("");
+  const [lojaAmount, setLojaAmount] = useState(0);
+  const [lojaErro, setLojaErro] = useState<string | null>(null);
+
+  function salvarMetaLoja() {
+    setLojaErro(null);
+    start(async () => {
+      // O periodo e o EXIBIDO, nao o corrente: a tela de historico tem de
+      // conseguir corrigir a meta de um mes passado.
+      const res = await setStoreGoal({
+        originStoreId: lojaId, amount: lojaAmount, month: periodMonth, year: periodYear,
+      });
+      if (res.ok) { setLojaAmount(0); router.refresh(); } else setLojaErro(res.error);
+    });
+  }
+  function excluirMetaLoja(id: string) {
+    start(async () => { await deleteStoreGoal(id); router.refresh(); });
+  }
 
   const MESES = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -710,6 +827,102 @@ function GoalsPanel({ sellers, goals, activeCampaigns, month, year, periodMonth,
           </>
         )}
       </div>
+      {/* ---------------------------------------------- META DA LOJA */}
+      <div className="space-y-3 rounded-lg border border-border p-4">
+        <div>
+          <p className="font-medium">Meta da Loja</p>
+          <p className="text-sm text-muted-foreground">
+            O alvo de faturamento da Loja de Origem em {String(periodMonth).padStart(2, "0")}/{periodYear}.
+            A apuração soma as vendedoras cuja <strong>loja principal</strong> é ela — a segunda loja
+            de origem serve apenas ao acompanhamento de pedidos. Regravar substitui o valor.
+          </p>
+        </div>
+
+        {semLojaPrincipal > 0 && (
+          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+            <strong>{semLojaPrincipal}</strong> vendedora(s) ativa(s) sem loja principal definida
+            ficam fora de toda meta de loja. Marque a estrela na aba <strong>Usuários</strong>.
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <FieldHelp label="Loja de Origem" help="Apenas lojas ativas recebem meta nova.">
+            <select className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"
+              value={lojaId} onChange={(e) => setLojaId(e.target.value)}>
+              <option value="">Loja...</option>
+              {storeGoals.filter((l) => l.active).map((l) => (
+                <option key={l.storeId} value={l.storeId}>{l.storeName}</option>
+              ))}
+            </select>
+          </FieldHelp>
+          <FieldHelp label="Meta (R$)" help="Faturamento alvo da loja no mês exibido.">
+            <Input type="number" min={0} step="0.01" placeholder="Ex: 150000"
+              value={lojaAmount || ""} onChange={(e) => setLojaAmount(Number(e.target.value))} />
+          </FieldHelp>
+          <div className="flex items-end">
+            <Button variant="brand" className="w-full" onClick={salvarMetaLoja}
+              disabled={pending || !lojaId || !(lojaAmount > 0)}>
+              Salvar meta da loja
+            </Button>
+          </div>
+        </div>
+        {lojaErro && <p className="text-sm text-destructive">{lojaErro}</p>}
+
+        <table className="w-full text-sm">
+          <thead className="border-b border-border text-left text-foreground">
+            <tr>
+              <th className="py-2 pr-4">Loja</th>
+              <th className="py-2 pr-4 text-right">Meta da loja</th>
+              <th className="py-2 pr-4 text-right">Soma das individuais</th>
+              <th className="py-2 pr-4 text-right">Diferença</th>
+              <th className="py-2 pr-4 text-right">Vendedoras</th>
+              <th className="py-2 pr-4 text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {storeGoals.map((l) => {
+              const dif = l.somaIndividuais - l.amount;
+              // So aponta diferenca quando EXISTEM as duas metas: sem meta de
+              // loja, "diferenca" seria a soma das individuais com sinal, o que
+              // leria como erro onde nao ha nada para comparar.
+              const comparavel = l.goalId !== null && l.somaIndividuais > 0;
+              return (
+                <tr key={l.storeId} className="border-b border-border last:border-0 hover:bg-secondary/50">
+                  <td className="py-2 pr-4 font-medium">
+                    {l.storeName}
+                    {!l.active && <Badge variant="secondary" className="ml-2">Inativa</Badge>}
+                  </td>
+                  <td className="py-2 pr-4 text-right font-data">
+                    {l.goalId ? formatBRL(l.amount) : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="py-2 pr-4 text-right font-data">
+                    {l.somaIndividuais > 0 ? formatBRL(l.somaIndividuais) : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className={`py-2 pr-4 text-right font-data ${comparavel && Math.abs(dif) > 0.004 ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                    {comparavel
+                      ? `${dif > 0 ? "+" : ""}${formatBRL(dif)}`
+                      : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="py-2 pr-4 text-right font-data">{l.vendedoras}</td>
+                  <td className="py-2 pr-4 text-right">
+                    {l.goalId && (
+                      <Button variant="ghost" size="icon" onClick={() => excluirMetaLoja(l.goalId!)} disabled={pending}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {storeGoals.length === 0 && (
+              <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">Nenhuma Loja de Origem cadastrada.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ---------------------------------------------- META INDIVIDUAL */}
+      <p className="font-medium">Meta individual</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
         <FieldHelp label="Vendedor" help="Quem recebe a meta. O escopo (Varejo/Atacado) vem do cadastro dele.">
           <select className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"

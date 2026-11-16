@@ -112,8 +112,14 @@ export interface RankData {
  * A janela EM_ANALISE continua de fora de proposito: ali a venda ainda nao foi
  * confirmada. Sair de EM_ANALISE e privilegio do Financeiro/Gestao, e o caminho
  * de recusa termina em ESTORNO/ESTORNO_PARCIAL/CANCELADO, que seguem excluidos.
+ *
+ * EXPORTADO desde 13/11/2026 para o Acompanhamento Gerencial (Comercial), que
+ * monta a grade do ano com uma consulta propria. Ele precisa do MESMO criterio
+ * de venda confirmada: com uma copia do filtro la, o dia em que este mudar as
+ * duas telas passariam a mostrar faturamentos diferentes do mesmo mes, e a
+ * divergencia apareceria primeiro para quem usa, nao para quem edita.
  */
-const FATURADO_WHERE = {
+export const FATURADO_WHERE = {
   status: {
     notIn: ["EM_ANALISE", "ESTORNO", "ESTORNO_PARCIAL", "CANCELADO"],
   },

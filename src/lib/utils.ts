@@ -78,6 +78,23 @@ export function shortName(full: string): string {
 }
 
 /**
+ * SO o primeiro nome, para onde nem "primeiro + segundo" cabe (a grade de 12
+ * meses do Acompanhamento Gerencial: o nome completo empurrava Janeiro para
+ * fora da tela).
+ *
+ * Nao substitui `shortName`, que e a forma PADRAO de encurtar nome na casa
+ * (Ranking, Financeiro) e continua sendo a primeira escolha. Esta so existe
+ * onde a largura e de uma coluna de tabela.
+ *
+ * Como `shortName`, e transformacao de EXIBICAO: nunca para gravar nem buscar.
+ * Homonimas ficam identicas — aceitavel na grade, onde a cor da serie e a
+ * ordem distinguem; num seletor, use o nome completo.
+ */
+export function firstName(full: string): string {
+  return full.trim().split(" ").filter(Boolean)[0] ?? "";
+}
+
+/**
  * Proxima campanha do rodizio do Ranking de Vendas.
  *
  * Percorre a lista em ciclo: a ultima volta para a primeira. Quando o id atual

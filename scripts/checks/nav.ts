@@ -91,6 +91,9 @@ check("ordem do Comercial", rotulos("/vendas"), [
   // Vitrine no fim, ao lado do Cronograma (pedido do dono, 06/11/2026): as duas
   // leem do Build.Connect e nenhuma escreve.
   "Vitrine",
+  // Acompanhamento Gerencial no fim (13/11/2026): e a unica ferramenta de
+  // Comercial restrita a GESTAO — as outras sao da vendedora, esta e sobre ela.
+  "Acompanhamento Gerencial",
 ]);
 check("rotulos do Financeiro", rotulos("/financeiro"), [
   "Gestão de Pedidos", "Registo de Pedidos", "Contratos Select", "Repasse a Motoristas",

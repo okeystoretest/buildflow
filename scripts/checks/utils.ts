@@ -1,6 +1,6 @@
 // Checagem dos helpers puros de src/lib/utils.ts.
 // Rodar com: npx tsx scripts/checks/utils.ts
-import { shortName, nextCampaignId, dataCurtaBR, rotuloDePeriodo } from "../../src/lib/utils";
+import { shortName, firstName, nextCampaignId, dataCurtaBR, rotuloDePeriodo } from "../../src/lib/utils";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -10,6 +10,17 @@ function check(nome: string, obtido: unknown, esperado: unknown) {
     console.log(`FALHOU ${nome}\n  esperado=${JSON.stringify(esperado)}\n  obtido  =${JSON.stringify(obtido)}`);
   }
 }
+
+// --- firstName: SO o primeiro, para a grade de 12 meses do Acompanhamento ---
+check("firstName dois nomes", firstName("Ana Paula"), "Ana");
+check("firstName tres nomes", firstName("Ana Paula Rodrigues"), "Ana");
+check("firstName nome unico", firstName("Ana"), "Ana");
+// Particula NAO e tratada de proposito: o primeiro token nunca e particula.
+check("firstName com particula", firstName("Maria da Silva Souza"), "Maria");
+check("firstName espacos extras", firstName("  Ana   Paula   Rodrigues "), "Ana");
+// As duas bordas que o ponytail pegou na primeira versao desta funcao:
+check("firstName vazio", firstName(""), "");
+check("firstName so espacos", firstName("   "), "");
 
 // --- shortName: primeiro + segundo nome, para caber no card ---
 check("dois nomes", shortName("Ana Paula"), "Ana Paula");

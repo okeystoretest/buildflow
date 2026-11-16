@@ -22,7 +22,7 @@ export default async function GestaoPage(
   const goalMonth = gm >= 1 && gm <= 12 ? gm : curMonth;
   const goalYear = gy > 2000 && gy < 3000 ? gy : curYear;
 
-  const [users, stores, orderTypes, operations, shippingMethods, goals, campaigns, customers, stageLimits, originStores, selectPlans] =
+  const [users, stores, orderTypes, operations, shippingMethods, goals, campaigns, customers, stageLimits, originStores, storeGoalsRaw, selectPlans] =
     await Promise.all([
       prisma.user.findMany({ orderBy: { name: "asc" }, include: { originStores: { select: { id: true } } } }),
       prisma.store.findMany({ orderBy: { name: "asc" } }),
@@ -40,6 +40,8 @@ export default async function GestaoPage(
       prisma.customer.findMany({ orderBy: { name: "asc" }, take: 20 }),
       prisma.stageTimeLimit.findMany(),
       prisma.originStore.findMany({ orderBy: { name: "asc" } }),
+      // Metas de LOJA do periodo exibido (o mesmo mes/ano das individuais).
+      prisma.storeGoal.findMany({ where: { month: goalMonth, year: goalYear } }),
       // Planos do Select. Vem TODOS (inclusive inativos): esta e a tela que
       // reativa um plano retirado de circulacao. A contagem de contratos
       // acompanha porque e ela que diz se o plano pode ser excluido — e que
@@ -62,11 +64,39 @@ export default async function GestaoPage(
 
   const isCurrentPeriod = goalMonth === curMonth && goalYear === curYear;
 
+  // META DA LOJA ao lado da SOMA DAS INDIVIDUAIS, loja por loja.
+  //
+  // A soma e calculada aqui, e nao no cliente, porque ela depende da LOJA
+  // PRINCIPAL de cada vendedora (`primaryOriginStoreId`) — um dado que o painel
+  // de Metas nao recebia e que nao faz sentido mandar inteiro para o navegador.
+  // So metas GERAIS entram: meta de campanha e em pecas, nao em reais.
+  const metasGerais = goals.filter((g) => !g.campaignId);
+  const storeGoals = originStores.map((loja) => {
+    const equipe = sellers.filter((u) => u.primaryOriginStoreId === loja.id);
+    const equipeIds = new Set(equipe.map((u) => u.id));
+    const sg = storeGoalsRaw.find((g) => g.originStoreId === loja.id);
+    return {
+      storeId: loja.id,
+      storeName: loja.name,
+      active: loja.active,
+      goalId: sg?.id ?? null,
+      amount: Number(sg?.amount ?? 0),
+      somaIndividuais: metasGerais
+        .filter((g) => equipeIds.has(g.userId))
+        .reduce((a, g) => a + Number(g.amount), 0),
+      vendedoras: equipe.length,
+    };
+  });
+
+  // Vendedoras ATIVAS sem loja principal: elas ficam fora de toda meta de loja,
+  // e o aviso existe para isso nao passar em silencio.
+  const semLojaPrincipal = sellers.filter((u) => u.active && !u.primaryOriginStoreId).length;
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Gestão — Parâmetros</h1>
       <GestaoTabs
-        users={users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, active: u.active, salesModel: u.salesModel, originStoreIds: u.originStores.map((s) => s.id), pixKey: u.pixKey ?? null, phone: u.phone ?? null }))}
+        users={users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, active: u.active, salesModel: u.salesModel, originStoreIds: u.originStores.map((s) => s.id), primaryOriginStoreId: u.primaryOriginStoreId ?? null, pixKey: u.pixKey ?? null, phone: u.phone ?? null }))}
         stores={stores.map((s) => ({ id: s.id, name: s.name, active: s.active }))}
         originStores={originStores.map((s) => ({ id: s.id, name: s.name, active: s.active, simplifiedFlow: s.simplifiedFlow }))}
         orderTypes={orderTypes.map((s) => ({ id: s.id, name: s.name, active: s.active }))}
@@ -76,6 +106,8 @@ export default async function GestaoPage(
         goals={goals.map((g) => ({ id: g.id, userName: g.user.name, amount: Number(g.amount), targetItems: g.targetItems, month: g.month, year: g.year, scope: g.scope, campaignName: g.campaign?.name ?? null }))}
         campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, active: c.active, selectBrand: c.selectBrand }))}
         activeCampaigns={activeCampaigns.map((c) => ({ id: c.id, name: c.name }))}
+        storeGoals={storeGoals}
+        semLojaPrincipal={semLojaPrincipal}
         customers={customers.map((c) => ({
           id: c.id, code: c.code, name: c.name,
           cep: c.cep, street: c.street, district: c.district,

@@ -84,6 +84,24 @@ model User {
   // "Lojas de Origem" atreladas ao usuario (max 2, validado na action).
   // Usado por VENDAS para escopo de criacao e por quem opera o fluxo por loja.
   originStores   OriginStore[]  @relation("UserOriginStores")
+  // A loja de origem PRINCIPAL — a que responde pela APURACAO DE METAS.
+  //
+  // Existe porque `originStores` e uma relacao N-N: ela diz QUAIS lojas a
+  // pessoa opera, nunca em que ordem. "A primeira loja de origem" (pedido de
+  // 13/11/2026, regra da meta por loja) nao existia no banco; as consultas
+  // ordenavam por nome, entao "primeira" significava "primeira no alfabeto" —
+  // acaso, e um acaso que joga o faturamento da vendedora na loja errada sem
+  // nada quebrar para avisar.
+  //
+  // A SEGUNDA loja continua existindo e segue servindo so ao acompanhamento de
+  // pedidos; ela nunca entra na meta.
+  //
+  // Opcional porque quem nao vende (Financeiro, Motorista) nao tem loja, e
+  // porque a migracao so consegue preencher sozinha quem tem UMA loja. Quem
+  // tem duas fica nulo ate a Gestao escolher. `SetNull` e nao `Cascade`:
+  // desativar uma loja nao pode apagar o usuario.
+  primaryOriginStore   OriginStore? @relation("UserPrimaryOriginStore", fields: [primaryOriginStoreId], references: [id], onDelete: SetNull)
+  primaryOriginStoreId String?
   pushSubscriptions PushSubscription[]
   driverPayments   DriverPayment[] @relation("DriverPaymentDriver")
   transportRequests TransportRequest[] @relation("TransportDriver")
@@ -91,8 +109,12 @@ model User {
   wholesaleLeads        WholesaleLead[]      @relation("WholesaleLeadSeller")
   wholesaleLeadsDecided WholesaleLead[]      @relation("WholesaleLeadDecider")
   wholesaleLeadEvents   WholesaleLeadEvent[] @relation("WholesaleLeadEventActor")
+  followUps          FollowUp[] @relation("FollowUpCollaborator")
+  followUpsAsManager FollowUp[] @relation("FollowUpManager")
 
   @@index([role])
+  // A apuracao da meta de loja parte da loja: "quem tem esta como principal".
+  @@index([primaryOriginStoreId])
 }
 
 // Inscrição de Web Push (Push API) de um dispositivo/navegador do usuário.
@@ -137,7 +159,10 @@ model OriginStore {
   createdAt      DateTime @default(now())
 
   users  User[]  @relation("UserOriginStores")
+  // Quem tem ESTA loja como principal (ver User.primaryOriginStoreId).
+  primaryUsers User[] @relation("UserPrimaryOriginStore")
   orders Order[]
+  goals  StoreGoal[]
 }
 
 model OrderType {
@@ -816,6 +841,40 @@ model SalesGoal {
   @@index([userId, month, year])
   @@index([month, year])
   @@index([campaignId])
+}
+
+// META DE FATURAMENTO DA LOJA DE ORIGEM no mes (pedido de 13/11/2026).
+//
+// SEPARADA de `SalesGoal` de proposito, e nao um `SalesGoal` com `userId`
+// nulo: a meta individual tem escopo (Varejo/Atacado), vinculo opcional a
+// campanha e meta por itens, e nada disso faz sentido para uma loja. Reusar a
+// tabela significaria uma coluna obrigatoria a menos e tres colunas sempre
+// nulas, mais as unicidades parciais em SQL que o `SalesGoal` ja precisa ter.
+//
+// INDEPENDENTE das metas individuais, por decisao do dono: a Gestao digita as
+// duas, e o painel mostra a diferenca entre a meta da loja e a soma das
+// individuais. A planilha que originou o pedido fazia o contrario (dividia a
+// meta da loja por 4, com tres vendedoras cadastradas) — um divisor fixo que
+// erra sozinho a cada contratacao.
+//
+// A APURACAO e por `User.primaryOriginStoreId`, nunca por `Order.originStoreId`:
+// a venda da vendedora conta na loja DELA, mesmo quando o pedido foi lancado na
+// segunda loja de origem (que serve so ao acompanhamento de pedidos).
+model StoreGoal {
+  id            String      @id @default(cuid())
+  originStore   OriginStore @relation(fields: [originStoreId], references: [id], onDelete: Cascade)
+  originStoreId String
+  amount        Decimal     @db.Decimal(12, 2) // meta em R$
+  month         Int         // 1-12
+  year          Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Uma meta por loja/mes. E o que permite REGRAVAR (upsert) quando a Gestao
+  // corrige um valor digitado errado, em vez de empilhar duas metas da mesma
+  // loja no mesmo mes e dobrar o alvo em silencio.
+  @@unique([originStoreId, month, year])
+  @@index([month, year])
 }
 
 // AJUSTE MANUAL DO REALIZADO NO RANKING DE VENDAS.
@@ -1595,4 +1654,85 @@ model RateLimitHit {
 
   @@index([key, at])
   @@index([at])
+}
+
+// ===========================================================================
+// ACOMPANHAMENTO DO COLABORADOR (One-on-One e Quinzenal)
+// ===========================================================================
+
+enum FollowUpKind {
+  ONE_ON_ONE
+  QUINZENAL
+}
+
+/// "Status de Evolucao" do One-on-One. Os cinco rotulos sao os da planilha
+/// `Acompanhamento Gerencial - FLOW.xlsx`, que especificou o campo.
+enum FollowUpStatus {
+  NAO_INICIADO
+  EM_ANDAMENTO
+  PRECISA_REVISAO
+  EM_ESPERA
+  ENTREGUE
+}
+
+/// Um registro de acompanhamento de um colaborador.
+///
+/// UM MODELO PARA OS DOIS FORMULARIOS (One-on-One e Quinzenal), e nao duas
+/// tabelas: cinco dos dez campos de cada um sao o MESMO campo com outro nome
+/// (forcas/pontos fortes, ponto de desenvolvimento/oportunidades,
+/// reflexao/perspectiva, plano de acao, observacoes). Com duas tabelas, a linha
+/// do tempo do colaborador — que e o que um gestor abre na pratica — exigiria
+/// duas consultas, dois tipos e uma uniao ordenada a mao.
+///
+/// Os campos exclusivos de um dos tipos sao ANULAVEIS por isso, e a action
+/// exige os do tipo que esta sendo gravado (`src/lib/validations/followup.ts`).
+model FollowUp {
+  id   String       @id @default(cuid())
+  kind FollowUpKind
+
+  /// Quem e acompanhado.
+  collaborator   User   @relation("FollowUpCollaborator", fields: [collaboratorId], references: [id], onDelete: Cascade)
+  collaboratorId String
+  /// "Gestor Responsavel pelo Suporte": quem PREENCHEU o formulario, gravado
+  /// automaticamente da sessao (instrucao de desenvolvimento da planilha).
+  /// `Restrict`: apagar o gestor nao pode apagar o historico do colaborador.
+  manager   User   @relation("FollowUpManager", fields: [managerId], references: [id], onDelete: Restrict)
+  managerId String
+
+  /// Data de realizacao da conversa. Meia-noite no fuso do negocio (ver
+  /// `instanteNoFuso` em src/lib/rank-window.ts): `new Date("2026-11-13")`
+  /// cairia em 12/11 as 21:00 de Brasilia e a tela mostraria o dia anterior.
+  heldOn DateTime
+
+  // --- comuns aos dois formularios -----------------------------------------
+  /// Reconhecimento e Pontos Fortes / Forcas em Evidencia.
+  strengths        String
+  /// Oportunidades de Desenvolvimento / Ponto de Desenvolvimento.
+  improvement      String
+  /// Perspectiva do Colaborador / Reflexao do Colaborador (frase).
+  collaboratorView String
+  /// Plano de Acao Semanal / Plano de Acao Definido.
+  actionPlan       String
+  /// Consideracoes Gerais / Observacoes. Opcional nos dois.
+  notes            String?
+
+  // --- so One-on-One --------------------------------------------------------
+  /// Metricas e Indicadores de Desempenho.
+  performance String?
+  /// Status de Evolucao. Padrao "Nao Iniciado" ate alteracao manual.
+  status      FollowUpStatus?
+
+  // --- so Quinzenal ---------------------------------------------------------
+  /// Tema Central da Conversa.
+  topic    String?
+  /// Apoio Necessario.
+  support  String?
+  /// Prazo de Reavaliacao. Data, nao texto: a tela ordena e cobra por ela.
+  reviewOn DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([collaboratorId, heldOn])
+  @@index([kind, heldOn])
 }

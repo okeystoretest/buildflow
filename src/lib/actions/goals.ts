@@ -113,6 +113,79 @@ export async function deleteSalesGoal(id: string): Promise<ActionResult<void>> {
 }
 
 // ===========================================================================
+// META DA LOJA (StoreGoal) — faturamento alvo de uma Loja de Origem no mes.
+//
+// INDEPENDENTE das metas individuais (decisao do dono, 13/11/2026): a Gestao
+// digita as duas, e o Acompanhamento Gerencial mostra a diferenca entre a meta
+// da loja e a soma das individuais das vendedoras vinculadas.
+//
+// A apuracao e por `User.primaryOriginStoreId` — a loja PRINCIPAL da
+// vendedora —, nunca pela loja registrada no pedido.
+// ===========================================================================
+
+/**
+ * Grava a meta da loja no mes. REGRAVA quando ja existe (upsert pela chave
+ * unica), em vez de criar uma segunda: corrigir um valor digitado errado e o
+ * uso normal desta tela, e duas metas da mesma loja no mesmo mes dobrariam o
+ * alvo em silencio.
+ */
+export async function setStoreGoal(args: {
+  originStoreId: string;
+  amount: number;
+  month: number;
+  year: number;
+}): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    if (!args.originStoreId) return actionError("Selecione a Loja de Origem.");
+    if (args.month < 1 || args.month > 12) return actionError("Mês inválido.");
+    if (!(args.year > 2000)) return actionError("Ano inválido.");
+    if (!(args.amount > 0)) return actionError("Informe um valor de meta válido.");
+
+    const loja = await prisma.originStore.findUnique({ where: { id: args.originStoreId } });
+    if (!loja) return actionError("Loja de Origem não encontrada.");
+    // Loja inativa nao recebe meta nova: o alvo de um mes que vem para uma loja
+    // que saiu de operacao so poderia aparecer na tela como meta nao batida.
+    if (!loja.active) return actionError("Loja de Origem inativa. Ative-a antes de definir a meta.");
+
+    await prisma.storeGoal.upsert({
+      where: {
+        originStoreId_month_year: {
+          originStoreId: args.originStoreId,
+          month: args.month,
+          year: args.year,
+        },
+      },
+      create: {
+        originStoreId: args.originStoreId,
+        amount: args.amount,
+        month: args.month,
+        year: args.year,
+      },
+      update: { amount: args.amount },
+    });
+
+    revalidatePath("/gestao");
+    revalidatePath("/vendas/acompanhamento");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao salvar a meta da loja.");
+  }
+}
+
+export async function deleteStoreGoal(id: string): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    await prisma.storeGoal.delete({ where: { id } });
+    revalidatePath("/gestao");
+    revalidatePath("/vendas/acompanhamento");
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao excluir a meta da loja.");
+  }
+}
+
+// ===========================================================================
 // CAMPANHAS (Campaign) — cadastro simples: apenas o nome.
 // ===========================================================================
 

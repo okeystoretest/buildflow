@@ -65,6 +65,24 @@
     --ring: 204 68% 50%;
     --radius: 0.625rem;
 
+    /* ===== SERIES DE GRAFICO (Acompanhamento Gerencial) =====
+       Seis cores categoricas em ORDEM FIXA: a vendedora leva sempre a mesma
+       cor, porque filtrar a loja nao pode repintar quem sobrou.
+       NAO sao as cores de setor: aquelas significam "Comercial", "Financeiro",
+       e usa-las como serie faria o grafico dizer setor onde diz pessoa.
+       Em HEX, e nao em HSL como o resto: os seis passos foram validados
+       (banda de luminosidade, cromaticidade, separacao para daltonismo e
+       contraste) contra a superficie do card em cada tema, e arredondar para
+       HSL moveria os valores conferidos. Tres deles ficam abaixo de 3:1 no
+       tema claro — por isso o grafico anda sempre junto da tabela com os
+       mesmos numeros, que e a leitura que nao depende de cor. */
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+
     /* Outfit + JetBrains Mono, servidas de src/app/fonts por next/font/local
        (ver layout.tsx). A LP do atacado sobrescreve --font-sans no wrapper
        dela e segue com Manrope. */
@@ -108,6 +126,15 @@
     --border: 222 16% 22%;
     --input: 222 16% 22%;
     --ring: 204 75% 58%;
+
+    /* Series no escuro: os MESMOS seis tons re-escolhidos para a superficie
+       escura, nao uma inversao automatica do claro. Aqui os seis passam 3:1. */
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
   }
 
   * { @apply border-border; }
