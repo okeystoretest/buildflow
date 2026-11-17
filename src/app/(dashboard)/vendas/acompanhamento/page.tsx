@@ -2,12 +2,12 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { computeAcompanhamento } from "@/lib/acompanhamento-data";
-import { janelaDoMes, FUSO_NEGOCIO } from "@/lib/rank-window";
-import type { SalesModel } from "@prisma/client";
+import { janelaDoMes, instanteNoFuso, FUSO_NEGOCIO } from "@/lib/rank-window";
+import type { Prisma, SalesModel } from "@prisma/client";
 import { AcompanhamentoFiltros } from "./filtros-client";
 import { AcompanhamentoPainel } from "./painel";
 import { FollowUpsClient, type FollowUpRow, type ColaboradorOpt } from "./followups-client";
-import type { FollowUpKindValue } from "@/lib/validations/followup";
+import { filtroDeSituacao, type FollowUpKindValue } from "@/lib/validations/followup";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +34,9 @@ const ABAS = [
 
 type AbaId = (typeof ABAS)[number]["id"];
 
+/** Registros por página na lista de conversas (mínimo pedido pelo dono). */
+const POR_PAGINA = 5;
+
 /** "YYYY-MM-DD" de um instante NO FUSO DO NEGOCIO (en-CA ja usa esse formato). */
 const diaDoNegocio = (d: Date) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: FUSO_NEGOCIO }).format(d);
@@ -47,6 +50,8 @@ export default async function AcompanhamentoPage(props: {
     vendedora?: string;
     escopo?: string;
     colab?: string;
+    situacao?: string;
+    page?: string;
   }>;
 }) {
   const sp = await props.searchParams;
@@ -85,6 +90,13 @@ export default async function AcompanhamentoPage(props: {
     | SalesModel
     | "";
   const colab = sp?.colab?.trim() || "";
+  // "" = todas; "abertos"; "concluidos" (o historico). Valor cru, como `colab`:
+  // quem interpreta e `FormularioAba`, e a querystring so o carrega entre abas.
+  const situacao = sp?.situacao?.trim() || "";
+  // Pagina 1 para qualquer coisa que nao seja um inteiro >= 1 (?page=0, =-3,
+  // =abc): a alternativa e `skip` negativo, que o Prisma recusa em runtime.
+  const paginaParam = Number(sp?.page);
+  const pagina = Number.isInteger(paginaParam) && paginaParam >= 1 ? paginaParam : 1;
 
   const querystring = (patch: Record<string, string>) => {
     const p = new URLSearchParams();
@@ -96,6 +108,7 @@ export default async function AcompanhamentoPage(props: {
       vendedora,
       escopo,
       colab,
+      situacao,
       ...patch,
     })) {
       if (v) p.set(k, v);
@@ -166,6 +179,9 @@ export default async function AcompanhamentoPage(props: {
           colaboradores={colaboradores}
           hoje={diaDoNegocio(agora)}
           gestorNome={session.name}
+          gestorId={session.userId}
+          situacao={situacao}
+          paginaPedida={pagina}
         />
       )}
     </div>
@@ -235,6 +251,9 @@ async function FormularioAba({
   colaboradores,
   hoje,
   gestorNome,
+  gestorId,
+  situacao,
+  paginaPedida,
 }: {
   kind: FollowUpKindValue;
   ano: number;
@@ -242,25 +261,62 @@ async function FormularioAba({
   colaboradores: ColaboradorOpt[];
   hoje: string;
   gestorNome: string;
+  gestorId: string;
+  /** "" = todas, "abertos", "concluidos". */
+  situacao: string;
+  /** A página PEDIDA na URL. A exibida é esta travada na última que existe. */
+  paginaPedida: number;
 }) {
   // Janela do ANO no fuso do negócio, pelas bordas do primeiro e do último mês.
   const inicio = janelaDoMes(ano, 1).inicio;
   const fim = janelaDoMes(ano, 12).fim;
 
+  const where: Prisma.FollowUpWhereInput = {
+    kind,
+    heldOn: { gte: inicio, lt: fim },
+    ...(colab ? { collaboratorId: colab } : {}),
+    // CONCLUÍDO = status ENTREGUE. A regra (e o `OR` que sustenta os registros
+    // de status nulo) mora em validations/followup.ts, onde a checagem a vê.
+    ...filtroDeSituacao(situacao),
+  };
+
+  // O `count` é o que a paginação precisa para saber quantas páginas existem —
+  // e substitui o antigo `take: 200`, que era um teto cego: num ano cheio o
+  // registro 201 simplesmente não existia para a tela.
+  // O `count` vem ANTES e sozinho de proposito: ele e quem diz qual e a ultima
+  // pagina, e sem trava a tela mente. Bastava o gestor estar na pagina 2 e
+  // apagar registros ate sobrarem 5 — `skip` pulava a lista inteira e a tela
+  // exibia "Mostrando 6-5 de 5" com a tabela vazia, em vez do fim da lista.
+  // Encontrado na tela em 17/11/2026.
+  const total = await prisma.followUp.count({ where });
+  const pagina = Math.min(paginaPedida, Math.max(1, Math.ceil(total / POR_PAGINA)));
+
   const registros = await prisma.followUp.findMany({
-    where: {
-      kind,
-      heldOn: { gte: inicio, lt: fim },
-      ...(colab ? { collaboratorId: colab } : {}),
-    },
+    where,
     include: {
       collaborator: { select: { name: true } },
       manager: { select: { name: true } },
     },
     orderBy: { heldOn: "desc" },
-    // Teto para a tela não crescer sem limite num ano cheio; a lista é ordenada
-    // do mais recente, que é o que a Gestão abre para ver.
-    take: 200,
+    skip: (pagina - 1) * POR_PAGINA,
+    take: POR_PAGINA,
+  });
+
+  // Tarefas do gestor JA EM ANDAMENTO hoje. Existem para o cronometro
+  // sobreviver ao recarregamento: o tempo e recalculado de `startTime`, que
+  // esta no banco, e nao de estado de cliente, que morre no F5.
+  //
+  // Recorte do dia no FUSO DO NEGOCIO, nao do servidor: `DailyTask` e
+  // declaradamente a tarefa do dia corrente, e as 22h de Brasilia ja sao o dia
+  // seguinte em UTC.
+  const [ay, am, ad] = hoje.split("-").map(Number);
+  const tarefasAtivas = await prisma.dailyTask.findMany({
+    where: {
+      userId: gestorId,
+      status: "FAZENDO",
+      createdAt: { gte: instanteNoFuso(ay, am, ad) },
+    },
+    select: { id: true, title: true, startTime: true },
   });
 
   const rows: FollowUpRow[] = registros.map((r) => ({
@@ -291,6 +347,11 @@ async function FormularioAba({
       gestorNome={gestorNome}
       colabFiltro={colab}
       anoFiltro={String(ano)}
+      situacaoFiltro={situacao}
+      pagina={pagina}
+      porPagina={POR_PAGINA}
+      total={total}
+      tarefasAtivas={tarefasAtivas}
     />
   );
 }

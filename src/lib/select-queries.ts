@@ -499,7 +499,7 @@ async function nonPurchaseOrderTypeIds(): Promise<string[]> {
  *    contados no ciclo da APROVAÇÃO, não no da criação;
  *  - `orderValue`, sem frete — frete é custo logístico, não compra;
  *  - fora os estornados e cancelados: venda desfeita não é compra;
- *  - menos as devoluções desses pedidos.
+ *  - já líquido das devoluções, SEM subtraí-las de novo (ver abaixo).
  */
 export async function purchasesInWindow(args: {
   customerId: string;
@@ -516,14 +516,13 @@ export async function purchasesInWindow(args: {
     ...(excluir.length ? { orderTypeId: { notIn: excluir } } : {}),
   };
 
-  const [compras, devolucoes] = await Promise.all([
-    prisma.order.aggregate({ where, _sum: { orderValue: true } }),
-    prisma.orderReturn.aggregate({ where: { order: where }, _sum: { totalValue: true } }),
-  ]);
-
-  const bruto = Number(compras._sum.orderValue ?? 0);
-  const devolvido = Number(devolucoes._sum.totalValue ?? 0);
-  return money(Math.max(0, bruto - devolvido));
+  // NAO subtrair `OrderReturn.totalValue` aqui: `orderValue` ja vem abatido.
+  // `registerOrderReturn` desconta a devolucao do proprio pedido no instante em
+  // que e registrada (order-returns.ts: `newOrderCents`), e `totalValue` e
+  // exatamente o que saiu dali. Subtrair outra vez tirava a mesma peca DUAS
+  // VEZES da regua, e uma cliente em dia podia cair abaixo do minimo mensal.
+  const compras = await prisma.order.aggregate({ where, _sum: { orderValue: true } });
+  return money(Math.max(0, Number(compras._sum.orderValue ?? 0)));
 }
 
 /** Um registro por ciclo mensal já iniciado do contrato. */

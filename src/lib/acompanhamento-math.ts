@@ -44,6 +44,36 @@ export interface PedidoAcomp {
    */
   pecas: number;
   createdAt: Date;
+  /**
+   * A cliente atendida — denominador de "Clientes Positivados" e dos tickets
+   * médios por cliente. Guardado como id, nunca como nome: duas clientes
+   * homônimas são duas clientes.
+   */
+  customerId: string;
+}
+
+/**
+ * Uma devolução registrada, já reduzida ao que os cartões precisam.
+ *
+ * NÃO tem vendedora: `OrderReturn` pende do PEDIDO, e nada no modelo diz quem
+ * registrou a devolução de quem. Por isso a devolução só existe na linha da
+ * LOJA (ver `GradeAnual.devolucoesLoja`) — inventar um rateio por vendedora
+ * seria um número que o banco não sustenta.
+ */
+export interface DevolucaoAcomp {
+  /** Quando a devolução foi REGISTRADA, não a data do pedido devolvido. */
+  createdAt: Date;
+  valor: number;
+  /** Soma das quantidades dos itens devolvidos. */
+  pecas: number;
+}
+
+/** Devoluções de um mês, na linha da loja. */
+export interface DevolucaoMes {
+  month: number; // 1-12
+  qtd: number;
+  valor: number;
+  pecas: number;
 }
 
 /** Uma vendedora da loja (a população da grade). */
@@ -79,6 +109,14 @@ export interface CelulaMes {
   pedidos: number;
   /** Peças vendidas no mês — o numerador do P.A., para somar vários meses. */
   pecas: number;
+  /**
+   * Clientes DISTINTAS atendidas no mês ("Clientes Positivados").
+   *
+   * Na linha da LOJA não é a soma das linhas das vendedoras: a mesma cliente
+   * atendida por duas vendedoras no mesmo mês é UMA cliente positivada, e
+   * somar as linhas a contaria duas vezes.
+   */
+  clientes: number;
   /** Variação do realizado contra o mês ANTERIOR. `null` quando ele foi zero. */
   vsAnterior: number | null;
 }
@@ -99,6 +137,22 @@ export interface GradeAnual {
   year: number;
   /** As 12 células da LOJA: `meta` é a meta da loja, `realizado` a soma das linhas. */
   loja: CelulaMes[];
+  /**
+   * Devoluções por mês, sempre 12 entradas. Só da LOJA — ver `DevolucaoAcomp`.
+   * Fica fora de `CelulaMes` de propósito: um `0` na célula de uma vendedora
+   * afirmaria "nenhuma devolução dela", quando a verdade é que o dado não
+   * existe por vendedora.
+   */
+  devolucoesLoja: DevolucaoMes[];
+  /**
+   * Clientes distintas da loja no ANO INTEIRO.
+   *
+   * NÃO é a soma de `loja[].clientes`: a mesma cliente que comprou em março e
+   * em agosto é UMA cliente positivada no ano, e somar os meses a contaria
+   * duas vezes. Só dá para saber isso aqui, onde o conjunto existe — a grade
+   * guarda uma contagem por mês, e de uma contagem não se recupera o conjunto.
+   */
+  clientesNoAno: number;
   vendedoras: LinhaVendedora[];
   /** Soma das metas individuais por mês — comparável com a meta da loja. */
   somaMetasIndividuais: number[];
@@ -166,8 +220,11 @@ export function montarGrade(args: {
   metasIndividuais: MetaMes[];
   metasLoja: MetaMes[];
   ajustes: AjusteMes[];
+  /** Devoluções do ano. Opcional: chamador antigo continua válido, sem devolução. */
+  devolucoes?: DevolucaoAcomp[];
 }): GradeAnual {
   const { year, pedidos, vendedoras, metasIndividuais, metasLoja, ajustes } = args;
+  const devolucoes = args.devolucoes ?? [];
 
   const daLoja = new Set(vendedoras.map((v) => v.id));
   const MESES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -219,25 +276,33 @@ export function montarGrade(args: {
     totalMes.set(m, total);
   }
 
-  const celula = (
-    month: number,
-    meta: number | null,
-    realizado: number,
-    anterior: number,
-    pecas: number,
-    pedidosQtd: number,
-  ): CelulaMes => ({
-    month,
-    meta,
-    realizado,
-    pct: pctDaMeta(realizado, meta),
-    pa: paDoMes(pecas, pedidosQtd),
-    pedidos: pedidosQtd,
-    pecas,
+  // Objeto, e não posicional: com `pecas`, `pedidos` e `clientes` lado a lado,
+  // três números do mesmo tipo em sequência, trocar dois de lugar passaria por
+  // `tsc` sem um ruído e sairia errado só na tela.
+  const celula = (a: {
+    month: number;
+    meta: number | null;
+    realizado: number;
+    anterior: number;
+    pecas: number;
+    pedidos: number;
+    clientes: number;
+  }): CelulaMes => ({
+    month: a.month,
+    meta: a.meta,
+    realizado: a.realizado,
+    pct: pctDaMeta(a.realizado, a.meta),
+    pa: paDoMes(a.pecas, a.pedidos),
+    pedidos: a.pedidos,
+    pecas: a.pecas,
+    clientes: a.clientes,
     // Janeiro não tem mês anterior DENTRO da grade: `variacaoMensal(x, 0)` já
     // devolve null, e é por isso que o anterior de Janeiro entra como 0.
-    vsAnterior: variacaoMensal(realizado, anterior),
+    vsAnterior: variacaoMensal(a.realizado, a.anterior),
   });
+
+  /** Clientes distintas de um conjunto de pedidos. */
+  const clientesDistintas = (ps: PedidoAcomp[]) => new Set(ps.map((p) => p.customerId)).size;
 
   const linhas: LinhaVendedora[] = vendedoras.map((v) => {
     const meses = MESES.map((m) => {
@@ -245,14 +310,15 @@ export function montarGrade(args: {
       const meta = metaInd.get(`${v.id}:${m}`) ?? null;
       const realizado = realizadoMes.get(m)!.get(v.id) ?? 0;
       const anterior = m === 1 ? 0 : (realizadoMes.get(m - 1)!.get(v.id) ?? 0);
-      return celula(
-        m,
+      return celula({
+        month: m,
         meta,
         realizado,
         anterior,
-        doMes.reduce((a, p) => a + p.pecas, 0),
-        doMes.length,
-      );
+        pecas: doMes.reduce((a, p) => a + p.pecas, 0),
+        pedidos: doMes.length,
+        clientes: clientesDistintas(doMes),
+      });
     });
     return {
       userId: v.id,
@@ -266,19 +332,35 @@ export function montarGrade(args: {
 
   const loja = MESES.map((m) => {
     const doMes = porMes.get(m)!;
-    return celula(
-      m,
-      metaLoja.get(m) ?? null,
-      totalMes.get(m)!,
-      m === 1 ? 0 : totalMes.get(m - 1)!,
-      doMes.reduce((a, p) => a + p.pecas, 0),
-      doMes.length,
-    );
+    return celula({
+      month: m,
+      meta: metaLoja.get(m) ?? null,
+      realizado: totalMes.get(m)!,
+      anterior: m === 1 ? 0 : totalMes.get(m - 1)!,
+      pecas: doMes.reduce((a, p) => a + p.pecas, 0),
+      pedidos: doMes.length,
+      // Do conjunto do MÊS INTEIRO, não da soma das vendedoras.
+      clientes: clientesDistintas(doMes),
+    });
+  });
+
+  const devolucoesLoja = MESES.map((m) => {
+    const doMes = devolucoes.filter((d) => mesDoAno(d.createdAt, year) === m);
+    return {
+      month: m,
+      qtd: doMes.length,
+      valor: doMes.reduce((a, d) => a + d.valor, 0),
+      pecas: doMes.reduce((a, d) => a + d.pecas, 0),
+    };
   });
 
   return {
     year,
     loja,
+    devolucoesLoja,
+    // Do conjunto do ANO, pelo mesmo motivo que a célula do mês: contagem não
+    // se soma. `porMes` já está filtrado a quem é da loja.
+    clientesNoAno: clientesDistintas(MESES.flatMap((m) => porMes.get(m)!)),
     // Da maior entrega do ano para a menor: a grade é lida de cima para baixo.
     vendedoras: linhas.sort(
       (a, b) => b.totalRealizado - a.totalRealizado || a.nome.localeCompare(b.nome, "pt-BR"),
@@ -290,4 +372,31 @@ export function montarGrade(args: {
     totalRealizado: loja.reduce((a, c) => a + c.realizado, 0),
     vendedorasSemMeta: linhas.filter((l) => l.semMetaNoAno).length,
   };
+}
+
+/** Faixa de atingimento da meta. `null` = sem meta, e sem meta não há faixa. */
+export type FaixaMeta = "vermelho" | "amarelo" | "azul" | "verde";
+
+/**
+ * Faixa de atingimento, a pedido do dono (17/11/2026): até 33% vermelho,
+ * 34–66% amarelo, 67–99% azul, 100% ou mais verde.
+ *
+ * SEM META NÃO TEM FAIXA. Mês sem meta cadastrada tem `pct` nulo, e pintar de
+ * vermelho leria como "não atingiu" onde não havia alvo nenhum — alarme falso
+ * justamente na linha de quem a Gestão ainda não distribuiu meta.
+ *
+ * As bordas comparam a FRAÇÃO exata, e não o percentual arredondado: 99,6%
+ * arredonda para "100%" no rótulo, e verde ali afirmaria que a meta foi batida
+ * quando faltaram R$ 400. O preço é uma janela de meio ponto em 34% e em 67%,
+ * onde o rótulo arredonda para cima e a cor ainda é a da faixa de baixo.
+ *
+ * A COR NUNCA É O ÚNICO SINAL: quem exibe põe o percentual em texto ao lado
+ * (`title` na grade), para quem não distingue as quatro cores.
+ */
+export function faixaDeAtingimento(fracao: number | null): FaixaMeta | null {
+  if (fracao === null) return null;
+  if (fracao >= 1) return "verde";
+  if (fracao >= 0.67) return "azul";
+  if (fracao >= 0.34) return "amarelo";
+  return "vermelho";
 }

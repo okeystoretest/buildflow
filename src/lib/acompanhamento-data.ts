@@ -84,13 +84,19 @@ export async function computeAcompanhamento(
 
   // Sem vendedora na loja nao ha o que consultar: a grade sai zerada, mas a
   // tela ainda abre (e o aviso de "sem loja principal" e o que explica).
-  const [pedidos, metas, ajustes, metasLoja] = ids.length
+  const [pedidos, metas, ajustes, metasLoja, devolucoes] = ids.length
     ? await Promise.all([
         prisma.order.findMany({
           where: { ...FATURADO_WHERE, sellerId: { in: ids }, createdAt: { gte: inicio, lt: fim } },
           // `pieceCount` (peças declaradas no pedido) é o numerador do P.A.;
           // `itemCount` é a contribuição para campanha e seria 0 fora delas.
-          select: { sellerId: true, orderValue: true, pieceCount: true, createdAt: true },
+          select: {
+            sellerId: true,
+            orderValue: true,
+            pieceCount: true,
+            createdAt: true,
+            customerId: true,
+          },
         }),
         // Metas GERAIS (campanha e em pecas, nao soma em R$).
         prisma.salesGoal.findMany({
@@ -105,11 +111,30 @@ export async function computeAcompanhamento(
           where: { year, ...(lojaId ? { originStoreId: lojaId } : {}) },
           select: { month: true, amount: true },
         }),
+        // DEVOLUCOES do ano, da mesma populacao. Recortadas pelo instante em
+        // que foram REGISTRADAS (`OrderReturn.createdAt`), nao pela data do
+        // pedido devolvido: "Devolucoes no periodo" pergunta o que entrou de
+        // volta no periodo, e um pedido de marco devolvido em novembro e uma
+        // devolucao de novembro.
+        //
+        // Sem `FATURADO_WHERE` no pedido de proposito: a devolucao aconteceu,
+        // e o status atual do pedido nao a desfaz.
+        prisma.orderReturn.findMany({
+          where: {
+            createdAt: { gte: inicio, lt: fim },
+            order: { sellerId: { in: ids } },
+          },
+          select: {
+            createdAt: true,
+            totalValue: true,
+            items: { select: { quantity: true } },
+          },
+        }),
       ])
     : [[], [], [], await prisma.storeGoal.findMany({
         where: { year, ...(lojaId ? { originStoreId: lojaId } : {}) },
         select: { month: true, amount: true },
-      })];
+      }), []];
 
   const grade = montarGrade({
     year,
@@ -119,6 +144,12 @@ export async function computeAcompanhamento(
       orderValue: Number(o.orderValue),
       pecas: o.pieceCount ?? 0,
       createdAt: new Date(o.createdAt),
+      customerId: o.customerId,
+    })),
+    devolucoes: devolucoes.map((d) => ({
+      createdAt: new Date(d.createdAt),
+      valor: Number(d.totalValue),
+      pecas: d.items.reduce((a, i) => a + i.quantity, 0),
     })),
     vendedoras: vendedorasDaLoja.map((v) => ({ id: v.id, nome: v.name })),
     metasIndividuais: metas.map((g) => ({

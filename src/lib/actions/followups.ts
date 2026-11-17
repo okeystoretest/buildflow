@@ -38,13 +38,17 @@ function dadosDoTipo(d: ReturnType<typeof followUpSchema.parse>) {
     collaboratorView: d.collaboratorView,
     actionPlan: d.actionPlan,
     notes: d.notes ?? null,
+    // "Nao Iniciado" e o padrao ate alteracao manual (planilha).
+    //
+    // NOS DOIS TIPOS desde 17/11/2026: e o campo que o filtro "Situacao" e o
+    // historico da lista leem, e enquanto ele era nulo no Quinzenal o filtro
+    // "Concluidos" daquela aba nao tinha como achar nada.
+    status: d.status ?? "NAO_INICIADO",
   };
   if (d.kind === "ONE_ON_ONE") {
     return {
       ...comuns,
       performance: d.performance ?? null,
-      // "Nao Iniciado" e o padrao ate alteracao manual (planilha).
-      status: d.status ?? "NAO_INICIADO",
       topic: null,
       support: null,
       reviewOn: null,
@@ -53,7 +57,6 @@ function dadosDoTipo(d: ReturnType<typeof followUpSchema.parse>) {
   return {
     ...comuns,
     performance: null,
-    status: null,
     topic: d.topic ?? null,
     support: d.support ?? null,
     reviewOn: d.reviewOn ? dataDoNegocio(d.reviewOn) : null,

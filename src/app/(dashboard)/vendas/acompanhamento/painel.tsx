@@ -2,7 +2,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { firstName, formatBRL } from "@/lib/utils";
 import { ColunasAgrupadas, LinhaMensal, MAX_SERIES } from "@/components/shared/mini-charts";
 import type { AcompanhamentoData } from "@/lib/acompanhamento-data";
-import { paDoMes, type CelulaMes } from "@/lib/acompanhamento-math";
+import {
+  faixaDeAtingimento,
+  paDoMes,
+  variacaoMensal,
+  type CelulaMes,
+  type FaixaMeta,
+} from "@/lib/acompanhamento-math";
 
 const MESES_CURTOS = [
   "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
@@ -26,8 +32,21 @@ function curto(v: number): string {
   return String(Math.round(v));
 }
 
+/**
+ * Percentual da meta, SEMPRE TRUNCADO PARA BAIXO.
+ *
+ * Arredondar transformava 99,6% em "100%" ao lado de uma celula pintada de
+ * azul: o rotulo afirmando que a meta foi batida e a cor dizendo que nao.
+ * Encontrado na tela em 17/11/2026, numa celula real da grade.
+ *
+ * Truncar faz rotulo e faixa concordarem em TODAS as bordas, porque
+ * `faixaDeAtingimento` corta exatamente nos inteiros 34, 67 e 100 — a
+ * contradicao deixa de ser possivel, em vez de ficar rara. O preco e exibir
+ * "99%" para 99,9%, pessimista, que e o lado certo de errar numa tela cuja
+ * pergunta e "bateu a meta?".
+ */
 const pct = (f: number | null) =>
-  f === null ? "—" : `${(f * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`;
+  f === null ? "—" : `${Math.floor(f * 100).toLocaleString("pt-BR")}%`;
 
 /** Variacao com sinal: +12%, -8%, ou "—" quando nao ha base de comparacao. */
 function variacao(f: number | null) {
@@ -35,40 +54,75 @@ function variacao(f: number | null) {
   const texto = `${f > 0 ? "+" : ""}${(f * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`;
   // Sinal TAMBEM no texto, nao so na cor: quem nao distingue verde de vermelho
   // le o mesmo que todo mundo.
+  //
+  // `text-rose-700 dark:text-rose-300` e nao `text-destructive`: medido na
+  // tela, o destructive da 3.77:1 contra o cartao no tema ESCURO — abaixo dos
+  // 4.5:1 da WCAG AA para texto normal, e estes sao numeros pequenos. O par
+  // rose e o MESMO que as celulas da grade ja usam (4.61 claro / 8.40 escuro),
+  // entao a tela passa a ter um vermelho so, em vez de dois com o mesmo
+  // significado e legibilidades diferentes.
   return (
-    <span className={f > 0 ? "text-vendas-text" : f < 0 ? "text-destructive" : ""}>{texto}</span>
+    <span className={f > 0 ? "text-vendas-text" : f < 0 ? "text-rose-700 dark:text-rose-300" : ""}>
+      {texto}
+    </span>
   );
 }
 
 /**
- * Cor de PREENCHIMENTO por atingimento da meta, a pedido do dono (16/11/2026):
- * verde >= 100%, azul 75–99%, vermelho abaixo de 75%.
+ * Cor de PREENCHIMENTO de cada faixa. As FAIXAS moram em
+ * `acompanhamento-math.ts`, onde o portao as cobre; aqui fica so o Tailwind.
  *
- * SEM META NAO TEM COR. Mes sem meta individual cadastrada tem `pct` nulo, e
- * pintar de vermelho leria como "nao atingiu" onde nao havia alvo nenhum —
- * alarme falso justamente na linha de quem a Gestao ainda nao distribuiu meta.
- * Mes futuro tambem nao pinta: ele ja mostra traco, nao zero.
+ * Mes futuro nao pinta: ele ja mostra traco, nao zero.
  *
- * A COR NUNCA E O UNICO SINAL: a celula leva `title` com o percentual em
- * texto, para quem nao distingue as tres cores.
+ * O tom de cada cor e escolhido por CONTRASTE, nao pela paleta: medido na tela,
+ * o 800 no tema claro e o 300 no escuro sao os que passam os 4.5:1 da WCAG AA
+ * contra o fundo /15 da propria celula.
  */
+const COR_DA_FAIXA: Record<FaixaMeta, string> = {
+  verde: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
+  azul: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  amarelo: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
+  vermelho: "bg-rose-500/15 text-rose-700 dark:text-rose-300",
+};
+
 function corDeAtingimento(fracao: number | null): string {
-  if (fracao === null) return "";
-  if (fracao >= 1) return "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300";
-  if (fracao >= 0.75) return "bg-sky-500/15 text-sky-700 dark:text-sky-300";
-  return "bg-rose-500/15 text-rose-700 dark:text-rose-300";
+  const faixa = faixaDeAtingimento(fracao);
+  return faixa === null ? "" : COR_DA_FAIXA[faixa];
 }
 
 const pa = (v: number | null) =>
   v === null ? "—" : v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function Resumo({ titulo, valor, rodape }: { titulo: string; valor: string; rodape?: string }) {
+function Resumo({
+  titulo,
+  valor,
+  rodape,
+  vs,
+}: {
+  titulo: string;
+  valor: string;
+  rodape?: string;
+  /**
+   * Variação contra o MÊS ANTERIOR.
+   *
+   * `undefined` = não há com o que comparar (recorte do ano inteiro, ou
+   * Janeiro) e a linha nem é desenhada. `null` = há mês anterior, mas ele foi
+   * zero — a linha aparece com "—", porque esconder a comparação e dizer que
+   * ela não existe são coisas diferentes.
+   */
+  vs?: number | null;
+}) {
   return (
     <Card>
       <CardContent className="pt-5">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
         <p className="mt-1 font-data text-2xl font-bold">{valor}</p>
         {rodape && <p className="mt-1 text-xs text-muted-foreground">{rodape}</p>}
+        {vs !== undefined && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            vs mês passado: {variacao(vs)}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -184,9 +238,100 @@ export function AcompanhamentoPainel({
       };
   const faltam = Math.max(0, recorte.meta - recorte.realizado);
 
+  // ----------------------------------------------------------------- KPIs
+  //
+  // Tudo sai de `grade.loja[]` e `grade.devolucoesLoja[]`, que ja vem prontos
+  // do modulo de matematica: esta fila inteira nao custa uma consulta a mais.
+  //
+  // Os derivados (tickets, pecas por cliente, liquido) sao divisao de dois
+  // campos que ja existem — nao viram coluna no banco nem campo na grade.
+  const kpisDe = (mes: number | null) => {
+    const c = mes ? grade.loja[mes - 1] : null;
+    const devs = mes ? [grade.devolucoesLoja[mes - 1]] : grade.devolucoesLoja;
+    const realizado = c ? c.realizado : grade.totalRealizado;
+    // O REALIZADO JA E LIQUIDO. `registerOrderReturn` abate a devolucao do
+    // proprio `Order.orderValue` (ver order-returns.ts: `newOrderCents`), e
+    // `OrderReturn.totalValue` e exatamente o que saiu dali. Subtrair
+    // `devValor` do realizado descontava a MESMA devolucao DUAS VEZES.
+    // `devValor` serve aos cartoes de devolucao e ao rodape, nada mais.
+    const devValor = devs.reduce((a, d) => a + d.valor, 0);
+    return {
+      realizado,
+      pedidos: c ? c.pedidos : grade.loja.reduce((a, x) => a + x.pedidos, 0),
+      pecas: c ? c.pecas : grade.loja.reduce((a, x) => a + x.pecas, 0),
+      // CONTAGEM DE CLIENTE NAO SE SOMA: o ano tem o proprio distinto, porque a
+      // mesma cliente em marco e em agosto e uma cliente.
+      clientes: c ? c.clientes : grade.clientesNoAno,
+      devQtd: devs.reduce((a, d) => a + d.qtd, 0),
+      devValor,
+      devPecas: devs.reduce((a, d) => a + d.pecas, 0),
+    };
+  };
+
+  const k = kpisDe(celulaFoco ? mesFoco : null);
+  // So ha "mes passado" com um mes escolhido E um anterior dentro do ano.
+  // Janeiro e o recorte do ano inteiro nao comparam com nada.
+  const kAnterior = celulaFoco && mesFoco > 1 ? kpisDe(mesFoco - 1) : null;
+
+  /**
+   * Variacao do cartao. Recebe o ACESSO ao campo, e nao dois numeros soltos:
+   * assim e impossivel comparar o pedido de um mes com a peca do outro.
+   */
+  const vs = (campo: (x: ReturnType<typeof kpisDe>) => number | null) => {
+    if (kAnterior === null) return undefined;
+    const atual = campo(k);
+    const anterior = campo(kAnterior);
+    // Um ticket medio que NAO EXISTE (mes sem cliente) nao e um ticket de
+    // zero. Tratar como 0 faria o mes sem atendimento aparecer como "-100%",
+    // uma queda que ninguem teve.
+    if (atual === null || anterior === null) return null;
+    return variacaoMensal(atual, anterior);
+  };
+
+  /** Mes que ainda nao aconteceu mostra traco: zero leria como "nao vendeu". */
+  const ouVazio = (texto: string) => (recorte.futuro ? "—" : texto);
+  /** Divisao que nunca devolve NaN nem Infinity. */
+  const divisao = (a: number, b: number) => (b > 0 ? a / b : null);
+  const reais = (v: number | null) => (v === null ? "—" : formatBRL(v));
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* ------------------------------------------------------------- KPIs
+          UMA fila so, doze cartoes do mesmo tamanho. A divisao em "destaque" e
+          "secundarios" dava dois tamanhos de fonte para numeros que a Gestao le
+          na mesma passada, e o olho tratava a segunda fila como rodape.
+
+          "Resultado liquido" SAIU (pedido do dono, 17/11/2026): mostrava o
+          mesmo numero de "Faturamento liquido", porque sem valor de desconto no
+          banco "liquido" so pode ser vendas menos devolucoes.
+
+          E o realizado JA E essa conta: a devolucao sai do `Order.orderValue`
+          na hora em que e registrada. Ver o comentario em `kpisDe`.
+
+          A ordem e a da leitura: o que a loja faturou, contra o alvo, de
+          quantas clientes; depois volume; depois as medias; e as devolucoes no
+          fim, que e o que se confere por ultimo. */}
+      {/* Com uma vendedora escolhida, os cartoes continuam sendo da LOJA: o
+          filtro so muda o grafico e a linha em foco. Doze cartoes mudos ao lado
+          de um filtro ativo leem como se respondessem a ele — e devolucao nem
+          tem vendedora no banco para poder responder (ver DevolucaoAcomp). */}
+      {vendedoraId !== "" && (
+        <p className="text-xs text-muted-foreground">
+          Os cartões abaixo são sempre da loja inteira. O filtro de vendedora muda apenas o
+          gráfico e a linha em foco.
+        </p>
+      )}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <Resumo
+          titulo={`Faturamento líquido — ${recorte.rotulo}`}
+          valor={ouVazio(formatBRL(k.realizado))}
+          rodape={
+            recorte.futuro || k.devValor === 0
+              ? undefined
+              : `Já sem ${formatBRL(k.devValor)} devolvidos`
+          }
+          vs={vs((x) => x.realizado)}
+        />
         <Resumo
           titulo={`Meta — ${recorte.rotulo}`}
           valor={recorte.meta > 0 ? formatBRL(recorte.meta) : "—"}
@@ -195,25 +340,62 @@ export function AcompanhamentoPainel({
           }
         />
         <Resumo
-          titulo={`Realizado — ${recorte.rotulo}`}
-          valor={recorte.futuro ? "—" : formatBRL(recorte.realizado)}
-          rodape={`${grade.vendedoras.length} vendedora(s) na apuração`}
+          titulo={`% da meta — ${recorte.rotulo}`}
+          valor={ouVazio(pct(recorte.meta > 0 ? recorte.realizado / recorte.meta : null))}
+          rodape={recorte.meta > 0 && !recorte.futuro ? `Faltam ${formatBRL(faltam)}` : undefined}
         />
         <Resumo
-          titulo={`% da meta — ${recorte.rotulo}`}
-          valor={
-            recorte.futuro
-              ? "—"
-              : pct(recorte.meta > 0 ? recorte.realizado / recorte.meta : null)
-          }
-          rodape={
-            recorte.meta > 0 && !recorte.futuro ? `Faltam ${formatBRL(faltam)}` : undefined
-          }
+          titulo={`Clientes positivados — ${recorte.rotulo}`}
+          valor={ouVazio(String(k.clientes))}
+          rodape={celulaFoco ? "clientes distintas no mês" : "clientes distintas no ano"}
+          vs={vs((x) => x.clientes)}
+        />
+        <Resumo
+          titulo={`Qtd de pedidos — ${recorte.rotulo}`}
+          valor={ouVazio(String(k.pedidos))}
+          rodape={`${grade.vendedoras.length} vendedora(s) na apuração`}
+          vs={vs((x) => x.pedidos)}
+        />
+        <Resumo
+          titulo="Qtd de produtos"
+          valor={ouVazio(String(k.pecas))}
+          rodape="peças vendidas no período"
+          vs={vs((x) => x.pecas)}
+        />
+        <Resumo
+          titulo="Ticket médio por cliente"
+          valor={ouVazio(reais(divisao(k.realizado, k.clientes)))}
+          rodape="faturamento ÷ clientes positivados"
+          vs={vs((x) => divisao(x.realizado, x.clientes))}
+        />
+        <Resumo
+          titulo="Ticket médio por pedido"
+          valor={ouVazio(reais(divisao(k.realizado, k.pedidos)))}
+          rodape="faturamento ÷ pedidos do período"
+          vs={vs((x) => divisao(x.realizado, x.pedidos))}
+        />
+        <Resumo
+          titulo="Peças por cliente"
+          valor={ouVazio(pa(divisao(k.pecas, k.clientes)))}
+          rodape="peças ÷ clientes positivados"
+          vs={vs((x) => divisao(x.pecas, x.clientes))}
         />
         <Resumo
           titulo={`P.A. — ${recorte.rotulo}`}
-          valor={recorte.futuro ? "—" : pa(recorte.pa)}
-          rodape={celulaFoco ? "Peças por atendimento no mês" : "Peças por atendimento no ano"}
+          valor={ouVazio(pa(recorte.pa))}
+          rodape={celulaFoco ? "peças por atendimento no mês" : "peças por atendimento no ano"}
+        />
+        <Resumo
+          titulo="Devoluções no período"
+          valor={ouVazio(String(k.devQtd))}
+          rodape={recorte.futuro ? undefined : `${formatBRL(k.devValor)} devolvidos`}
+          vs={vs((x) => x.devQtd)}
+        />
+        <Resumo
+          titulo="Peças devolvidas"
+          valor={ouVazio(String(k.devPecas))}
+          rodape="itens devolvidos"
+          vs={vs((x) => x.devPecas)}
         />
       </div>
 
@@ -231,7 +413,7 @@ export function AcompanhamentoPainel({
           <CardTitle>Grade do ano — {nomeDaLoja}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="kanban-scroll overflow-x-auto">
             <table className="w-full min-w-[920px] text-sm">
               {/* A coluna do mês em foco acende pela TABELA, com `<col>`, e não
                   classe em cada `<td>`: é um elemento em vez de um retoque em
@@ -347,7 +529,7 @@ export function AcompanhamentoPainel({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="kanban-scroll overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead className="border-b border-border text-left text-foreground">
                 <tr>
@@ -366,7 +548,13 @@ export function AcompanhamentoPainel({
                     <td className="py-2 pr-4 text-right font-data">
                       {c.meta === null ? <span className="text-muted-foreground">—</span> : formatBRL(c.meta)}
                     </td>
-                    <td className="py-2 pr-4 text-right font-data">
+                    {/* Mesma regra de cor da grade do ano. `corDeAtingimento`
+                        devolve vazio sem meta, e mes futuro nao pinta. */}
+                    <td
+                      className={`py-2 pr-4 text-right font-data ${
+                        futuro(c.month) ? "" : corDeAtingimento(c.pct)
+                      }`}
+                    >
                       {ouTraco(c.month, formatBRL(c.realizado))}
                     </td>
                     <td className="py-2 pr-4 text-right font-data">{ouTraco(c.month, pct(c.pct))}</td>
@@ -384,7 +572,7 @@ export function AcompanhamentoPainel({
           <p className="mt-3 text-xs text-muted-foreground">
             <strong>P.A.</strong> = peças por atendimento (peças vendidas ÷ pedidos do mês).
             <strong className="ml-2">vs. mês anterior</strong> compara o <em>realizado</em> com o do
-            mês anterior — não é o progresso da meta, que é a coluna “% da Meta”.
+            mês anterior.
           </p>
         </CardContent>
       </Card>

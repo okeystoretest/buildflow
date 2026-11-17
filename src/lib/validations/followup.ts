@@ -1,4 +1,6 @@
 import { z } from "zod";
+// Type-only: some no tipo do `where`, nao entra em bundle de cliente.
+import type { Prisma } from "@prisma/client";
 
 /**
  * Validacao dos formularios de acompanhamento (One-on-One e Quinzenal).
@@ -59,9 +61,9 @@ export const followUpSchema = z
     collaboratorView: texto("Percepção do colaborador"),
     actionPlan: texto("Plano de ação"),
     notes: textoOpcional(),
+    status: z.enum(FOLLOWUP_STATUSES).optional(),
     // One-on-One
     performance: textoOpcional(),
-    status: z.enum(FOLLOWUP_STATUSES).optional(),
     // Quinzenal
     topic: textoOpcional(1000),
     support: textoOpcional(),
@@ -91,6 +93,25 @@ export const updateFollowUpSchema = z.intersection(
 );
 
 export type FollowUpInput = z.infer<typeof followUpSchema>;
+
+/**
+ * Recorte de SITUACAO da lista de conversas: "" (todas), "abertos",
+ * "concluidos". CONCLUIDO = status ENTREGUE.
+ *
+ * O `OR` de "abertos" NAO e zelo: `status` aceita nulo (todo registro quinzenal
+ * gravado antes de 17/11/2026 tem nulo) e, em SQL, `null <> 'ENTREGUE'` nao e
+ * verdadeiro — `{ not: "ENTREGUE" }` sozinho sumiria com esses registros
+ * justamente da lista de quem esta EM ABERTO.
+ *
+ * Mora aqui, fora do componente de pagina, para a checagem poder segurar o
+ * `OR` no lugar: `tsc` nao ve esse erro e a tela nao acusa — ela so devolve
+ * menos linhas. Ver scripts/checks/followup-situacao.ts.
+ */
+export function filtroDeSituacao(situacao: string): Prisma.FollowUpWhereInput {
+  if (situacao === "concluidos") return { status: "ENTREGUE" };
+  if (situacao === "abertos") return { OR: [{ status: null }, { status: { not: "ENTREGUE" } }] };
+  return {};
+}
 
 /**
  * Minimo de caracteres para a busca do colaborador devolver nomes.
