@@ -152,6 +152,79 @@ function Vazio({ children }: { children: React.ReactNode }) {
  * mes. E um traco e nao uma coluna de propósito: meta nao e entrega, e lado a
  * lado as duas se leriam como duas vendas.
  */
+const TIP_LARGURA = 190;
+const TIP_LINHA = 15;
+
+/**
+ * TOOLTIP DO MES — e ainda SEM UM BYTE DE JAVASCRIPT.
+ *
+ * O `<title>` nativo que havia antes nao servia: demora mais de um segundo
+ * para aparecer, a aparencia e do sistema operacional, no telefone ele nao
+ * existe, e ele mostra UMA marca — quem olha um grafico de Meta vs Atingido
+ * quer os DOIS numeros daquele mes, nao o que esta embaixo do cursor.
+ *
+ * Como funciona sem JS: uma faixa transparente por mes, desenhada DEPOIS das
+ * marcas (logo, por cima), recebe o hover e o CSS revela o balao — `group` e
+ * `group-hover` do Tailwind valem em SVG como em qualquer elemento. Os charts
+ * continuam renderizando no servidor, que e a propriedade que este arquivo
+ * existe para preservar.
+ *
+ * Efeito colateral util: a faixa cobre as marcas, entao o `<title>` nativo
+ * nunca mais dispara — ele fica no DOM so como texto para leitor de tela.
+ */
+function TooltipDeMes({
+  w,
+  cx,
+  categoria,
+  linhas,
+}: {
+  w: number;
+  cx: number;
+  categoria: string;
+  linhas: { nome: string; cor: string; texto: string }[];
+}) {
+  const alt = 22 + linhas.length * TIP_LINHA;
+  // Preso dentro do desenho: perto da borda o balao desliza em vez de vazar.
+  const x = Math.min(Math.max(cx - TIP_LARGURA / 2, L), w - R - TIP_LARGURA);
+  const y = T + 2;
+  return (
+    <g className="pointer-events-none opacity-0 transition-opacity duration-100 group-hover:opacity-100">
+      <rect
+        x={x}
+        y={y}
+        width={TIP_LARGURA}
+        height={alt}
+        rx={6}
+        fill="hsl(var(--card))"
+        stroke="hsl(var(--border))"
+      />
+      <text x={x + 8} y={y + 15} fontSize={11} fontWeight={600} fill="hsl(var(--foreground))">
+        {categoria}
+      </text>
+      {linhas.map((l, i) => {
+        const ly = y + 22 + i * TIP_LINHA;
+        return (
+          <g key={l.nome + i}>
+            <rect x={x + 8} y={ly + 2} width={7} height={7} rx={1.5} fill={l.cor} />
+            <text x={x + 20} y={ly + 9} fontSize={11} fill="hsl(var(--muted-foreground))">
+              {l.nome}
+            </text>
+            <text
+              x={x + TIP_LARGURA - 8}
+              y={ly + 9}
+              fontSize={11}
+              textAnchor="end"
+              fill="hsl(var(--foreground))"
+            >
+              {l.texto}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 export function ColunasAgrupadas({
   categorias,
   series,
@@ -236,6 +309,36 @@ export function ColunasAgrupadas({
             </g>
           );
         })}
+        {/* FAIXAS DE HOVER — depois das colunas de proposito, para ficarem por
+            cima delas e receberem o ponteiro em qualquer altura da faixa, e
+            nao so sobre a barra (uma barra baixa seria quase impossivel de
+            acertar com o mouse). */}
+        {categorias.map((cat, ci) => (
+          <g key={`tip-${cat}-${ci}`} className="group">
+            <rect x={L + faixa * ci} y={T} width={faixa} height={plot} fill="transparent" />
+            <TooltipDeMes
+              w={w}
+              cx={L + faixa * (ci + 0.5)}
+              categoria={cat}
+              linhas={[
+                ...series.map((s) => ({
+                  nome: s.nome,
+                  cor: COR_SERIE[s.slot % MAX_SERIES],
+                  texto: formatarValor(s.valores[ci] ?? 0),
+                })),
+                ...(referencias?.[ci] != null && referencias[ci]! > 0
+                  ? [
+                      {
+                        nome: rotuloReferencia,
+                        cor: "hsl(var(--foreground))",
+                        texto: formatarValor(referencias[ci]!),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </g>
+        ))}
         <line
           x1={L}
           x2={w - R}
@@ -339,6 +442,27 @@ export function LinhaMensal({
             </g>
           );
         })}
+        {/* FAIXAS DE HOVER — depois das linhas, por cima. Aqui elas valem ainda
+            mais que no grafico de colunas: acertar um ponto de raio 4 com o
+            mouse e tarefa de pontaria, e o que a pessoa quer ao parar sobre
+            Marco sao TODOS os valores de Marco — meta e atingido juntos. */}
+        {categorias.map((cat, ci) => (
+          <g key={`tip-${cat}-${ci}`} className="group">
+            <rect x={L + faixa * ci} y={T} width={faixa} height={plot} fill="transparent" />
+            <TooltipDeMes
+              w={w}
+              cx={px(ci)}
+              categoria={cat}
+              linhas={series
+                .filter((s) => s.valores[ci] !== null && s.valores[ci] !== undefined)
+                .map((s) => ({
+                  nome: s.nome,
+                  cor: COR_SERIE[s.slot % MAX_SERIES],
+                  texto: formatarValor(s.valores[ci] as number),
+                }))}
+            />
+          </g>
+        ))}
         <line
           x1={L}
           x2={w - R}

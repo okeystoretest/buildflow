@@ -42,6 +42,7 @@ export default async function AcompanhamentoPage(props: {
   searchParams?: Promise<{
     aba?: string;
     ano?: string;
+    mes?: string;
     loja?: string;
     vendedora?: string;
     escopo?: string;
@@ -57,6 +58,27 @@ export default async function AcompanhamentoPage(props: {
   const ano = anoParam > 2000 && anoParam < 3000 ? anoParam : anoAtual;
 
   const aba: AbaId = ABAS.some((a) => a.id === sp?.aba) ? (sp!.aba as AbaId) : "painel";
+
+  // MES EM FOCO (0 = ano inteiro). Sem parametro, o mes VIGENTE no fuso do
+  // negocio, a pedido do dono: a pergunta de todo dia e "como estamos este
+  // mes", e responder exigia achar uma coluna no meio de uma tabela de doze.
+  //
+  // O mes NAO filtra a grade — ela continua com os doze meses. Ele troca o
+  // recorte dos quatro numeros do topo e acende a coluna correspondente.
+  //
+  // "ano" e um VALOR e nao a ausencia do parametro: a querystring descarta
+  // valor vazio, e ausencia ja significa "mes vigente". Sem valor proprio,
+  // "Ano inteiro" nao teria como ser escolhido.
+  const mesParam = Number(sp?.mes);
+  const mesFoco =
+    sp?.mes === "ano"
+      ? 0
+      : mesParam >= 1 && mesParam <= 12
+        ? mesParam
+        : Number(diaDoNegocio(agora).slice(5, 7));
+  /** O que volta para a URL, para aba e filtros preservarem o periodo escolhido. */
+  const mesUrl = mesFoco === 0 ? "ano" : String(mesFoco);
+
   const loja = sp?.loja?.trim() || "";
   const vendedora = sp?.vendedora?.trim() || "";
   const escopo = (sp?.escopo === "VAREJO" || sp?.escopo === "ATACADO" ? sp.escopo : "") as
@@ -69,6 +91,7 @@ export default async function AcompanhamentoPage(props: {
     for (const [k, v] of Object.entries({
       aba,
       ano: String(ano),
+      mes: mesUrl,
       loja,
       vendedora,
       escopo,
@@ -126,6 +149,8 @@ export default async function AcompanhamentoPage(props: {
       {aba === "painel" ? (
         <PainelAba
           ano={ano}
+          anoAtual={anoAtual}
+          mesFoco={mesFoco}
           loja={loja}
           vendedora={vendedora}
           escopo={escopo}
@@ -149,12 +174,17 @@ export default async function AcompanhamentoPage(props: {
 
 async function PainelAba({
   ano,
+  anoAtual,
+  mesFoco,
   loja,
   vendedora,
   escopo,
   mesLimite,
 }: {
   ano: number;
+  anoAtual: number;
+  /** 0 = ano inteiro; 1-12 = mes em foco nos numeros do topo. */
+  mesFoco: number;
   loja: string;
   vendedora: string;
   escopo: SalesModel | "";
@@ -169,6 +199,8 @@ async function PainelAba({
     <>
       <AcompanhamentoFiltros
         ano={String(ano)}
+        mes={mesFoco === 0 ? "ano" : String(mesFoco)}
+        anoAtual={anoAtual}
         loja={loja}
         vendedora={vendedora}
         escopo={escopo}
@@ -187,6 +219,7 @@ async function PainelAba({
 
       <AcompanhamentoPainel
         dados={dados}
+        mesFoco={mesFoco}
         vendedoraId={vendedora}
         nomeDaLoja={nomeDaLoja}
         mesLimite={mesLimite}

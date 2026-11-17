@@ -40,6 +40,25 @@ function variacao(f: number | null) {
   );
 }
 
+/**
+ * Cor de PREENCHIMENTO por atingimento da meta, a pedido do dono (16/11/2026):
+ * verde >= 100%, azul 75–99%, vermelho abaixo de 75%.
+ *
+ * SEM META NAO TEM COR. Mes sem meta individual cadastrada tem `pct` nulo, e
+ * pintar de vermelho leria como "nao atingiu" onde nao havia alvo nenhum —
+ * alarme falso justamente na linha de quem a Gestao ainda nao distribuiu meta.
+ * Mes futuro tambem nao pinta: ele ja mostra traco, nao zero.
+ *
+ * A COR NUNCA E O UNICO SINAL: a celula leva `title` com o percentual em
+ * texto, para quem nao distingue as tres cores.
+ */
+function corDeAtingimento(fracao: number | null): string {
+  if (fracao === null) return "";
+  if (fracao >= 1) return "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300";
+  if (fracao >= 0.75) return "bg-sky-500/15 text-sky-700 dark:text-sky-300";
+  return "bg-rose-500/15 text-rose-700 dark:text-rose-300";
+}
+
 const pa = (v: number | null) =>
   v === null ? "—" : v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -57,11 +76,20 @@ function Resumo({ titulo, valor, rodape }: { titulo: string; valor: string; roda
 
 export function AcompanhamentoPainel({
   dados,
+  mesFoco,
   vendedoraId,
   nomeDaLoja,
   mesLimite,
 }: {
   dados: AcompanhamentoData;
+  /**
+   * Mes em foco nos quatro numeros do topo. 0 = ano inteiro.
+   *
+   * NAO filtra a grade: ela e sempre os doze meses, porque e ela que mostra a
+   * curva do ano. O mes troca o recorte dos cartoes e acende a coluna
+   * correspondente, para a pessoa ver de onde o numero saiu.
+   */
+  mesFoco: number;
   /** Vendedora do painel individual. "" = a de maior entrega no ano. */
   vendedoraId: string;
   nomeDaLoja: string;
@@ -132,36 +160,60 @@ export function AcompanhamentoPainel({
     grade.loja.reduce((a, c) => a + c.pedidos, 0),
   );
 
+  // RECORTE DOS QUATRO NUMEROS DO TOPO: o mes em foco, ou o ano inteiro.
+  // Os dados por mes ja existem em `grade.loja[m-1]` (meta, realizado, pct,
+  // P.A.), entao nada precisou ser recalculado — e o modulo de matematica nao
+  // foi tocado.
+  const celulaFoco = mesFoco >= 1 && mesFoco <= 12 ? grade.loja[mesFoco - 1] : null;
+  const recorte = celulaFoco
+    ? {
+        rotulo: MESES_CURTOS[mesFoco - 1],
+        meta: celulaFoco.meta ?? 0,
+        realizado: celulaFoco.realizado,
+        pa: celulaFoco.pa,
+        // Mes que ainda nao aconteceu: realizado e P.A. viram traco, nunca
+        // zero. Zero mente — leria como "a loja nao vendeu nada".
+        futuro: futuro(mesFoco),
+      }
+    : {
+        rotulo: String(grade.year),
+        meta: grade.totalMetaLoja,
+        realizado: grade.totalRealizado,
+        pa: paDoAno,
+        futuro: false,
+      };
+  const faltam = Math.max(0, recorte.meta - recorte.realizado);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Resumo
-          titulo="Meta do ano"
-          valor={grade.totalMetaLoja > 0 ? formatBRL(grade.totalMetaLoja) : "—"}
+          titulo={`Meta — ${recorte.rotulo}`}
+          valor={recorte.meta > 0 ? formatBRL(recorte.meta) : "—"}
           rodape={
-            grade.totalMetaLoja > 0
-              ? `${nomeDaLoja}`
-              : "Nenhuma meta de loja cadastrada em Gestão > Metas"
+            recorte.meta > 0 ? nomeDaLoja : "Nenhuma meta de loja cadastrada em Gestão > Metas"
           }
         />
         <Resumo
-          titulo="Realizado"
-          valor={formatBRL(grade.totalRealizado)}
+          titulo={`Realizado — ${recorte.rotulo}`}
+          valor={recorte.futuro ? "—" : formatBRL(recorte.realizado)}
           rodape={`${grade.vendedoras.length} vendedora(s) na apuração`}
         />
         <Resumo
-          titulo="% da meta"
-          valor={pct(grade.totalMetaLoja > 0 ? grade.totalRealizado / grade.totalMetaLoja : null)}
+          titulo={`% da meta — ${recorte.rotulo}`}
+          valor={
+            recorte.futuro
+              ? "—"
+              : pct(recorte.meta > 0 ? recorte.realizado / recorte.meta : null)
+          }
           rodape={
-            grade.totalMetaLoja > 0
-              ? `Faltam ${formatBRL(Math.max(0, grade.totalMetaLoja - grade.totalRealizado))}`
-              : undefined
+            recorte.meta > 0 && !recorte.futuro ? `Faltam ${formatBRL(faltam)}` : undefined
           }
         />
         <Resumo
-          titulo="P.A. médio"
-          valor={pa(paDoAno)}
-          rodape="Peças por atendimento no ano"
+          titulo={`P.A. — ${recorte.rotulo}`}
+          valor={recorte.futuro ? "—" : pa(recorte.pa)}
+          rodape={celulaFoco ? "Peças por atendimento no mês" : "Peças por atendimento no ano"}
         />
       </div>
 
@@ -181,11 +233,31 @@ export function AcompanhamentoPainel({
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] text-sm">
+              {/* A coluna do mês em foco acende pela TABELA, com `<col>`, e não
+                  classe em cada `<td>`: é um elemento em vez de um retoque em
+                  todos os laços de célula desta tabela. Linha com fundo próprio
+                  (Meta da Loja) pinta por cima e o realce fica mais fraco nela
+                  — aceitável, porque quem orienta a leitura é o cabeçalho. */}
+              <colgroup>
+                <col />
+                {MESES_CURTOS.map((m, i) => (
+                  <col key={m} className={i + 1 === mesFoco ? "bg-vendas/10" : undefined} />
+                ))}
+                <col />
+              </colgroup>
               <thead className="border-b border-border text-foreground">
                 <tr>
                   <th className="py-2 pr-4 text-left">Linha</th>
-                  {MESES_CURTOS.map((m) => (
-                    <th key={m} className="py-2 pr-3 text-right font-medium">{m}</th>
+                  {MESES_CURTOS.map((m, i) => (
+                    <th
+                      key={m}
+                      aria-current={i + 1 === mesFoco ? "true" : undefined}
+                      className={`py-2 pr-3 text-right font-medium ${
+                        i + 1 === mesFoco ? "text-vendas-text" : ""
+                      }`}
+                    >
+                      {m}
+                    </th>
                   ))}
                   <th className="py-2 text-right">Total</th>
                 </tr>
@@ -202,53 +274,13 @@ export function AcompanhamentoPainel({
                     {grade.totalMetaLoja > 0 ? formatBRL(grade.totalMetaLoja) : "—"}
                   </td>
                 </tr>
-                <tr className="border-b border-border">
-                  <td className="py-2 pr-4 font-medium">Realizado da Loja</td>
-                  {grade.loja.map((c) => (
-                    <td key={c.month} className="py-2 pr-3 text-right font-data">
-                      {ouTraco(c.month, formatBRL(c.realizado))}
-                    </td>
-                  ))}
-                  <td className="py-2 text-right font-data font-semibold">
-                    {formatBRL(grade.totalRealizado)}
-                  </td>
-                </tr>
-                <tr className="border-b border-border">
-                  <td className="py-2 pr-4 text-muted-foreground">% da Meta</td>
-                  {grade.loja.map((c) => (
-                    <td key={c.month} className="py-2 pr-3 text-right font-data">
-                      {ouTraco(c.month, pct(c.pct))}
-                    </td>
-                  ))}
-                  <td className="py-2 text-right font-data">
-                    {pct(grade.totalMetaLoja > 0 ? grade.totalRealizado / grade.totalMetaLoja : null)}
-                  </td>
-                </tr>
-                <tr className="border-b border-border">
-                  <td className="py-2 pr-4 text-muted-foreground">Soma das Metas Individuais</td>
-                  {grade.somaMetasIndividuais.map((v, i) => {
-                    const metaLoja = grade.loja[i].meta;
-                    // Diferenca entre as duas metas: e o que a Gestao precisa
-                    // ver para saber se distribuiu a meta da loja inteira.
-                    const difere = metaLoja !== null && v > 0 && Math.abs(v - metaLoja) > 0.004;
-                    return (
-                      <td
-                        key={i}
-                        className={`py-2 pr-3 text-right font-data ${difere ? "text-amber-600 dark:text-amber-400" : ""}`}
-                        title={
-                          difere
-                            ? `Difere da meta da loja em ${formatBRL(v - metaLoja!)}`
-                            : undefined
-                        }
-                      >
-                        {v > 0 ? formatBRL(v) : "—"}
-                      </td>
-                    );
-                  })}
-                  <td className="py-2 text-right font-data">
-                    {formatBRL(grade.somaMetasIndividuais.reduce((a, v) => a + v, 0))}
-                  </td>
-                </tr>
+                {/* SAIRAM DAQUI (16/11/2026, pedido do dono): "Realizado da
+                    Loja", "% da Meta" e "Soma das Metas Individuais". Os dois
+                    primeiros viraram os cartoes do topo, que agora respondem
+                    pelo mes em foco ou pelo ano; o terceiro ja existe em
+                    Gestao > Metas, com a coluna Diferenca ao lado. Tres linhas
+                    repetindo numero que esta a um palmo de distancia so
+                    empurravam as vendedoras para baixo da dobra. */}
                 {grade.vendedoras.map((v) => (
                   <tr key={v.userId} className="border-b border-border last:border-0 hover:bg-secondary/50">
                     <td className="py-2 pr-4">
@@ -264,11 +296,24 @@ export function AcompanhamentoPainel({
                         )}
                       </span>
                     </td>
-                    {v.meses.map((c) => (
-                      <td key={c.month} className="py-2 pr-3 text-right font-data">
-                        {c.realizado > 0 ? formatBRL(c.realizado) : <span className="text-muted-foreground">—</span>}
-                      </td>
-                    ))}
+                    {v.meses.map((c) => {
+                      const pinta = !futuro(c.month) && c.pct !== null;
+                      return (
+                        <td
+                          key={c.month}
+                          className={`py-2 pr-3 text-right font-data ${pinta ? corDeAtingimento(c.pct) : ""}`}
+                          title={
+                            pinta
+                              ? `${pct(c.pct)} da meta de ${formatBRL(c.meta!)}`
+                              : c.meta === null && !futuro(c.month)
+                                ? "Sem meta individual cadastrada neste mês"
+                                : undefined
+                          }
+                        >
+                          {c.realizado > 0 ? formatBRL(c.realizado) : <span className="text-muted-foreground">—</span>}
+                        </td>
+                      );
+                    })}
                     <td className="py-2 text-right font-data font-semibold">
                       {formatBRL(v.totalRealizado)}
                     </td>
@@ -344,7 +389,12 @@ export function AcompanhamentoPainel({
         </CardContent>
       </Card>
 
-      {/* ------------------------------------------------- graficos */}
+      {/* ------------------------------------------------- graficos
+          LADO A LADO a partir de `lg`, a pedido do dono: empilhados ocupavam
+          duas dobras e comparar um com o outro exigia rolar. Abaixo de `lg`
+          continuam um sobre o outro — dois graficos de doze meses lado a lado
+          num telefone nao se leem. */}
+      <div className="grid gap-6 lg:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>
@@ -359,6 +409,10 @@ export function AcompanhamentoPainel({
             rotuloReferencia="Meta individual"
             formatarEixo={curto}
             formatarValor={formatBRL}
+            // Menor que os 240 do padrao: em duas colunas cada grafico tem
+            // metade da largura, e manter a altura antiga deixaria os dois
+            // quase quadrados, com as doze colunas espremidas.
+            alturaPx={200}
           />
         </CardContent>
       </Card>
@@ -385,9 +439,11 @@ export function AcompanhamentoPainel({
             ]}
             formatarEixo={curto}
             formatarValor={formatBRL}
+            alturaPx={200}
           />
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
