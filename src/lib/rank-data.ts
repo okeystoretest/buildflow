@@ -4,6 +4,23 @@ import { premiacaoDoItem } from "@/lib/campaign-commission";
 import { janelaDoMes, janelaDaSemana, corteLegado, instanteNoFuso } from "@/lib/rank-window";
 import { computeRealizado, vendidoDoVendedor, selectCampaignRows, selectSellerRows } from "@/lib/rank-math";
 import type { SelectSellerRow } from "@/lib/rank-math";
+// O import e CIRCULAR por construcao (`acompanhamento-data` importa
+// `FATURADO_WHERE` daqui) e e seguro: nenhum dos dois lados usa o import do
+// outro na AVALIACAO do modulo, so dentro de funcao — com binding vivo do ESM,
+// quando `computeRankData` roda os dois modulos ja estao prontos. Conferido no
+// `next build` e com o valor por loja medido no banco.
+import { computeAcompanhamento } from "@/lib/acompanhamento-data";
+
+/** Uma Loja de Origem no bloco de metas das lojas do quadro. */
+export interface LojaMetaRow {
+  id: string;
+  nome: string;
+  /** `null` = nenhuma meta de loja cadastrada no mes. Nunca 0 para "nao cadastrada". */
+  meta: number | null;
+  realizado: number;
+  /** Percentual inteiro TRUNCADO. `null` sem meta — nao existe % de um alvo que nao existe. */
+  pct: number | null;
+}
 
 export interface RankRow {
   /** Necessário para o ajuste manual (a linha precisa saber a quem pertence). */
@@ -83,6 +100,8 @@ export interface RankData {
   rankSelect: SelectSellerRow[];
   /** Soma dos contratos de `rankSelect`, para o rodape do bloco. */
   selectTotal: number;
+  /** Meta e progresso de cada Loja de Origem ativa no mes exibido. */
+  metasDeLoja: LojaMetaRow[];
   campaigns: CampaignData[];
   campaignPerf: CampaignPerf[];
   updatedAt: string;
@@ -509,6 +528,43 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     })),
   );
 
+  // METAS DAS LOJAS — a MESMA conta do Acompanhamento Gerencial, nao uma copia
+  // dela.
+  //
+  // Tentei somar o `porVendedor` que este arquivo ja tem em mao e nao serve:
+  // ele so contem quem tem META INDIVIDUAL cadastrada (ver `computeRealizado`),
+  // enquanto a loja responde pelo faturamento de TODA vendedora que a tem como
+  // principal. Agrupar aquele mapa daria, para a mesma loja e o mesmo mes, um
+  // numero menor do que o Acompanhamento mostra — duas telas discordando sobre
+  // dinheiro. Reescrever a soma aqui daria o mesmo risco pela outra porta: foi
+  // assim que a devolucao passou a sair duas vezes do faturamento (16/11/2026).
+  //
+  // Uma chamada por loja porque a grade e de UMA loja por construcao, e em
+  // `Promise.all` para o tempo de parede ser o de uma. A celula do mes exibido
+  // sai pronta, com meta, realizado e ajuste manual ja aplicados.
+  const lojasAtivas = await prisma.originStore.findMany({
+    where: { active: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  const metasDeLoja: LojaMetaRow[] = await Promise.all(
+    lojasAtivas.map(async (l) => {
+      const { grade } = await computeAcompanhamento({ year, lojaId: l.id });
+      const celula = grade.loja[month - 1];
+      return {
+        id: l.id,
+        nome: l.name,
+        meta: celula.meta,
+        realizado: celula.realizado,
+        // TRUNCADO, nunca arredondado, pelo mesmo motivo do painel do
+        // Acompanhamento: `tierColor` vira verde exatamente em 100, e
+        // arredondar 99,6 para "100%" poria o rotulo dizendo que bateu a meta
+        // ao lado de uma barra azul dizendo que nao.
+        pct: celula.pct === null ? null : Math.floor(celula.pct * 100),
+      };
+    }),
+  );
+
   return {
     month, year, isCurrent,
     metaGeral, realizadoGeral, metaGeralPct, goalsCount: goalsGerais.length,
@@ -520,6 +576,7 @@ export async function computeRankData(period?: RankPeriod): Promise<RankData> {
     maiorSemana: maior(daSemana), maiorMes: maior(doMes),
     rankGeral: buildRank(null), rankVarejo: buildRank("VAREJO"), rankAtacado: buildRank("ATACADO"),
     rankSelect, selectTotal: rankSelect.reduce((a, r) => a + r.valor, 0),
+    metasDeLoja,
     campaigns, campaignPerf, updatedAt: new Date().toISOString(),
   };
 }

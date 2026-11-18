@@ -251,11 +251,19 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
   const participacaoVarejo =
     faturamentoTotal > 0 ? (totalVarejo / faturamentoTotal) * 100 : null;
 
+  // METAS DAS LOJAS — ordenadas por PROGRESSO, porque este quadro e um ranking
+  // e a pergunta dele e quem esta na frente. Loja sem meta cadastrada nao tem
+  // percentual, logo nao tem posicao: vai para o fim, mantendo entre elas a
+  // ordem alfabetica que o servidor ja aplicou.
+  const lojasOrdenadas = [...data.metasDeLoja].sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
+  const lojasRealizado = data.metasDeLoja.reduce((a, l) => a + l.realizado, 0);
+  const lojasMeta = data.metasDeLoja.reduce((a, l) => a + (l.meta ?? 0), 0);
+  // Truncado, como as linhas: o rodape nao pode anunciar 100% com as barras
+  // ainda azuis.
+  const lojasPct = lojasMeta > 0 ? Math.floor((lojasRealizado / lojasMeta) * 100) : null;
+
   // Concentracao do topo: quanto do volume do mes esta nas tres primeiras.
   // Com tres vendedoras ou menos a resposta e sempre 100% e nao informa nada.
-  const selectTotalContratos = data.rankSelect.reduce((a, r) => a + r.qtd, 0);
-  // Divisor da barra: a lider. Nunca zero — a lista vazia nem renderiza linha.
-  const selectLider = data.rankSelect[0]?.qtd || 1;
   const concentracaoTop3 = useMemo(() => {
     if (data.rankGeral.length <= 3) return null;
     const total = somaVendido(data.rankGeral);
@@ -515,59 +523,81 @@ export function RankBoard({ initial, canEdit = false }: { initial: RankData; can
           />
         </div>
 
-        {/* Venda do servico Select no mes, por vendedora. Fica colado no
-            ranking de propósito: e a mesma pergunta ("quem vendeu"), medida em
-            contratos em vez de reais. Sem campanha e sem meta — a barra e a
-            participacao de cada uma no total do mes, nao progresso de meta. */}
+        {/* METAS DAS LOJAS — ocupa o lugar do antigo bloco de Select (pedido do
+            dono, 18/11/2026): mesmo canto, mesma moldura, mesmo tamanho.
+            Os numeros saem de `computeAcompanhamento`, a MESMA conta da tela de
+            Acompanhamento Gerencial, e nao de uma soma escrita aqui — a soma
+            das lojas deste bloco fecha com o faturamento de la (conferido em
+            nov/2026: R$ 179.002,00 sobre meta de R$ 625.000,00).
+            As faixas de cor sao as de `tierColor`/`tierText` (34 / 67 / 100),
+            as mesmas do ranking ao lado e da grade do Acompanhamento: o mesmo
+            percentual tem a mesma cor em todo o sistema. */}
         <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3.5 lg:col-start-1 lg:row-start-2">
           <div className="mb-3 flex shrink-0 items-start justify-between gap-2">
             <h2 className="flex min-w-0 items-center gap-2 pt-0.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
               <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
-              <span className="truncate">Select</span>
+              <span className="truncate">Metas das Lojas</span>
             </h2>
             <span className="shrink-0 text-right text-[11px] uppercase leading-tight tracking-widest text-muted-foreground">
-              <span className="font-data block text-sm font-bold normal-case tracking-normal text-foreground">
-                {selectTotalContratos}
+              <span
+                className={`font-data block text-sm font-bold normal-case tracking-normal ${
+                  lojasPct === null ? "text-foreground" : tierText(lojasPct)
+                }`}
+              >
+                {lojasPct === null ? "—" : `${lojasPct}%`}
               </span>
-              {selectTotalContratos === 1 ? "contrato" : "contratos"}
+              da meta
             </span>
           </div>
           <div className="kanban-scroll flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
-            {data.rankSelect.map((r, i) => (
-              <div key={r.userId} className="px-0.5 py-1">
+            {lojasOrdenadas.map((l) => (
+              <div key={l.id} className="px-0.5 py-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="font-data w-4 shrink-0 text-center text-xs text-muted-foreground">{i + 1}</span>
-                    <span className="truncate text-sm font-medium lg:text-[0.9375rem]" title={r.nome}>
-                      {shortName(r.nome)}
-                    </span>
+                  <span className="truncate text-sm font-medium lg:text-[0.9375rem]" title={l.nome}>
+                    {l.nome}
                   </span>
                   <span className="flex shrink-0 items-center gap-2.5">
                     <span className="font-data text-sm text-muted-foreground lg:text-[0.9375rem]">
-                      {formatBRL(r.valor)}
+                      {formatBRL(l.realizado)}
                     </span>
-                    <span className="font-data w-11 shrink-0 text-right text-sm font-bold lg:text-[0.9375rem]">
-                      {r.qtd}
+                    <span
+                      className={`font-data w-11 shrink-0 text-right text-sm font-bold lg:text-[0.9375rem] ${
+                        l.pct === null ? "text-muted-foreground" : tierText(l.pct)
+                      }`}
+                    >
+                      {l.pct === null ? "—" : `${l.pct}%`}
                     </span>
                   </span>
                 </div>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary">
+                {/* A META EMBAIXO DO NOME, e nao so o percentual: "102%" de
+                    R$ 175.000 e outra conversa que "102%" de R$ 20.000, e sem
+                    o alvo escrito o numero nao tem de onde ter saido. */}
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {l.meta === null
+                    ? "Sem meta cadastrada em Gestão > Metas"
+                    : `Meta ${formatBRL(l.meta)}`}
+                </p>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
                   <div
-                    className="h-full rounded-full bg-emerald-400"
-                    style={{ width: `${(r.qtd / selectLider) * 100}%`, transition: "width .5s ease" }}
+                    // Travada em 100%: a barra mede o caminho ate a meta, e
+                    // 140% nao tem onde ser desenhado. Quem passou do alvo ve
+                    // isso no numero, em verde, ao lado.
+                    className={`h-full rounded-full ${l.pct === null ? "bg-transparent" : tierColor(l.pct)}`}
+                    style={{ width: `${Math.min(l.pct ?? 0, 100)}%`, transition: "width .5s ease" }}
                   />
                 </div>
               </div>
             ))}
-            {data.rankSelect.length === 0 && (
-              <p className="m-auto text-sm text-muted-foreground">Nenhum Select vendido no mês.</p>
+            {lojasOrdenadas.length === 0 && (
+              <p className="m-auto text-sm text-muted-foreground">Nenhuma Loja de Origem ativa.</p>
             )}
           </div>
-          {data.rankSelect.length > 0 && (
+          {lojasOrdenadas.length > 0 && (
             <p className="mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-border pt-2.5 text-[11px] uppercase tracking-widest text-muted-foreground">
-              <span>Total contratado</span>
+              <span>Total</span>
               <span className="font-data font-bold normal-case tracking-normal text-foreground">
-                {formatBRL(data.selectTotal)}
+                {formatBRL(lojasRealizado)}
+                {lojasMeta > 0 ? ` / ${formatBRL(lojasMeta)}` : ""}
               </span>
             </p>
           )}
