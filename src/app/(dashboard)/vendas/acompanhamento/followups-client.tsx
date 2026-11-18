@@ -1,21 +1,25 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, Pencil, Play, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, Pencil, Play, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Pagination } from "@/components/shared/pagination";
+import { Modal } from "@/components/shared/modal";
 import { useFilterQuery } from "@/hooks/use-filter-query";
 import { createFollowUp, updateFollowUp, deleteFollowUp } from "@/lib/actions/followups";
 import { createTask, moveTask } from "@/lib/actions/tasks";
 import {
   FOLLOWUP_STATUSES,
   FOLLOWUP_STATUS_LABEL,
+  FOLLOWUP_KIND_LABEL,
   MIN_BUSCA_COLABORADOR,
+  MAX_TEXTO,
+  MAX_TOPICO,
   type FollowUpKindValue,
 } from "@/lib/validations/followup";
 
@@ -200,7 +204,24 @@ function PlanoDeAcao({
   );
 }
 
-const CAMPO = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm";
+/**
+ * `resize-none`: a alça de arrastar do canto é o padrão do navegador em todo
+ * `<textarea>`, e com nove campos empilhados puxar um deles empurra o resto do
+ * formulário para baixo — o campo que a pessoa estava lendo sai do lugar.
+ * Decisão do dono em 18/11/2026: os campos não mudam de tamanho. O teto de
+ * caracteres (`MAX_TEXTO`) existe pelo mesmo motivo, e é o que torna a caixa
+ * fixa suficiente: o texto rola dentro dela em vez de não caber.
+ *
+ * Mesma escolha do `delay-reason-modal`, que já é assim.
+ *
+ * `kanban-scroll` é consequência direta disso: caixa fixa faz o texto rolar por
+ * dentro, e a barra que apareceria é a padrão do sistema — 15px, com setas nas
+ * pontas, dentro de um campo de 78px de altura. A classe da casa a deixa com
+ * 6px, trilho transparente e a cor da borda, escurecendo só enquanto o campo
+ * está em foco. É a mesma barra das tabelas do Painel.
+ */
+const CAMPO =
+  "kanban-scroll w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm";
 
 function Texto({
   label,
@@ -208,18 +229,49 @@ function Texto({
   value,
   onChange,
   rows = 3,
+  max = MAX_TEXTO,
 }: {
   label: string;
   help?: string;
   value: string;
   onChange: (v: string) => void;
   rows?: number;
+  /** Teto em caracteres. O MESMO do schema — ver `MAX_TEXTO`. */
+  max?: number;
 }) {
+  // O AVISO SO APARECE PERTO DO TETO (ultimo quinto). Oito campos com contador
+  // permanente poem oito numeros a competir com os rotulos, num formulario cuja
+  // tarefa e escrever; e o teto e tao alto que o numero seria decoracao em 99%
+  // das vezes. Mas ele PRECISA aparecer antes de o `maxLength` travar a tecla:
+  // digitacao que para de responder sem explicacao e o pior dos dois mundos.
+  const restante = max - value.length;
+  const perto = restante <= max / 5;
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
-      <textarea className={CAMPO} rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />
-      {help && <p className="text-xs text-muted-foreground">{help}</p>}
+      <textarea
+        className={CAMPO}
+        rows={rows}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        maxLength={max}
+      />
+      <div className="flex items-start justify-between gap-3">
+        {help ? <p className="text-xs text-muted-foreground">{help}</p> : <span />}
+        {perto &&
+          (restante > 0 ? (
+            <p className="shrink-0 font-data text-xs text-muted-foreground">
+              {restante.toLocaleString("pt-BR")} caracteres restantes
+            </p>
+          ) : (
+            // `role="status"` so no estado de LIMITE, que acontece uma vez: num
+            // contador a cada tecla, a regiao viva viraria tagarelice no leitor
+            // de tela. Tom 700/300, os que passam os 4.5:1 da WCAG AA.
+            <p role="status" className="shrink-0 text-xs font-medium text-rose-700 dark:text-rose-300">
+              Limite de {max.toLocaleString("pt-BR")} caracteres atingido.
+            </p>
+          ))}
+      </div>
     </div>
   );
 }
@@ -384,6 +436,14 @@ export function FollowUpsClient({
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   /** Registro aberto por inteiro na lista. `null` = todos fechados. */
   const [abertoId, setAbertoId] = useState<string | null>(null);
+  /**
+   * O registro da ficha aberta, procurado em `rows` em vez de guardado no
+   * estado: assim ele acompanha o que o servidor acabou de gravar. Com uma
+   * cópia no estado, editar pelo modal deixava a ficha mostrando o texto antigo
+   * até fechar e abrir de novo. Se a linha sair da página (filtro, exclusão,
+   * paginação), o `find` devolve `undefined` e a ficha simplesmente fecha.
+   */
+  const aberto = rows.find((r) => r.id === abertoId);
 
   const umAum = kind === "ONE_ON_ONE";
 
@@ -548,6 +608,7 @@ export function FollowUpsClient({
             <Texto
               label="Tema Central da Conversa"
               help="Assunto principal, projeto, desafio ou foco do encontro."
+              max={MAX_TOPICO}
               value={f.topic}
               onChange={(v) => set("topic", v)}
               rows={2}
@@ -726,30 +787,31 @@ export function FollowUpsClient({
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <Fragment key={r.id}>
                   <tr
+                    key={r.id}
                     className="cursor-pointer border-b border-border last:border-0 hover:bg-secondary/50"
                     // Clique NÃO pode ser o único caminho: a linha é um botão
                     // de verdade, alcançável por Tab e aberta por Enter/Espaço.
                     role="button"
                     tabIndex={0}
-                    aria-expanded={abertoId === r.id}
-                    onClick={() => setAbertoId((p) => (p === r.id ? null : r.id))}
+                    // `haspopup`, e não `expanded`: o registro abre a ficha num
+                    // modal, e nada se expande na própria linha.
+                    aria-haspopup="dialog"
+                    onClick={() => setAbertoId(r.id)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        setAbertoId((p) => (p === r.id ? null : r.id));
+                        setAbertoId(r.id);
                       }
                     }}
                   >
                     <td className="py-2 pr-4 font-data whitespace-nowrap">
                       <span className="inline-flex items-center gap-1">
-                        <ChevronDown
-                          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-                            abertoId === r.id ? "rotate-180" : ""
-                          }`}
-                          aria-hidden
-                        />
+                        {/* Seta para a DIREITA e sem rotacao: ela dizia "isto
+                            abre aqui embaixo", e agora abre uma ficha. Apontar
+                            para baixo prometeria a expansao que nao existe
+                            mais. */}
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                         {r.heldOn.split("-").reverse().join("/")}
                       </span>
                     </td>
@@ -805,45 +867,6 @@ export function FollowUpsClient({
                       </div>
                     </td>
                   </tr>
-                  {abertoId === r.id && (
-                    <tr className="border-b border-border bg-secondary/20 last:border-0">
-                      <td colSpan={6} className="px-3 py-4">
-                        <div className="space-y-4 text-sm">
-                          <Bloco titulo="Reconhecimento e pontos fortes" texto={r.strengths} />
-                          <Bloco titulo="Oportunidades de desenvolvimento" texto={r.improvement} />
-                          <Bloco titulo="Perspectiva do colaborador" texto={r.collaboratorView} />
-                          {umAum ? (
-                            <Bloco titulo="Métricas e indicadores" texto={r.performance} />
-                          ) : (
-                            <>
-                              <Bloco titulo="Tema central da conversa" texto={r.topic} />
-                              <Bloco titulo="Apoio necessário" texto={r.support} />
-                              <Bloco
-                                titulo="Prazo de reavaliação"
-                                texto={r.reviewOn ? r.reviewOn.split("-").reverse().join("/") : null}
-                              />
-                            </>
-                          )}
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                              Plano de ação
-                            </p>
-                            <div className="mt-1.5">
-                              <PlanoDeAcao
-                                texto={r.actionPlan}
-                                tarefas={tarefasAtivas}
-                                ocupado={pending}
-                                aoIniciar={(linha) => iniciarTarefa(linha, r)}
-                                aoConcluir={concluirTarefa}
-                              />
-                            </div>
-                          </div>
-                          <Bloco titulo="Observações" texto={r.notes} />
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  </Fragment>
                 ))}
                 {rows.length === 0 && (
                   <tr>
@@ -860,6 +883,101 @@ export function FollowUpsClient({
           </div>
         </CardContent>
       </Card>
+
+      {/* A FICHA DO REGISTRO, no mesmo padrão do cartão de pedido do Fluxo
+          (pedido do dono, 18/11/2026). A moldura é a `Modal` da casa — a mesma
+          do `order-detail-modal`, com ESC, véu que fecha ao clique e portal que
+          sobrevive à tela cheia.
+          Antes ela abria DENTRO da tabela, num `<tr>` de seis colunas: os nove
+          campos de texto longo empurravam as linhas seguintes para fora da
+          tela, e comparar dois registros exigia fechar um para achar o outro.
+          O cabeçalho repete data, colaborador, tipo, status e gestor porque o
+          modal COBRE a tabela: o que estava nas colunas sai de vista. */}
+      {aberto && (
+        <Modal onClose={() => setAbertoId(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Conversa de ${aberto.collaboratorName}`}
+            className="space-y-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="break-words text-lg font-bold">{aberto.collaboratorName}</h2>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {FOLLOWUP_KIND_LABEL[aberto.kind]} ·{" "}
+                  <span className="font-data">{aberto.heldOn.split("-").reverse().join("/")}</span> ·
+                  Gestor: {aberto.managerName}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge variant="outline" className={COR_DO_STATUS[aberto.status ?? "NAO_INICIADO"]}>
+                  {FOLLOWUP_STATUS_LABEL[aberto.status ?? "NAO_INICIADO"]}
+                </Badge>
+                {/* O X fica além do ESC e do véu: os dois são invisíveis, e a
+                    ficha é longa — quem rolou até o fim precisa de um alvo. */}
+                <button
+                  type="button"
+                  onClick={() => setAbertoId(null)}
+                  aria-label="Fechar"
+                  className="rounded-lg px-1 text-2xl leading-none text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 border-t border-border pt-4 text-sm">
+              <Bloco titulo="Reconhecimento e pontos fortes" texto={aberto.strengths} />
+              <Bloco titulo="Oportunidades de desenvolvimento" texto={aberto.improvement} />
+              <Bloco titulo="Perspectiva do colaborador" texto={aberto.collaboratorView} />
+              {umAum ? (
+                <Bloco titulo="Métricas e indicadores" texto={aberto.performance} />
+              ) : (
+                <>
+                  <Bloco titulo="Tema central da conversa" texto={aberto.topic} />
+                  <Bloco titulo="Apoio necessário" texto={aberto.support} />
+                  <Bloco
+                    titulo="Prazo de reavaliação"
+                    texto={aberto.reviewOn ? aberto.reviewOn.split("-").reverse().join("/") : null}
+                  />
+                </>
+              )}
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Plano de ação</p>
+                <div className="mt-1.5">
+                  <PlanoDeAcao
+                    texto={aberto.actionPlan}
+                    tarefas={tarefasAtivas}
+                    ocupado={pending}
+                    aoIniciar={(linha) => iniciarTarefa(linha, aberto)}
+                    aoConcluir={concluirTarefa}
+                  />
+                </div>
+              </div>
+              <Bloco titulo="Observações" texto={aberto.notes} />
+            </div>
+
+            {/* Editar no rodapé, como o cartão de pedido faz: a ficha é de
+                leitura, e a ação que a altera fica depois do conteúdo, não
+                competindo com ele. Fecha a ficha antes de abrir o formulário —
+                os dois no ar deixariam dois estados do mesmo registro na tela. */}
+            <div className="flex justify-end gap-2 border-t border-border pt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setAbertoId(null);
+                  editar(aberto);
+                }}
+              >
+                <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Editar
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -114,12 +114,19 @@ function Resumo({
 }) {
   return (
     <Card>
-      <CardContent className="pt-5">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
-        <p className="mt-1 font-data text-2xl font-bold">{valor}</p>
-        {rodape && <p className="mt-1 text-xs text-muted-foreground">{rodape}</p>}
+      {/* Compacto para caber SEIS numa linha (pedido do dono, 18/11/2026): doze
+          cartoes em duas fileiras de seis, em vez de tres de quatro, deixam a
+          grade do ano comecar acima da dobra — e e ela que mostra a curva.
+          `leading-tight` em tudo: a 1/6 da largura os titulos quebram em duas
+          linhas, e a entrelinha padrao somava altura justamente onde a troca
+          existe para economizar. 11px e o piso: abaixo disso o rotulo para de
+          ser legivel, e o cartao sem rotulo nao informa nada. */}
+      <CardContent className="p-3">
+        <p className="text-[11px] uppercase leading-tight tracking-wide text-muted-foreground">{titulo}</p>
+        <p className="mt-1 font-data text-lg font-bold leading-tight">{valor}</p>
+        {rodape && <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{rodape}</p>}
         {vs !== undefined && (
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-[11px] leading-tight text-muted-foreground">
             vs mês passado: {variacao(vs)}
           </p>
         )}
@@ -321,7 +328,11 @@ export function AcompanhamentoPainel({
           gráfico e a linha em foco.
         </p>
       )}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* SEIS POR LINHA no telao: os doze cartoes fecham em duas fileiras
+          exatas, sem orfao no fim. As larguras menores descem em passos que
+          tambem dividem doze (4, 3, 2), pelo mesmo motivo — tres por linha
+          deixaria um cartao sozinho na ultima. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         <Resumo
           titulo={`Faturamento líquido — ${recorte.rotulo}`}
           valor={ouVazio(formatBRL(k.realizado))}

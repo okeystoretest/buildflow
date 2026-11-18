@@ -42,11 +42,27 @@ const dataISO = z
 
 const dataOpcional = dataISO.optional().or(z.literal("").transform(() => undefined));
 
+/**
+ * TETO DOS CAMPOS DE TEXTO, em caracteres.
+ *
+ * 4.000 sao ~650 palavras, uma pagina e meia: umas seis vezes o que um registro
+ * completo de conversa ocupa. E teto de SEGURANCA, nao regua de redacao —
+ * ninguem encosta nele escrevendo de verdade. O tema do Quinzenal e uma linha,
+ * e por isso tem o seu.
+ *
+ * EXPORTADOS porque a TELA tambem precisa deles. Com o numero so aqui, o campo
+ * nao travava nem avisava: a pessoa escrevia 5.000 caracteres e descobria o
+ * limite ao salvar, pela mensagem do servidor. Mesmo motivo de
+ * `MIN_BUSCA_COLABORADOR` morar aqui — os dois lados precisam concordar.
+ */
+export const MAX_TEXTO = 4000;
+export const MAX_TOPICO = 1000;
+
 /** Texto longo obrigatorio de um dos campos de conteudo. */
-const texto = (campo: string, max = 4000) =>
+const texto = (campo: string, max = MAX_TEXTO) =>
   z.string().trim().min(1, `${campo} é obrigatório.`).max(max, `${campo} está muito longo.`);
 
-const textoOpcional = (max = 4000) =>
+const textoOpcional = (max = MAX_TEXTO) =>
   z.string().trim().max(max, "Texto muito longo.").optional()
     .or(z.literal("").transform(() => undefined));
 
@@ -65,7 +81,7 @@ export const followUpSchema = z
     // One-on-One
     performance: textoOpcional(),
     // Quinzenal
-    topic: textoOpcional(1000),
+    topic: textoOpcional(MAX_TOPICO),
     support: textoOpcional(),
     reviewOn: dataOpcional,
   })
