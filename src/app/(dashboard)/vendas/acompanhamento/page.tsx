@@ -12,7 +12,8 @@ import { filtroDeSituacao, type FollowUpKindValue } from "@/lib/validations/foll
 export const dynamic = "force-dynamic";
 
 /**
- * COMERCIAL > Acompanhamento Gerencial
+ * COMERCIAL > Acompanhamento (rotulo do menu; a planilha de origem chama
+ * "Acompanhamento Gerencial")
  * ---------------------------------------------------------------------------
  * As tres abas da planilha `Acompanhamento Gerencial - FLOW.xlsx`, que o dono
  * mantinha a mao: o painel de meta da loja e das vendedoras, o One-on-One e o

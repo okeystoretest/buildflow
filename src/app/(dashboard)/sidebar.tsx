@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ShoppingCart, Wallet, PackageCheck, Truck, Settings, KanbanSquare,
   PackageOpen, HandCoins, FileSignature, Gauge, ScrollText, CalendarDays, Store,
   ClipboardCheck, Star, Users, MapPin, ListTodo, BarChart3, History, CreditCard, FilePlus2,
-  Landmark, Tag, Building2, AlertTriangle, Clock, Shirt, Timer, ClipboardList,
+  Landmark, Tag, Building2, AlertTriangle, Clock, Shirt, Timer, ClipboardList, Target,
   Menu, X, LogOut, ChevronDown, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -46,6 +46,9 @@ const ICON: Record<string, React.ReactNode> = {
   "/vendas/cronograma": <CalendarDays className="h-3.5 w-3.5" />,
   "/vendas/vitrine": <Store className="h-3.5 w-3.5" />,
   "/vendas/historico": <History className="h-3.5 w-3.5" />,
+  // Alvo, e nao um grafico: a tela ja tem o grafico dentro, e a pergunta que
+  // ela responde e "bateu a meta?". BarChart3 ja e dos Resultados de Campanhas.
+  "/vendas/acompanhamento": <Target className="h-3.5 w-3.5" />,
 
   "/financeiro/historico": <ScrollText className="h-3.5 w-3.5" />,
   "/financeiro/entregas": <HandCoins className="h-3.5 w-3.5" />,

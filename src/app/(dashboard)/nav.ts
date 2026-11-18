@@ -185,7 +185,7 @@ export const NAV: NavModule[] = [
       { href: "/vendas/vitrine", label: "Vitrine", descricao: "Fotos, vídeos e documentos publicados no Build.Connect.", roles: ["GESTAO", "VENDAS", "FINANCEIRO"] },
       // SO GESTAO, e por isso no fim: as outras ferramentas de Comercial sao
       // da vendedora, esta e sobre ela (meta da loja, One-on-One, Quinzenal).
-      { href: "/vendas/acompanhamento", label: "Acompanhamento Gerencial", descricao: "A meta da loja e das vendedoras mês a mês, e as conversas de acompanhamento.", roles: ["GESTAO"] },
+      { href: "/vendas/acompanhamento", label: "Acompanhamento", descricao: "A meta da loja e das vendedoras mês a mês, e as conversas de acompanhamento.", roles: ["GESTAO"] },
     ],
   },
   {

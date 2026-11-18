@@ -8,6 +8,7 @@
  *
  * Rode com: npx tsx scripts/checks/nav.ts
  */
+import { readFileSync } from "node:fs";
 import {
   navParaSessao,
   moduloAtivo,
@@ -91,9 +92,11 @@ check("ordem do Comercial", rotulos("/vendas"), [
   // Vitrine no fim, ao lado do Cronograma (pedido do dono, 06/11/2026): as duas
   // leem do Build.Connect e nenhuma escreve.
   "Vitrine",
-  // Acompanhamento Gerencial no fim (13/11/2026): e a unica ferramenta de
-  // Comercial restrita a GESTAO — as outras sao da vendedora, esta e sobre ela.
-  "Acompanhamento Gerencial",
+  // Acompanhamento no fim (13/11/2026): e a unica ferramenta de Comercial
+  // restrita a GESTAO — as outras sao da vendedora, esta e sobre ela.
+  // Rotulo encurtado de "Acompanhamento Gerencial" a pedido do dono em
+  // 18/11/2026; a planilha de origem mantem o nome longo.
+  "Acompanhamento",
 ]);
 check("rotulos do Financeiro", rotulos("/financeiro"), [
   "Gestão de Pedidos", "Registo de Pedidos", "Contratos Select", "Repasse a Motoristas",
@@ -263,6 +266,23 @@ check(
 
 // Papel SEM fixo (Gestao) segue so pelo uso, como antes.
 check("sem fixo, zero uso da lista vazia", escolherFavoritos({}, modsVendas, undefined), []);
+
+// TODA ROTA DO MENU TEM ICONE. O mapa `ICON` mora em `sidebar.tsx`, porque um
+// componente de icone nao atravessa a fronteira RSC -> client, e NADA ligava os
+// dois arquivos: ferramenta nova entrava no menu, nascia sem icone e nada
+// quebrava para avisar — a linha so ficava torta na tela, e quem reporta isso e
+// o dono, nao o portao. Foi exatamente o que aconteceu com o Acompanhamento
+// (18/11/2026).
+//
+// Lido como TEXTO de proposito: importar `sidebar.tsx` arrastaria React e
+// `next/navigation` para dentro do portao, que roda em Node puro.
+const sidebar = readFileSync("src/app/(dashboard)/sidebar.tsx", "utf8");
+const rotasDoMenu = [...new Set([...NAV.map((m) => m.base), ...NAV.flatMap((m) => m.tools.map((t) => t.href))])];
+check(
+  "toda rota do menu tem icone em sidebar.tsx",
+  rotasDoMenu.filter((href) => !sidebar.includes(`"${href}":`)),
+  [],
+);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);
