@@ -26,7 +26,7 @@
  * NÃO adicionar "use server": é usado por Server Components.
  */
 
-import { janelaDoMes } from "@/lib/rank-window";
+import { janelaDoMes, type Janela } from "@/lib/rank-window";
 import { computeRealizado, vendidoDoVendedor, type AjusteRank } from "@/lib/rank-math";
 
 /** Um pedido faturado, já reduzido ao que a grade precisa. */
@@ -196,11 +196,19 @@ export function variacaoMensal(atual: number, anterior: number): number | null {
   return (atual - anterior) / anterior;
 }
 
-/** Em que mês (1-12) do ano este instante cai, no fuso do negócio. `null` fora do ano. */
-function mesDoAno(d: Date, year: number): number | null {
-  for (let m = 1; m <= 12; m++) {
-    const { inicio, fim } = janelaDoMes(year, m);
-    if (d >= inicio && d < fim) return m;
+/**
+ * Em que mês (1-12) do ano este instante cai, no fuso do negócio. `null` fora
+ * do ano.
+ *
+ * Recebe as janelas PRONTAS, e não o ano: `janelaDoMes` constrói dois
+ * `Intl.DateTimeFormat` por chamada, e montar as doze aqui dentro fazia isso
+ * por PEDIDO. Medido em 18/11/2026 com 302 pedidos: 460 ms aqui contra 30 ms
+ * de banco — e crescendo junto com o número de pedidos, que é o que a tela de
+ * produção tem de sobra. As janelas nascem uma vez em `montarGrade`.
+ */
+function mesDoAno(d: Date, janelas: Janela[]): number | null {
+  for (let i = 0; i < janelas.length; i++) {
+    if (d >= janelas[i].inicio && d < janelas[i].fim) return i + 1;
   }
   return null;
 }
@@ -229,12 +237,15 @@ export function montarGrade(args: {
   const daLoja = new Set(vendedoras.map((v) => v.id));
   const MESES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-  // Pedidos por mês, uma passada só: `mesDoAno` roda 12 janelas por pedido e
+  // As doze janelas do ano, UMA VEZ para toda a grade. Ver `mesDoAno`.
+  const janelas = MESES.map((m) => janelaDoMes(year, m));
+
+  // Pedidos por mês, uma passada só: `mesDoAno` compara 12 janelas por pedido e
   // uma grade de 2.000 pedidos não precisa de 24.000 comparações por célula.
   const porMes = new Map<number, PedidoAcomp[]>(MESES.map((m) => [m, []]));
   for (const p of pedidos) {
     if (!daLoja.has(p.sellerId)) continue;
-    const m = mesDoAno(p.createdAt, year);
+    const m = mesDoAno(p.createdAt, janelas);
     if (m !== null) porMes.get(m)!.push(p);
   }
 
@@ -345,7 +356,7 @@ export function montarGrade(args: {
   });
 
   const devolucoesLoja = MESES.map((m) => {
-    const doMes = devolucoes.filter((d) => mesDoAno(d.createdAt, year) === m);
+    const doMes = devolucoes.filter((d) => mesDoAno(d.createdAt, janelas) === m);
     return {
       month: m,
       qtd: doMes.length,
