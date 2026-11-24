@@ -5,11 +5,18 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/shared/modal";
+import { TabPanel, Tabs } from "@/components/ui/tabs";
 import { excluirRelatorio } from "@/lib/actions/relatorio-semanal";
 import { formatarData } from "@/lib/relatorio-semanal-labels";
 import type { WeeklyReportDetail } from "@/lib/relatorio-semanal-data";
 import { PendenciasProvider, useSalvarPendencias } from "./pendencias";
 import { ResumoSection } from "./resumo-section";
+import {
+  AgendaSection,
+  DeliveriesSection,
+  MetricsSection,
+  OkrsSection,
+} from "./report-sections";
 
 /**
  * A semana aberta para EDITAR.
@@ -21,9 +28,12 @@ import { ResumoSection } from "./resumo-section";
  * também tem o seu — uma sexta interrompida no meio das métricas não pode
  * perder as entregas já respondidas.
  *
- * EM CONSTRUÇÃO: por enquanto só o bloco do Resumo. Entregas, métricas, OKRs,
- * bloqueios e pauta entram em seguida, e com eles as abas — com um bloco só,
- * uma barra de abas seria ruído.
+ * TODOS OS BLOCOS FICAM MONTADOS, e a aba só esconde. Desmontar o bloco
+ * escondido jogaria fora o que foi digitado nele e, pior, o tiraria do
+ * registro de pendências — o "Salvar" do cabeçalho deixaria de enxergá-lo.
+ *
+ * EM CONSTRUÇÃO: falta o bloco de Bloqueios, a única seção que grava linha a
+ * linha. Entra em seguida.
  */
 export function ReportEditor({
   detail,
@@ -36,6 +46,15 @@ export function ReportEditor({
   const [excluindo, setExcluindo] = useState(false);
   const [confirmar, setConfirmar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [aba, setAba] = useState("resumo");
+
+  const abas = [
+    { id: "resumo", label: "Resumo" },
+    { id: "entregas", label: `Entregas (${detail.deliveries.length})` },
+    { id: "metricas", label: `Métricas (${detail.metrics.length})` },
+    { id: "okrs", label: `OKRs (${detail.okrs.length})` },
+    { id: "pauta", label: `Pauta (${detail.agenda.length})` },
+  ];
 
   async function remover() {
     if (excluindo) return;
@@ -85,7 +104,25 @@ export function ReportEditor({
 
         {erro && <p className="text-xs text-destructive">{erro}</p>}
 
-        <ResumoSection detail={detail} />
+        <Tabs items={abas} value={aba} onValueChange={setAba} />
+
+        <TabPanel tabId={aba}>
+          <div className={aba === "resumo" ? "" : "hidden"}>
+            <ResumoSection detail={detail} />
+          </div>
+          <div className={aba === "entregas" ? "" : "hidden"}>
+            <DeliveriesSection reportId={detail.id} deliveries={detail.deliveries} />
+          </div>
+          <div className={aba === "metricas" ? "" : "hidden"}>
+            <MetricsSection reportId={detail.id} metrics={detail.metrics} />
+          </div>
+          <div className={aba === "okrs" ? "" : "hidden"}>
+            <OkrsSection reportId={detail.id} okrs={detail.okrs} />
+          </div>
+          <div className={aba === "pauta" ? "" : "hidden"}>
+            <AgendaSection reportId={detail.id} agenda={detail.agenda} />
+          </div>
+        </TabPanel>
 
         {confirmar && (
           <Modal onClose={() => !excluindo && setConfirmar(false)} largura="max-w-md">
