@@ -233,7 +233,7 @@ export function Sidebar({
         title={colapsada ? m.label : undefined}
         className={cn(
           "flex items-center gap-2.5 rounded-lg py-1.5 text-sm transition-colors",
-          colapsada ? "justify-center px-1.5" : "px-2",
+          "px-2", colapsada && "lg:justify-center lg:px-1.5",
           // QUEM MOSTRA O ESTADO E O QUADRADO DO ICONE, nunca uma faixa na
           // linha inteira: a faixa lia como "retangulo" ao lado de icones
           // quadrados, e some atras do rotulo em vez de marcar o item.
@@ -249,7 +249,9 @@ export function Sidebar({
           // Retraida nao leva fundo — a 4.5rem ele vira um retangulo em volta
           // do quadrado do icone.
           eAtivo
-            ? cn("font-semibold text-foreground", !colapsada && "bg-card shadow-md ring-1 ring-border")
+            // O fundo de card do item aceso tambem e desktop-only: na gaveta a
+            // largura e cheia, entao ele vale sempre e so sai na coluna estreita.
+            ? cn("font-semibold text-foreground", "bg-card shadow-md ring-1 ring-border", colapsada && "lg:bg-transparent lg:shadow-none lg:ring-0")
             : "font-medium text-muted-foreground hover:text-foreground",
         )}
       >
@@ -264,7 +266,12 @@ export function Sidebar({
         )}>
           {ICON[m.base]}
         </span>
-        {!colapsada && <span className="truncate">{m.label}</span>}
+        {/* `lg:hidden` e nao `!colapsada &&`: `colapsada` e a coluna estreita
+            do DESKTOP, e a gaveta do mobile usa a largura cheia. Removendo o
+            rotulo do DOM, quem recolhia a barra no desktop abria o menu no
+            celular sem uma palavra escrita. Mesmo idioma do rotulo de
+            ferramenta, logo abaixo. */}
+        <span className={cn("truncate", colapsada && "lg:hidden")}>{m.label}</span>
       </Link>
     );
   }
@@ -385,7 +392,17 @@ export function Sidebar({
         <div className={cn("flex h-16 shrink-0 items-center gap-2 border-b border-border px-3", colapsada && "lg:justify-center lg:px-2")}>
           {/* Tamanhos pela especificacao: 40px aberta, 36px recolhida. */}
           <Link href="/" onClick={fechar} className="min-w-0">
-            <MarcaBuildFlow tamanho={colapsada ? "compacto" : "padrao"} semTexto={colapsada} />
+            {/* Duas marcas, e nao uma com props condicionais: `tamanho` e
+                `semTexto` sao PROPS, e prop nao atende media query. Na gaveta
+                do mobile a marca e sempre a inteira; no desktop ela segue a
+                coluna. Dar um `textoClassName` ao componente custaria API nova
+                numa marca usada em varias telas, para um caller. */}
+            <MarcaBuildFlow tamanho="padrao" className="lg:hidden" />
+            <MarcaBuildFlow
+              tamanho={colapsada ? "compacto" : "padrao"}
+              semTexto={colapsada}
+              className="hidden lg:flex"
+            />
           </Link>
           <button onClick={fechar} className="ml-auto rounded-md p-1 text-muted-foreground hover:text-foreground lg:hidden" aria-label="Fechar menu">
             <X className="h-4 w-4" />
@@ -409,12 +426,10 @@ export function Sidebar({
             >
               {user.iniciais}
             </span>
-            {!colapsada && (
-              <span className="min-w-0 leading-tight">
-                <span className="block truncate text-sm font-semibold" title={user.nome}>{user.nome}</span>
-                <span className="block truncate text-xs text-muted-foreground">{user.papel}</span>
-              </span>
-            )}
+            <span className={cn("min-w-0 leading-tight", colapsada && "lg:hidden")}>
+              <span className="block truncate text-sm font-semibold" title={user.nome}>{user.nome}</span>
+              <span className="block truncate text-xs text-muted-foreground">{user.papel}</span>
+            </span>
           </div>
         </div>
 
@@ -425,7 +440,7 @@ export function Sidebar({
               vazia pedindo explicacao. */}
           {favoritos.length > 0 && (
             <>
-              {!colapsada && <p className="px-2 pb-1 pt-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground">Favoritos</p>}
+              <p className={cn("px-2 pb-1 pt-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground", colapsada && "lg:hidden")}>Favoritos</p>
               {favoritos.map(({ tool: t, modulo: m }) => {
                 const c = cor(m.base);
                 const acesa = t.href === ferramentaAberta;
@@ -440,13 +455,13 @@ export function Sidebar({
                     aria-current={acesa ? "page" : undefined}
                     className={cn(
                       "flex items-center gap-2.5 rounded-lg py-1.5 text-sm transition-colors",
-                      colapsada ? "justify-center px-1.5" : "px-2",
+                      "px-2", colapsada && "lg:justify-center lg:px-1.5",
                       // Mesmo fundo elevado da ferramenta acesa na lista do
                       // setor: o atalho e a mesma ferramenta, tem de acender
                       // igual. Retraida nao leva sombra — a 4.5rem o fundo
                       // vira um retangulo em volta do quadrado do icone.
                       acesa
-                        ? cn("font-semibold text-foreground", !colapsada && "bg-card shadow-md ring-1 ring-border")
+                        ? cn("font-semibold text-foreground", "bg-card shadow-md ring-1 ring-border", colapsada && "lg:bg-transparent lg:shadow-none lg:ring-0")
                         : "font-medium text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -474,7 +489,7 @@ export function Sidebar({
           {geral.length > 0 && (
             <>
               <div className="my-2 border-t border-border" />
-              {!colapsada && <p className="px-2 pb-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground">Geral</p>}
+              <p className={cn("px-2 pb-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground", colapsada && "lg:hidden")}>Geral</p>
               {geral.map((m) => <LinkModulo key={m.base} m={m} eAtivo={m.base === ativo} />)}
             </>
           )}
@@ -482,7 +497,7 @@ export function Sidebar({
           {setores.length > 0 && (
             <>
               <div className="my-2 border-t border-border" />
-              {!colapsada && <p className="px-2 pb-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground">Setores</p>}
+              <p className={cn("px-2 pb-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground", colapsada && "lg:hidden")}>Setores</p>
               {setores.map((m) => {
                 const c = cor(m.base);
                 const aberto = expandido === m.base;
@@ -502,45 +517,6 @@ export function Sidebar({
                 // nao "estou aqui". Fechada e longe: neutro.
                 const chipDoSetor =
                   m.base === ativo ? c.chip : aberto ? c.chipSuave : CHIP_NEUTRO;
-
-                // Colapsada: o icone abre um flyout com as ferramentas, porque
-                // a lista indentada nao cabe em 4.5rem de largura.
-                if (colapsada) {
-                  return (
-                    <div key={m.base} className="relative">
-                      <button
-                        onClick={(e) => {
-                          const r = e.currentTarget.getBoundingClientRect();
-                          setFlyout((f) => (f?.href === m.base ? null : { href: m.base, top: r.top }));
-                        }}
-                        title={m.label}
-                        aria-expanded={flyout?.href === m.base}
-                        // Sem faixa: retraida, o botao ocupa a largura da
-                        // coluna e pintar o fundo dele dava um retangulo em
-                        // volta do quadrado do icone.
-                        className="flex w-full items-center justify-center rounded-lg px-1.5 py-1.5 transition-colors"
-                      >
-                        <span className={cn(
-                          "flex h-8 w-8 items-center justify-center rounded-xl transition-colors",
-                          chipDoSetor,
-                        )}>
-                          {ICON[m.base]}
-                        </span>
-                      </button>
-                      {flyout?.href === m.base && (
-                        <div
-                          className="fixed left-[4.75rem] z-50 w-56 rounded-xl border border-border bg-card p-2 shadow-xl"
-                          style={{ top: flyout.top }}
-                        >
-                          <p className={cn("px-2 pb-1.5 text-[0.6875rem] font-semibold uppercase tracking-widest", c.texto)}>
-                            {m.label}
-                          </p>
-                          <Ferramentas m={m} dentroDoFlyout />
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
 
                 // Miolo do item: identico com ou sem destino.
                 const miolo = (
@@ -562,8 +538,8 @@ export function Sidebar({
                 );
                 const alternar = () => setExpandido((e) => (e === m.base ? null : m.base));
 
-                return (
-                  <div key={m.base}>
+                const itemExpansivel = (
+                  <div>
                     <div className={cn(
                       // Sem faixa no item aberto: o estado e o quadrado do
                       // icone. A faixa lia como retangulo ao lado dos icones
@@ -601,6 +577,53 @@ export function Sidebar({
                     )}
                   </div>
                 );
+
+                // COLAPSADA E SO DESKTOP, e por isso os DOIS ficam no DOM.
+                // Na coluna de 4.5rem a lista indentada nao cabe e o icone abre
+                // um flyout; na gaveta do mobile, que usa a largura cheia, vale
+                // a lista normal. Um `if` em JavaScript nao sabe a largura da
+                // tela — era ele que mostrava icones MUDOS na gaveta para quem
+                // recolhia a barra no desktop. Quem escolhe agora e o breakpoint.
+                if (colapsada) {
+                  return (
+                    <div key={m.base}>
+                      <div className="relative hidden lg:block">
+                      <button
+                        onClick={(e) => {
+                          const r = e.currentTarget.getBoundingClientRect();
+                          setFlyout((f) => (f?.href === m.base ? null : { href: m.base, top: r.top }));
+                        }}
+                        title={m.label}
+                        aria-expanded={flyout?.href === m.base}
+                        // Sem faixa: retraida, o botao ocupa a largura da
+                        // coluna e pintar o fundo dele dava um retangulo em
+                        // volta do quadrado do icone.
+                        className="flex w-full items-center justify-center rounded-lg px-1.5 py-1.5 transition-colors"
+                      >
+                        <span className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-xl transition-colors",
+                          chipDoSetor,
+                        )}>
+                          {ICON[m.base]}
+                        </span>
+                      </button>
+                      {flyout?.href === m.base && (
+                        <div
+                          className="fixed left-[4.75rem] z-50 w-56 rounded-xl border border-border bg-card p-2 shadow-xl"
+                          style={{ top: flyout.top }}
+                        >
+                          <p className={cn("px-2 pb-1.5 text-[0.6875rem] font-semibold uppercase tracking-widest", c.texto)}>
+                            {m.label}
+                          </p>
+                          <Ferramentas m={m} dentroDoFlyout />
+                        </div>
+                      )}
+                      </div>
+                      <div className="lg:hidden">{itemExpansivel}</div>
+                    </div>
+                  );
+                }
+                return <div key={m.base}>{itemExpansivel}</div>;
               })}
             </>
           )}
@@ -627,7 +650,7 @@ export function Sidebar({
               )}>
                 <Settings className="h-4 w-4" />
               </span>
-              {!colapsada && <span>{CONFIG.label}</span>}
+              <span className={cn(colapsada && "lg:hidden")}>{CONFIG.label}</span>
             </Link>
           )}
 
@@ -644,7 +667,7 @@ export function Sidebar({
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary">
                 <LogOut className="h-4 w-4" />
               </span>
-              {!colapsada && <span>Sair</span>}
+              <span className={cn(colapsada && "lg:hidden")}>Sair</span>
             </button>
           </form>
         </div>
