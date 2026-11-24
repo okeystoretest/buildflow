@@ -8,6 +8,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Segmented } from "@/components/ui/segmented";
 import { Pagination } from "@/components/shared/pagination";
 import type { WeeklyReportDetail, WeeklyReportListItem } from "@/lib/relatorio-semanal-data";
+import type { KanbanSummary, MarketingTaskItem, TaskPerson } from "@/lib/relatorio-semanal-math";
+import { KanbanBoard } from "./kanban-board";
+import { KanbanSummaryPanel } from "./kanban-summary";
 import { NewReportModal } from "./new-report-modal";
 import { ReportCard } from "./report-card";
 import { ReportEditor } from "./report-editor";
@@ -33,15 +36,18 @@ export function Painel({
   page,
   porPagina,
   total,
-  totalTarefas,
+  tasks,
+  summary,
+  people,
 }: {
   reports: readonly WeeklyReportListItem[];
   detail: WeeklyReportDetail | null;
   page: number;
   porPagina: number;
   total: number;
-  /** Só para a contagem da aba do quadro. */
-  totalTarefas: number;
+  tasks: readonly MarketingTaskItem[];
+  summary: KanbanSummary;
+  people: readonly TaskPerson[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -82,7 +88,7 @@ export function Painel({
       <Segmented
         options={[
           { value: "semanas", label: `Semanas (${total})` },
-          { value: "kanban", label: `Kanban (${totalTarefas})` },
+          { value: "kanban", label: `Kanban (${summary.total})` },
         ]}
         value={vista}
         onChange={setVista}
@@ -113,14 +119,11 @@ export function Painel({
           </div>
         ))}
 
-      {/* O quadro é a última fatia do porte. O aviso é explícito de propósito:
-          uma aba que abre vazia se lê como defeito, e os 12 cartões JÁ ESTÃO
-          no banco — a contagem ao lado prova. */}
       {vista === "kanban" && (
-        <EmptyState
-          title="O quadro está sendo montado"
-          description={`As ${totalTarefas} tarefas já estão registradas; as cinco colunas, o arrasto e o painel de contagens entram na próxima etapa do porte.`}
-        />
+        <div className="space-y-5">
+          <KanbanBoard tasks={tasks} summary={summary} people={people} />
+          <KanbanSummaryPanel summary={summary} />
+        </div>
       )}
 
       {novo && (

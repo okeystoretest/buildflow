@@ -15,6 +15,8 @@ import {
   primeiroErro,
   resumoSchema,
   secaoSchema,
+  tarefaSchema,
+  moverSchema,
 } from "@/lib/relatorio-semanal-schemas";
 
 /**
@@ -367,5 +369,134 @@ export async function excluirRelatorio(args: {
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao excluir a semana.");
+  }
+}
+
+/* --------------------------------------------- o quadro (abas 7 e 8) */
+
+/**
+ * Próximo código do quadro ("K-13").
+ *
+ * Lido do MAIOR código existente, e não da contagem de cartões: contar daria
+ * "K-12" de novo assim que alguém excluísse um cartão do meio, e o código é a
+ * forma de citar a tarefa na reunião de sexta — reaproveitá-lo confundiria a
+ * ata da semana anterior.
+ */
+async function proximoCodigo(): Promise<string> {
+  const codigos = await prisma.marketingTask.findMany({ select: { code: true } });
+  let maior = 0;
+  for (const { code } of codigos) {
+    const n = Number(code.replace(/^K-/, ""));
+    if (Number.isInteger(n) && n > maior) maior = n;
+  }
+  return `K-${String(maior + 1).padStart(2, "0")}`;
+}
+
+export async function salvarTarefa(
+  args: z.input<typeof tarefaSchema>,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    const parsed = tarefaSchema.safeParse(args, { errorMap: EM_PORTUGUES });
+    if (!parsed.success) return actionError(primeiroErro(parsed.error));
+
+    const d = parsed.data;
+
+    // O id do responsável vem do NAVEGADOR: sem esta conferência, um cartão
+    // cairia no nome de alguém desligado, ou num id inventado.
+    if (d.assigneeId) {
+      const existe = await prisma.user.findFirst({
+        where: { id: d.assigneeId, active: true },
+        select: { id: true },
+      });
+      if (!existe) return actionError("Escolha alguém ativo na plataforma.");
+    }
+
+    const campos = {
+      title: d.title,
+      category: d.category,
+      priority: d.priority,
+      assigneeId: d.assigneeId || null,
+      dueDate: d.dueDate ? lerDia(d.dueDate) : null,
+      evidence: d.evidence || null,
+      note: d.note || null,
+    };
+
+    if (d.taskId) {
+      const { count } = await prisma.marketingTask.updateMany({
+        where: { id: d.taskId },
+        data: campos,
+      });
+      if (count === 0) return actionError("Tarefa não encontrada.");
+      revalidatePath(ROTA);
+      return actionOk({ id: d.taskId });
+    }
+
+    const criado = await prisma.marketingTask.create({
+      data: { code: await proximoCodigo(), ...campos },
+      select: { id: true },
+    });
+    revalidatePath(ROTA);
+    return actionOk({ id: criado.id });
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao salvar a tarefa.");
+  }
+}
+
+export async function moverTarefa(
+  args: z.input<typeof moverSchema>,
+): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    const parsed = moverSchema.safeParse(args, { errorMap: EM_PORTUGUES });
+    if (!parsed.success) return actionError("Dados inválidos.");
+    const { taskId, status } = parsed.data;
+
+    const task = await prisma.marketingTask.findUnique({
+      where: { id: taskId },
+      select: { id: true, evidence: true, status: true },
+    });
+    if (!task) return actionError("Tarefa não encontrada.");
+    if (task.status === status) return actionOk(undefined);
+
+    // A regra que era uma frase na aba de instruções, que ninguém abria, e
+    // aqui é recusa: nada chega a Publicado sem prova.
+    if (status === "PUBLICADO" && !task.evidence) {
+      return actionError(
+        "Toda tarefa precisa de evidência (link ou print) antes de ir para Publicado.",
+      );
+    }
+
+    await prisma.marketingTask.update({
+      where: { id: task.id },
+      // Voltar de Publicado LIMPA a data de conclusão: o cartão não está
+      // concluído, e a data sobrevivente contaria como entrega no histórico.
+      data: { status, doneAt: status === "PUBLICADO" ? new Date() : null },
+    });
+
+    revalidatePath(ROTA);
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao mover a tarefa.");
+  }
+}
+
+export async function excluirTarefa(args: { taskId: string }): Promise<ActionResult<void>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    const parsed = z
+      .object({ taskId: z.string().min(1) })
+      .safeParse(args, { errorMap: EM_PORTUGUES });
+    if (!parsed.success) return actionError("Dados inválidos.");
+
+    const { count } = await prisma.marketingTask.deleteMany({
+      where: { id: parsed.data.taskId },
+    });
+    if (count === 0) return actionError("Tarefa não encontrada.");
+
+    revalidatePath(ROTA);
+    return actionOk(undefined);
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao excluir a tarefa.");
   }
 }

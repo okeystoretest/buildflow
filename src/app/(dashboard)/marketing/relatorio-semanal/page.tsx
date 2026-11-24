@@ -37,7 +37,7 @@ export default async function RelatorioSemanalPage(props: {
   const searchParams = await props.searchParams;
   await requireRole(["GESTAO"]);
 
-  const { reports, summary } = await getRelatorioSemanalData();
+  const { reports, summary, tasks, people } = await getRelatorioSemanalData();
   // `?semana=` de uma semana que não existe devolve null e a lista abre normal,
   // em vez de uma ficha vazia ou de um erro: id colado à mão não é acidente
   // raro, é o que acontece quando alguém guarda o link e a semana é excluída.
@@ -58,7 +58,9 @@ export default async function RelatorioSemanalPage(props: {
       page={page}
       porPagina={POR_PAGINA}
       total={reports.length}
-      totalTarefas={summary.total}
+      tasks={tasks}
+      summary={summary}
+      people={people}
     />
   );
 }

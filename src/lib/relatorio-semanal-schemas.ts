@@ -157,6 +157,25 @@ export const bloqueioSchema = z.object({
   resolution: textoLongo,
 });
 
+/* ------------------------------------------------- o quadro (abas 7 e 8) */
+
+export const tarefaSchema = z.object({
+  /** Ausente = criar. */
+  taskId: z.string().min(1).optional(),
+  title: z.string().trim().min(1, "Dê um nome à tarefa.").max(300, "Nome muito longo."),
+  category: z.enum(["CONTEUDO", "PUBLICACAO", "COMUNIDADE", "RELATORIO", "PROCESSO"]),
+  priority: z.enum(["ALTA", "MEDIA", "BAIXA"]),
+  assigneeId: z.string().trim().max(60).nullish(),
+  dueDate: dia.nullish(),
+  evidence: evidencia,
+  note: textoLongo,
+});
+
+export const moverSchema = z.object({
+  taskId: z.string().min(1),
+  status: z.enum(["BACKLOG", "A_FAZER", "EM_ANDAMENTO", "REVISAO", "PUBLICADO"]),
+});
+
 /** "2026-11-17" → meia-noite em UTC, a mesma régua das colunas `@db.Date`. */
 export function lerDia(iso: string): Date {
   return new Date(`${iso}T00:00:00Z`);
