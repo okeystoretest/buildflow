@@ -17,6 +17,7 @@ import {
   MetricsSection,
   OkrsSection,
 } from "./report-sections";
+import { BlockersSection } from "./blockers-section";
 
 /**
  * A semana aberta para EDITAR.
@@ -32,8 +33,8 @@ import {
  * escondido jogaria fora o que foi digitado nele e, pior, o tiraria do
  * registro de pendências — o "Salvar" do cabeçalho deixaria de enxergá-lo.
  *
- * EM CONSTRUÇÃO: falta o bloco de Bloqueios, a única seção que grava linha a
- * linha. Entra em seguida.
+ * Os SEIS blocos da planilha estão aqui. O que falta do porte é o fluxo em
+ * etapas da semana nova, que reusa estes mesmos blocos página a página.
  */
 export function ReportEditor({
   detail,
@@ -53,6 +54,7 @@ export function ReportEditor({
     { id: "entregas", label: `Entregas (${detail.deliveries.length})` },
     { id: "metricas", label: `Métricas (${detail.metrics.length})` },
     { id: "okrs", label: `OKRs (${detail.okrs.length})` },
+    { id: "bloqueios", label: `Bloqueios (${detail.blockers.length})` },
     { id: "pauta", label: `Pauta (${detail.agenda.length})` },
   ];
 
@@ -118,6 +120,9 @@ export function ReportEditor({
           </div>
           <div className={aba === "okrs" ? "" : "hidden"}>
             <OkrsSection reportId={detail.id} okrs={detail.okrs} />
+          </div>
+          <div className={aba === "bloqueios" ? "" : "hidden"}>
+            <BlockersSection reportId={detail.id} blockers={detail.blockers} />
           </div>
           <div className={aba === "pauta" ? "" : "hidden"}>
             <AgendaSection reportId={detail.id} agenda={detail.agenda} />
