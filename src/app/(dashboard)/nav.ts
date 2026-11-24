@@ -136,6 +136,7 @@ export const ACENTO: Record<
   "/logistica":  { faixa: "bg-distribuicao", chip: "bg-distribuicao text-distribuicao-fg", chipSuave: "bg-distribuicao/15 text-distribuicao-text", texto: "text-distribuicao-text" },
   "/motorista":  { faixa: "bg-motorista",    chip: "bg-motorista text-motorista-fg",       chipSuave: "bg-motorista/15 text-motorista-text",       texto: "text-motorista-text" },
   "/gestao":     { faixa: "bg-brand",        chip: "bg-brand text-brand-fg",               chipSuave: "bg-brand/15 text-brand-text",               texto: "text-brand-text" },
+  "/marketing":  { faixa: "bg-marketing",    chip: "bg-marketing text-marketing-fg",       chipSuave: "bg-marketing/15 text-marketing-text",       texto: "text-marketing-text" },
 };
 
 const SEM_COR = {
@@ -231,6 +232,23 @@ export const NAV: NavModule[] = [
       { href: "/motorista", label: "Entregas", descricao: "As entregas atribuídas a você e o andamento de cada uma.", roles: ["GESTAO", "MOTORISTA"] },
       { href: "/motorista/chamados", label: "Chamados", descricao: "Pedidos de transporte abertos e quem já aceitou.", roles: ["GESTAO", "MOTORISTA", "LOGISTICA"] },
       { href: "/motorista/dashboard", label: "Dashboard", descricao: "Volume de chamados, tempo de atendimento e quilometragem.", roles: ["GESTAO", "LOGISTICA"] },
+    ],
+  },
+  // NO FIM da lista, pelo mesmo motivo que "Meus Selects" e o Cronograma estao
+  // no fim das ferramentas do Comercial: a ordem dos modulos foi passada pelo
+  // dono, e um modulo novo entrando no meio decidiria por ele a posicao numa
+  // lista que ele ordenou a mao.
+  //
+  // SO GESTAO (decisao de 24/11/2026). O buildflow nao tem papel de Marketing,
+  // e inventar um custaria migracao do enum `Role` para um modulo de uma
+  // ferramenta — quem preenche o relatorio e a gestao.
+  {
+    href: null,
+    base: "/marketing",
+    label: "Marketing",
+    roles: ["GESTAO"],
+    tools: [
+      { href: "/marketing/relatorio-semanal", label: "Relatório Semanal", descricao: "A semana do Marketing: entregas, métricas, OKRs e o quadro de tarefas.", roles: ["GESTAO"] },
     ],
   },
 ];

@@ -86,7 +86,7 @@ check("leu o card do tema escuro", cardEscuro !== null, true);
 
 // `rank` nao e setor (e a cor da tela unica Rank de Vendas), mas passa pelos
 // mesmos dois usos — fundo de botao e cor de texto —, entao mede junto.
-const SETORES = ["vendas", "financeiro", "distribuicao", "motorista", "brand", "servico", "rank", "fluxo"] as const;
+const SETORES = ["vendas", "financeiro", "distribuicao", "motorista", "brand", "servico", "rank", "fluxo", "marketing"] as const;
 const MINIMO = 4.5; // WCAG AA para texto abaixo de 18,66px negrito / 24px normal
 
 // Nenhuma divida aqui: os quatro setores que reprovavam no botao (financeiro
@@ -221,7 +221,7 @@ for (const marca of MARCAS_DE_BOTAO) {
 let puros = "";
 try {
   puros = execSync(
-    `node -e "const{readdirSync,readFileSync,statSync}=require('fs');const p=require('path');let n=0;const re=/text-(vendas|financeiro|distribuicao|motorista|brand|servico|rank)(?![-\\\\w])/g;(function w(d){for(const e of readdirSync(d)){const f=p.join(d,e);if(statSync(f).isDirectory())w(f);else if(/\\.(tsx?|jsx?)$/.test(e)){const m=readFileSync(f,'utf8').match(re);if(m)n+=m.length}}})('src');console.log(n)"`,
+    `node -e "const{readdirSync,readFileSync,statSync}=require('fs');const p=require('path');let n=0;const re=/text-(vendas|financeiro|distribuicao|motorista|brand|servico|rank|marketing)(?![-\\\\w])/g;(function w(d){for(const e of readdirSync(d)){const f=p.join(d,e);if(statSync(f).isDirectory())w(f);else if(/\\.(tsx?|jsx?)$/.test(e)){const m=readFileSync(f,'utf8').match(re);if(m)n+=m.length}}})('src');console.log(n)"`,
     { cwd: raiz, encoding: "utf8" },
   ).trim();
 } catch {

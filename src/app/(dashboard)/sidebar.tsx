@@ -8,7 +8,7 @@ import {
   PackageOpen, HandCoins, FileSignature, Gauge, ScrollText, CalendarDays, Store,
   ClipboardCheck, Star, Users, MapPin, ListTodo, BarChart3, History, CreditCard, FilePlus2,
   Landmark, Tag, Building2, AlertTriangle, Clock, Shirt, Timer, ClipboardList, Target,
-  Menu, X, LogOut, ChevronDown, ChevronLeft, ChevronRight,
+  Menu, X, LogOut, ChevronDown, ChevronLeft, ChevronRight, Megaphone, NotebookPen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MarcaBuildFlow } from "@/components/shared/build-flow-logo";
@@ -35,6 +35,7 @@ const ICON: Record<string, React.ReactNode> = {
   "/logistica": <PackageCheck className="h-4 w-4" />,
   "/motorista": <Truck className="h-4 w-4" />,
   "/gestao": <Settings className="h-4 w-4" />,
+  "/marketing": <Megaphone className="h-4 w-4" />,
 
   "/vendas/novo": <FilePlus2 className="h-3.5 w-3.5" />,
   "/vendas/analise-clientes": <ClipboardCheck className="h-3.5 w-3.5" />,
@@ -66,6 +67,8 @@ const ICON: Record<string, React.ReactNode> = {
 
   "/motorista/chamados": <ClipboardList className="h-3.5 w-3.5" />,
   "/motorista/dashboard": <Gauge className="h-3.5 w-3.5" />,
+
+  "/marketing/relatorio-semanal": <NotebookPen className="h-3.5 w-3.5" />,
 };
 
 /**

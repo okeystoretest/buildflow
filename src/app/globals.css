@@ -52,6 +52,7 @@
     --motorista-text: 204 70% 39%;
     --brand-text: 204 70% 39%;
     --servico-text: 145 63% 29.5%;
+    --marketing-text: 248 60% 46%;
     /* Rank de Vendas: o roxo que era do Comercial antes do remanejo de
        05/11/2026. Valor recuperado do historico, ja calibrado — nao recalculado. */
     --rank-text: 283 39% 50%;
@@ -120,6 +121,7 @@
     --motorista-text: 204 70% 50%;
     --brand-text: 204 70% 50%;
     --servico-text: 145 63% 50%;
+    --marketing-text: 248 65% 70%;
     --rank-text: 283 39% 60%;
     --fluxo-text: 215 20% 72%;
 

@@ -62,6 +62,14 @@ const config: Config = {
         brand: {
           DEFAULT: "#2079b4", soft: "#e8f3fb", text: "hsl(var(--brand-text))", fg: "#ffffff",
         },
+        // Marketing. INDIGO, e nao o roxo que o modulo pediria: `rank` ja e
+        // roxo (283), e os dois ficam lado a lado na MESMA barra lateral, onde
+        // 11 graus de hue num chip de 16px nao se distinguem. Indigo (248) e o
+        // maior vao livre da paleta — 44 graus do azul de Motorista/brand e 35
+        // do roxo do Ranking.
+        marketing: {
+          DEFAULT: "#4635b6", soft: "#edebfa", text: "hsl(var(--marketing-text))", fg: "#ffffff",
+        },
         // Select (venda de SERVICO). Nao e um setor: e uma natureza de venda
         // que aparece dentro de Vendas e do Financeiro. Token PROPRIO mesmo
         // tendo o mesmo verde da Logistica: o nome e que diz a quem a cor

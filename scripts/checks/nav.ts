@@ -46,6 +46,11 @@ check("Gestao nao e um modulo da lista", NAV.some((m) => m.base === "/gestao"), 
 check("Configuracoes e so da GESTAO", CONFIG.roles, ["GESTAO"]);
 check("MOTORISTA so ve o modulo dele", bases("MOTORISTA"), ["/motorista"]);
 check("FINANCEIRO nao ve Logistica", bases("FINANCEIRO"), ["/fluxo", "/vendas", "/financeiro"]);
+// Marketing e o unico modulo de UM papel so. As quatro linhas acima ja provam
+// que ninguem mais entra (as listas de FINANCEIRO e MOTORISTA sao exatas e nao
+// o citam); esta prova o outro lado — que GESTAO entra, e pela ferramenta certa.
+check("Marketing e so da GESTAO", bases("VENDAS").includes("/marketing"), false);
+check("GESTAO ve o Relatorio Semanal", tools("GESTAO", "/marketing"), ["/marketing/relatorio-semanal"]);
 
 // --- a flag LIBERA, nunca restringe ----------------------------------------
 // A vendedora de loja de fluxo simplificado entra em Logistica; a de loja
