@@ -111,6 +111,8 @@ model User {
   wholesaleLeadEvents   WholesaleLeadEvent[] @relation("WholesaleLeadEventActor")
   followUps          FollowUp[] @relation("FollowUpCollaborator")
   followUpsAsManager FollowUp[] @relation("FollowUpManager")
+  weeklyReports  WeeklyReport[]  @relation("WeeklyReportAuthor")
+  marketingTasks MarketingTask[] @relation("MarketingTaskAssignee")
 
   @@index([role])
   // A apuracao da meta de loja parte da loja: "quem tem esta como principal".
@@ -1735,4 +1737,245 @@ model FollowUp {
 
   @@index([collaboratorId, heldOn])
   @@index([kind, heldOn])
+}
+
+// ---------------------------------------------------------------------------
+// RELATÓRIO SEMANAL DO MARKETING
+//
+// Porte da ferramenta do Build.Connect (`Relatorio-Semanal-Karen-Okey.xlsx`,
+// 10 abas). O que mudou em relação ao original, e por quê:
+//
+//  - SEM `subsectorId`. Lá o relatório pende do subsetor, porque o Connect tem
+//    vários; aqui o Marketing é um só, e uma coluna de escopo com um único
+//    valor possível é uma junção a mais em toda consulta para não decidir nada.
+//
+//  - SEM `status`/`submittedAt`/`approvedAt`. O ciclo "rascunho → enviado →
+//    aprovado" foi removido lá em 24/11/2026, e as colunas ficaram sem ninguém
+//    escrevendo nelas. Nascer com dívida não se justifica: se a aprovação
+//    voltar um dia, volta como feature.
+//
+// NENHUMA CONTA VIRA COLUNA. Variação, % da meta, média de 4 semanas e o
+// painel inteiro do quadro saem de `relatorio-semanal-math.ts` na leitura.
+// Guardar o resultado ao lado dos números que o produzem cria uma segunda
+// verdade, que envelhece na primeira correção de um número.
+// ---------------------------------------------------------------------------
+
+/// 🟢 No ritmo · 🟡 Atenção · 🔴 Travado. A legenda que vivia dentro da célula.
+enum WeeklyHealth {
+  NO_RITMO
+  ATENCAO
+  TRAVADO
+}
+
+model WeeklyReport {
+  id String @id @default(cuid())
+
+  /// Nº da semana (ISO-8601) e o período, os dois derivados de UMA data pela
+  /// regra do WEEKNUM(...;21) do Excel. Na planilha eram digitados separados,
+  /// e a semana 46 com o período da 45 era o erro mais comum do arquivo.
+  weekNumber  Int
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+
+  /// Os três campos longos do resumo.
+  highlight    String? @db.Text
+  learning     String? @db.Text
+  nextPriority String? @db.Text
+
+  createdById String?
+  createdBy   User?   @relation("WeeklyReportAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  deliveries WeeklyReportDelivery[]
+  metrics    WeeklyReportMetric[]
+  okrs       WeeklyReportOkr[]
+  blockers   WeeklyReportBlocker[]
+  agenda     WeeklyReportAgendaItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Um relatório por semana. A chave é o PERÍODO, não o número: a semana 1 de
+  /// 2027 e a de 2028 têm o mesmo número e períodos diferentes, e é o período
+  /// que diz de qual sexta se está falando.
+  @@unique([periodStart])
+  @@index([periodStart])
+  @@index([createdById])
+}
+
+/// Uma linha da aba "Entregas da Semana".
+///
+/// `day`, `block` e `expected` são CÓPIA do modelo no momento em que a linha
+/// nasce, não referência a ele. Mudar a rotina em janeiro não pode reescrever
+/// o que foi cobrado em dezembro.
+model WeeklyReportDelivery {
+  id       String       @id @default(cuid())
+  reportId String
+  report   WeeklyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  order    Int
+  day      String
+  block    String
+  expected String @db.Text
+
+  health   WeeklyHealth?
+  evidence String?
+  note     String?       @db.Text
+
+  @@index([reportId])
+}
+
+/// Uma linha da aba "Canais e Métricas".
+model WeeklyReportMetric {
+  id       String       @id @default(cuid())
+  reportId String
+  report   WeeklyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  order   Int
+  channel String
+  metric  String
+
+  /// Semana anterior e semana atual. Float porque a mesma coluna guarda
+  /// contagem (5 posts) e percentual (2,5% vira 2.5).
+  previous Float?
+  current  Float?
+
+  /// "Meta/Benchmark" é TEXTO na planilha ("149.500/mês", "Reduzir de 48%").
+  /// Continua texto: é referência de leitura, não número de conta.
+  target String?
+
+  health  WeeklyHealth?
+  reading String?       @db.Text
+
+  @@index([reportId])
+}
+
+/// Um resultado-chave. As duas abas de OKR da planilha (semanal e trimestral)
+/// são a MESMA lista de 9 KRs vista em duas apurações — aqui é uma linha só,
+/// com o realizado da semana e a meta do trimestre lado a lado.
+model WeeklyReportOkr {
+  id       String       @id @default(cuid())
+  reportId String
+  report   WeeklyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  order     Int
+  objective String
+  keyResult String @db.Text
+  measure   String @db.Text
+
+  /// Meta como ela se lê ("100% na semana", "+3.000 seguidores").
+  goalLabel String
+
+  /// A mesma meta em número, quando ela TEM número. Nulo em metas como
+  /// "0 falhas" — e é por isso que a % da meta é opcional na tela, em vez de
+  /// uma divisão por zero disfarçada de resultado.
+  goalValue Float?
+  achieved  Float?
+
+  /// true no KR de leitura MENSAL: a decisão sai da média de 4 semanas, nunca
+  /// de uma semana isolada (as linhas amarelas da planilha).
+  monthlyRead Boolean @default(false)
+
+  health   WeeklyHealth?
+  nextStep String?       @db.Text
+
+  @@index([reportId])
+}
+
+/// Uma linha da aba "Bloqueios e Decisões". Aqui não há modelo fixo: a
+/// planilha trazia cinco linhas vazias numeradas, que é o mesmo que nenhuma.
+model WeeklyReportBlocker {
+  id       String       @id @default(cuid())
+  reportId String
+  report   WeeklyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  order  Int
+  title  String  @db.Text
+  impact String? @db.Text
+  /// "Precisa de quem" — nome livre, não FK: o bloqueio às vezes depende de
+  /// alguém que não tem conta no sistema (fornecedor, agência).
+  needs  String?
+
+  dueDate    DateTime?     @db.Date
+  health     WeeklyHealth?
+  resolution String?       @db.Text
+
+  @@index([reportId])
+}
+
+/// Um bloco da aba "Pauta do One-on-One".
+model WeeklyReportAgendaItem {
+  id       String       @id @default(cuid())
+  reportId String
+  report   WeeklyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  order    Int
+  block    String
+  minutes  Int
+  question String  @db.Text
+  answer   String? @db.Text
+
+  @@index([reportId])
+}
+
+enum MarketingTaskStatus {
+  BACKLOG
+  A_FAZER
+  EM_ANDAMENTO
+  REVISAO
+  PUBLICADO
+}
+
+enum MarketingTaskCategory {
+  CONTEUDO
+  PUBLICACAO
+  COMUNIDADE
+  RELATORIO
+  PROCESSO
+}
+
+enum MarketingTaskPriority {
+  ALTA
+  MEDIA
+  BAIXA
+}
+
+/// Um cartão do Kanban (abas 7 e 8 da planilha).
+///
+/// NÃO pende do relatório: o quadro atravessa as semanas e é auditado toda
+/// sexta. A aba 8 ("Painel Kanban") não tem modelo — ela era uma folha de
+/// COUNTIFs sobre esta tabela, e virou leitura calculada.
+model MarketingTask {
+  id String @id @default(cuid())
+
+  /// "K-01". Legível, estável e único — é assim que o cartão é citado na
+  /// reunião de sexta. O código sai do MAIOR existente, não da contagem:
+  /// excluir o K-12 e criar outro dá K-13, porque reaproveitar o número
+  /// confundiria a ata da semana anterior.
+  code  String @unique
+  title String @db.Text
+
+  category MarketingTaskCategory
+  priority MarketingTaskPriority @default(MEDIA)
+
+  /// Responsável pelo cartão — gente da plataforma, não texto digitado.
+  /// `SetNull` para que o desligamento de alguém não leve o cartão junto.
+  assigneeId String?
+  assignee   User?   @relation("MarketingTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  enteredAt DateTime  @default(now()) @db.Date
+  dueDate   DateTime? @db.Date
+
+  status MarketingTaskStatus @default(BACKLOG)
+
+  /// Nada chega a PUBLICADO sem evidência — a regra que era uma frase na aba
+  /// de instruções, que ninguém abria, e virou recusa da action.
+  evidence String?
+  note     String?   @db.Text
+  doneAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([assigneeId])
 }
