@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { AGENDA } from "@/lib/relatorio-semanal-templates";
+import { getRelatorioSemanalDetail, type WeeklyReportDetail } from "@/lib/relatorio-semanal-data";
+import { MAX_UPLOAD_MB, processAndSaveImage, validateUpload } from "@/lib/image";
 import {
   EM_PORTUGUES,
   bloqueioSchema,
@@ -60,7 +62,10 @@ export async function criarRelatorio(args: {
   weekNumber: number;
   periodStart: string;
   periodEnd: string;
-}): Promise<ActionResult<{ id: string }>> {
+  // O DETALHE VOLTA JUNTO: o modal abre os blocos na sequência, e a pauta
+  // nasce pronta no servidor — sem isto a tela teria de adivinhar os ids dela
+  // ou dar uma segunda volta ao banco para lê-los.
+}): Promise<ActionResult<{ id: string; detail: WeeklyReportDetail | null }>> {
   try {
     const sessao = await requireRoleAction(["GESTAO"]);
     const parsed = criarSchema.safeParse(args, { errorMap: EM_PORTUGUES });
@@ -89,7 +94,7 @@ export async function criarRelatorio(args: {
     });
 
     revalidatePath(ROTA);
-    return actionOk({ id: criado.id });
+    return actionOk({ id: criado.id, detail: await getRelatorioSemanalDetail(criado.id) });
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao criar a semana.");
   }
@@ -498,5 +503,40 @@ export async function excluirTarefa(args: { taskId: string }): Promise<ActionRes
     return actionOk(undefined);
   } catch (err) {
     return actionError(err instanceof Error ? err.message : "Erro ao excluir a tarefa.");
+  }
+}
+
+/**
+ * Envia um print como evidência e devolve o CAMINHO público.
+ *
+ * Server Action, e não a rota `/api/uploads`: aquela existe para dar progresso
+ * em arquivo grande, e um print não precisa de barra de progresso.
+ *
+ * A imagem é reprocessada por `processAndSaveImage` — corrige a orientação do
+ * EXIF, redimensiona e converte para .webp. O banco guarda só o caminho, como
+ * todo arquivo do sistema; nunca o binário.
+ *
+ * GRAVA, MAS NÃO ASSOCIA: quem escreve o caminho é `salvarSecao` ou
+ * `salvarTarefa`, com o resto do formulário. Separá-los é o que permite trocar
+ * a imagem antes de salvar sem deixar a linha apontando para um arquivo
+ * descartado.
+ */
+export async function enviarEvidencia(formData: FormData): Promise<ActionResult<{ path: string }>> {
+  try {
+    await requireRoleAction(["GESTAO"]);
+    const file = formData.get("file");
+    if (!(file instanceof File)) return actionError("Nenhuma imagem recebida.");
+
+    const invalido = validateUpload(file, MAX_UPLOAD_MB);
+    if (invalido) return actionError(invalido);
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const processada = await processAndSaveImage(buffer, {
+      folder: "relatorio-semanal",
+      fileName: `evid_${Date.now()}`,
+    });
+    return actionOk({ path: processada.filePath });
+  } catch (err) {
+    return actionError(err instanceof Error ? err.message : "Erro ao enviar a imagem.");
   }
 }

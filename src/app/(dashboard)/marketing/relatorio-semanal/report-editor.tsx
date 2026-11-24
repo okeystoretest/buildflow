@@ -5,19 +5,11 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/shared/modal";
-import { TabPanel, Tabs } from "@/components/ui/tabs";
 import { excluirRelatorio } from "@/lib/actions/relatorio-semanal";
 import { formatarData } from "@/lib/relatorio-semanal-labels";
 import type { WeeklyReportDetail } from "@/lib/relatorio-semanal-data";
 import { PendenciasProvider, useSalvarPendencias } from "./pendencias";
-import { ResumoSection } from "./resumo-section";
-import {
-  AgendaSection,
-  DeliveriesSection,
-  MetricsSection,
-  OkrsSection,
-} from "./report-sections";
-import { BlockersSection } from "./blockers-section";
+import { ReportSteps } from "./report-steps";
 
 /**
  * A semana aberta para EDITAR.
@@ -47,16 +39,6 @@ export function ReportEditor({
   const [excluindo, setExcluindo] = useState(false);
   const [confirmar, setConfirmar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [aba, setAba] = useState("resumo");
-
-  const abas = [
-    { id: "resumo", label: "Resumo" },
-    { id: "entregas", label: `Entregas (${detail.deliveries.length})` },
-    { id: "metricas", label: `Métricas (${detail.metrics.length})` },
-    { id: "okrs", label: `OKRs (${detail.okrs.length})` },
-    { id: "bloqueios", label: `Bloqueios (${detail.blockers.length})` },
-    { id: "pauta", label: `Pauta (${detail.agenda.length})` },
-  ];
 
   async function remover() {
     if (excluindo) return;
@@ -106,28 +88,7 @@ export function ReportEditor({
 
         {erro && <p className="text-xs text-destructive">{erro}</p>}
 
-        <Tabs items={abas} value={aba} onValueChange={setAba} />
-
-        <TabPanel tabId={aba}>
-          <div className={aba === "resumo" ? "" : "hidden"}>
-            <ResumoSection detail={detail} />
-          </div>
-          <div className={aba === "entregas" ? "" : "hidden"}>
-            <DeliveriesSection reportId={detail.id} deliveries={detail.deliveries} />
-          </div>
-          <div className={aba === "metricas" ? "" : "hidden"}>
-            <MetricsSection reportId={detail.id} metrics={detail.metrics} />
-          </div>
-          <div className={aba === "okrs" ? "" : "hidden"}>
-            <OkrsSection reportId={detail.id} okrs={detail.okrs} />
-          </div>
-          <div className={aba === "bloqueios" ? "" : "hidden"}>
-            <BlockersSection reportId={detail.id} blockers={detail.blockers} />
-          </div>
-          <div className={aba === "pauta" ? "" : "hidden"}>
-            <AgendaSection reportId={detail.id} agenda={detail.agenda} />
-          </div>
-        </TabPanel>
+        <ReportSteps detail={detail} />
 
         {confirmar && (
           <Modal onClose={() => !excluindo && setConfirmar(false)} largura="max-w-md">

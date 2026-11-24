@@ -16,6 +16,7 @@ import {
   type TaskPerson,
 } from "@/lib/relatorio-semanal-math";
 import { TASK_CATEGORY_LABEL, TASK_PRIORITY_LABEL } from "@/lib/relatorio-semanal-labels";
+import { EvidenceField } from "./evidence-field";
 
 const PRIORIDADES = ["ALTA", "MEDIA", "BAIXA"] as const;
 
@@ -139,8 +140,7 @@ export function TaskModal({
 
         <div className="space-y-1.5">
           <Label htmlFor="tarefa-evidencia">Evidência</Label>
-          <Input id="tarefa-evidencia" value={evidence} placeholder="link da publicação"
-            onChange={(e) => setEvidence(e.target.value)} />
+          <EvidenceField ariaLabel="Evidência da tarefa" value={evidence} onChange={setEvidence} />
           <p className="text-[11px] text-muted-foreground">
             Sem evidência o cartão não chega a Publicado.
           </p>

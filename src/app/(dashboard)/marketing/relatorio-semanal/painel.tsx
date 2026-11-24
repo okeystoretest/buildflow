@@ -127,13 +127,7 @@ export function Painel({
       )}
 
       {novo && (
-        <NewReportModal
-          onClose={() => setNovo(false)}
-          onCriada={(id) => {
-            setNovo(false);
-            abrir(id, "editar");
-          }}
-        />
+        <NewReportModal onClose={() => setNovo(false)} />
       )}
 
       {detail && modo === "ver" && (

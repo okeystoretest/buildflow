@@ -6,8 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/shared/modal";
+import { useRouter } from "next/navigation";
 import { criarRelatorio } from "@/lib/actions/relatorio-semanal";
 import { segundaDaSemana, semanaIso, somarDias } from "@/lib/relatorio-semanal-math";
+import { formatarData } from "@/lib/relatorio-semanal-labels";
+import type { WeeklyReportDetail } from "@/lib/relatorio-semanal-data";
+import { PendenciasProvider } from "./pendencias";
+import { ReportSteps } from "./report-steps";
 
 /** Segunda a sexta da semana corrente — a janela da rotina da planilha. */
 function semanaCorrente() {
@@ -32,25 +37,20 @@ function semanaCorrente() {
  * isso este passo existe separado e vem antes. Ao criar, a tela abre a semana
  * no editor.
  *
- * DIFERENÇA DO BUILD.CONNECT, por enquanto: lá os seis blocos são preenchidos
- * em páginas DENTRO deste modal, com cada "Próximo" gravando o bloco à vista.
- * Aqui o editor ainda tem um bloco só, então criar leva direto a ele. Quando
- * as outras cinco seções entrarem, o fluxo em etapas vem com elas.
+ * Depois dela vêm OS SEIS BLOCOS, um por página, e cada "Próximo" grava o
+ * bloco à vista — concluir fecha a janela, e sem isso este seria o melhor
+ * lugar possível para perder texto.
  */
-export function NewReportModal({
-  onClose,
-  onCriada,
-}: {
-  onClose: () => void;
-  /** Recebe o id da semana criada, para a tela abri-la. */
-  onCriada: (id: string) => void;
-}) {
+export function NewReportModal({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
   const inicial = semanaCorrente();
   const [weekNumber, setWeekNumber] = useState(String(inicial.weekNumber));
   const [periodStart, setPeriodStart] = useState(inicial.periodStart);
   const [periodEnd, setPeriodEnd] = useState(inicial.periodEnd);
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
+  /** A semana já criada. É o que os blocos editam, e vem da própria action. */
+  const [detail, setDetail] = useState<WeeklyReportDetail | null>(null);
 
   /** Mover o início ARRASTA o fim: a janela é de uma semana de trabalho. */
   function trocarInicio(valor: string) {
@@ -74,7 +74,42 @@ export function NewReportModal({
       setErro(r.error);
       return;
     }
-    onCriada(r.data.id);
+    if (!r.data.detail) {
+      setErro("A semana foi criada, mas não foi possível abri-la. Recarregue a página.");
+      return;
+    }
+    setDetail(r.data.detail);
+    router.refresh();
+  }
+
+  function fechar() {
+    if (criando) return;
+    // A semana já está gravada quando se chega aos blocos; o refresh é o que
+    // faz o card dela aparecer na lista atrás do modal.
+    if (detail) router.refresh();
+    onClose();
+  }
+
+  if (detail) {
+    return (
+      <Modal onClose={fechar} largura="max-w-5xl">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-foreground">Semana {detail.weekNumber}</h2>
+            <p className="text-sm text-muted-foreground">
+              {formatarData(detail.periodStart)} a {formatarData(detail.periodEnd)} · cada passo
+              grava ao avançar
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={fechar} aria-label="Fechar">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <PendenciasProvider>
+          <ReportSteps detail={detail} onConcluir={fechar} />
+        </PendenciasProvider>
+      </Modal>
+    );
   }
 
   return (

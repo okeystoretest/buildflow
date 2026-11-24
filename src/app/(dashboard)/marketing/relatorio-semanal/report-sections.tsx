@@ -20,6 +20,7 @@ import {
   formatarPercentual,
   formatarVariacao,
 } from "@/lib/relatorio-semanal-labels";
+import { EvidenceField } from "./evidence-field";
 import { HealthSelect } from "./health-select";
 import { SectionCard } from "./section-card";
 import { escreverNumero, lerNumero, useSecao } from "./use-secao";
@@ -172,8 +173,8 @@ export function DeliveriesSection({
                     onChange={(health) => secao.alterar(row.id, { health })} />
                 </td>
                 <td className="px-2 py-1.5 align-middle">
-                  <Input aria-label={`Evidência da entrega ${i + 1}`} className="h-9 text-xs" placeholder="link ou print"
-                    value={row.evidence ?? ""} onChange={(e) => secao.alterar(row.id, { evidence: e.target.value })} />
+                  <EvidenceField ariaLabel={`Evidência da entrega ${i + 1}`} value={row.evidence}
+                    onChange={(evidence) => secao.alterar(row.id, { evidence })} />
                 </td>
                 <td className="px-2 py-1.5 align-middle">
                   <Input aria-label={`Observação da entrega ${i + 1}`} className="h-9 text-xs"
