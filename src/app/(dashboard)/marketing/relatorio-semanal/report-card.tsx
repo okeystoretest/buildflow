@@ -14,16 +14,30 @@ import type { WeeklyReportListItem } from "@/lib/relatorio-semanal-data";
  * segue ("só aparece o que foi preenchido") e que o traço no lugar do zero
  * segue nas contas — ausência nunca se mostra como zero.
  *
- * AINDA NÃO CLICA. A ficha de leitura e o editor entram na próxima fatia do
- * porte; desenhar aqui um botão que não abre nada seria pior do que não ter.
+ * O CARD INTEIRO ABRE A SEMANA PARA LEITURA. A camada que recebe o clique é um
+ * botão irmão do conteúdo, e não um botão em volta dele: botão dentro de botão
+ * é HTML inválido, e quando o lápis da edição entrar (próxima fatia) o teclado
+ * perderia um dos dois.
  */
-export function ReportCard({ report }: { report: WeeklyReportListItem }) {
+export function ReportCard({
+  report,
+  onOpen,
+}: {
+  report: WeeklyReportListItem;
+  onOpen: () => void;
+}) {
   const ano = report.periodStart.slice(0, 4);
   const total = report.onTrack + report.attention + report.blocked + report.pending;
   const respondidas = total - report.pending;
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40">
+    <div className="group relative flex flex-col gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Ver a semana ${report.weekNumber}`}
+        className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+      />
       <div>
         <p className="text-base font-semibold text-foreground">Semana {report.weekNumber}</p>
         <p className="text-xs text-muted-foreground">

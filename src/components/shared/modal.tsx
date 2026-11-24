@@ -83,7 +83,11 @@ export function Modal({
     >
       <div
         className={cn(
-          "max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in",
+          // `kanban-scroll`: a barra discreta da casa. O conteudo de um modal
+          // passa de 90vh com frequencia (uma ficha longa, a leitura da
+          // semana), e ate aqui ele rolava com a barra padrao do sistema —
+          // larga, sempre visivel e diferente do resto do app.
+          "kanban-scroll max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-in",
           largura,
         )}
         onClick={(e) => e.stopPropagation()}

@@ -1,9 +1,8 @@
 import { NotebookPen } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Pagination } from "@/components/shared/pagination";
-import { getRelatorioSemanalData } from "@/lib/relatorio-semanal-data";
-import { ReportCard } from "./report-card";
+import { getRelatorioSemanalData, getRelatorioSemanalDetail } from "@/lib/relatorio-semanal-data";
+import { Painel } from "./painel";
 
 /**
  * RELATÓRIO SEMANAL DO MARKETING — a lista de semanas.
@@ -21,9 +20,13 @@ import { ReportCard } from "./report-card";
  * enquanto a semana nova entrava na 1, invisível. Com a página na URL, quem
  * decide é a navegação.
  *
- * EM CONSTRUÇÃO: esta fatia do porte entrega a LISTA. Abrir a semana para
- * leitura, o editor em seis passos e o quadro Kanban entram nas próximas — e
- * é por isso que o card ainda não clica.
+ * QUAL SEMANA ESTÁ ABERTA também vem da URL (`?semana=`), e o detalhe é
+ * resolvido AQUI, no servidor: a ficha abre com os dados já prontos, e o
+ * cálculo da média de 4 semanas — que lê os três relatórios anteriores — nunca
+ * sai do servidor.
+ *
+ * EM CONSTRUÇÃO: esta fatia entrega a lista e a LEITURA. O editor em seis
+ * passos e o quadro Kanban entram nas próximas.
  */
 export const dynamic = "force-dynamic";
 
@@ -31,12 +34,18 @@ export const dynamic = "force-dynamic";
 const POR_PAGINA = 6;
 
 export default async function RelatorioSemanalPage(props: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; semana?: string }>;
 }) {
   const searchParams = await props.searchParams;
   await requireRole(["GESTAO"]);
 
   const { reports } = await getRelatorioSemanalData();
+  // `?semana=` de uma semana que não existe devolve null e a lista abre normal,
+  // em vez de uma ficha vazia ou de um erro: id colado à mão não é acidente
+  // raro, é o que acontece quando alguém guarda o link e a semana é excluída.
+  const detail = searchParams.semana
+    ? await getRelatorioSemanalDetail(searchParams.semana)
+    : null;
 
   const totalPaginas = Math.max(1, Math.ceil(reports.length / POR_PAGINA));
   // Grampeia a página ao intervalo que existe: `?page=99` numa lista de duas
@@ -55,13 +64,12 @@ export default async function RelatorioSemanalPage(props: {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {daPagina.map((r) => (
-          <ReportCard key={r.id} report={r} />
-        ))}
-      </div>
-      <Pagination page={page} perPage={POR_PAGINA} total={reports.length} label="semanas" />
-    </div>
+    <Painel
+      reports={daPagina}
+      detail={detail}
+      page={page}
+      porPagina={POR_PAGINA}
+      total={reports.length}
+    />
   );
 }
