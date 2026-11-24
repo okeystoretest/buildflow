@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
@@ -35,14 +35,16 @@ import type { WeeklyReportDetail } from "@/lib/relatorio-semanal-data";
  * toda semana nova abriria exibindo exatamente o que esta tela existe para não
  * mostrar.
  *
- * Editar entra na próxima fatia do porte; por isso aqui só há Fechar.
+ * Editar é o lápis — daqui e do card.
  */
 export function ReportViewModal({
   detail,
   onClose,
+  onEdit,
 }: {
   detail: WeeklyReportDetail;
   onClose: () => void;
+  onEdit: () => void;
 }) {
   const blocos = montarBlocos(detail);
   const [aba, setAba] = useState(0);
@@ -83,9 +85,13 @@ export function ReportViewModal({
         )}
       </div>
 
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           Fechar
+        </Button>
+        <Button onClick={onEdit}>
+          <Pencil className="h-4 w-4" />
+          Editar
         </Button>
       </div>
     </Modal>

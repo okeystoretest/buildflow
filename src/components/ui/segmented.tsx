@@ -7,9 +7,20 @@ export interface SegmentedOption<T extends string> {
   label: string;
 }
 
+/** Quantas colunas para quantas opcoes. Quatro quebram em duas no celular. */
+const COLUNAS: Record<number, string> = {
+  2: "grid-cols-2",
+  3: "grid-cols-3",
+  4: "grid-cols-2 sm:grid-cols-4",
+};
+
 /**
- * Pilulas exclusivas: escolher UMA entre poucas opcoes que cabem lado a lado
- * (a vista Semanas / Kanban do Relatorio Semanal).
+ * Escolher UMA entre poucas opcoes, em botoes de LARGURA CHEIA divididos por
+ * igual (a vista Semanas / Kanban do Relatorio Semanal).
+ *
+ * Largura cheia, e nao pilulas compactas: as duas vistas sao os dois lados da
+ * mesma ferramenta, e um par de pilulas pequenas no canto as faria parecer um
+ * filtro do conteudo abaixo.
  *
  * `radiogroup` e nao um grupo de botoes: para quem usa leitor de tela, a
  * diferenca e saber que escolher uma desmarca a outra. As setas do teclado
@@ -33,7 +44,7 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className={cn("inline-flex items-center gap-1 rounded-full border border-border bg-card p-1", className)}
+      className={cn("grid gap-3", COLUNAS[options.length] ?? "grid-cols-2", className)}
     >
       {options.map((o) => {
         const escolhida = o.value === value;
@@ -45,11 +56,11 @@ export function Segmented<T extends string>({
             aria-checked={escolhida}
             onClick={() => onChange(o.value)}
             className={cn(
-              "whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors",
+              "h-11 rounded-xl border px-2 text-sm font-semibold transition-colors",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
               escolhida
-                ? "bg-primary font-semibold text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
             )}
           >
             {o.label}

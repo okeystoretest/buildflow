@@ -1,6 +1,4 @@
-import { NotebookPen } from "lucide-react";
 import { requireRole } from "@/lib/auth";
-import { EmptyState } from "@/components/ui/empty-state";
 import { getRelatorioSemanalData, getRelatorioSemanalDetail } from "@/lib/relatorio-semanal-data";
 import { Painel } from "./painel";
 
@@ -39,7 +37,7 @@ export default async function RelatorioSemanalPage(props: {
   const searchParams = await props.searchParams;
   await requireRole(["GESTAO"]);
 
-  const { reports } = await getRelatorioSemanalData();
+  const { reports, summary } = await getRelatorioSemanalData();
   // `?semana=` de uma semana que não existe devolve null e a lista abre normal,
   // em vez de uma ficha vazia ou de um erro: id colado à mão não é acidente
   // raro, é o que acontece quando alguém guarda o link e a semana é excluída.
@@ -53,16 +51,6 @@ export default async function RelatorioSemanalPage(props: {
   const page = Math.min(Math.max(1, Number(searchParams.page ?? 1) || 1), totalPaginas);
   const daPagina = reports.slice((page - 1) * POR_PAGINA, page * POR_PAGINA);
 
-  if (reports.length === 0) {
-    return (
-      <EmptyState
-        icon={<NotebookPen className="h-6 w-6" />}
-        title="Nenhuma semana registrada"
-        description="A primeira semana do Marketing aparece aqui assim que for preenchida."
-      />
-    );
-  }
-
   return (
     <Painel
       reports={daPagina}
@@ -70,6 +58,7 @@ export default async function RelatorioSemanalPage(props: {
       page={page}
       porPagina={POR_PAGINA}
       total={reports.length}
+      totalTarefas={summary.total}
     />
   );
 }
