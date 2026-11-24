@@ -1,3 +1,4 @@
+import { Pencil } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { formatarDiaMes } from "@/lib/relatorio-semanal-labels";
 import type { WeeklyReportListItem } from "@/lib/relatorio-semanal-data";
@@ -22,9 +23,11 @@ import type { WeeklyReportListItem } from "@/lib/relatorio-semanal-data";
 export function ReportCard({
   report,
   onOpen,
+  onEdit,
 }: {
   report: WeeklyReportListItem;
   onOpen: () => void;
+  onEdit: () => void;
 }) {
   const ano = report.periodStart.slice(0, 4);
   const total = report.onTrack + report.attention + report.blocked + report.pending;
@@ -38,7 +41,18 @@ export function ReportCard({
         aria-label={`Ver a semana ${report.weekNumber}`}
         className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
       />
-      <div>
+      {/* ACIMA da camada de clique (z-20): o lápis leva direto à edição, o
+          resto do card abre a leitura. */}
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={`Editar a semana ${report.weekNumber}`}
+        title="Editar"
+        className="absolute right-2.5 top-2.5 z-20 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+      <div className="pr-8">
         <p className="text-base font-semibold text-foreground">Semana {report.weekNumber}</p>
         <p className="text-xs text-muted-foreground">
           {formatarDiaMes(report.periodStart)} a {formatarDiaMes(report.periodEnd)}/{ano}
