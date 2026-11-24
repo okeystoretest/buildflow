@@ -95,6 +95,25 @@ export function firstName(full: string): string {
 }
 
 /**
+ * As INICIAIS de quem aparece num disco de avatar: primeiro e ULTIMO nome.
+ *
+ * Primeiro + ultimo, e nao os dois primeiros como `shortName`, porque e assim
+ * que uma pessoa e reconhecida por duas letras — "Karen Souza Lima" vira KL,
+ * nao KS. Particula nao e tratada: "Maria da Silva" vira MS, que e o certo.
+ *
+ * Nome vazio devolve "?" em vez de "": um disco em branco no quadro parece
+ * defeito de carregamento, e o cartao sem responsavel ja tem a sua propria
+ * marca (o circulo tracejado).
+ */
+export function iniciais(full: string): string {
+  const partes = full.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "?";
+  const primeira = partes[0][0];
+  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : "";
+  return (primeira + ultima).toUpperCase();
+}
+
+/**
  * Proxima campanha do rodizio do Ranking de Vendas.
  *
  * Percorre a lista em ciclo: a ultima volta para a primeira. Quando o id atual

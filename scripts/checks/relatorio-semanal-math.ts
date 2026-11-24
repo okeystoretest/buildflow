@@ -26,7 +26,7 @@ import {
   variacao,
   type MarketingTaskItem,
 } from "../../src/lib/relatorio-semanal-math";
-import { formatarVariacao, iniciais } from "../../src/lib/relatorio-semanal-labels";
+import { formatarVariacao } from "../../src/lib/relatorio-semanal-labels";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -178,13 +178,10 @@ check("a variacao positiva sai com sinal", formatarVariacao(0.2), "+20,0%");
 check("a queda sai com o sinal negativo", formatarVariacao(-0.25), "-25,0%");
 check("sem variacao, traco", formatarVariacao(undefined), "—");
 
-// As iniciais substituem a foto que o buildflow não tem. Entram aqui porque
-// são a única lógica NOVA deste porte — no Connect quem resolvia isso era o
-// componente de avatar.
-check("iniciais pegam o primeiro e o ULTIMO nome", iniciais("Karen Souza Lima"), "KL");
-check("nome unico vira uma letra so", iniciais("Karen"), "K");
-check("espaco sobrando nao vira inicial vazia", iniciais("  Karen   Lima  "), "KL");
-check("nome vazio nao quebra o cartao", iniciais("   "), "?");
+// `iniciais()` virou helper de nome em src/lib/utils.ts, ao lado de
+// shortName/firstName, assim que ganhou o segundo uso (o Avatar). As
+// checagens dela moraram aqui por um momento e foram junto: quem vigia os
+// helpers puros de utils.ts e scripts/checks/utils.ts.
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);

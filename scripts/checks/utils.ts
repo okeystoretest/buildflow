@@ -1,6 +1,6 @@
 // Checagem dos helpers puros de src/lib/utils.ts.
 // Rodar com: npx tsx scripts/checks/utils.ts
-import { shortName, firstName, nextCampaignId, dataCurtaBR, rotuloDePeriodo } from "../../src/lib/utils";
+import { shortName, firstName, iniciais, nextCampaignId, dataCurtaBR, rotuloDePeriodo } from "../../src/lib/utils";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -21,6 +21,16 @@ check("firstName espacos extras", firstName("  Ana   Paula   Rodrigues "), "Ana"
 // As duas bordas que o ponytail pegou na primeira versao desta funcao:
 check("firstName vazio", firstName(""), "");
 check("firstName so espacos", firstName("   "), "");
+
+// --- iniciais: as duas letras do disco de avatar (Relatorio Semanal) ---
+// Primeiro + ULTIMO, ao contrario de shortName: e assim que uma pessoa e
+// reconhecida por duas letras.
+check("iniciais primeiro e ultimo nome", iniciais("Karen Souza Lima"), "KL");
+check("iniciais nome unico", iniciais("Karen"), "K");
+check("iniciais espacos extras", iniciais("  Karen   Lima  "), "KL");
+check("iniciais com particula nao a trata", iniciais("Maria da Silva"), "MS");
+// Disco em branco parece defeito de carregamento; "?" diz que nao ha nome.
+check("iniciais vazio vira interrogacao", iniciais("   "), "?");
 
 // --- shortName: primeiro + segundo nome, para caber no card ---
 check("dois nomes", shortName("Ana Paula"), "Ana Paula");

@@ -167,12 +167,3 @@ export function formatarNumero(valor?: number): string {
 export function evidenciaEhImagem(evidence?: string): boolean {
   return !!evidence && evidence.startsWith("/uploads/");
 }
-
-/** As iniciais de quem toca o cartão, quando não há foto — e aqui nunca há. */
-export function iniciais(nome: string): string {
-  const partes = nome.trim().split(/\s+/).filter(Boolean);
-  if (partes.length === 0) return "?";
-  const primeira = partes[0][0];
-  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : "";
-  return (primeira + ultima).toUpperCase();
-}
