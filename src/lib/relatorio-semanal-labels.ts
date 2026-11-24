@@ -158,12 +158,28 @@ export function formatarNumero(valor?: number): string {
 }
 
 /**
+ * Os prefixos que um arquivo NOSSO pode ter.
+ *
+ * `/api/uploads` é a rota que serve o arquivo conferindo a sessão, e é onde
+ * todo upload novo nasce. `/uploads` fica porque registros antigos do sistema
+ * guardaram esse caminho — é a mesma lista que `KNOWN_PUBLIC_BASES` mantém em
+ * `lib/image.ts`, repetida aqui porque aquele módulo importa `sharp` e não
+ * atravessa a fronteira para o cliente.
+ *
+ * ESTA LISTA É A FONTE ÚNICA das duas decisões que dependem dela: desenhar a
+ * evidência como imagem ou como link (aqui), e aceitá-la na gravação
+ * (`relatorio-semanal-schemas.ts`). Separadas, elas divergiram — o servidor
+ * recusava o caminho que ele mesmo tinha acabado de gerar.
+ */
+export const PREFIXOS_DE_UPLOAD = ["/api/uploads/", "/uploads/"] as const;
+
+/**
  * A evidência é uma imagem nossa, ou um endereço?
  *
- * O campo é um só: caminho começando no prefixo de uploads é print enviado, o
+ * O campo é um só: caminho começando num prefixo de upload é print enviado, o
  * resto é link. Uma coluna a mais para guardar essa distinção seria uma
  * coluna que pode discordar do valor ao lado dela.
  */
 export function evidenciaEhImagem(evidence?: string): boolean {
-  return !!evidence && evidence.startsWith("/uploads/");
+  return !!evidence && PREFIXOS_DE_UPLOAD.some((p) => evidence.startsWith(p));
 }

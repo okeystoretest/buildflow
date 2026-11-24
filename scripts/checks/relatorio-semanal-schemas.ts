@@ -21,6 +21,7 @@ import {
   numero,
   secaoSchema,
 } from "../../src/lib/relatorio-semanal-schemas";
+import { evidenciaEhImagem } from "../../src/lib/relatorio-semanal-labels";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -37,7 +38,16 @@ const aceita = (schema: { safeParse: (v: unknown) => { success: boolean } }, v: 
 
 /* ------------------------------------------------- evidência (segurança) */
 
-check("evidencia aceita upload nosso", aceita(evidencia, "/uploads/print.webp"), true);
+// O CAMINHO QUE O NOSSO PROPRIO UPLOAD GERA. Faltava, e o schema recusava o
+// que a action `enviarEvidencia` tinha acabado de gravar: o upload subia o
+// arquivo e o "Salvar" seguinte dizia que a evidencia era invalida. Veio da
+// convencao do Build.Connect (`/uploads/`), e aqui a rota autenticada e
+// `/api/uploads/`.
+check("evidencia aceita o caminho que o upload daqui gera", aceita(evidencia, "/api/uploads/relatorio-semanal/2026/11/evid_1.webp"), true);
+check("evidencia aceita o caminho antigo, de registros anteriores", aceita(evidencia, "/uploads/print.webp"), true);
+// A mesma lista decide o desenho: imagem, nao link.
+check("o caminho do upload se desenha como IMAGEM", evidenciaEhImagem("/api/uploads/x.webp"), true);
+check("...e o link http nao", evidenciaEhImagem("https://instagram.com/p/x"), false);
 check("evidencia aceita https", aceita(evidencia, "https://instagram.com/p/x"), true);
 check("evidencia aceita http", aceita(evidencia, "http://exemplo.com/x"), true);
 check("evidencia aceita vazio (campo opcional)", aceita(evidencia, ""), true);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PREFIXOS_DE_UPLOAD } from "@/lib/relatorio-semanal-labels";
 
 /**
  * A validação das escritas do Relatório Semanal.
@@ -44,7 +45,13 @@ export const evidencia = z
   .trim()
   .max(500, "Endereço muito longo.")
   .refine(
-    (v) => v === "" || v.startsWith("/uploads/") || /^https?:\/\//i.test(v),
+    (v) =>
+      v === "" ||
+      // A MESMA lista que decide se a evidência se desenha como imagem. Com as
+      // duas separadas, o servidor chegou a recusar o caminho que ele mesmo
+      // tinha acabado de gerar no upload.
+      PREFIXOS_DE_UPLOAD.some((p) => v.startsWith(p)) ||
+      /^https?:\/\//i.test(v),
     "A evidência precisa ser um link http(s) ou uma imagem enviada.",
   )
   .nullish();
