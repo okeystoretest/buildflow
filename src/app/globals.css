@@ -143,6 +143,52 @@
 
   html { color-scheme: light dark; }
 
+  /* ---- BASE DE TOQUE -------------------------------------------------
+     O que separa "um site aberto no celular" de "um app". Nada disto
+     reproduz no navegador do desktop, nem com o modo dispositivo ligado:
+     são comportamentos de aparelho de verdade.
+
+     `-webkit-tap-highlight-color`: iOS e Android pintam um retângulo
+     cinza por cima de TUDO que tem clique. Era o sinal mais barulhento de
+     "isto é um site", e brigava com o `active:scale-[0.98]` que o Button
+     já faz. Some o retângulo; o feedback de pressão continua sendo o
+     `:active` de cada controle, que vale em toque e em mouse.
+
+     `overscroll-behavior: none`: rolar para além do topo dispara o
+     puxar-para-atualizar do Chrome no Android e o balanço da página
+     inteira no iOS. Num painel com rolagem própria (o quadro, os modais)
+     isso rouba o gesto de quem queria rolar a lista.
+
+     `-webkit-text-size-adjust`: o iOS infla a fonte sozinho ao virar para
+     paisagem. O 100% desliga.
+
+     `touch-action: manipulation`: diz ao navegador que estes elementos
+     nunca dão zoom por toque duplo, então ele para de esperar o segundo
+     toque antes de disparar o clique. É o atraso que faz um botão parecer
+     lento mesmo quando a resposta é instantânea.
+
+     `user-select` SÓ em botão, nunca em link: segurar o dedo num botão
+     seleciona o rótulo dele, que nenhum app nativo faz. Mas os links daqui
+     carregam CONTEÚDO que se copia — a URL da evidência de uma tarefa é o
+     caso — e em `body` isto seria defeito, não acerto. */
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
+
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
+  button,
+  [role="button"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
   /* Responsividade: impede que qualquer elemento mais largo que a tela force o
      navegador móvel a "diminuir o zoom" (escala < 1). Com o viewport correto
      (width=device-width) + este guard, o layout ocupa 100% da largura real do
