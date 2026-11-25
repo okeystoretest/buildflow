@@ -41,6 +41,9 @@ import { TaskDetailsModal } from "./task-details-modal";
  * Arrastar é mouse. O caminho de quem usa TECLADO é o cartão em foco com ← e
  * →, e o clique abre a ficha. Por isso o cartão não tem botões próprios: eles
  * viviam num alvo de 20px dentro de um cartão que agora inteiro é clicável.
+ *
+ * E O CAMINHO DO TOQUE é a lista "Mover para" da ficha — nem arrasto nativo nem
+ * seta existem num telefone. Ver o cabeçalho de `task-details-modal.tsx`.
  */
 
 /** Selo minúsculo do cartão. */
@@ -167,8 +170,8 @@ export function KanbanBoard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           Arraste os cartões da esquerda para a direita conforme a tarefa avança, ou clique para ver
-          a ficha. Com o cartão em foco, ← e → movem entre as colunas. Nada chega a Publicado sem
-          evidência.
+          a ficha — que também move o cartão, e é o caminho no celular. Com o cartão em foco, ← e →
+          movem entre as colunas. Nada chega a Publicado sem evidência.
         </p>
         <Button size="sm" onClick={() => setNovo(true)}>
           <Plus className="h-3.5 w-3.5" />
@@ -391,6 +394,15 @@ export function KanbanBoard({
           onClose={() => setAbertoId(null)}
           onEdit={() => setEditando(aberto)}
           onDelete={() => setExcluindo(aberto)}
+          /* Fecha a ficha ANTES de mover: a resposta é o cartão aparecendo na
+             coluna nova, e uma recusa do servidor vai para o aviso do quadro,
+             que a ficha aberta esconderia. O `foco` devolve o teclado ao cartão
+             movido, igual ao caminho das setas. */
+          onMove={(destino) => {
+            foco.current = aberto.id;
+            setAbertoId(null);
+            void mover(aberto.id, destino);
+          }}
         />
       )}
 

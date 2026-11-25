@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, CalendarDays, Clock, ExternalLink, Pencil, Trash2, User as UserIcon, X } from "lucide-react";
+import { CalendarClock, CalendarDays, Clock, ExternalLink, MoveRight, Pencil, Trash2, User as UserIcon, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -15,15 +15,31 @@ import {
   formatarData,
   formatarDataHora,
 } from "@/lib/relatorio-semanal-labels";
-import type { MarketingTaskItem } from "@/lib/relatorio-semanal-math";
+import {
+  TASK_STATUSES,
+  type MarketingTaskItem,
+  type MarketingTaskStatus,
+} from "@/lib/relatorio-semanal-math";
 
 /**
  * Tudo que se sabe sobre um cartão, ao clicar nele.
  *
- * AQUI SÓ SE LÊ. Mover o cartão é trabalho do quadro — arrastando, ou com as
- * setas do teclado sobre o cartão em foco. A lista "Mover para" que morava
- * aqui saiu: duas portas para a mesma ação, e a ficha é onde se confere a
- * atividade, não onde se opera o quadro.
+ * E O UNICO JEITO DE MOVER UM CARTAO EM TELA DE TOQUE. A lista "Mover para"
+ * tinha saido daqui por ser uma segunda porta para a mesma acao — arrastar, ou
+ * ← e → sobre o cartao em foco. Ela voltou em 25/11/2026 porque NO TOQUE NAO
+ * EXISTE A PRIMEIRA PORTA: o drag-and-drop nativo do HTML nao cobre toque e um
+ * telefone nao tem setas. Sem esta lista, num celular nao havia como mover
+ * cartao nenhum.
+ *
+ * Ela volta para TODO MUNDO, e nao atras de `pointer: coarse`: essa consulta
+ * mente em notebook com tela sensivel e em tablet com teclado, e esconder
+ * controle por palpite de aparelho e o mesmo defeito que a gaveta do menu
+ * custou em 849f152. De quebra ela torna visivel o atalho de teclado, que
+ * ninguem descobre sozinho.
+ *
+ * Mover FECHA a ficha, de proposito: o cartao mudando de coluna e a resposta, e
+ * a recusa ("nada chega a Publicado sem evidencia") aparece no aviso do quadro,
+ * que a ficha aberta cobriria.
  */
 
 /** Caixa de campo: rótulo minúsculo com ícone, conteúdo embaixo. */
@@ -52,11 +68,13 @@ export function TaskDetailsModal({
   onClose,
   onEdit,
   onDelete,
+  onMove,
 }: {
   task: MarketingTaskItem;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onMove: (destino: MarketingTaskStatus) => void;
 }) {
   return (
     <Modal onClose={onClose} largura="max-w-lg">
@@ -171,6 +189,18 @@ export function TaskDetailsModal({
           </Campo>
         </div>
       )}
+
+      <div className="mt-4">
+        <Campo icone={<MoveRight className="h-3 w-3" />} rotulo="Mover para">
+          <div className="flex flex-wrap gap-2">
+            {TASK_STATUSES.filter((s) => s !== task.status).map((s) => (
+              <Button key={s} variant="outline" size="sm" onClick={() => onMove(s)}>
+                {TASK_STATUS_LABEL[s]}
+              </Button>
+            ))}
+          </div>
+        </Campo>
+      </div>
 
       <div className="mt-6 flex flex-wrap justify-end gap-2">
         <Button variant="ghost" className="text-destructive" onClick={onDelete}>
