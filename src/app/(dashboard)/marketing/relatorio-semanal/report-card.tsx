@@ -42,7 +42,12 @@ export function ReportCard({
         className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
       />
       {/* ACIMA da camada de clique (z-20): o lápis leva direto à edição, o
-          resto do card abre a leitura. */}
+          resto do card abre a leitura.
+
+          SEM LÁPIS quando a semana fechou: o servidor recusaria a gravação de
+          qualquer jeito, e um lápis que abre um formulário condenado é pior do
+          que lápis nenhum. O card continua abrindo a leitura. */}
+      {!report.fechada && (
       <button
         type="button"
         onClick={onEdit}
@@ -52,6 +57,7 @@ export function ReportCard({
       >
         <Pencil className="h-3.5 w-3.5" />
       </button>
+      )}
       <div className="pr-8">
         <p className="text-base font-semibold text-foreground">Semana {report.weekNumber}</p>
         <p className="text-xs text-muted-foreground">

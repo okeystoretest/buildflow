@@ -7,7 +7,13 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleAction } from "@/lib/auth";
 import { actionOk, actionError, type ActionResult } from "@/types/action";
 import { AGENDA } from "@/lib/relatorio-semanal-templates";
-import { getRelatorioSemanalDetail, type WeeklyReportDetail } from "@/lib/relatorio-semanal-data";
+import { semanaFechada } from "@/lib/relatorio-semanal-math";
+import {
+  getRelatorioSemanalDetail,
+  hojeIso,
+  isoDia,
+  type WeeklyReportDetail,
+} from "@/lib/relatorio-semanal-data";
 import { MAX_UPLOAD_MB, processAndSaveImage, validateUpload } from "@/lib/image";
 import {
   EM_PORTUGUES,
@@ -41,10 +47,31 @@ const ROTA = "/marketing/relatorio-semanal";
 
 /** O relatorio existe? E o preambulo de toda escrita em cima dele. */
 async function abrirRelatorio(reportId: string) {
-  return prisma.weeklyReport.findUnique({
+  const report = await prisma.weeklyReport.findUnique({
     where: { id: reportId },
+    select: { id: true, periodStart: true, periodEnd: true },
+  });
+  if (!report) return null;
+
+  // A TRANCA MORA AQUI, e não em cada action, porque este é o funil por onde
+  // TODA escrita da semana passa (resumo, seções, bloqueios). O quadro Kanban
+  // NÃO passa por aqui, de propósito: ele é o estado vivo, movido à mão na
+  // reunião, e não o registro daquela semana.
+  //
+  // `throw` e não valor de retorno: o `catch` que cada action já tem vira a
+  // mensagem, igual ao que `requireRoleAction` faz. Devolver `null` diria
+  // "Relatório não encontrado", que seria mentira.
+  const maisNova = await prisma.weeklyReport.findFirst({
+    where: { periodStart: { gt: report.periodStart } },
     select: { id: true },
   });
+  if (semanaFechada(isoDia(report.periodEnd), !!maisNova, hojeIso())) {
+    throw new Error(
+      "Esta semana já fechou: o período dela acabou e a semana seguinte já existe. Cada semana é um planejamento novo.",
+    );
+  }
+
+  return { id: report.id };
 }
 
 /* ------------------------------------------------------------ a semana */

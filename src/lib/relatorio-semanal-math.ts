@@ -337,3 +337,34 @@ export function resumirKanban(tasks: readonly MarketingTaskItem[]): KanbanSummar
     byCategory,
   };
 }
+
+/**
+ * A semana já fechou para edição?
+ *
+ * O OBJETIVO É NÃO REAPROVEITAR SEMANA FECHADA: toda semana é um planejamento
+ * novo. O risco não é histórico virar mentira — é alguém abrir a semana
+ * passada e reescrever por cima dela em vez de criar a seguinte.
+ *
+ * DUAS CONDIÇÕES, e cada uma tapa o buraco da outra:
+ *
+ * - `existeMaisNova` sozinho trancaria a semana CORRENTE no dia em que
+ *   alguém criasse a seguinte adiantado, no meio da semana, só para ir
+ *   anotando.
+ * - `periodEnd < hoje` sozinho tranca o que não precisa: enquanto a semana
+ *   seguinte não existe, não há no que reaproveitar — quem edita ainda está
+ *   terminando aquela mesma semana.
+ *
+ * SEM CONTAGEM DE DIAS de propósito. Um número aqui seria chute, e teria de
+ * ser revisto quando a rotina da reunião mudasse; o instante em que
+ * reaproveitar vira possível é o nascimento da semana seguinte, e é esse que a
+ * conta lê.
+ *
+ * NÃO há reabertura, e isso é a decisão, não esquecimento: reabrir seria
+ * exatamente a porta que este fechamento existe para não ter.
+ *
+ * Datas em "yyyy-mm-dd": a ordem alfabética delas é a cronológica, que é a
+ * régua que o resto deste módulo já usa para dia.
+ */
+export function semanaFechada(periodEnd: string, existeMaisNova: boolean, hoje: string): boolean {
+  return existeMaisNova && periodEnd < hoje;
+}

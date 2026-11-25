@@ -12,6 +12,7 @@ import {
   type MetricItem,
   type OkrItem,
   type TaskPerson,
+  semanaFechada,
 } from "@/lib/relatorio-semanal-math";
 
 /**
@@ -29,7 +30,7 @@ import {
  */
 
 /** `@db.Date` do Prisma → "yyyy-mm-dd". */
-function isoDia(value: Date): string {
+export function isoDia(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
@@ -54,6 +55,12 @@ export interface WeeklyReportListItem {
   blocked: number;
   /** Entregas sem status: o que ainda falta responder. */
   pending: number;
+  /**
+   * Fechada para edição: a semana seguinte já existe E o período desta já
+   * acabou. Ver `semanaFechada`. A tela esconde o lápis; o servidor recusa de
+   * qualquer jeito.
+   */
+  fechada: boolean;
 }
 
 export interface WeeklyReportDetail extends WeeklyReportListItem {
@@ -161,13 +168,18 @@ export async function getRelatorioSemanalData(): Promise<WeeklyReportData> {
     }),
   ]);
 
-  const reports: WeeklyReportListItem[] = reportRows.map((row) => ({
+  // A lista vem em ordem DECRESCENTE de período, então só a primeira linha não
+  // tem semana mais nova: a posição responde "existe mais nova?" sem uma
+  // segunda consulta por semana.
+  const hoje = hojeIso();
+  const reports: WeeklyReportListItem[] = reportRows.map((row, i) => ({
     id: row.id,
     weekNumber: row.weekNumber,
     periodStart: isoDia(row.periodStart),
     periodEnd: isoDia(row.periodEnd),
     authorName: row.createdBy?.name,
     highlight: row.highlight ?? undefined,
+    fechada: semanaFechada(isoDia(row.periodEnd), i > 0, hoje),
     ...contarEntregas(row.deliveries),
   }));
 
@@ -227,12 +239,20 @@ export async function getRelatorioSemanalDetail(
     }
   }
 
+  // Uma consulta a mais, e só na ficha: aqui não existe a lista ordenada que
+  // responde isto de graça.
+  const maisNova = await prisma.weeklyReport.findFirst({
+    where: { periodStart: { gt: row.periodStart } },
+    select: { id: true },
+  });
+
   return {
     id: row.id,
     weekNumber: row.weekNumber,
     periodStart: isoDia(row.periodStart),
     periodEnd: isoDia(row.periodEnd),
     authorName: row.createdBy?.name,
+    fechada: semanaFechada(isoDia(row.periodEnd), !!maisNova, hojeIso()),
     ...contarEntregas(row.deliveries),
     highlight: row.highlight ?? undefined,
     learning: row.learning ?? undefined,

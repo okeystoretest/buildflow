@@ -89,10 +89,16 @@ export function ReportViewModal({
         <Button variant="secondary" onClick={onClose}>
           Fechar
         </Button>
+        {detail.fechada ? (
+          <p className="self-center text-xs text-muted-foreground">
+            Semana fechada — a seguinte já existe e o período desta acabou.
+          </p>
+        ) : (
         <Button onClick={onEdit}>
-          <Pencil className="h-4 w-4" />
-          Editar
-        </Button>
+            <Pencil className="h-4 w-4" />
+            Editar
+          </Button>
+        )}
       </div>
     </Modal>
   );

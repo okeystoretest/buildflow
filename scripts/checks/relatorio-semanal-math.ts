@@ -20,6 +20,7 @@ import {
   mediaDasSemanas,
   percentualDaMeta,
   resumirKanban,
+  semanaFechada,
   segundaDaSemana,
   semanaIso,
   somarDias,
@@ -182,6 +183,36 @@ check("sem variacao, traco", formatarVariacao(undefined), "—");
 // shortName/firstName, assim que ganhou o segundo uso (o Avatar). As
 // checagens dela moraram aqui por um momento e foram junto: quem vigia os
 // helpers puros de utils.ts e scripts/checks/utils.ts.
+
+/* ------------------------------------------- o fechamento da semana */
+
+// A REGRA: fecha quando o período já acabou E a semana seguinte já existe.
+// Serve a um objetivo só — nao reaproveitar semana fechada como se fosse a
+// nova. Cada caso abaixo é um dos quatro cruzamentos possíveis.
+
+// O caso que a tranca existe para impedir: semana passada, a nova ja criada.
+check('periodo acabado + existe mais nova = FECHADA', semanaFechada('2026-11-20', true, '2026-11-25'), true);
+
+// O caso que uma tranca so por data quebraria: criaram a semana seguinte
+// adiantado, na quarta, e a semana CORRENTE nao pode travar no meio dela.
+check('periodo em curso + existe mais nova = aberta', semanaFechada('2026-11-27', true, '2026-11-25'), false);
+
+// O caso que uma tranca so por 'existe mais nova' nao cobriria: a semana
+// acabou mas ninguem criou a seguinte — nao ha no que reaproveitar, e quem
+// edita ainda esta terminando aquela mesma semana.
+check('periodo acabado + nenhuma mais nova = aberta', semanaFechada('2026-11-20', false, '2026-11-25'), false);
+
+check('periodo em curso + nenhuma mais nova = aberta', semanaFechada('2026-11-27', false, '2026-11-25'), false);
+
+// A BORDA QUE IMPORTA: a reuniao e na sexta, que e o ultimo dia do periodo.
+//  e nao : no proprio dia do fechamento a semana ainda grava, senao
+// quem preenche durante a reuniao leva recusa na cara.
+check('no ultimo dia do periodo ainda grava', semanaFechada('2026-11-25', true, '2026-11-25'), false);
+check('no dia seguinte ja fechou', semanaFechada('2026-11-25', true, '2026-11-26'), true);
+
+// Datas em yyyy-mm-dd comparam como texto na ordem certa, inclusive na virada
+// do ano — e isso e o que o resto do modulo ja assume.
+check('a virada do ano compara certo', semanaFechada('2026-12-31', true, '2027-01-01'), true);
 
 if (falhas > 0) {
   console.log(`\n${falhas} checagem(ns) falharam.`);
