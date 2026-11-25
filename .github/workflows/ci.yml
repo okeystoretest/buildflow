@@ -1,6 +1,6 @@
 # Os mesmos portoes que a regra de trabalho exige na maquina, rodando sozinhos:
-# `tsc`, os scripts de scripts/checks/ e o build. O quarto portao (abrir o
-# navegador) nao cabe aqui — continua sendo manual.
+# `tsc`, as migrations, os scripts de scripts/checks/ e o build. O quinto portao
+# (abrir o navegador) nao cabe aqui — continua sendo manual.
 #
 # ESTE PIPELINE NAO PUBLICA NADA. Nao ha passo de deploy: o verde aqui diz que o
 # codigo COMPILA e passa nos portoes, nunca que ele esta em producao. Publicar e
@@ -22,10 +22,40 @@ on:
 jobs:
   portoes:
     runs-on: ubuntu-latest
+
+    # O CI TEM BANCO, e isto e deliberado. Ate 24/11/2026 nao tinha, e o preco
+    # foi alto: `scripts/checks/rate-limit.ts` fala com o Postgres de proposito
+    # (o risco dele mora na instrucao SQL unica), sem banco ele sai com codigo 1,
+    # e `scripts/check.ts` aborta na primeira falha. Ele e a 25a de 53 — as 28
+    # seguintes NUNCA rodaram aqui. Na maquina do dev, que tem banco, o portao
+    # ficava verde; so o CI estava cego.
+    #
+    # Pular a checagem sem banco teria sido mais barato e pior: ela passaria a
+    # mentir, porque `checkRate` degrada para um balde em memoria quando o banco
+    # cai — as 6 primeiras asseroes passam contra o FALLBACK, que e exatamente o
+    # que o cabecalho daquele script diz que se recusa a testar.
+    services:
+      postgres:
+        # Casa com a maquina do dev (18.x). Descartavel: nasce e morre com o job.
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        # Sem o health-check o `npm ci` corre antes do banco aceitar conexao.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
-      # `prisma generate` (dentro de `npm run build`) exige a variavel PRESENTE,
-      # mas NAO conecta: nenhum passo aqui toca banco. Valor ficticio de proposito
-      # — um DATABASE_URL real em CI seria credencial de producao num log publico.
+      # Aponta para o CONTEINER acima, nao para banco nenhum de verdade: o valor
+      # continua ficticio de proposito — um DATABASE_URL real em CI seria
+      # credencial de producao num log publico. Este morre em menos de um minuto
+      # e nao existe fora deste job.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
 
     steps:
@@ -40,6 +70,12 @@ jobs:
 
       - name: tsc --noEmit
         run: npx tsc --noEmit
+
+      # Antes das checagens porque elas precisam das tabelas. De brinde, ESTE
+      # passo prova que as migrations aplicam numa base limpa — o que antes so
+      # se descobria na subida de producao, onde o entrypoint as roda.
+      - name: migrations
+        run: npm run prisma:deploy
 
       # A linha que o laco de bash prometia. Mesmo comportamento (aborta na
       # primeira falha); a diferenca e que agora roda igual na maquina do dev,
