@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, X } from "lucide-react";
+import { Download, Pencil, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
@@ -85,16 +85,31 @@ export function ReportViewModal({
         )}
       </div>
 
-      <div className="mt-6 flex justify-end gap-2">
+      {/* `flex-wrap`: com o PDF ao lado do aviso de semana fechada a linha
+          passa de três itens, e precisa quebrar em tela estreita. */}
+      <div className="mt-6 flex flex-wrap justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           Fechar
+        </Button>
+        {/* LINK, e não botão com fetch: a rota devolve um ARQUIVO e o navegador
+            já sabe baixar. Um fetch traria o PDF para a memória do React só
+            para devolvê-lo ao disco.
+
+            Vale também com a semana FECHADA — é justamente a fechada que
+            alguém precisa mandar para quem não entra no sistema. Fechar impede
+            reescrever, não impede ler. */}
+        <Button variant="secondary" asChild>
+          <a href={`/api/marketing/relatorio-semanal/pdf?semana=${detail.id}`} download>
+            <Download className="h-4 w-4" />
+            PDF
+          </a>
         </Button>
         {detail.fechada ? (
           <p className="self-center text-xs text-muted-foreground">
             Semana fechada — a seguinte já existe e o período desta acabou.
           </p>
         ) : (
-        <Button onClick={onEdit}>
+          <Button onClick={onEdit}>
             <Pencil className="h-4 w-4" />
             Editar
           </Button>
