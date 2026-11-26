@@ -18,12 +18,12 @@ datasource db {
 // Fluxo de Pedidos. Usado para colorir os cards: >=50% do limite = amarelo
 // (aviso), > limite = vermelho (alerta). Um registro por status (unico).
 model StageTimeLimit {
-  id        String      @id @default(cuid())
-  status    OrderStatus @unique
+  id           String      @id @default(cuid())
+  status       OrderStatus @unique
   // Limite em minutos. null/0 = sem alerta para este status.
-  limitMinutes Int       @default(0)
-  updatedAt DateTime    @updatedAt
-  createdAt DateTime    @default(now())
+  limitMinutes Int         @default(0)
+  updatedAt    DateTime    @updatedAt
+  createdAt    DateTime    @default(now())
 }
 
 // ===========================================================================
@@ -45,45 +45,45 @@ enum SalesModel {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role
+  id           String      @id @default(cuid())
+  name         String
+  email        String      @unique
+  password     String
+  role         Role
   // Obrigatorio para VENDAS; null para os demais perfis.
-  salesModel SalesModel?
+  salesModel   SalesModel?
   // Chave PIX do MOTORISTA (para o pagamento de entregas pelo Financeiro).
   // Opcional; so faz sentido para o perfil MOTORISTA (validado na action).
-  pixKey    String?
+  pixKey       String?
   // Telefone do MOTORISTA. Guardado SEMPRE como digitos com DDD e sem o
   // codigo do pais (ex.: "11988887777") — a formatacao com mascara e so de
   // exibicao. Normalizar na gravacao evita ter de limpar a base depois, quando
   // o numero for consumido por um envio automatico.
   // Opcional; so faz sentido para o perfil MOTORISTA (validado na action).
-  phone     String?
+  phone        String?
   // Código opaco de indicação da vendedora de ATACADO. NÃO é o id: um
   // ?v=<userId> vazaria ids internos, seria enumerável e deixaria qualquer
   // pessoa apontar submissões para qualquer vendedora (decisão 13). Opaco e
   // único para poder ser rotacionado se vazar.
-  referralCode String? @unique
-  active    Boolean  @default(true)
+  referralCode String?     @unique
+  active       Boolean     @default(true)
   // Versão da sessão. O JWT carrega este número; qualquer incremento invalida
   // TODOS os tokens já emitidos (logout server-side real, expulsão de usuário
   // desativado, "sair de todos os dispositivos"). Sem isto, um JWT roubado
   // valeria pelos 7 dias inteiros mesmo após logout.
-  tokenVersion Int   @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  tokenVersion Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
-  ordersAsSeller Order[]        @relation("OrderSeller")
-  deliveries     Delivery[]     @relation("DeliveryDriver")
-  notifications  Notification[]
-  salesGoals     SalesGoal[]
-  rankAdjustments RankAdjustment[]
-  dailyTasks     DailyTask[]
+  ordersAsSeller        Order[]              @relation("OrderSeller")
+  deliveries            Delivery[]           @relation("DeliveryDriver")
+  notifications         Notification[]
+  salesGoals            SalesGoal[]
+  rankAdjustments       RankAdjustment[]
+  dailyTasks            DailyTask[]
   // "Lojas de Origem" atreladas ao usuario (max 2, validado na action).
   // Usado por VENDAS para escopo de criacao e por quem opera o fluxo por loja.
-  originStores   OriginStore[]  @relation("UserOriginStores")
+  originStores          OriginStore[]        @relation("UserOriginStores")
   // A loja de origem PRINCIPAL — a que responde pela APURACAO DE METAS.
   //
   // Existe porque `originStores` e uma relacao N-N: ela diz QUAIS lojas a
@@ -100,19 +100,23 @@ model User {
   // porque a migracao so consegue preencher sozinha quem tem UMA loja. Quem
   // tem duas fica nulo ate a Gestao escolher. `SetNull` e nao `Cascade`:
   // desativar uma loja nao pode apagar o usuario.
-  primaryOriginStore   OriginStore? @relation("UserPrimaryOriginStore", fields: [primaryOriginStoreId], references: [id], onDelete: SetNull)
-  primaryOriginStoreId String?
-  pushSubscriptions PushSubscription[]
-  driverPayments   DriverPayment[] @relation("DriverPaymentDriver")
-  transportRequests TransportRequest[] @relation("TransportDriver")
-  selectContracts   SelectContract[]   @relation("SelectResponsible")
+  primaryOriginStore    OriginStore?         @relation("UserPrimaryOriginStore", fields: [primaryOriginStoreId], references: [id], onDelete: SetNull)
+  primaryOriginStoreId  String?
+  pushSubscriptions     PushSubscription[]
+  driverPayments        DriverPayment[]      @relation("DriverPaymentDriver")
+  transportRequests     TransportRequest[]   @relation("TransportDriver")
+  selectContracts       SelectContract[]     @relation("SelectResponsible")
   wholesaleLeads        WholesaleLead[]      @relation("WholesaleLeadSeller")
   wholesaleLeadsDecided WholesaleLead[]      @relation("WholesaleLeadDecider")
   wholesaleLeadEvents   WholesaleLeadEvent[] @relation("WholesaleLeadEventActor")
-  followUps          FollowUp[] @relation("FollowUpCollaborator")
-  followUpsAsManager FollowUp[] @relation("FollowUpManager")
-  weeklyReports  WeeklyReport[]  @relation("WeeklyReportAuthor")
-  marketingTasks MarketingTask[] @relation("MarketingTaskAssignee")
+  followUps             FollowUp[]           @relation("FollowUpCollaborator")
+  followUpsAsManager    FollowUp[]           @relation("FollowUpManager")
+  weeklyReports         WeeklyReport[]       @relation("WeeklyReportAuthor")
+  marketingTasks        MarketingTask[]      @relation("MarketingTaskAssignee")
+  contentPosts          ContentPost[]        @relation("ContentPostAuthor")
+  contentOwned          ContentPost[]        @relation("ContentPostOwner")
+  contentScripts        ContentPost[]        @relation("ContentPostScript")
+  aiSettings            AiSettings[]         @relation("AiSettingsAuthor")
 
   @@index([role])
   // A apuracao da meta de loja parte da loja: "quem tem esta como principal".
@@ -160,11 +164,11 @@ model OriginStore {
   active         Boolean  @default(true)
   createdAt      DateTime @default(now())
 
-  users  User[]  @relation("UserOriginStores")
+  users        User[]      @relation("UserOriginStores")
   // Quem tem ESTA loja como principal (ver User.primaryOriginStoreId).
-  primaryUsers User[] @relation("UserPrimaryOriginStore")
-  orders Order[]
-  goals  StoreGoal[]
+  primaryUsers User[]      @relation("UserPrimaryOriginStore")
+  orders       Order[]
+  goals        StoreGoal[]
 }
 
 model OrderType {
@@ -185,24 +189,24 @@ model Operation {
 }
 
 model ShippingMethod {
-  id        String   @id @default(cuid())
-  name      String
-  active    Boolean  @default(true)
+  id              String   @id @default(cuid())
+  name            String
+  active          Boolean  @default(true)
   // Quando true, o formulário de Vendas exige o endereço de entrega completo
   // (CEP, logradouro, número, bairro, cidade, UF) e habilita a etiqueta
   // térmica. Usado pela forma de envio "Excursão". Default false = sem
   // endereço (comportamento das demais formas de envio).
-  requiresAddress Boolean @default(false)
-  createdAt DateTime @default(now())
-  orders    Order[]
+  requiresAddress Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  orders          Order[]
 }
 
 model PaymentMethod {
-  id        String   @id @default(cuid())
-  name      String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  orders    Order[]
+  id             String          @id @default(cuid())
+  name           String
+  active         Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  orders         Order[]
   selectPayments SelectPayment[]
 }
 
@@ -212,7 +216,7 @@ model Bank {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  orders Order[]
+  orders         Order[]
   selectPayments SelectPayment[]
 }
 
@@ -227,7 +231,7 @@ model Cnpj {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orders Order[]
+  orders         Order[]
   selectPayments SelectPayment[]
 
   @@index([active])
@@ -282,17 +286,17 @@ model Customer {
 // Excursao (ShippingMethod.requiresAddress = true). Ao escolher, o endereco
 // da excursao pre-preenche os campos ship* do pedido (editaveis).
 model Excursao {
-  id          String   @id @default(cuid())
-  name        String
-  address     String
+  id            String   @id @default(cuid())
+  name          String
+  address       String
   // "Funciona ate as" (horario limite). Texto livre (ex.: "18:00").
-  cutoffTime  String?
+  cutoffTime    String?
   // Dias de funcionamento (texto livre, ex.: "Seg a Sex").
   operatingDays String?
-  notes       String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  notes         String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   orders Order[]
 
@@ -353,24 +357,24 @@ model Order {
   // informada no formulario de Vendas ao lado do Numero do Pedido. E um dado
   // DECLARADO (nao derivado de OrderItem/CampaignItem) — serve para conferencia
   // na separacao e para o Controle de Pecas. Default 0 para pedidos antigos.
-  pieceCount    Int         @default(0)
+  pieceCount Int @default(0)
 
   // ----- CONTROLE DE PECAS (tipo "10 - Peças p/ Blogueira") -----
   // Estado da peca emprestada. null = ainda nao entrou no controle (o pedido
   // ainda nao foi ENTREGUE). A transicao para EM_USO so acontece apos o
   // registro de entrega — regra aplicada em src/lib/actions/pieces.ts.
-  pieceStatus   PieceStatus?
+  pieceStatus PieceStatus?
 
-  store       Store     @relation(fields: [storeId], references: [id])
-  storeId     String
+  store         Store        @relation(fields: [storeId], references: [id])
+  storeId       String
   // "Loja de Origem" do pedido (conceito novo, separado de store).
   // Nullable: pedidos antigos nao tem. Define o fluxo (simplificado ou padrao).
   originStore   OriginStore? @relation(fields: [originStoreId], references: [id])
   originStoreId String?
-  orderType   OrderType @relation(fields: [orderTypeId], references: [id])
-  orderTypeId String
-  operation   Operation @relation(fields: [operationId], references: [id])
-  operationId String
+  orderType     OrderType    @relation(fields: [orderTypeId], references: [id])
+  orderTypeId   String
+  operation     Operation    @relation(fields: [operationId], references: [id])
+  operationId   String
 
   customer   Customer @relation(fields: [customerId], references: [id])
   customerId String
@@ -415,15 +419,15 @@ model Order {
   trackingToken String? @unique
 
   // Vinculo opcional a uma campanha (meta por volume de itens).
-  campaign   Campaign? @relation(fields: [campaignId], references: [id])
-  campaignId String?
+  campaign         Campaign? @relation(fields: [campaignId], references: [id])
+  campaignId       String?
   // Quantidade de itens que este pedido contribui para a campanha.
-  itemCount  Int       @default(0)
+  itemCount        Int       @default(0)
   // "Possui desconto?" — marcado no formulario de Vendas quando as pecas de
   // campanha deste pedido sao vendidas com desconto. Muda a premiacao por item:
   //   Atacado: R$4,00 (sem) / R$2,00 (com) · Varejo: R$5,00 (sem) / R$2,50 (com).
   // Pedidos antigos ficam false (sem desconto = valor integral).
-  campaignDiscount Boolean @default(false)
+  campaignDiscount Boolean   @default(false)
 
   orderValue Decimal @default(0) @db.Decimal(10, 2)
   freight    Decimal @default(0) @db.Decimal(10, 2)
@@ -432,11 +436,11 @@ model Order {
   // Comprovante enviado pela Vendedora na criacao do pedido.
   // MANTIDO por compatibilidade: pedidos antigos usam este campo unico.
   // Pedidos novos gravam ate 5 comprovantes na tabela OrderPaymentProof.
-  paymentProofPath String?
+  paymentProofPath  String?
   // Segundo comprovante, anexado pelo FINANCEIRO na Analise de Pedidos.
   // Obrigatorio para aprovar. Visivel a todos ao expandir o card no fluxo.
   paymentProof2Path String?
-  invoicePath      String?
+  invoicePath       String?
 
   // "Observacoes de Envio" na UI. Vai para a logistica/motorista.
   notes String?
@@ -445,16 +449,16 @@ model Order {
   // (ShippingMethod.requiresAddress = true, ex.: "Excursão"). Todos opcionais
   // no banco (pedidos de outras formas de envio não têm endereço); a
   // obrigatoriedade é validada no formulário quando a forma exige.
-  shipCep         String?
-  shipStreet      String?  // Logradouro
-  shipNumber      String?  // Número
-  shipDistrict    String?  // Bairro
-  shipCity        String?  // Cidade
-  shipState       String?  // UF
+  shipCep      String?
+  shipStreet   String? // Logradouro
+  shipNumber   String? // Número
+  shipDistrict String? // Bairro
+  shipCity     String? // Cidade
+  shipState    String? // UF
   // Excursao selecionada (opcional). So faz sentido quando a forma de envio e
   // a de Excursao; o endereco da excursao pre-preenche os campos ship* acima.
-  excursao   Excursao? @relation(fields: [excursaoId], references: [id])
-  excursaoId String?
+  excursao     Excursao? @relation(fields: [excursaoId], references: [id])
+  excursaoId   String?
   // "Observacoes de Pagamento": exclusivo do FINANCEIRO na aprovacao.
   // NAO e exibido para motorista/logistica.
   paymentNotes String?
@@ -482,16 +486,16 @@ model Order {
   // Null = nunca aprovado (em analise, estornado, cancelado).
   financeApprovedAt DateTime?
 
-  items         OrderItem[]
-  campaignItems CampaignItem[]
-  paymentProofs OrderPaymentProof[]
-  financeProofs OrderFinanceProof[]
-  delivery      Delivery?
-  driverPayment DriverPayment?
-  history       OrderStatusHistory[]
+  items          OrderItem[]
+  campaignItems  CampaignItem[]
+  paymentProofs  OrderPaymentProof[]
+  financeProofs  OrderFinanceProof[]
+  delivery       Delivery?
+  driverPayment  DriverPayment?
+  history        OrderStatusHistory[]
   pieceMovements PieceMovement[]
-  delayReasons  OrderDelayReason[]
-  returns       OrderReturn[]
+  delayReasons   OrderDelayReason[]
+  returns        OrderReturn[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -592,15 +596,15 @@ enum PieceStatus {
 // Guarda de/para, observacao e quem moveu. Nunca sobrescrevemos: o estado
 // atual vive em Order.pieceStatus e o historico completo vive aqui.
 model PieceMovement {
-  id        String       @id @default(cuid())
-  order     Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId   String
+  id         String       @id @default(cuid())
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String
   // null quando e a PRIMEIRA entrada no controle (entrega registrada).
   fromStatus PieceStatus?
   toStatus   PieceStatus
   note       String?
   changedBy  String?
-  createdAt  DateTime    @default(now())
+  createdAt  DateTime     @default(now())
 
   @@index([orderId])
   @@index([createdAt])
@@ -638,7 +642,7 @@ model Delivery {
   // "Pagamentos de Motoristas" e que pre-preenche o pagamento — o valor pago
   // fica em DriverPayment.amount e pode diferir. Null nas entregas concluidas
   // antes de o campo existir.
-  driverFee   Decimal?  @db.Decimal(10, 2)
+  driverFee Decimal? @db.Decimal(10, 2)
 
   proofs Proof[]
 
@@ -676,12 +680,12 @@ model DriverPayment {
   driverId String
 
   // Valor da entrega pago ao motorista.
-  amount   Decimal @db.Decimal(10, 2)
+  amount        Decimal  @db.Decimal(10, 2)
   // Chave PIX usada no pagamento (snapshot; pode diferir do cadastro atual).
-  pixKey   String?
+  pixKey        String?
   // Usuario (Financeiro/Gestao) que confirmou o pagamento.
   confirmedById String?
-  createdAt DateTime @default(now())
+  createdAt     DateTime @default(now())
 
   @@index([driverId])
 }
@@ -734,8 +738,8 @@ model TransportRequest {
   destLat   Float?
   destLng   Float?
 
-  driver   User?   @relation("TransportDriver", fields: [driverId], references: [id])
-  driverId String?
+  driver       User?   @relation("TransportDriver", fields: [driverId], references: [id])
+  driverId     String?
   // Quem atribuiu (Logistica/Gestao) — null quando o proprio motorista assumiu.
   assignedById String?
 
@@ -826,19 +830,19 @@ model Notification {
 //   - Meta CAMPANHA (campaignId NOT NULL): unica por (user, mes, ano, escopo, campanha)
 // Assim a Geral e as varias metas de Campanha convivem sem se sobrescrever.
 model SalesGoal {
-  id        String     @id @default(cuid())
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-  amount    Decimal    @db.Decimal(12, 2) // meta em R$ (usada quando Geral)
+  id          String     @id @default(cuid())
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  amount      Decimal    @db.Decimal(12, 2) // meta em R$ (usada quando Geral)
   // Meta por quantidade de itens. Usada quando a meta é vinculada a Campanha.
   targetItems Int?
-  month     Int        // 1-12
-  year      Int
-  scope     SalesModel // ATACADO ou VAREJO
+  month       Int // 1-12
+  year        Int
+  scope       SalesModel // ATACADO ou VAREJO
   // null = meta Geral; preenchido = meta vinculada a uma Campanha.
-  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  campaignId String?
-  createdAt DateTime   @default(now())
+  campaign    Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignId  String?
+  createdAt   DateTime   @default(now())
 
   @@index([userId, month, year])
   @@index([month, year])
@@ -867,7 +871,7 @@ model StoreGoal {
   originStore   OriginStore @relation(fields: [originStoreId], references: [id], onDelete: Cascade)
   originStoreId String
   amount        Decimal     @db.Decimal(12, 2) // meta em R$
-  month         Int         // 1-12
+  month         Int // 1-12
   year          Int
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -893,24 +897,24 @@ model StoreGoal {
 // Um registro por vendedor/mes/ano: o ajuste vale para os tres paineis (Geral,
 // Varejo e Atacado), que sao recortes do MESMO numero.
 model RankAdjustment {
-  id     String @id @default(cuid())
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-  month  Int    // 1-12
-  year   Int
+  id           String    @id @default(cuid())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  month        Int // 1-12
+  year         Int
   // Valor manual do realizado, em R$.
-  amount       Decimal @db.Decimal(12, 2)
+  amount       Decimal   @db.Decimal(12, 2)
   // Consolidado pelo sistema no momento em que o ajuste foi salvo.
-  systemAmount Decimal @db.Decimal(12, 2) @default(0)
+  systemAmount Decimal   @default(0) @db.Decimal(12, 2)
   // CORTE do ajuste: instante ate o qual `amount` responde pelo realizado.
   // Pedidos criados a partir daqui NAO sao substituidos pelo ajuste — eles
   // SOMAM sobre ele. Null = ajuste anterior a esta regra; nesse caso o corte
   // usado e a constante AJUSTE_CORTE_PADRAO (ver src/lib/rank-data.ts).
   baselineAt   DateTime?
-  note      String?
-  changedBy String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  note         String?
+  changedBy    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@unique([userId, month, year])
   @@index([month, year])
@@ -919,10 +923,10 @@ model RankAdjustment {
 // Campanha: apenas o nome (cadastro simples). As metas vinculadas
 // a ela ficam em SalesGoal (campo campaignId).
 model Campaign {
-  id         String   @id @default(cuid())
-  name       String
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   // CAMPANHA DE SELECT: preenchido = esta campanha acompanha a venda do
   // servico Select de UMA marca, e as vendas entram nela pela marca escolhida
@@ -947,18 +951,18 @@ model Campaign {
 // que só comportava UMA campanha por pedido. Os campos legados no Order são
 // mantidos por compatibilidade e alimentados com os agregados destes itens.
 model CampaignItem {
-  id        String   @id @default(cuid())
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId   String
+  id         String   @id @default(cuid())
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String
   campaign   Campaign @relation(fields: [campaignId], references: [id])
   campaignId String
   // "Referência" da peça de campanha (texto livre informado no pedido).
-  reference String
-  quantity  Int      @default(0)
+  reference  String
+  quantity   Int      @default(0)
   // Valor (R$) registrado individualmente para este item de campanha.
   // É esta soma que alimenta a coluna "Valor" no Rank > Performance na Campanha.
-  value     Decimal  @default(0) @db.Decimal(10, 2)
-  createdAt DateTime @default(now())
+  value      Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
 
   @@index([orderId])
   @@index([campaignId])
@@ -1080,10 +1084,10 @@ model OrderReturn {
   // Quem registrou. Sem FK: usuario apagado nao pode levar a devolucao junto.
   registeredById String?
   // Observacao livre (motivo, estado da peca...). Opcional.
-  note String?
+  note           String?
   // Soma dos valores dos itens, gravada para leitura rapida do historico.
-  totalValue Decimal @db.Decimal(10, 2)
-  createdAt  DateTime @default(now())
+  totalValue     Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
 
   items OrderReturnItem[]
 
@@ -1138,7 +1142,7 @@ model SelectPlan {
   name      String
   sortOrder Int    @default(0)
 
-  validityMonths Int @default(12)
+  validityMonths     Int      @default(12)
   // Mensalidade BASE do plano, SEM o Build.Sales. A mensalidade que a cliente
   // paga e esta mais BUILD_SALES_MONTHLY (lib/select-contract.ts), somado pelo
   // servidor na adesao. Quem ler esta coluna direto ve 597, nao 664.
@@ -1165,8 +1169,8 @@ model SelectPlanBenefit {
   plan   SelectPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   planId String
 
-  sortOrder Int    @default(0)
-  text      String
+  sortOrder  Int     @default(0)
+  text       String
   // Entra na regua do roadmap (beneficio EXECUTAVEL: tem marco de entrega) ou
   // fica fora dela (casual/continuo, tipo "suporte sob demanda", que nao tem
   // conclusao e por isso nao pode contar percentual). Default true: o
@@ -1180,13 +1184,13 @@ model SelectPlanBenefit {
 model SelectContract {
   id String @id @default(cuid())
 
-  customer   Customer @relation(fields: [customerId], references: [id])
-  customerId String
-  plan       SelectPlan @relation(fields: [planId], references: [id])
-  planId     String
+  customer      Customer   @relation(fields: [customerId], references: [id])
+  customerId    String
+  plan          SelectPlan @relation(fields: [planId], references: [id])
+  planId        String
   // Responsavel pela venda. FK real (e coluna de filtro da tela do Financeiro),
   // ao contrario dos campos de auditoria abaixo.
-  responsible   User   @relation("SelectResponsible", fields: [responsibleId], references: [id])
+  responsible   User       @relation("SelectResponsible", fields: [responsibleId], references: [id])
   responsibleId String
 
   // Datas puras (sem hora): o contrato e por dia, e hora nenhuma faria o
@@ -1197,9 +1201,9 @@ model SelectContract {
   closedAt  DateTime? @db.Date
 
   // Vinculo 1:1 da troca: este contrato foi substituido por aquele.
-  replacedBy   SelectContract?  @relation("SelectReplacement", fields: [replacedById], references: [id])
-  replacedById String?          @unique
-  replaces     SelectContract?  @relation("SelectReplacement")
+  replacedBy   SelectContract? @relation("SelectReplacement", fields: [replacedById], references: [id])
+  replacedById String?         @unique
+  replaces     SelectContract? @relation("SelectReplacement")
 
   // ----- SNAPSHOT: copia dos valores no momento da adesao -----
   validityMonths     Int
@@ -1317,13 +1321,13 @@ model SelectInstallment {
   contract   SelectContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
   contractId String
 
-  number  Int
-  dueDate DateTime @db.Date
-  amount  Decimal  @db.Decimal(10, 2)
+  number     Int
+  dueDate    DateTime @db.Date
+  amount     Decimal  @db.Decimal(10, 2)
   // Soma dos pagamentos NAO revertidos. Denormalizado e reescrito dentro da
   // mesma transacao de todo pagamento/reversao: os indicadores do painel somam
   // esta coluna em vez de varrer SelectPayment a cada leitura.
-  paidAmount Decimal @db.Decimal(10, 2) @default(0)
+  paidAmount Decimal  @default(0) @db.Decimal(10, 2)
 
   status    SelectInstallmentStatus @default(PENDENTE)
   // Quando paidAmount alcancou amount.
@@ -1509,16 +1513,16 @@ model WholesaleLead {
 
   // --- Seção 2: Sobre o Seu Negócio ---
   /// UF de 2 letras (decisão 23).
-  state             String
-  city              String
+  state              String
+  city               String
   /// NULO só em candidatura IMPORTADA de planilha antiga (ver
   /// src/lib/wholesale-import.ts): o formulário público sempre grava um valor,
   /// e a planilha que a Gestão tinha não registrava estas respostas. Preencher
   /// com "OUTRO" faria a ficha afirmar à analista algo que ninguém respondeu.
-  serviceModel      WholesaleServiceModel?
-  serviceModelOther String?
+  serviceModel       WholesaleServiceModel?
+  serviceModelOther  String?
   /// Handle sem o "@".
-  instagram         String
+  instagram          String
   instagramImagePath String
   storeImagePath     String
   /// Derivado de serviceModel (storeImageKindFor); NULO quando ele é nulo.
@@ -1561,9 +1565,9 @@ model WholesaleLead {
 
   // --- Decisão ---
   /// "Atendente" da planilha: quem aprovou/reprovou.
-  decidedById String?
-  decidedBy   User?     @relation("WholesaleLeadDecider", fields: [decidedById], references: [id])
-  decidedAt   DateTime?
+  decidedById   String?
+  decidedBy     User?     @relation("WholesaleLeadDecider", fields: [decidedById], references: [id])
+  decidedAt     DateTime?
   /// Um dos 34 de wholesale-rejection-codes.ts. Obrigatório em REPROVADO.
   rejectionCode String?
   /// Obrigatório em CUIDADO (decisão 8).
@@ -1698,8 +1702,8 @@ model FollowUp {
   /// "Gestor Responsavel pelo Suporte": quem PREENCHEU o formulario, gravado
   /// automaticamente da sessao (instrucao de desenvolvimento da planilha).
   /// `Restrict`: apagar o gestor nao pode apagar o historico do colaborador.
-  manager   User   @relation("FollowUpManager", fields: [managerId], references: [id], onDelete: Restrict)
-  managerId String
+  manager        User   @relation("FollowUpManager", fields: [managerId], references: [id], onDelete: Restrict)
+  managerId      String
 
   /// Data de realizacao da conversa. Meia-noite no fuso do negocio (ver
   /// `instanteNoFuso` em src/lib/rank-window.ts): `new Date("2026-11-13")`
@@ -1978,4 +1982,154 @@ model MarketingTask {
 
   @@index([status])
   @@index([assigneeId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Cronograma de Conteúdo — as peças criadas AQUI
+// ─────────────────────────────────────────────────────────────
+
+/// Etapa do funil de conteúdo. Mesmos três valores do Build.Connect, e a
+/// mesma ordem: a tela mostra as duas origens no mesmo calendário, e um
+/// vocabulário diferente de cada lado faria a mesma peça parecer outra.
+enum ContentFunnel {
+  TOFU // Topo: atrair novo público
+  MOFU // Meio: aquecer e educar
+  BOFU // Fundo: converter em venda
+}
+
+enum ContentFormat {
+  REEL
+  STORY
+  FEED
+  CARROSSEL
+  LIVE
+  /// Peça de LANÇAMENTO. Leva o número do line-up em ContentPost.lineUp.
+  LANCAMENTO
+  /// Formato fora da lista. O texto digitado vai em ContentPost.formatOther.
+  OUTRO
+}
+
+enum ContentStatus {
+  IDEIA
+  EM_PRODUCAO
+  AGENDADO
+  PUBLICADO
+}
+
+enum ContentPlatform {
+  INSTAGRAM
+  TIKTOK
+  YOUTUBE
+}
+
+enum ContentBrand {
+  OKEY
+  LOV_CLUB
+}
+
+/// Uma peça de conteúdo CRIADA NO BUILD.FLOW.
+///
+/// A SINCRONIZAÇÃO É DE MÃO ÚNICA (decisão do dono, 25/11/2026): o que o
+/// Build.Connect publica chega aqui por leitura e é SÓ LEITURA; o que nasce
+/// aqui fica aqui e nunca volta para lá. Por isso esta tabela não guarda id
+/// do Connect, não tem campo de origem e não tem estado de sincronização —
+/// ela não espelha nada. As duas origens só se encontram na TELA, que lê as
+/// peças de lá (`lib/integration/connect-cronograma.ts`) e as daqui e as
+/// desenha no mesmo calendário.
+///
+/// SEM CAMPO DE ALCANCE, e é diferente do Connect de propósito: lá
+/// `visibility` existe porque a mesma base serve três abas (Marketing, Vendas
+/// e Criação). Aqui a ferramenta é uma só, então toda peça aparece para quem
+/// abre o Cronograma — Gestão e Vendas. Quem edita é só o autor, e isso é
+/// `createdById`, não alcance.
+model ContentPost {
+  id          String   @id @default(cuid())
+  title       String
+  scheduledAt DateTime
+
+  funnel      ContentFunnel
+  /// Formatos da peça (seleção múltipla): o mesmo conteúdo costuma sair em
+  /// mais de um, e duplicar a peça só para registrar isso quebraria a
+  /// contagem do funil.
+  formats     ContentFormat[]   @default([])
+  status      ContentStatus     @default(IDEIA)
+  brand       ContentBrand?
+  /// Redes sociais da peça. Lista vazia = atividade sem plataforma definida.
+  platforms   ContentPlatform[] @default([])
+  /// Descrição livre do formato quando OUTRO está entre os escolhidos.
+  formatOther String?
+  /// Número do line-up quando LANCAMENTO está entre os escolhidos. Inteiro e
+  /// não texto: é identificador de lançamento, e o formulário só aceita dígito.
+  lineUp      Int?
+  notes       String?           @db.Text
+
+  /// Responsável pela produção. Nulo = sem dono definido. `SetNull` para que
+  /// o desligamento de alguém não leve a peça junto.
+  ownerId String?
+  owner   User?   @relation("ContentPostOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  /// Autor do registro. É ele — e só ele — quem edita a peça depois. Nulo
+  /// quando a conta de quem criou foi removida: a peça continua no calendário
+  /// (apagá-la junto perderia a agenda da equipe), e aí ninguém mais a edita.
+  createdById String?
+  createdBy   User?   @relation("ContentPostAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// Roteiro da peça: rascunho da IA, acabamento da pessoa. Nulo = nunca
+  /// gerado. Os três andam juntos — o texto, quem o escreveu por último e
+  /// quando — para o modal poder dizer "Gerado por X · data".
+  script          String?   @db.Text
+  scriptUpdatedAt DateTime?
+  scriptById      String?
+  scriptBy        User?     @relation("ContentPostScript", fields: [scriptById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// O calendário sempre pergunta por um RECORTE de datas: é o índice que a
+  /// tela usa em toda carga.
+  @@index([scheduledAt])
+  @@index([ownerId])
+  @@index([createdById])
+  @@index([scriptById])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Inteligência Artificial
+// ─────────────────────────────────────────────────────────────
+
+/// A configuração da IA do sistema — hoje, a que escreve os roteiros das
+/// atividades do Cronograma.
+///
+/// LINHA ÚNICA, de id fixo (`AI_SETTINGS_ID`). É configuração do sistema, não
+/// uma lista: um `findFirst` sem âncora abriria a porta para duas linhas e
+/// para "qual das duas vale?" — pergunta que não tem resposta boa e que só
+/// aparece em produção.
+///
+/// A CHAVE DA API NÃO MORA AQUI, e é decisão de segurança: ela fica em
+/// `GEMINI_API_KEY`, no ambiente, como todo segredo deste sistema (ver
+/// `integration/connect-auth.ts`). Chave no banco entra em backup, em dump de
+/// depuração e na tela de quem tiver acesso de leitura — e sai de lá sem
+/// ninguém notar. A tela de Gestão diz se a chave ESTÁ configurada; nunca
+/// mostra o valor.
+model AiSettings {
+  id String @id
+
+  /// Nome do modelo no provedor, ex.: `gemini-2.5-flash`. Validado na action
+  /// antes de gravar: ele vira CAMINHO na URL do provedor, e texto livre aqui
+  /// seria um caminho que o usuário escreve.
+  model String
+
+  /// A instrução de sistema: o comportamento do roteirista (tom, idioma,
+  /// formato). É o que a Retaguarda do Build.Connect guarda por marca; aqui é
+  /// uma só, porque o Flow não tem o conceito de marca para instrução.
+  instruction String @db.Text
+
+  /// Quem mexeu por último, para a tela poder dizer. `SetNull` porque o
+  /// desligamento de alguém não pode levar a configuração do sistema junto.
+  updatedById String?
+  updatedBy   User?   @relation("AiSettingsAuthor", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedById])
 }

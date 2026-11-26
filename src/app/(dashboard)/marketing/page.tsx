@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { requireRole } from "@/lib/auth";
+import { navParaSessao } from "../nav";
 
 /**
  * `/marketing` sozinho nao e tela de nada: o modulo tem `href: null` no
@@ -6,13 +8,16 @@ import { redirect } from "next/navigation";
  * 404 — e e URL que gente digita, porque e o prefixo que aparece na barra de
  * endereco ao usar a ferramenta.
  *
- * Destino fixo, e nao lido do `nav.ts`: o modulo tem UMA ferramenta. No dia em
- * que tiver duas, isto vira uma escolha de verdade e o `nav.ts` entra aqui.
- *
- * SEM PORTA DE ACESSO PROPRIA de proposito: quem decide e o
- * `requireRole(["GESTAO"])` do destino. Repetir a checagem aqui criaria um
- * segundo lugar para ela divergir.
+ * MANDA PARA A PRIMEIRA FERRAMENTA QUE ESTA PESSOA VE, lida do `nav.ts`, e nao
+ * para um destino fixo. O modulo tem duas ferramentas com portas DIFERENTES
+ * (Relatorio Semanal e so da GESTAO; o Cronograma e de GESTAO e VENDAS), e um
+ * destino fixo mandaria VENDAS para a tela que o `requireRole` de la recusa —
+ * um clique que termina na raiz do sistema sem dizer por que.
  */
-export default function MarketingPage() {
-  redirect("/marketing/relatorio-semanal");
+export default async function MarketingPage() {
+  const sessao = await requireRole(["GESTAO", "VENDAS"]);
+  const modulo = navParaSessao(sessao.role).find((m) => m.base === "/marketing");
+  // Sem ferramenta nenhuma nao deveria acontecer (o papel que ve o modulo ve ao
+  // menos uma), mas aqui `redirect(undefined)` seria uma tela branca.
+  redirect(modulo?.tools[0]?.href ?? "/");
 }

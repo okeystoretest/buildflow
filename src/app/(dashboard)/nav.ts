@@ -178,11 +178,13 @@ export const NAV: NavModule[] = [
       // financeiro). Gestao e Financeiro tem a tela cheia em /financeiro/select.
       // Fica no fim: nao estava na ordem que o dono passou.
       { href: "/vendas/select", label: "Meus Selects", descricao: "O roteiro e as compras das suas clientes no Select.", roles: ["VENDAS"] },
+      // O Cronograma de Conteudo ESTEVE AQUI e mudou para o modulo Marketing
+      // em 25/11/2026: a agenda e do Marketing, e o Comercial a lia de
+      // emprestado. Com o modulo aberto a VENDAS, ela nao perdeu a tela — ela
+      // trocou de prateleira. FINANCEIRO perdeu, e e a consequencia pedida.
       // NO FIM, como "Meus Selects", e pelo mesmo motivo: nao estava na ordem
       // que o dono passou. Entrar no meio seria decidir por ele a posicao de
       // uma ferramenta nova numa lista que ele ordenou a mao.
-      { href: "/vendas/cronograma", label: "Cronograma de Conteúdo", descricao: "O que o Marketing vai publicar, e quando.", roles: ["GESTAO", "VENDAS", "FINANCEIRO"] },
-      // Ao lado do Cronograma: as duas leem do Build.Connect e nenhuma escreve.
       { href: "/vendas/vitrine", label: "Vitrine", descricao: "Fotos, vídeos e documentos publicados no Build.Connect.", roles: ["GESTAO", "VENDAS", "FINANCEIRO"] },
       // SO GESTAO, e por isso no fim: as outras ferramentas de Comercial sao
       // da vendedora, esta e sobre ela (meta da loja, One-on-One, Quinzenal).
@@ -239,16 +241,26 @@ export const NAV: NavModule[] = [
   // dono, e um modulo novo entrando no meio decidiria por ele a posicao numa
   // lista que ele ordenou a mao.
   //
-  // SO GESTAO (decisao de 24/11/2026). O buildflow nao tem papel de Marketing,
-  // e inventar um custaria migracao do enum `Role` para um modulo de uma
-  // ferramenta — quem preenche o relatorio e a gestao.
+  // GESTAO E VENDAS (decisao de 25/11/2026), e ninguem mais: Financeiro,
+  // Logistica e Motorista nao veem o modulo nem as ferramentas dele. O
+  // buildflow nao tem papel de Marketing, e inventar um custaria migracao do
+  // enum `Role`; VENDAS entra porque e quem usa a agenda de conteudo no dia a
+  // dia — era por isso que o Cronograma morava no Comercial.
+  //
+  // CADA FERRAMENTA TEM A PORTA DELA, e as duas nao sao iguais: VENDAS entra no
+  // modulo pelo Cronograma. O RELATORIO SEMANAL SEGUE SO DA GESTAO porque ele
+  // nao e uma tela de ler — e um editor (criar semana, lapis, Kanban que
+  // arrasta e exclui) cujas actions todas sao `requireRoleAction(["GESTAO"])`.
+  // Mostra-lo a VENDAS sem um modo leitura daria uma tela de botoes que falham,
+  // e inventar esse modo e decisao do dono, nao consequencia desta mudanca.
   {
     href: null,
     base: "/marketing",
     label: "Marketing",
-    roles: ["GESTAO"],
+    roles: ["GESTAO", "VENDAS"],
     tools: [
       { href: "/marketing/relatorio-semanal", label: "Relatório Semanal", descricao: "A semana do Marketing: entregas, métricas, OKRs e o quadro de tarefas.", roles: ["GESTAO"] },
+      { href: "/marketing/cronograma", label: "Cronograma de Conteúdo", descricao: "O que o Marketing vai publicar, e quando.", roles: ["GESTAO", "VENDAS"] },
     ],
   },
 ];

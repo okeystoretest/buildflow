@@ -44,7 +44,7 @@ const ICON: Record<string, React.ReactNode> = {
   "/vendas/excursoes": <MapPin className="h-3.5 w-3.5" />,
   "/vendas/tarefas": <ListTodo className="h-3.5 w-3.5" />,
   "/vendas/relatorio-campanha": <BarChart3 className="h-3.5 w-3.5" />,
-  "/vendas/cronograma": <CalendarDays className="h-3.5 w-3.5" />,
+  "/marketing/cronograma": <CalendarDays className="h-3.5 w-3.5" />,
   "/vendas/vitrine": <Store className="h-3.5 w-3.5" />,
   "/vendas/historico": <History className="h-3.5 w-3.5" />,
   // Alvo, e nao um grafico: a tela ja tem o grafico dentro, e a pergunta que

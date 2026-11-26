@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { GestaoTabs } from "./tabs-client";
+import { lerConfigDeIa } from "@/lib/ia-settings";
 import { sortOperationsByCode } from "@/lib/utils";
 
 export default async function GestaoPage(
@@ -58,6 +59,11 @@ export default async function GestaoPage(
       }),
     ]);
 
+  // FORA do `Promise.all` acima: aquele bloco carrega os cadastros, e esta e
+  // a configuracao do sistema. Entrar la custaria uma linha a mais no maior
+  // destructuring do arquivo, para um dado que nenhuma outra aba usa.
+  const configDeIa = await lerConfigDeIa();
+
   const activeCampaigns = campaigns.filter((c) => c.active);
 
   const sellers = users.filter((u) => u.role === "VENDAS");
@@ -96,6 +102,7 @@ export default async function GestaoPage(
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Gestão — Parâmetros</h1>
       <GestaoTabs
+        configDeIa={configDeIa}
         users={users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, active: u.active, salesModel: u.salesModel, originStoreIds: u.originStores.map((s) => s.id), primaryOriginStoreId: u.primaryOriginStoreId ?? null, pixKey: u.pixKey ?? null, phone: u.phone ?? null }))}
         stores={stores.map((s) => ({ id: s.id, name: s.name, active: s.active }))}
         originStores={originStores.map((s) => ({ id: s.id, name: s.name, active: s.active, simplifiedFlow: s.simplifiedFlow }))}

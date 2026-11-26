@@ -46,11 +46,24 @@ check("Gestao nao e um modulo da lista", NAV.some((m) => m.base === "/gestao"), 
 check("Configuracoes e so da GESTAO", CONFIG.roles, ["GESTAO"]);
 check("MOTORISTA so ve o modulo dele", bases("MOTORISTA"), ["/motorista"]);
 check("FINANCEIRO nao ve Logistica", bases("FINANCEIRO"), ["/fluxo", "/vendas", "/financeiro"]);
-// Marketing e o unico modulo de UM papel so. As quatro linhas acima ja provam
-// que ninguem mais entra (as listas de FINANCEIRO e MOTORISTA sao exatas e nao
-// o citam); esta prova o outro lado — que GESTAO entra, e pela ferramenta certa.
-check("Marketing e so da GESTAO", bases("VENDAS").includes("/marketing"), false);
-check("GESTAO ve o Relatorio Semanal", tools("GESTAO", "/marketing"), ["/marketing/relatorio-semanal"]);
+// Marketing e de GESTAO e VENDAS, e de mais ninguem (25/11/2026). As quatro
+// linhas acima ja provam que o resto nao entra (as listas de FINANCEIRO e
+// MOTORISTA sao exatas e nao o citam); estas provam o outro lado.
+//
+// AS DUAS FERRAMENTAS TEM PORTAS DIFERENTES, e e o ponto que quebra em
+// silencio: VENDAS entra no modulo pelo Cronograma e NAO pode ver o Relatorio
+// Semanal, que e um editor cujas actions sao todas da GESTAO. Trocar a lista de
+// papeis de uma linha do `nav.ts` nao da erro nenhum — so mostra a tela errada.
+check("GESTAO ve as duas ferramentas de Marketing", tools("GESTAO", "/marketing"), [
+  "/marketing/relatorio-semanal",
+  "/marketing/cronograma",
+]);
+check("VENDAS entra em Marketing", bases("VENDAS").includes("/marketing"), true);
+check("VENDAS so ve o Cronograma", tools("VENDAS", "/marketing"), ["/marketing/cronograma"]);
+check("Marketing nao e do FINANCEIRO", bases("FINANCEIRO").includes("/marketing"), false);
+// O Cronograma SAIU do Comercial no mesmo dia: duas prateleiras para a mesma
+// tela e o jeito de ela aparecer duas vezes no menu de quem ve os dois modulos.
+check("Cronograma saiu do Comercial", tools("GESTAO", "/vendas").includes("/vendas/cronograma"), false);
 
 // --- a flag LIBERA, nunca restringe ----------------------------------------
 // A vendedora de loja de fluxo simplificado entra em Logistica; a de loja
@@ -93,9 +106,8 @@ const rotulos = (base: string) => NAV.find((m) => m.base === base)!.tools.map((t
 check("ordem do Comercial", rotulos("/vendas"), [
   "Cadastro de Clientes", "Gestão de Excursões", "Lançar Pedidos", "Qualificação de Clientes",
   "Agenda de Tarefas", "Vendas Realizadas", "Resultados de Campanhas", "Meus Selects",
-  "Cronograma de Conteúdo",
-  // Vitrine no fim, ao lado do Cronograma (pedido do dono, 06/11/2026): as duas
-  // leem do Build.Connect e nenhuma escreve.
+  // A Vitrine ficou SOZINHA no fim: o Cronograma, que entrou ao lado dela em
+  // 06/11/2026, mudou para o modulo Marketing em 25/11/2026.
   "Vitrine",
   // Acompanhamento no fim (13/11/2026): e a unica ferramenta de Comercial
   // restrita a GESTAO — as outras sao da vendedora, esta e sobre ela.

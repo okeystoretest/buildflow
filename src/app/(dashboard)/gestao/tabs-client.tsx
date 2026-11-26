@@ -23,6 +23,8 @@ import { CrudTable, type CrudRow } from "@/components/shared/crud-table";
 import { Modal } from "@/components/shared/modal";
 import { SELECT_BRANDS, SELECT_BRAND_LABEL } from "@/lib/select-brand";
 import { PlanosPanel, type PlanAdminRow } from "./planos-panel";
+import { IaPanel } from "./ia-panel";
+import type { ConfigDeIaLida } from "@/lib/ia-settings";
 import { CsvImport } from "@/components/shared/csv-import";
 import { ClientesManager, type ClienteRow } from "@/app/(dashboard)/vendas/clientes/manager-client";
 import { importUsersCsv, importOperationsCsv, importCustomersCsv } from "@/lib/actions/import";
@@ -54,7 +56,9 @@ interface StageLimitRow { status: OrderStatus; limitMinutes: number; }
 
 type SimpleEntity = "store" | "orderType" | "shippingMethod";
 
-const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Planos", "Etapas", "Lojas", "Lojas de Origem", "Tipos de Pedido", "Operações", "Formas de Envio"] as const;
+// "Inteligência Artificial" NO FIM: as outras abas sao cadastro do dia a dia,
+// esta e ajuste de sistema — mexida uma vez e esquecida.
+const TABS = ["Usuários", "Clientes", "Metas", "Campanhas", "Planos", "Etapas", "Lojas", "Lojas de Origem", "Tipos de Pedido", "Operações", "Formas de Envio", "Inteligência Artificial"] as const;
 
 export function GestaoTabs(props: {
   users: UserRow[]; stores: Row[]; originStores: OriginStoreRow[]; orderTypes: Row[]; operations: OpRow[]; shippingMethods: Row[];
@@ -66,6 +70,7 @@ export function GestaoTabs(props: {
   goalPeriodMonth: number; goalPeriodYear: number; isCurrentGoalPeriod: boolean;
   stageLimits: StageLimitRow[];
   selectPlans: PlanAdminRow[];
+  configDeIa: ConfigDeIaLida;
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Usuários");
 
@@ -85,6 +90,7 @@ export function GestaoTabs(props: {
       {tab === "Metas" && <GoalsPanel sellers={props.sellers} goals={props.goals} activeCampaigns={props.activeCampaigns} month={props.currentMonth} year={props.currentYear} periodMonth={props.goalPeriodMonth} periodYear={props.goalPeriodYear} isCurrentPeriod={props.isCurrentGoalPeriod} storeGoals={props.storeGoals} semLojaPrincipal={props.semLojaPrincipal} />}
       {tab === "Campanhas" && <CampaignsPanel campaigns={props.campaigns} />}
       {tab === "Planos" && <PlanosPanel plans={props.selectPlans} />}
+      {tab === "Inteligência Artificial" && <IaPanel config={props.configDeIa} />}
       {tab === "Etapas" && <EtapasPanel stageLimits={props.stageLimits} />}
       {tab === "Lojas" && <SimplePanel entity="store" rows={props.stores} label="loja" />}
       {tab === "Lojas de Origem" && <OriginStoresPanel rows={props.originStores} />}
