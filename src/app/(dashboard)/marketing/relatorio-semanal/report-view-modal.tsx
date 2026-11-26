@@ -226,7 +226,7 @@ function montarBlocos(detail: WeeklyReportDetail): Bloco[] {
   if (respondidas.length > 0) {
     blocos.push({
       id: "pauta",
-      label: `Pauta (${respondidas.length})`,
+      label: `One-on-one (${respondidas.length})`,
       corpo: respondidas.map((a) => (
         <Caixa key={a.id} titulo={a.question} acima={[a.block, `${a.minutes} min`]}>
           <p className="whitespace-pre-wrap text-sm text-foreground">{a.answer}</p>

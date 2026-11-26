@@ -209,7 +209,7 @@ export function gerarRelatorioSemanalPdf(
 
   /* ---- 6. pauta ---- */
   if (detalhe.agenda.length > 0) {
-    bloco(doc, "6 · Pauta da reunião");
+    bloco(doc, "6 · One-on-one");
     detalhe.agenda.forEach((a, i) =>
       item(doc, i, `${a.block} · ${a.minutes} min`, [a.question, a.answer ? `Resposta: ${a.answer}` : ""]),
     );

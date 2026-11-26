@@ -329,7 +329,11 @@ export function KanbanBoard({
                               pergunta "de quem é isto?". */}
                           {task.assignee ? (
                             <span className="ml-auto flex items-center">
-                              <Avatar name={task.assignee.name} size="h-6 w-6" textSize="text-[10px]" />
+                              {/* 28px, nao 24: o disco e a unica forma de
+                                  saber de quem e o cartao numa varredura da
+                                  coluna, e com duas iniciais em 10px ele
+                                  pedia aproximacao. */}
+                              <Avatar name={task.assignee.name} size="h-7 w-7" textSize="text-[11px]" />
                               {/* As iniciais não são um nome para quem ouve a tela. */}
                               <span className="sr-only">Responsável: {task.assignee.name}</span>
                             </span>
@@ -337,9 +341,9 @@ export function KanbanBoard({
                             <span
                               aria-hidden
                               title="Sem responsável"
-                              className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground/70"
+                              className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground/70"
                             >
-                              <UserRound className="h-3 w-3" />
+                              <UserRound className="h-3.5 w-3.5" />
                             </span>
                           )}
                         </div>

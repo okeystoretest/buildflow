@@ -458,7 +458,7 @@ export function OkrsSection({ reportId, okrs }: { reportId: string; okrs: readon
   );
 }
 
-/* --------------------------------------- aba 6 — Pauta do one-on-one */
+/* ------------------------------------------------- aba 6 — One-on-one */
 
 export function AgendaSection({ reportId, agenda }: { reportId: string; agenda: readonly AgendaItem[] }) {
   const enviar = useCallback(
@@ -471,7 +471,7 @@ export function AgendaSection({ reportId, agenda }: { reportId: string; agenda: 
 
   return (
     <SectionCard
-      title="Pauta do one-on-one"
+      title="One-on-one"
       description="As perguntas da conversa de sexta. Respondidas antes da reunião, elas viram pauta em vez de improviso."
       onSave={secao.salvar}
       sujo={secao.sujo}

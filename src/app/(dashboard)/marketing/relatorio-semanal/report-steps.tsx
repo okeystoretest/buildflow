@@ -18,7 +18,7 @@ export const PASSOS = [
   { id: "metricas", label: "3 · Canais e métricas" },
   { id: "okrs", label: "4 · OKRs" },
   { id: "bloqueios", label: "5 · Bloqueios" },
-  { id: "pauta", label: "6 · Pauta" },
+  { id: "pauta", label: "6 · One-on-one" },
 ] as const;
 
 /**
