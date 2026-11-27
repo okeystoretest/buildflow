@@ -263,8 +263,16 @@ export function AtividadeModal({
 
       {/* `kanban-scroll` e não a barra do sistema: é a barra da casa em toda
           área que rola. O formulário é alto e o modal não pode crescer além da
-          janela. */}
-      <div className="kanban-scroll max-h-[65vh] space-y-3 overflow-y-auto pr-1">
+          janela.
+
+          `p-1` COM `-mx-1`: o anel de foco dos campos fica 3px FORA da borda
+          (`ring-2` + `ring-offset-1`), e uma área que rola recorta no limite do
+          seu preenchimento. Com padding só à direita, o anel do campo em foco
+          saía cortado à esquerda e embaixo — era isso que parecia borda vazando
+          (visto na tela em 27/11/2026). O padding dá os 3px de que o anel
+          precisa, e a margem negativa devolve o alinhamento com o cabeçalho e
+          o rodapé do modal, que ficam fora desta caixa. */}
+      <div className="kanban-scroll -mx-1 max-h-[65vh] space-y-3 overflow-y-auto p-1">
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between gap-2">
             <Label htmlFor="atividade-titulo">Título</Label>

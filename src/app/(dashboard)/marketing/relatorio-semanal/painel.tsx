@@ -10,7 +10,6 @@ import { Pagination } from "@/components/shared/pagination";
 import type { WeeklyReportDetail, WeeklyReportListItem } from "@/lib/relatorio-semanal-data";
 import type { KanbanSummary, MarketingTaskItem, TaskPerson } from "@/lib/relatorio-semanal-math";
 import { KanbanBoard } from "./kanban-board";
-import { KanbanSummaryPanel } from "./kanban-summary";
 import { NewReportModal } from "./new-report-modal";
 import { ReportCard } from "./report-card";
 import { ReportEditor } from "./report-editor";
@@ -119,12 +118,13 @@ export function Painel({
           </div>
         ))}
 
-      {vista === "kanban" && (
-        <div className="space-y-5">
-          <KanbanBoard tasks={tasks} summary={summary} people={people} />
-          <KanbanSummaryPanel summary={summary} />
-        </div>
-      )}
+      {/* SÓ O QUADRO. As duas tabelas de resumo ("Tarefas por status" e
+          "Categoria × status") saíram em 27/11/2026, a pedido do dono: os
+          números que importam já estão nos cinco quadrinhos do topo do quadro,
+          e a contagem por coluna está no cabeçalho de cada coluna. As tabelas
+          repetiam isso embaixo, custavam uma gaveta para ninguém abrir, e a de
+          categoria era a única coisa na tela que precisava rolar de lado. */}
+      {vista === "kanban" && <KanbanBoard tasks={tasks} summary={summary} people={people} />}
 
       {novo && (
         <NewReportModal onClose={() => setNovo(false)} />

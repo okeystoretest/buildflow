@@ -80,12 +80,16 @@ export function FiltroResponsavel({
             </Button>
           </div>
 
+          {/* A lista rola com `p-1` e `-mx-1` pelo mesmo motivo do formulário
+              de atividade: o anel de foco fica 3px fora da borda e uma área que
+              rola recorta no limite do preenchimento, cortando o anel à
+              esquerda. */}
           {nomes.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               Nenhuma atividade com responsável neste período.
             </p>
           ) : (
-            <div className="kanban-scroll max-h-[50vh] space-y-1 overflow-y-auto pr-1">
+            <div className="kanban-scroll -mx-1 max-h-[50vh] space-y-1 overflow-y-auto p-1">
               {nomes.map((nome) => {
                 const marcado = escolha.includes(nome);
                 return (

@@ -140,11 +140,6 @@ export interface KanbanSummary {
   published: number;
   overdue: number;
   byStatus: readonly { status: MarketingTaskStatus; count: number; share: number }[];
-  byCategory: readonly {
-    category: MarketingTaskCategory;
-    counts: Readonly<Record<MarketingTaskStatus, number>>;
-    total: number;
-  }[];
 }
 
 export const TASK_STATUSES: readonly MarketingTaskStatus[] = [
@@ -312,20 +307,6 @@ export function resumirKanban(tasks: readonly MarketingTaskItem[]): KanbanSummar
     porStatus.set(t.status, (porStatus.get(t.status) ?? 0) + 1);
   }
 
-  const byCategory = TASK_CATEGORIES.map((category) => {
-    const counts = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<
-      MarketingTaskStatus,
-      number
-    >;
-    let soma = 0;
-    for (const t of tasks) {
-      if (t.category !== category) continue;
-      counts[t.status] += 1;
-      soma += 1;
-    }
-    return { category, counts, total: soma };
-  });
-
   return {
     total,
     published: porStatus.get("PUBLICADO") ?? 0,
@@ -334,7 +315,6 @@ export function resumirKanban(tasks: readonly MarketingTaskItem[]): KanbanSummar
       const count = porStatus.get(status) ?? 0;
       return { status, count, share: total === 0 ? 0 : count / total };
     }),
-    byCategory,
   };
 }
 

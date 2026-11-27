@@ -134,15 +134,6 @@ check("...e os atrasados", resumo.overdue, 1);
 const soma = resumo.byStatus.reduce((acc, linha) => acc + linha.share, 0);
 check("as fatias de status somam 1", Math.abs(soma - 1) < 1e-9, true);
 
-const conteudo = resumo.byCategory.find((c) => c.category === "CONTEUDO");
-check("a matriz categoria x status conta a categoria", conteudo?.total, 2);
-check("...e separa por status dentro dela", [conteudo?.counts.BACKLOG, conteudo?.counts.A_FAZER, conteudo?.counts.PUBLICADO], [1, 1, 0]);
-
-// Toda categoria aparece, inclusive a vazia: a matriz da planilha tinha as
-// cinco linhas sempre, e uma linha que desaparece esconde que ninguém está
-// trabalhando naquela frente.
-check("as cinco categorias aparecem sempre", resumo.byCategory.length, 5);
-check("...inclusive a que esta vazia", resumo.byCategory.find((c) => c.category === "PROCESSO")?.total, 0);
 
 const vazio = resumirKanban([]);
 check("quadro vazio: total zero", vazio.total, 0);
