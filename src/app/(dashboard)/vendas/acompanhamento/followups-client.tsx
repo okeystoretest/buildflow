@@ -1,17 +1,16 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Pencil, Play, Trash2, X } from "lucide-react";
+import { Check, Pencil, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Pagination } from "@/components/shared/pagination";
 import { Modal } from "@/components/shared/modal";
 import { useFilterQuery } from "@/hooks/use-filter-query";
-import { createFollowUp, updateFollowUp, deleteFollowUp } from "@/lib/actions/followups";
+import { deleteFollowUp } from "@/lib/actions/followups";
 import { createTask, moveTask } from "@/lib/actions/tasks";
 import { Cronometro } from "@/components/shared/cronometro";
 import {
@@ -22,13 +21,10 @@ import {
   type TarefaAtiva,
 } from "@/lib/followup-kanban";
 import { KanbanFollowUps } from "./kanban-followups";
+import { FollowUpFormModal } from "./followup-form-modal";
 import {
-  FOLLOWUP_STATUSES,
   FOLLOWUP_STATUS_LABEL,
   FOLLOWUP_KIND_LABEL,
-  MIN_BUSCA_COLABORADOR,
-  MAX_TEXTO,
-  MAX_TOPICO,
   type FollowUpKindValue,
 } from "@/lib/validations/followup";
 
@@ -147,185 +143,6 @@ function PlanoDeAcao({
   );
 }
 
-/**
- * `resize-none`: a alça de arrastar do canto é o padrão do navegador em todo
- * `<textarea>`, e com nove campos empilhados puxar um deles empurra o resto do
- * formulário para baixo — o campo que a pessoa estava lendo sai do lugar.
- * Decisão do dono em 18/11/2026: os campos não mudam de tamanho. O teto de
- * caracteres (`MAX_TEXTO`) existe pelo mesmo motivo, e é o que torna a caixa
- * fixa suficiente: o texto rola dentro dela em vez de não caber.
- *
- * Mesma escolha do `delay-reason-modal`, que já é assim.
- *
- * `kanban-scroll` é consequência direta disso: caixa fixa faz o texto rolar por
- * dentro, e a barra que apareceria é a padrão do sistema — 15px, com setas nas
- * pontas, dentro de um campo de 78px de altura. A classe da casa a deixa com
- * 6px, trilho transparente e a cor da borda, escurecendo só enquanto o campo
- * está em foco. É a mesma barra das tabelas do Painel.
- */
-const CAMPO =
-  "kanban-scroll w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm";
-
-function Texto({
-  label,
-  help,
-  value,
-  onChange,
-  rows = 3,
-  max = MAX_TEXTO,
-}: {
-  label: string;
-  help?: string;
-  value: string;
-  onChange: (v: string) => void;
-  rows?: number;
-  /** Teto em caracteres. O MESMO do schema — ver `MAX_TEXTO`. */
-  max?: number;
-}) {
-  // O AVISO SO APARECE PERTO DO TETO (ultimo quinto). Oito campos com contador
-  // permanente poem oito numeros a competir com os rotulos, num formulario cuja
-  // tarefa e escrever; e o teto e tao alto que o numero seria decoracao em 99%
-  // das vezes. Mas ele PRECISA aparecer antes de o `maxLength` travar a tecla:
-  // digitacao que para de responder sem explicacao e o pior dos dois mundos.
-  const restante = max - value.length;
-  const perto = restante <= max / 5;
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      <textarea
-        className={CAMPO}
-        rows={rows}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        maxLength={max}
-      />
-      <div className="flex items-start justify-between gap-3">
-        {help ? <p className="text-xs text-muted-foreground">{help}</p> : <span />}
-        {perto &&
-          (restante > 0 ? (
-            <p className="shrink-0 font-data text-xs text-muted-foreground">
-              {restante.toLocaleString("pt-BR")} caracteres restantes
-            </p>
-          ) : (
-            // `role="status"` so no estado de LIMITE, que acontece uma vez: num
-            // contador a cada tecla, a regiao viva viraria tagarelice no leitor
-            // de tela. Tom 700/300, os que passam os 4.5:1 da WCAG AA.
-            <p role="status" className="shrink-0 text-xs font-medium text-rose-700 dark:text-rose-300">
-              Limite de {max.toLocaleString("pt-BR")} caracteres atingido.
-            </p>
-          ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Busca do colaborador por digitação, com o mínimo de caracteres que a
- * especificação pede (cinco).
- *
- * FILTRA NO NAVEGADOR, e isto é correto aqui: a lista inteira de usuários
- * ativos são algumas dezenas de nomes, que já vêm com a página. Uma rota de
- * busca no servidor existiria para resolver um volume que esta tela não tem —
- * ao contrário do cadastro de clientes, que tem dezenas de milhares e por isso
- * usa o `CustomerCombobox`.
- */
-function BuscaColaborador({
-  colaboradores,
-  value,
-  onChange,
-}: {
-  colaboradores: ColaboradorOpt[];
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  const selecionado = colaboradores.find((c) => c.id === value) ?? null;
-  const [termo, setTermo] = useState("");
-
-  const achados = useMemo(() => {
-    const t = termo.trim().toLowerCase();
-    if (t.length < MIN_BUSCA_COLABORADOR) return [];
-    return colaboradores.filter((c) => c.name.toLowerCase().includes(t)).slice(0, 10);
-  }, [termo, colaboradores]);
-
-  if (selecionado) {
-    return (
-      <div className="space-y-1.5">
-        <Label>Colaborador</Label>
-        <div className="flex h-10 items-center justify-between rounded-lg border border-input bg-secondary/40 px-3 text-sm">
-          <span className="font-medium">{selecionado.name}</span>
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              onChange("");
-              setTermo("");
-            }}
-            aria-label="Trocar colaborador"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const curto = termo.trim().length > 0 && termo.trim().length < MIN_BUSCA_COLABORADOR;
-
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor="busca-colaborador">Colaborador</Label>
-      <Input
-        id="busca-colaborador"
-        placeholder={`Digite ${MIN_BUSCA_COLABORADOR} letras do nome...`}
-        value={termo}
-        onChange={(e) => setTermo(e.target.value)}
-        autoComplete="off"
-      />
-      {curto && (
-        <p className="text-xs text-muted-foreground">
-          Faltam {MIN_BUSCA_COLABORADOR - termo.trim().length} caractere(s) para buscar.
-        </p>
-      )}
-      {achados.length > 0 && (
-        <ul className="max-h-48 overflow-y-auto rounded-lg border border-border bg-card">
-          {achados.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-secondary/60"
-                onClick={() => {
-                  onChange(c.id);
-                  setTermo("");
-                }}
-              >
-                <span>{c.name}</span>
-                <span className="text-xs text-muted-foreground">{c.detalhe}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {!curto && termo.trim().length >= MIN_BUSCA_COLABORADOR && achados.length === 0 && (
-        <p className="text-xs text-muted-foreground">Nenhum colaborador com esse nome.</p>
-      )}
-    </div>
-  );
-}
-
-const VAZIO = {
-  collaboratorId: "",
-  heldOn: "",
-  strengths: "",
-  improvement: "",
-  collaboratorView: "",
-  actionPlan: "",
-  notes: "",
-  performance: "",
-  status: "NAO_INICIADO" as (typeof FOLLOWUP_STATUSES)[number],
-  topic: "",
-  support: "",
-  reviewOn: "",
-};
 
 export function FollowUpsClient({
   kind,
@@ -373,10 +190,15 @@ export function FollowUpsClient({
   const anoAtual = new Date().getFullYear();
   const anos = Array.from({ length: 5 }, (_, i) => anoAtual - i);
   const [pending, start] = useTransition();
-  // A data já nasce preenchida com hoje (especificação), e segue editável:
-  // a conversa de sexta às vezes é registrada na segunda.
-  const [f, setF] = useState({ ...VAZIO, heldOn: hoje });
-  const [editId, setEditId] = useState<string | null>(null);
+  /**
+   * O formulário: `"novo"` ou o id do registro em edição. `null` = fechado.
+   *
+   * Ele ficava fixo no topo da aba e virou modal em 27/11/2026 — por isso o
+   * estado é só "qual modal está aberto", e não os onze campos: eles moraram
+   * aqui enquanto o formulário era parte da tela, e agora vivem dentro de
+   * `FollowUpFormModal`, que nasce e morre com ele.
+   */
+  const [formulario, setFormulario] = useState<"novo" | string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
@@ -437,234 +259,29 @@ export function FollowUpsClient({
       router.refresh();
     });
   }
-  const set = (k: keyof typeof VAZIO, v: string) => setF((p) => ({ ...p, [k]: v }));
 
-  function limpar() {
-    setF({ ...VAZIO, heldOn: hoje });
-    setEditId(null);
-    setError(null);
-  }
-
-  function salvar() {
-    setError(null);
-    setMsg(null);
-    const payload = { ...f, kind };
-    start(async () => {
-      const res = editId
-        ? await updateFollowUp({ ...payload, id: editId })
-        : await createFollowUp(payload);
-      if (res.ok) {
-        limpar();
-        setMsg(editId ? "Acompanhamento atualizado." : "Acompanhamento registrado.");
-        router.refresh();
-      } else {
-        // `fieldErrors` traz a mensagem do campo que faltou; sem ela o usuário
-        // via só "Dados inválidos." e tinha de adivinhar qual campo era.
-        const primeiro = Object.values(res.fieldErrors ?? {})[0]?.[0];
-        setError(primeiro ?? res.error);
-      }
-    });
-  }
-
-  function editar(r: FollowUpRow) {
-    setEditId(r.id);
-    setError(null);
-    setMsg(null);
-    setF({
-      collaboratorId: r.collaboratorId,
-      heldOn: r.heldOn,
-      strengths: r.strengths,
-      improvement: r.improvement,
-      collaboratorView: r.collaboratorView,
-      actionPlan: r.actionPlan,
-      notes: r.notes ?? "",
-      performance: r.performance ?? "",
-      status: r.status ?? "NAO_INICIADO",
-      topic: r.topic ?? "",
-      support: r.support ?? "",
-      reviewOn: r.reviewOn ?? "",
-    });
-    // O formulário fica no topo da aba; sem isto, em telas pequenas o clique em
-    // "editar" parece não ter feito nada.
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+  /** Abre o formulário em edição. O modal é quem carrega os campos. */
+  const editar = (r: FollowUpRow) => setFormulario(r.id);
 
   function excluir(id: string) {
     start(async () => {
       const res = await deleteFollowUp(id);
       setConfirmDel(null);
       if (res.ok) {
-        if (editId === id) limpar();
+        // A ficha fecha junto: o registro que ela mostrava não existe mais, e
+        // o `find` devolveria `undefined` no próximo desenho de qualquer jeito.
+        setAbertoId(null);
+        setFormulario((atual) => (atual === id ? null : atual));
         router.refresh();
       } else setError(res.error);
     });
   }
 
   return (
-    // FORMULÁRIO EM CIMA E REGISTROS EMBAIXO (pedido do dono, 17/11/2026), com
-    // a página de largura limitada: o formulário volta a ter os três campos na
-    // mesma linha, e nada varre os 1900px de um monitor largo.
-    //
-    // `max-w-5xl` (1024px) e não menos: a tabela de registros tem
-    // `min-w-[720px]`, então uma folha mais estreita já nasceria rolando na
-    // horizontal.
+    // O QUADRO OCUPA A TELA. O formulário saiu daqui para um modal
+    // (especificação de 27/11/2026): dez campos de texto longo empurravam as
+    // colunas para baixo da dobra, e quem abre um Kanban vem mexer em cartão.
     <div className="w-full space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {editId ? "Editar registro" : umAum ? "Novo One-on-One" : "Novo Acompanhamento Quinzenal"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <BuscaColaborador
-              colaboradores={colaboradores}
-              value={f.collaboratorId}
-              onChange={(id) => set("collaboratorId", id)}
-            />
-            <div className="space-y-1.5">
-              <Label htmlFor="held-on">{umAum ? "Data de Realização" : "Data do Feedback"}</Label>
-              <Input
-                id="held-on"
-                type="date"
-                value={f.heldOn}
-                onChange={(e) => set("heldOn", e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Gestor Responsável pelo Suporte</Label>
-              <div className="flex h-10 items-center rounded-lg border border-input bg-secondary/40 px-3 text-sm text-muted-foreground">
-                {editId ? "mantém quem conduziu" : gestorNome}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Registrado automaticamente: quem preenche o formulário.
-              </p>
-            </div>
-          </div>
-
-          {umAum ? (
-            <Texto
-              label="Métricas e Indicadores de Desempenho"
-              help="Atingimento de metas, postura, pontualidade e qualidade no atendimento."
-              value={f.performance}
-              onChange={(v) => set("performance", v)}
-              rows={4}
-            />
-          ) : (
-            <Texto
-              label="Tema Central da Conversa"
-              help="Assunto principal, projeto, desafio ou foco do encontro."
-              max={MAX_TOPICO}
-              value={f.topic}
-              onChange={(v) => set("topic", v)}
-              rows={2}
-            />
-          )}
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Texto
-              label={umAum ? "Reconhecimento e Pontos Fortes" : "Forças em Evidência"}
-              help={
-                umAum
-                  ? "Um elogio fundamentado em fatos concretos da atuação recente."
-                  : "Competências, entregas de destaque e comportamentos positivos do período."
-              }
-              value={f.strengths}
-              onChange={(v) => set("strengths", v)}
-            />
-            <Texto
-              label={umAum ? "Oportunidades de Desenvolvimento" : "Ponto de Desenvolvimento"}
-              help="O que precisa de aprimoramento ou correção de rota."
-              value={f.improvement}
-              onChange={(v) => set("improvement", v)}
-            />
-            <Texto
-              label={umAum ? "Perspectiva do Colaborador" : "Reflexão do Colaborador (Frase)"}
-              help="Nas palavras dele, o mais fiel possível."
-              value={f.collaboratorView}
-              onChange={(v) => set("collaboratorView", v)}
-            />
-            <Texto
-              label={umAum ? "Plano de Ação Semanal" : "Plano de Ação Definido"}
-              help={
-                umAum
-                  ? "Uma meta prática e de curto prazo até o próximo acompanhamento."
-                  : "Ações práticas e etapas acordadas para o próximo período."
-              }
-              value={f.actionPlan}
-              onChange={(v) => set("actionPlan", v)}
-            />
-          </div>
-
-          {/* STATUS NOS DOIS TIPOS (pedido do dono, 17/11/2026): é o campo que o
-              filtro "Situação" e o histórico leem. Registro quinzenal gravado
-              antes disto tem status nulo no banco e a lista o lê como "Não
-              Iniciado" — nenhuma migration, a coluna já aceitava. */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="status">Status de Evolução</Label>
-              <select
-                id="status"
-                className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                value={f.status}
-                onChange={(e) => set("status", e.target.value)}
-              >
-                {FOLLOWUP_STATUSES.map((s) => (
-                  <option key={s} value={s}>{FOLLOWUP_STATUS_LABEL[s]}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {!umAum && (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <Texto
-                label="Apoio Necessário"
-                help="Recursos, treinamentos ou suporte da liderança para viabilizar o plano."
-                value={f.support}
-                onChange={(v) => set("support", v)}
-              />
-              <div className="space-y-1.5">
-                <Label htmlFor="review-on">Prazo de Reavaliação</Label>
-                <Input
-                  id="review-on"
-                  type="date"
-                  value={f.reviewOn}
-                  onChange={(e) => set("reviewOn", e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Data limite para verificar o progresso das ações.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <Texto
-            label={umAum ? "Considerações Gerais" : "Observações"}
-            help="Opcional: acordos paralelos, intercorrências e recados que merecem registro."
-            value={f.notes}
-            onChange={(v) => set("notes", v)}
-            rows={2}
-          />
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          {/* `motorista-text` (azul) e a cor de SUCESSO das outras telas, nao
-              um descuido: o rosa do Comercial fica perto demais do vermelho de
-              erro logo acima para dizer "deu certo". */}
-          {msg && <p className="text-sm text-motorista-text">{msg}</p>}
-
-          <div className="flex gap-2">
-            <Button variant="brand" onClick={salvar} disabled={pending || !f.collaboratorId}>
-              {editId ? "Salvar alterações" : "Registrar"}
-            </Button>
-            {editId && (
-              <Button variant="outline" onClick={limpar} disabled={pending}>
-                Cancelar edição
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader className="gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -732,10 +349,7 @@ export function FollowUpsClient({
             kind={kind}
             hoje={hoje}
             onAbrir={setAbertoId}
-            onNovo={() => {
-              limpar();
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
+            onNovo={() => setFormulario("novo")}
           />
           <div className="mt-3">
             <Pagination page={pagina} perPage={porPagina} total={total} label="registros" />
@@ -816,6 +430,16 @@ export function FollowUpsClient({
                 </div>
               </div>
               <Bloco titulo="Observações" texto={aberto.notes} />
+
+              {/* O aviso do Plano de Ação mora aqui desde 27/11/2026: ele
+                  ficava no rodapé do formulário, que saiu da tela, e "Iniciar"
+                  é um botão DESTA ficha — a resposta dele tem de aparecer onde
+                  o clique aconteceu, não numa tela que já fechou. */}
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              {/* `motorista-text` (azul) e a cor de SUCESSO das outras telas,
+                  nao um descuido: o rosa do Comercial fica perto demais do
+                  vermelho de erro logo acima para dizer "deu certo". */}
+              {msg && <p className="text-sm text-motorista-text">{msg}</p>}
             </div>
 
             {/* Editar no rodapé, como o cartão de pedido faz: a ficha é de
@@ -870,6 +494,23 @@ export function FollowUpsClient({
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* O FORMULÁRIO, em modal (especificação de 27/11/2026).
+          A `key` o remonta a cada registro: o estado dele vive em
+          inicializadores de `useState`, e sem ela abrir o segundo registro
+          mostraria os dados do primeiro. Mesma armadilha documentada no quadro
+          do Relatório Semanal. */}
+      {formulario && (
+        <FollowUpFormModal
+          key={formulario}
+          kind={kind}
+          registro={formulario === "novo" ? undefined : rows.find((r) => r.id === formulario)}
+          colaboradores={colaboradores}
+          hoje={hoje}
+          gestorNome={gestorNome}
+          onClose={() => setFormulario(null)}
+        />
       )}
     </div>
   );
