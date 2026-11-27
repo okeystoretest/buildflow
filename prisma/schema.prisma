@@ -1721,12 +1721,33 @@ model FollowUp {
   actionPlan       String
   /// Consideracoes Gerais / Observacoes. Opcional nos dois.
   notes            String?
+  /// Status de Evolucao — as COLUNAS do quadro Kanban, nos dois formularios
+  /// (27/11/2026; antes era so do One-on-One).
+  ///
+  /// ANULAVEL e assim fica: todo registro quinzenal gravado antes de
+  /// 17/11/2026 tem nulo, e nulo e LIDO como NAO_INICIADO na tela
+  /// (`colunaDe` em src/lib/followup-kanban.ts). Um UPDATE de migracao
+  /// trocaria dado antigo por nada: a coluna seria a mesma e o `OR` de
+  /// `filtroDeSituacao`, que existe por causa desses nulos, teria de ficar
+  /// de pe de todo jeito.
+  status           FollowUpStatus?
+
+  /// Instante em que o cronometro do card foi acionado; NULO = parado.
+  ///
+  /// TIMESTAMP, nao "HH:MM" como `DailyTask.startTime`: um acompanhamento
+  /// atravessa semanas e varios status, e hora sem data da tempo negativo na
+  /// virada do dia (ver o `shortcut` em followups-client.tsx).
+  ///
+  /// O tempo JA DECORRIDO nao mora aqui — mora em `FollowUpMovement.elapsedMs`,
+  /// uma linha por trecho contado. Este campo e so "esta contando desde".
+  timerStartedAt   DateTime?
+
+  /// Trilha de movimentacao do quadro: o historico E a medicao de tempo.
+  movements FollowUpMovement[]
 
   // --- so One-on-One --------------------------------------------------------
   /// Metricas e Indicadores de Desempenho.
   performance String?
-  /// Status de Evolucao. Padrao "Nao Iniciado" ate alteracao manual.
-  status      FollowUpStatus?
 
   // --- so Quinzenal ---------------------------------------------------------
   /// Tema Central da Conversa.
@@ -1741,6 +1762,60 @@ model FollowUp {
 
   @@index([collaboratorId, heldOn])
   @@index([kind, heldOn])
+}
+
+/// Trilha de movimentacao do quadro de Acompanhamento — e, na MESMA linha, a
+/// medicao do tempo.
+///
+/// UMA TABELA PARA AS DUAS EXIGENCIAS (especificacao de 27/11/2026): o dono
+/// pediu "historico de movimentacao como no Fluxo de Pedidos" e "calcular a
+/// duracao de execucao" como se fossem dois assuntos. Sao o mesmo registro: a
+/// linha que diz "saiu de Em Andamento para Entregue, por Fulano, as 14:30"
+/// e exatamente onde cabe "e ficou 1h20 em Em Andamento".
+///
+/// Por isso NAO existe coluna de acumulador, nem JSON de tempo por status, nem
+/// segunda tabela:
+///   - tempo no status X = SOMA de `elapsedMs` das linhas cujo `fromStatus` e X
+///   - duracao total     = SOMA de `elapsedMs` de todas as linhas
+///   - "voltou a um status anterior e a contagem prossegue de onde parou"
+///     (exigencia literal da especificacao) cai de graca: a volta gera uma
+///     linha nova, e a soma daquele status cresce sozinha.
+///
+/// Nunca se sobrescreve: o estado atual vive em `FollowUp.status` e a trilha
+/// inteira vive aqui. Mesmo arranjo de `Order.status` + `OrderStatusHistory` e
+/// de `Order.pieceStatus` + `PieceMovement`.
+model FollowUpMovement {
+  id         String   @id @default(cuid())
+  followUp   FollowUp @relation(fields: [followUpId], references: [id], onDelete: Cascade)
+  followUpId String
+
+  /// Nulo so na primeira movimentacao de um registro gravado antes de
+  /// 27/11/2026, que nunca teve status. Nos demais e o status de ONDE o card
+  /// saiu — e a chave pela qual o tempo e somado.
+  fromStatus FollowUpStatus?
+  toStatus   FollowUpStatus
+
+  /// Milissegundos contados NO `fromStatus` ate esta movimentacao.
+  ///
+  /// NULO significa "ninguem estava cronometrando", e e diferente de zero:
+  /// zero afirmaria que o trecho foi medido e durou nada. Quem le o tempo por
+  /// status ignora o nulo em vez de somar 0.
+  ///
+  /// Apurado SEMPRE no servidor, de `FollowUp.timerStartedAt` contra o relogio
+  /// do servidor. O cliente nunca envia duracao: relogio de navegador
+  /// adiantado gravaria tempo falso numa trilha de auditoria.
+  elapsedMs  Int?
+
+  /// Quem movimentou. Id E COPIA DO NOME, sem FK, como em
+  /// `SelectContractStepEvent`: a trilha tem de continuar legivel depois que a
+  /// pessoa sai da empresa, e sem join nenhum para renderizar a ficha.
+  changedById   String
+  changedByName String
+
+  createdAt DateTime @default(now())
+
+  @@index([followUpId, createdAt])
+  @@index([createdAt])
 }
 
 // ---------------------------------------------------------------------------
