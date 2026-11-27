@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/shared/modal";
+import { KpiNumero } from "@/components/shared/kpi-numero";
 import { excluirTarefa, moverTarefa } from "@/lib/actions/relatorio-semanal";
 import {
   TASK_STATUSES,
@@ -62,24 +63,12 @@ const PRIORITY_BADGE: Record<MarketingTaskItem["priority"], string> = {
   BAIXA: "border-border bg-muted text-muted-foreground",
 };
 
-/** Um número do topo do quadro. */
-function Numero({ rotulo, valor, destaque }: { rotulo: string; valor: number; destaque?: "ok" | "alerta" }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <p className="text-[11px] text-muted-foreground">{rotulo}</p>
-      <p
-        className={cn(
-          "mt-1 text-2xl font-bold tracking-tight",
-          destaque === "ok" && valor > 0 && "text-emerald-700 dark:text-emerald-300",
-          destaque === "alerta" && valor > 0 && "text-amber-700 dark:text-amber-300",
-          (!destaque || valor === 0) && "text-foreground",
-        )}
-      >
-        {valor}
-      </p>
-    </div>
-  );
-}
+/**
+ * O número do topo do quadro mora em `shared/kpi-numero.tsx` desde
+ * 27/11/2026: o quadro do Acompanhamento usa os mesmos quadrinhos, e duas
+ * cópias divergiriam no primeiro ajuste de tom.
+ */
+const Numero = KpiNumero;
 
 export function KanbanBoard({
   tasks,

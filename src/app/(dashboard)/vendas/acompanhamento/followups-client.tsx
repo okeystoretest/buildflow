@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronRight, Pencil, Play, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Modal } from "@/components/shared/modal";
 import { useFilterQuery } from "@/hooks/use-filter-query";
 import { createFollowUp, updateFollowUp, deleteFollowUp } from "@/lib/actions/followups";
 import { createTask, moveTask } from "@/lib/actions/tasks";
+import { Cronometro } from "@/components/shared/cronometro";
 import { FOLLOWUP_STATUS_BADGE } from "@/lib/followup-kanban";
 import {
   FOLLOWUP_STATUSES,
@@ -94,22 +95,6 @@ function instanteDe(hhmm: string): number {
   const d = new Date();
   d.setHours(h, m, 0, 0);
   return d.getTime();
-}
-
-/** Contador que anda de segundo em segundo enquanto a tarefa está em andamento. */
-function Cronometro({ desde }: { desde: number }) {
-  const [agora, setAgora] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setAgora(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const seg = Math.max(0, Math.floor((agora - desde) / 1000));
-  const dd = (n: number) => String(n).padStart(2, "0");
-  return (
-    <span className="font-data tabular-nums" aria-live="off">
-      {dd(Math.floor(seg / 3600))}:{dd(Math.floor((seg % 3600) / 60))}:{dd(seg % 60)}
-    </span>
-  );
 }
 
 /** Um campo do registro aberto. Campo vazio não vira bloco vazio na tela. */
