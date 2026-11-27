@@ -171,13 +171,19 @@ function BuscaColaborador({
           Faltam {MIN_BUSCA_COLABORADOR - termo.trim().length} caractere(s) para buscar.
         </p>
       )}
+      {/* `kanban-scroll`: a barra da casa, como em toda área que rola. */}
       {achados.length > 0 && (
-        <ul className="max-h-48 overflow-y-auto rounded-lg border border-border bg-card">
+        <ul className="kanban-scroll max-h-48 overflow-y-auto rounded-lg border border-border bg-card">
           {achados.map((c) => (
             <li key={c.id}>
+              {/* O resultado só tinha `hover`: quem chega por TECLADO não via
+                  onde estava. E o anel é `ring-inset` de propósito — a linha
+                  ocupa a largura inteira da lista, que rola, e um anel por
+                  FORA da borda seria recortado pelos quatro lados. Por dentro
+                  ele aparece inteiro sem precisar de folga nenhuma. */}
               <button
                 type="button"
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-secondary/60"
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 onClick={() => {
                   onChange(c.id);
                   setTermo("");
