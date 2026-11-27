@@ -234,7 +234,13 @@ export function KanbanBoard({
                     shortcut: cartão muito mais alto que o normal (título de
                     duas linhas, prazo e evidência) mostra 4 em vez de 5; se o
                     cartão mudar de forma, refazer a conta. */}
-                <div className="kanban-scroll max-h-[600px] min-h-[120px] space-y-2 overflow-y-auto p-2">
+                {/* `relative` NÃO é enfeite: sem ele a coluna rola por dentro
+                    mas os cartões recortados continuam contando para a área
+                    rolável do DOCUMENTO, e a página ganha algumas centenas de
+                    pixels de nada embaixo do rodapé — medido em 27/11/2026,
+                    342px nesta tela. O contêiner de rolagem precisa ser bloco
+                    de contenção para conter o que recorta. */}
+                <div className="kanban-scroll relative max-h-[600px] min-h-[120px] space-y-2 overflow-y-auto p-2">
                   {coluna.length === 0 ? (
                     <div
                       className={cn(

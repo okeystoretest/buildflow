@@ -17,10 +17,20 @@ import { useEffect, useState } from "react";
  *
  * `aria-live="off"` de propósito: um leitor de tela anunciando o segundo que
  * passa não deixaria ouvir mais nada da página.
+ *
+ * O PRIMEIRO DESENHO É SEMPRE 00:00:00, e isso conserta um erro de
+ * hidratação: com `Date.now()` no inicializador, o servidor renderiza "14",
+ * o cliente renderiza "15" um instante depois, e o React joga fora a árvore
+ * inteira reclamando no console. Enquanto o cronômetro só existia dentro de um
+ * modal — que nasce depois do clique, no cliente — ninguém via; ao entrar no
+ * CARTÃO, que é renderizado no servidor, o erro passou a acontecer em todo
+ * cartão contando. Partindo de `desde`, os dois lados concordam, e o `useEffect`
+ * acerta o relógio no mesmo instante em que monta.
  */
 export function Cronometro({ desde }: { desde: number }) {
-  const [agora, setAgora] = useState(() => Date.now());
+  const [agora, setAgora] = useState(desde);
   useEffect(() => {
+    setAgora(Date.now());
     const t = setInterval(() => setAgora(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);

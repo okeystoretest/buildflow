@@ -222,7 +222,12 @@ export function KanbanFollowUps({
                   </span>
                 </header>
 
-                <div className={cn("kanban-scroll min-h-[120px] space-y-2 overflow-y-auto p-2", ALTURA_DA_COLUNA)}>
+                {/* `relative` NÃO é enfeite: sem ele a coluna rola por dentro
+                    mas os cartões recortados continuam contando para a área
+                    rolável do DOCUMENTO, e a página ganha centenas de pixels
+                    de nada embaixo do rodapé. O contêiner de rolagem precisa
+                    ser bloco de contenção para conter o que recorta. */}
+                <div className={cn("kanban-scroll relative min-h-[120px] space-y-2 overflow-y-auto p-2", ALTURA_DA_COLUNA)}>
                   {coluna.length === 0 ? (
                     <div
                       className={cn(
