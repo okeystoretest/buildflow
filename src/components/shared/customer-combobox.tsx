@@ -139,8 +139,12 @@ export function CustomerCombobox({
             className="flex h-10 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           />
 
+          {/* As opções têm anel de foco `ring-inset`, e não só `hover`: quem
+              percorre a lista pelo TECLADO precisa ver onde está. Por DENTRO
+              porque cada opção ocupa a largura inteira de uma lista que rola —
+              um anel por fora seria recortado pelos quatro lados. */}
           {open && (
-            <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+            <div className="kanban-scroll absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
               {loading && (
                 <p className="px-3 py-2 text-sm text-muted-foreground">Buscando...</p>
               )}
@@ -160,7 +164,7 @@ export function CustomerCombobox({
                     setOpen(false);
                     onCreateNew(query.trim());
                   }}
-                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm font-medium text-vendas-text transition-colors hover:bg-secondary"
+                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm font-medium text-vendas-text transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <Plus className="h-3.5 w-3.5 shrink-0" />
                   Novo cliente
@@ -172,7 +176,7 @@ export function CustomerCombobox({
                   key={c.id}
                   type="button"
                   onClick={() => pick(c)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   {value === c.id && <Check className="h-3.5 w-3.5 shrink-0 text-vendas-text" />}
                   <span className="font-data shrink-0 text-xs text-muted-foreground">{c.code}</span>

@@ -103,7 +103,7 @@ export function DriverFilter({
           <div
             id="lista-motoristas"
             role="listbox"
-            className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-lg"
+            className="kanban-scroll absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-lg"
           >
             <Opcao
               label="Todos os motoristas"
@@ -130,6 +130,14 @@ export function DriverFilter({
   );
 }
 
+/**
+ * Uma opção da lista.
+ *
+ * O anel de foco é `ring-inset`, e não só `hover`: quem percorre a lista pelo
+ * TECLADO precisa ver onde está. Por DENTRO porque a opção ocupa a largura
+ * inteira de uma lista que rola — um anel por fora seria recortado pelos
+ * quatro lados pela própria área de rolagem.
+ */
 function Opcao({
   label,
   ativo,
@@ -145,7 +153,7 @@ function Opcao({
       role="option"
       aria-selected={ativo}
       onClick={onClick}
-      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       <span className="truncate">{label}</span>
       {ativo && <Check className="h-4 w-4 shrink-0 text-motorista-text" aria-hidden />}
