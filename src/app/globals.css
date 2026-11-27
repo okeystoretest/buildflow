@@ -141,7 +141,21 @@
 
   * { @apply border-border; }
 
-  html { color-scheme: light dark; }
+  /* O ESQUEMA NATIVO SEGUE O TEMA DO APP, não o do sistema operacional.
+
+     `color-scheme: light dark` dizia ao navegador "aceito os dois" e deixava
+     ele escolher pelo SISTEMA. Só que o tema daqui é a classe `.dark` no
+     `<html>`, que o sistema não conhece: com o app no claro e o Windows no
+     escuro, o `<input type="date">` desenhava no esquema escuro — e o ícone
+     do calendário, branco, sumia dentro do campo claro. O contrário também:
+     app escuro e sistema claro davam ícone preto sobre campo escuro.
+     Encontrado nos filtros de Período em 27/11/2026.
+
+     Declarando um esquema por tema, todo controle NATIVO acompanha o app:
+     o ícone do calendário e do relógio, a lista suspensa do `<select>`, a
+     barra de rolagem padrão e o fundo do preenchimento automático. */
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
 
   /* ---- BASE DE TOQUE -------------------------------------------------
      O que separa "um site aberto no celular" de "um app". Nada disto
