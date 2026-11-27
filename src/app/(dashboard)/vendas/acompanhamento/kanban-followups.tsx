@@ -232,11 +232,14 @@ export function KanbanFollowUps({
                     >
                       <Inbox className="h-5 w-5 text-muted-foreground/60" aria-hidden />
                       <p className="text-[11px] leading-tight text-muted-foreground">
+                        {/* "Nenhum registro nesta coluna", e não "Nenhum em
+                            {status}": a preposição colide com o "Em" do rótulo
+                            em três dos cinco status ("Nenhum em em espera"). */}
                         {recebendo
                           ? "Solte aqui"
                           : resumo.porStatus[status] > 0
                             ? "Nenhum nesta página"
-                            : `Nenhum em ${FOLLOWUP_STATUS_LABEL[status].toLowerCase()}`}
+                            : "Nenhum registro nesta coluna"}
                       </p>
                     </div>
                   ) : (

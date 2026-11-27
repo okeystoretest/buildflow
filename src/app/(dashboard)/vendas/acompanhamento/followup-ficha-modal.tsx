@@ -221,15 +221,26 @@ export function FollowUpFichaModal({
   }
 
   /**
-   * Mover FECHA A FICHA antes de gravar: a resposta é o cartão aparecendo na
-   * coluna nova, e uma recusa do servidor vai para o aviso do quadro, que a
-   * ficha aberta esconderia. Mesma escolha do Relatório Semanal.
+   * Mover GRAVA PRIMEIRO e só então fecha a ficha.
+   *
+   * A ordem não é estética. Fechar antes desmonta este componente, e com ele a
+   * `useTransition` que carrega a chamada: o pedido nunca chega ao servidor e a
+   * tela não acusa nada — o cartão simplesmente continua na coluna de origem.
+   * Foi o que aconteceu no teste de tela em 27/11/2026.
+   *
+   * De quebra, uma recusa do servidor aparece aqui, na ficha que a pessoa está
+   * olhando, em vez de num aviso do quadro atrás do modal.
    */
   function mover(status: FollowUpStatusValue) {
-    onClose();
+    setError(null);
     start(async () => {
       const r = await moverFollowUp({ id: registro.id, status });
-      if (r.ok) router.refresh();
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      router.refresh();
+      onClose();
     });
   }
 
@@ -398,8 +409,8 @@ export function FollowUpFichaModal({
           </p>
           {registro.movements.length === 0 ? (
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Sem movimentações. O registro continua em {FOLLOWUP_STATUS_LABEL[atual].toLowerCase()}{" "}
-              desde que foi criado.
+              Sem movimentações. O registro continua na coluna{" "}
+              <strong>{FOLLOWUP_STATUS_LABEL[atual]}</strong> desde que foi criado.
             </p>
           ) : (
             <ul className="mt-1.5 space-y-1 text-sm">
@@ -422,11 +433,14 @@ export function FollowUpFichaModal({
                           <span className="font-medium">{FOLLOWUP_STATUS_LABEL[m.toStatus]}</span>
                         </>
                       )}
+                      {/* Só a duração: o status de origem é a primeira coisa
+                          da linha, e repeti-lo aqui dava "2min em em
+                          andamento" — a preposição colide com o "Em" do
+                          rótulo em três dos cinco status. */}
                       {m.elapsedMs !== null && (
                         <span className="text-muted-foreground">
                           {" "}
-                          · <span className="font-data">{formatarDuracao(m.elapsedMs)}</span> em{" "}
-                          {FOLLOWUP_STATUS_LABEL[colunaDe(m.fromStatus)].toLowerCase()}
+                          · <span className="font-data">{formatarDuracao(m.elapsedMs)}</span>
                         </span>
                       )}
                       <span className="text-muted-foreground"> · por {m.changedByName}</span>
