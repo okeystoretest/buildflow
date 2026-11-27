@@ -99,8 +99,13 @@ export function FollowUpsClient({
       <Card>
         <CardHeader className="gap-3 sm:flex-row sm:items-end sm:justify-between">
           <CardTitle>Registros</CardTitle>
+          {/* Cada filtro é uma LINHA FLEX, não um `space-y`: `Label` é um
+              `<label>` inline, então ele não empilha com o `<select>` — os dois
+              caem na mesma linha e, sem nada entre eles, o rótulo encosta na
+              borda do seletor. Em 390px isso lê como texto cortado
+              ("Situaçã|Todas"). Visto no navegador em 27/11/2026. */}
           <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <Label htmlFor="filtro-colab">Colaborador</Label>
               <select
                 id="filtro-colab"
@@ -120,7 +125,7 @@ export function FollowUpsClient({
 
                 Padrão "Todas" de propósito: um padrão "Em aberto" faria os
                 registros já entregues desaparecerem da tela sem ninguém pedir. */}
-            <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <Label htmlFor="filtro-situacao">Situação</Label>
               <select
                 id="filtro-situacao"
@@ -133,7 +138,7 @@ export function FollowUpsClient({
                 <option value="concluidos">Concluídos (histórico)</option>
               </select>
             </div>
-            <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <Label htmlFor="filtro-ano">Ano</Label>
               <select
                 id="filtro-ano"

@@ -68,7 +68,13 @@ export function KanbanSummaryPanel({ summary }: { summary: KanbanSummary }) {
       <div className="grid border-t border-border lg:grid-cols-2 lg:divide-x lg:divide-border">
         {/* Divisória entre as duas, e não uma moldura em cada: a gaveta já é a
             caixa, e caixa dentro de caixa com a mesma borda vira sujeira. */}
-        <section>
+        {/* `min-w-0` nos DOIS: um item de grade não encolhe abaixo do
+            conteúdo mínimo, e a tabela "Categoria × status" tem
+            `min-w-[480px]`. Sem isto a coluna inteira ia a 480px e a gaveta
+            transbordava a tela num celular de 390px — medido em 27/11/2026,
+            126px para fora. Com `min-w-0` a coluna encolhe e quem rola de lado
+            é só a tabela, dentro do seu próprio `overflow-x-auto`. */}
+        <section className="min-w-0">
           <Titulo>Tarefas por status</Titulo>
           <table className="w-full border-collapse">
             <thead className="sr-only">
@@ -94,7 +100,7 @@ export function KanbanSummaryPanel({ summary }: { summary: KanbanSummary }) {
           </table>
         </section>
 
-        <section className="border-t border-border lg:border-t-0">
+        <section className="min-w-0 border-t border-border lg:border-t-0">
           <Titulo>Categoria × status</Titulo>
           <div className="kanban-scroll relative overflow-x-auto">
             <table className="w-full min-w-[480px] border-collapse">

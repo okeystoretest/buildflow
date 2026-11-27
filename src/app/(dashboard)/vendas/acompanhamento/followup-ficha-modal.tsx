@@ -297,7 +297,7 @@ export function FollowUpFichaModal({
               type="button"
               onClick={() => !pending && onClose()}
               aria-label="Fechar"
-              className="rounded-lg px-1 text-2xl leading-none text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="-m-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-2xl leading-none text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               ×
             </button>
