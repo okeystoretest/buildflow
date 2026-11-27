@@ -13,6 +13,7 @@ import { Modal } from "@/components/shared/modal";
 import { useFilterQuery } from "@/hooks/use-filter-query";
 import { createFollowUp, updateFollowUp, deleteFollowUp } from "@/lib/actions/followups";
 import { createTask, moveTask } from "@/lib/actions/tasks";
+import { FOLLOWUP_STATUS_BADGE } from "@/lib/followup-kanban";
 import {
   FOLLOWUP_STATUSES,
   FOLLOWUP_STATUS_LABEL,
@@ -24,26 +25,11 @@ import {
 } from "@/lib/validations/followup";
 
 /**
- * Cor de cada status. VERMELHO SO em "Precisa de Revisao": e o unico que pede
- * acao de quem passa os olhos na lista, e um vermelho repartido entre tres
- * status nao aponta mais nada. "Em Espera" e ambar porque parou sem ser
- * problema, e "Nao Iniciado" fica neutro de proposito — ele e a AUSENCIA de
- * evolucao, e cinco cores competindo pela atencao e o mesmo que nenhuma.
- *
- * `outline` + par de tons, e nao as variantes do Badge: aquelas sao as cores de
- * SETOR do sistema, e usar "vendas" para "Entregue" amarraria o significado do
- * status a identidade do Comercial.
- *
- * Tom 800 no claro e 300 no escuro: sao os que passam os 4.5:1 da WCAG AA
- * contra o fundo /15 do proprio badge.
+ * O selo de status mora em `followup-kanban.ts`, ao lado do hexadecimal da
+ * bolinha da coluna: são o mesmo tom dito de dois jeitos, e em dois arquivos
+ * eles divergiam no primeiro ajuste.
  */
-const COR_DO_STATUS: Record<(typeof FOLLOWUP_STATUSES)[number], string> = {
-  NAO_INICIADO: "border-border text-muted-foreground",
-  EM_ANDAMENTO: "border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-300",
-  PRECISA_REVISAO: "border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-300",
-  EM_ESPERA: "border-amber-500/40 bg-amber-500/15 text-amber-800 dark:text-amber-300",
-  ENTREGUE: "border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
-};
+const COR_DO_STATUS = FOLLOWUP_STATUS_BADGE;
 
 export interface FollowUpRow {
   id: string;
