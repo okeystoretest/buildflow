@@ -1,4 +1,4 @@
-import { FOLLOWUP_STATUSES } from "@/lib/validations/followup";
+import { FOLLOWUP_STATUSES, type FollowUpKindValue } from "@/lib/validations/followup";
 
 /**
  * A matemática do quadro de Acompanhamento — tudo PURO, nada de banco.
@@ -56,6 +56,16 @@ export const FOLLOWUP_STATUS_BADGE: Record<FollowUpStatusValue, string> = {
   ENTREGUE: "border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
 };
 
+// ---------------------------------------------------------------------------
+// OS TIPOS DA TELA
+//
+// Moram aqui, e não no componente, porque desde 27/11/2026 três arquivos de
+// tela os compartilham (o quadro, o modal do formulário e a ficha). Com eles
+// declarados em `followups-client.tsx`, os outros dois importariam de lá e
+// `followups-client` importaria os componentes de volta — um ciclo que o
+// TypeScript tolera em tipos e que nenhum leitor tolera.
+// ---------------------------------------------------------------------------
+
 /** Uma linha da trilha, como a tela a recebe (datas já em texto ISO). */
 export interface MovementItem {
   id: string;
@@ -66,6 +76,46 @@ export interface MovementItem {
   /** Milissegundos contados no `fromStatus`; nulo = ninguém cronometrava. */
   elapsedMs: number | null;
   createdAt: string;
+}
+
+/** Um registro de acompanhamento, como a tela o recebe. */
+export interface FollowUpRow {
+  id: string;
+  kind: FollowUpKindValue;
+  collaboratorId: string;
+  collaboratorName: string;
+  managerName: string;
+  /** "YYYY-MM-DD" — já no fuso do negócio, formatado no servidor. */
+  heldOn: string;
+  strengths: string;
+  improvement: string;
+  collaboratorView: string;
+  actionPlan: string;
+  notes: string | null;
+  performance: string | null;
+  status: FollowUpStatusValue | null;
+  topic: string | null;
+  support: string | null;
+  reviewOn: string | null;
+  /** Instante ISO em que a contagem foi acionada; nulo = parada. */
+  timerStartedAt: string | null;
+  /** A trilha inteira do registro, em ordem cronológica. */
+  movements: MovementItem[];
+}
+
+export interface ColaboradorOpt {
+  id: string;
+  name: string;
+  /** Rótulo auxiliar na lista (papel / modelo de venda). */
+  detalhe: string;
+}
+
+/** Tarefa do gestor já em andamento hoje, para o cronômetro do plano retomar. */
+export interface TarefaAtiva {
+  id: string;
+  title: string;
+  /** "HH:MM" de quando foi iniciada. */
+  startTime: string | null;
 }
 
 /**
@@ -161,6 +211,12 @@ export interface FollowUpSummary {
   emEspera: number;
   entregues: number;
   reavaliacaoVencida: number;
+  /**
+   * Quantos registros há em cada coluna NO FILTRO — o "de 11" do topo da
+   * coluna. Sai do mesmo resumo, e não de um `groupBy` à parte, para que o
+   * cabeçalho da coluna e os KPIs nunca contem conjuntos diferentes.
+   */
+  porStatus: Record<FollowUpStatusValue, number>;
 }
 
 /**
@@ -181,16 +237,25 @@ export function resumirFollowUps(
   rows: readonly { status: FollowUpStatusValue | null; reviewOn: string | null }[],
   hoje: string,
 ): FollowUpSummary {
-  const conta = (s: FollowUpStatusValue) => rows.filter((r) => r.status === s).length;
+  const porStatus = Object.fromEntries(FOLLOWUP_STATUSES.map((s) => [s, 0])) as Record<
+    FollowUpStatusValue,
+    number
+  >;
+  // `colunaDe` e não `r.status`: o nulo dos quinzenais antigos tem de contar na
+  // coluna em que o quadro o desenha, senão o cabeçalho diria "0 de 0" numa
+  // coluna com cartões dentro.
+  for (const r of rows) porStatus[colunaDe(r.status)] += 1;
+
   return {
     total: rows.length,
-    emAndamento: conta("EM_ANDAMENTO"),
-    precisaRevisao: conta("PRECISA_REVISAO"),
-    emEspera: conta("EM_ESPERA"),
-    entregues: conta("ENTREGUE"),
+    emAndamento: porStatus.EM_ANDAMENTO,
+    precisaRevisao: porStatus.PRECISA_REVISAO,
+    emEspera: porStatus.EM_ESPERA,
+    entregues: porStatus.ENTREGUE,
     reavaliacaoVencida: rows.filter(
       (r) => r.reviewOn !== null && r.reviewOn < hoje && r.status !== "ENTREGUE",
     ).length,
+    porStatus,
   };
 }
 

@@ -109,6 +109,16 @@ check("nulo entra no total", r.total, 4);
 check("nulo nao conta como entregue", r.entregues, 1);
 check("em andamento conta so o proprio status", r.emAndamento, 1);
 check("reavaliacao vencida ignora o entregue", r.reavaliacaoVencida, 1);
+// A contagem por status sai do MESMO resumo, e nao de uma segunda consulta:
+// o topo da coluna e os KPIs tem de contar o mesmo conjunto, senao a tela
+// discorda de si mesma.
+check("o nulo cai na contagem de Nao Iniciado", r.porStatus.NAO_INICIADO, 1);
+check("a contagem por status cobre todos os cinco", Object.keys(r.porStatus).length, 5);
+check(
+  "a soma das colunas e o total",
+  Object.values(r.porStatus).reduce((a, b) => a + b, 0),
+  r.total,
+);
 check(
   "sem prazo nao vence",
   resumirFollowUps([{ status: "EM_ANDAMENTO", reviewOn: null }], "2026-11-27").reavaliacaoVencida,

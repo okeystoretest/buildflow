@@ -6,7 +6,12 @@ import { janelaDoMes, instanteNoFuso, FUSO_NEGOCIO } from "@/lib/rank-window";
 import type { Prisma, SalesModel } from "@prisma/client";
 import { AcompanhamentoFiltros } from "./filtros-client";
 import { AcompanhamentoPainel } from "./painel";
-import { FollowUpsClient, type FollowUpRow, type ColaboradorOpt } from "./followups-client";
+import { FollowUpsClient } from "./followups-client";
+import {
+  resumirFollowUps,
+  type ColaboradorOpt,
+  type FollowUpRow,
+} from "@/lib/followup-kanban";
 import { filtroDeSituacao, type FollowUpKindValue } from "@/lib/validations/followup";
 
 export const dynamic = "force-dynamic";
@@ -297,11 +302,37 @@ async function FormularioAba({
     include: {
       collaborator: { select: { name: true } },
       manager: { select: { name: true } },
+      // A trilha inteira do registro: ela é o histórico de movimentação da
+      // ficha E a medição de tempo do cartão. `asc` porque é uma linha do
+      // tempo, lida de cima para baixo.
+      movements: { orderBy: { createdAt: "asc" } },
     },
     orderBy: { heldOn: "desc" },
     skip: (pagina - 1) * POR_PAGINA,
     take: POR_PAGINA,
   });
+
+  // OS NÚMEROS DO QUADRO VARREM O FILTRO INTEIRO, não a página.
+  //
+  // O dono manteve a paginação de cinco no quadro (27/11/2026). Se os KPIs e o
+  // contador do topo da coluna contassem `registros`, a tela diria "Total de
+  // registros: 5" num ano com trinta, e "0" numa coluna cheia de cartões que
+  // estão na página seguinte.
+  //
+  // UMA consulta só, e não um `groupBy` à parte: os KPIs e a contagem por
+  // coluna saem do mesmo `resumirFollowUps`, então não há como os dois números
+  // discordarem.
+  const doFiltro = await prisma.followUp.findMany({
+    where,
+    select: { status: true, reviewOn: true },
+  });
+  const resumo = resumirFollowUps(
+    doFiltro.map((r) => ({
+      status: r.status,
+      reviewOn: r.reviewOn ? diaDoNegocio(r.reviewOn) : null,
+    })),
+    hoje,
+  );
 
   // Tarefas do gestor JA EM ANDAMENTO hoje. Existem para o cronometro
   // sobreviver ao recarregamento: o tempo e recalculado de `startTime`, que
@@ -337,6 +368,18 @@ async function FormularioAba({
     topic: r.topic,
     support: r.support,
     reviewOn: r.reviewOn ? diaDoNegocio(r.reviewOn) : null,
+    // ISO, e não `diaDoNegocio`: o cronômetro mede instantes, não dias. É
+    // deste campo que a contagem é recalculada depois de um F5 — por isso ela
+    // não morre no recarregamento.
+    timerStartedAt: r.timerStartedAt?.toISOString() ?? null,
+    movements: r.movements.map((m) => ({
+      id: m.id,
+      fromStatus: m.fromStatus,
+      toStatus: m.toStatus,
+      changedByName: m.changedByName,
+      elapsedMs: m.elapsedMs,
+      createdAt: m.createdAt.toISOString(),
+    })),
   }));
 
   return (
@@ -352,6 +395,7 @@ async function FormularioAba({
       pagina={pagina}
       porPagina={POR_PAGINA}
       total={total}
+      resumo={resumo}
       tarefasAtivas={tarefasAtivas}
     />
   );

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronRight, Pencil, Play, Trash2, X } from "lucide-react";
+import { Check, Pencil, Play, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,14 @@ import { useFilterQuery } from "@/hooks/use-filter-query";
 import { createFollowUp, updateFollowUp, deleteFollowUp } from "@/lib/actions/followups";
 import { createTask, moveTask } from "@/lib/actions/tasks";
 import { Cronometro } from "@/components/shared/cronometro";
-import { FOLLOWUP_STATUS_BADGE } from "@/lib/followup-kanban";
+import {
+  FOLLOWUP_STATUS_BADGE,
+  type ColaboradorOpt,
+  type FollowUpRow,
+  type FollowUpSummary,
+  type TarefaAtiva,
+} from "@/lib/followup-kanban";
+import { KanbanFollowUps } from "./kanban-followups";
 import {
   FOLLOWUP_STATUSES,
   FOLLOWUP_STATUS_LABEL,
@@ -31,41 +38,6 @@ import {
  * eles divergiam no primeiro ajuste.
  */
 const COR_DO_STATUS = FOLLOWUP_STATUS_BADGE;
-
-export interface FollowUpRow {
-  id: string;
-  kind: FollowUpKindValue;
-  collaboratorId: string;
-  collaboratorName: string;
-  managerName: string;
-  /** "YYYY-MM-DD" — já no fuso do negócio, formatado no servidor. */
-  heldOn: string;
-  strengths: string;
-  improvement: string;
-  collaboratorView: string;
-  actionPlan: string;
-  notes: string | null;
-  performance: string | null;
-  status: (typeof FOLLOWUP_STATUSES)[number] | null;
-  topic: string | null;
-  support: string | null;
-  reviewOn: string | null;
-}
-
-export interface ColaboradorOpt {
-  id: string;
-  name: string;
-  /** Rótulo auxiliar na lista (papel / modelo de venda). */
-  detalhe: string;
-}
-
-/** Tarefa do gestor já em andamento hoje, para o cronômetro retomar. */
-export interface TarefaAtiva {
-  id: string;
-  title: string;
-  /** "HH:MM" de quando foi iniciada. */
-  startTime: string | null;
-}
 
 /**
  * Título da tarefa a partir de uma linha do Plano de Ação.
@@ -367,6 +339,7 @@ export function FollowUpsClient({
   pagina,
   porPagina,
   total,
+  resumo,
   tarefasAtivas,
 }: {
   kind: FollowUpKindValue;
@@ -384,6 +357,8 @@ export function FollowUpsClient({
   pagina: number;
   porPagina: number;
   total: number;
+  /** Os números do topo do quadro, contados no filtro inteiro. */
+  resumo: FollowUpSummary;
   /** Tarefas do gestor em andamento hoje — o cronômetro retoma delas. */
   tarefasAtivas: TarefaAtiva[];
 }) {
@@ -533,7 +508,7 @@ export function FollowUpsClient({
     // `max-w-5xl` (1024px) e não menos: a tabela de registros tem
     // `min-w-[720px]`, então uma folha mais estreita já nasceria rolando na
     // horizontal.
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <div className="w-full space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>
@@ -744,116 +719,30 @@ export function FollowUpsClient({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="kanban-scroll overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead className="border-b border-border text-left text-foreground">
-                <tr>
-                  <th className="py-2 pr-4">Data</th>
-                  <th className="py-2 pr-4">Colaborador</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2 pr-4">Plano de ação</th>
-                  <th className="py-2 pr-4">Gestor</th>
-                  <th className="py-2 pr-4 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr
-                    key={r.id}
-                    className="cursor-pointer border-b border-border last:border-0 hover:bg-secondary/50"
-                    // Clique NÃO pode ser o único caminho: a linha é um botão
-                    // de verdade, alcançável por Tab e aberta por Enter/Espaço.
-                    role="button"
-                    tabIndex={0}
-                    // `haspopup`, e não `expanded`: o registro abre a ficha num
-                    // modal, e nada se expande na própria linha.
-                    aria-haspopup="dialog"
-                    onClick={() => setAbertoId(r.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setAbertoId(r.id);
-                      }
-                    }}
-                  >
-                    <td className="py-2 pr-4 font-data whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1">
-                        {/* Seta para a DIREITA e sem rotacao: ela dizia "isto
-                            abre aqui embaixo", e agora abre uma ficha. Apontar
-                            para baixo prometeria a expansao que nao existe
-                            mais. */}
-                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                        {r.heldOn.split("-").reverse().join("/")}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-4 font-medium">{r.collaboratorName}</td>
-                    <td className="py-2 pr-4">
-                      <Badge variant="outline" className={COR_DO_STATUS[r.status ?? "NAO_INICIADO"]}>
-                        {FOLLOWUP_STATUS_LABEL[r.status ?? "NAO_INICIADO"]}
-                      </Badge>
-                      {/* O prazo de reavaliação perdeu a coluna para o Status,
-                          mas não a tela: ele é o que a Gestão checa na lista do
-                          Quinzenal, então desce para baixo do badge em vez de
-                          ficar só no registro aberto. */}
-                      {!umAum && r.reviewOn && (
-                        <p className="mt-1 font-data text-xs text-muted-foreground">
-                          reavaliar {r.reviewOn.split("-").reverse().join("/")}
-                        </p>
-                      )}
-                    </td>
-                    <td className="py-2 pr-4 text-muted-foreground">
-                      <span className="line-clamp-2">{r.actionPlan}</span>
-                    </td>
-                    <td className="py-2 pr-4 text-muted-foreground">{r.managerName}</td>
-                    <td className="py-2 pr-4">
-                      {/* A célula inteira para o clique: sem isto, Editar e
-                          Excluir também abririam o painel da linha. */}
-                      <div
-                        className="flex justify-end gap-1"
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                      >
-                        <Button variant="ghost" size="icon" onClick={() => editar(r)} aria-label="Editar">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        {confirmDel === r.id ? (
-                          <span className="flex items-center gap-1">
-                            <Button variant="destructive" size="sm" onClick={() => excluir(r.id)} disabled={pending}>
-                              Confirmar
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setConfirmDel(null)}>
-                              Não
-                            </Button>
-                          </span>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setConfirmDel(r.id)}
-                            aria-label="Excluir"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-6 text-center text-muted-foreground">
-                      Nenhum registro com estes filtros.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          {/* O QUADRO no lugar da tabela (especificação de 27/11/2026). A
+              tabela de seis colunas saiu inteira: as mesmas seis informações
+              estão no cartão e na ficha, e manter as duas leituras seria a
+              mesma lista duas vezes.
+              A PAGINAÇÃO continua embaixo, por decisão do dono — e é por isso
+              que o topo de cada coluna diz "3 de 11": sem esse rótulo, o
+              quadro mentiria sobre o que existe fora da página. */}
+          <KanbanFollowUps
+            rows={rows}
+            resumo={resumo}
+            kind={kind}
+            hoje={hoje}
+            onAbrir={setAbertoId}
+            onNovo={() => {
+              limpar();
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
           <div className="mt-3">
             <Pagination page={pagina} perPage={porPagina} total={total} label="registros" />
           </div>
         </CardContent>
       </Card>
+
 
       {/* A FICHA DO REGISTRO, no mesmo padrão do cartão de pedido do Fluxo
           (pedido do dono, 18/11/2026). A moldura é a `Modal` da casa — a mesma
@@ -933,7 +822,40 @@ export function FollowUpsClient({
                 leitura, e a ação que a altera fica depois do conteúdo, não
                 competindo com ele. Fecha a ficha antes de abrir o formulário —
                 os dois no ar deixariam dois estados do mesmo registro na tela. */}
+            {/* EXCLUIR mora aqui desde 27/11/2026, quando a tabela deu lugar
+                ao quadro: ele era um ícone por linha, e o cartão não tem
+                botões próprios além do cronômetro. Na ficha ele fica depois do
+                conteúdo, onde quem já leu o registro decide — e não a um
+                clique de distância de quem só passava os olhos na coluna. */}
             <div className="flex justify-end gap-2 border-t border-border pt-3">
+              {confirmDel === aberto.id ? (
+                <span className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    Excluir este registro? Não há como desfazer.
+                  </span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => excluir(aberto.id)}
+                    disabled={pending}
+                  >
+                    Confirmar
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmDel(null)}>
+                    Não
+                  </Button>
+                </span>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmDel(aberto.id)}
+                  disabled={pending}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5 text-destructive" aria-hidden />
+                  Excluir
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
