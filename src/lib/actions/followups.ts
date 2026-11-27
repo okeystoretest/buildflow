@@ -127,9 +127,12 @@ export async function updateFollowUp(raw: unknown): Promise<ActionResult<void>> 
     // uma edicao de texto nao pode mover o card. Mesmo risco que a sessao de
     // 26/11 provou no Cronograma (§3.3), aqui no sentido contrario — lá a
     // action só gravava o status quando enviado; aqui ela o reescrevia sempre.
+    // `preservarStatus` SEMPRE: `updateFollowUpSchema` descarta o campo, e o
+    // `tsc` recusa `d.status` aqui — a invariante "só o quadro move o cartão"
+    // deixou de depender de o chamador se comportar.
     await prisma.followUp.update({
       where: { id },
-      data: dadosDoTipo(d, { preservarStatus: d.status === undefined }),
+      data: dadosDoTipo(d, { preservarStatus: true }),
     });
 
     revalidatePath(PATH);

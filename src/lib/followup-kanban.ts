@@ -270,6 +270,22 @@ export const rotuloDaColuna = (naPagina: number, noFiltro: number): string =>
   naPagina === noFiltro ? String(naPagina) : `${naPagina} de ${noFiltro}`;
 
 /**
+ * Teto de um trecho medido, em milissegundos: o maior valor que cabe num
+ * `INTEGER` do Postgres, que é o tipo de `FollowUpMovement.elapsedMs`.
+ *
+ * São 24 dias e 20 horas. Não é uma folga confortável: "Iniciar" é um botão
+ * manual, sem desligamento automático, e um cronômetro aceso antes de umas
+ * férias passa disso sozinho.
+ *
+ * E o preço de não ter o teto não seria um número errado, seria um CARTÃO
+ * TRAVADO: o banco recusaria a linha, a transação voltaria atrás, o cartão não
+ * sairia da coluna — e a pausa falharia pelo mesmo motivo, sem nenhuma saída
+ * pela tela. Cortar em 24d é perder a casa decimal de uma medição que já não
+ * significa nada; recusar a gravação é perder o registro.
+ */
+const TETO_ELAPSED = 2_147_483_647;
+
+/**
  * O que vai para a trilha quando alguém move o card ou pausa a contagem — ou
  * `null` quando não há nada a gravar.
  *
@@ -290,7 +306,9 @@ export function decidirMovimento(
   opts?: { pausa?: boolean },
 ): { fromStatus: FollowUpStatusValue; toStatus: FollowUpStatusValue; elapsedMs: number | null } | null {
   const de = colunaDe(atual);
-  const decorrido = timerStartedAt ? Math.max(0, agora - Date.parse(timerStartedAt)) : null;
+  const decorrido = timerStartedAt
+    ? Math.min(TETO_ELAPSED, Math.max(0, agora - Date.parse(timerStartedAt)))
+    : null;
 
   if (opts?.pausa) {
     // Sem contagem aberta não há trecho: pausar duas vezes não pode gravar uma

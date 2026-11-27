@@ -26,6 +26,7 @@ import {
   tempoTotal,
   type MovementItem,
 } from "../../src/lib/followup-kanban";
+import { updateFollowUpSchema } from "../../src/lib/validations/followup";
 
 let falhas = 0;
 function check(nome: string, obtido: unknown, esperado: unknown) {
@@ -200,6 +201,51 @@ check(
   "pausa sem contagem aberta nao grava nada",
   decidirMovimento("EM_ANDAMENTO", "EM_ANDAMENTO", null, 0, { pausa: true }),
   null,
+);
+
+// --- o teto do inteiro do banco ---------------------------------------------
+// `elapsedMs` e INTEGER no Postgres: 2.147.483.647 ms sao 24,85 DIAS. O botao
+// Iniciar nao tem desligamento automatico, entao um cronometro aceso antes de
+// umas ferias estoura a coluna — e, sem teto, a gravacao passa a ser RECUSADA:
+// a transacao volta atras, o cartao nao move, e a pausa falha pelo mesmo
+// motivo. O registro ficaria travado, sem saida pela tela.
+const MS_30_DIAS = 30 * 86_400_000;
+check(
+  "contagem esquecida por semanas nao estoura o inteiro do banco",
+  decidirMovimento("EM_ANDAMENTO", "ENTREGUE", "2026-01-01T00:00:00.000Z", Date.parse("2026-01-01T00:00:00.000Z") + MS_30_DIAS)?.elapsedMs,
+  2_147_483_647,
+);
+check(
+  "a pausa respeita o mesmo teto",
+  decidirMovimento("EM_ANDAMENTO", "EM_ANDAMENTO", "2026-01-01T00:00:00.000Z", Date.parse("2026-01-01T00:00:00.000Z") + MS_30_DIAS, { pausa: true })?.elapsedMs,
+  2_147_483_647,
+);
+check("o teto ainda e uma duracao legivel", formatarDuracao(2_147_483_647), "24d 20h");
+
+// --- a edicao NAO pode carregar status --------------------------------------
+// O quadro e o unico dono do status, porque so ele grava a linha da trilha.
+// Enquanto o schema de edicao aceitasse `status`, bastaria um chamador mandar o
+// campo para o status mudar SEM rastro e com o cronometro correndo: o trecho
+// seguinte seria creditado ao status errado e o historico nao mostraria nada.
+// Hoje nenhum chamador manda — isto aqui transforma "ninguem manda" em "nao da
+// para mandar".
+const edicao = updateFollowUpSchema.safeParse({
+  id: "abc",
+  kind: "ONE_ON_ONE",
+  collaboratorId: "colab",
+  heldOn: "2026-11-27",
+  strengths: "a",
+  improvement: "a",
+  collaboratorView: "a",
+  actionPlan: "a",
+  performance: "a",
+  status: "ENTREGUE",
+});
+check("a edicao continua valida com status no payload", edicao.success, true);
+check(
+  "mas o status NAO atravessa o schema de edicao",
+  edicao.success ? "status" in edicao.data : "nao parseou",
+  false,
 );
 
 console.log(falhas === 0 ? "\nTODAS OK" : `\n${falhas} FALHA(S)`);

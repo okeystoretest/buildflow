@@ -103,10 +103,23 @@ export const followUpSchema = z
     }
   });
 
-export const updateFollowUpSchema = z.intersection(
-  followUpSchema,
-  z.object({ id: z.string().min(1, "ID obrigatório.") }),
-);
+/**
+ * A EDICAO NAO CARREGA STATUS, e o `transform` o descarta mesmo quando o
+ * payload traz um.
+ *
+ * Desde 27/11/2026 o dono do status e o QUADRO, porque so ele grava a linha da
+ * trilha de movimentacao. Enquanto este schema aceitasse o campo, bastava um
+ * chamador manda-lo para o status mudar SEM rastro e com o cronometro
+ * correndo: o trecho seguinte seria creditado ao status errado, e o historico
+ * que a especificacao pede nao mostraria nada.
+ *
+ * Hoje nenhum chamador manda — o formulario deixou de ter o campo. Isto aqui
+ * transforma "ninguem manda" em "nao da para mandar", que e o que uma trilha
+ * de auditoria precisa: a invariante vira do tipo, nao do costume.
+ */
+export const updateFollowUpSchema = z
+  .intersection(followUpSchema, z.object({ id: z.string().min(1, "ID obrigatório.") }))
+  .transform(({ status: _statusIgnorado, ...resto }) => resto);
 
 export type FollowUpInput = z.infer<typeof followUpSchema>;
 
