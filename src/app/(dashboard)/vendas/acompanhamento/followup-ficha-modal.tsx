@@ -40,11 +40,19 @@ import {
  * Semanal.
  */
 
-/** Um campo do registro aberto. Campo vazio não vira bloco vazio na tela. */
+/**
+ * Um campo do registro aberto. Campo vazio não vira bloco vazio na tela.
+ *
+ * A MOLDURA é a mesma do item do Plano de Ação logo abaixo (pedido do dono,
+ * 27/11/2026): sem ela, nove campos de texto corrido viravam uma parede única
+ * e o olho não achava onde um acaba e o outro começa. Caixa e não régua
+ * porque o texto do campo pode ter várias linhas — a régua separa, a caixa
+ * delimita.
+ */
 function Bloco({ titulo, texto }: { titulo: string; texto: string | null }) {
   if (!texto || !texto.trim()) return null;
   return (
-    <div>
+    <div className="rounded-lg border border-border bg-secondary/40 px-3 py-2">
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
       {/* `whitespace-pre-wrap`: o texto foi digitado em linhas e é lido em linhas. */}
       <p className="mt-0.5 whitespace-pre-wrap">{texto}</p>
@@ -110,14 +118,18 @@ function PlanoDeAcao({
   if (linhas.length === 0) {
     return <p className="text-muted-foreground">Sem plano de ação registrado.</p>;
   }
+  // Os itens perderam a moldura PRÓPRIA quando os demais campos ganharam a
+  // sua: a caixa agora é do bloco inteiro (rótulo incluído, como nos outros),
+  // e caixa dentro de caixa com a mesma borda e o mesmo fundo vira sujeira.
+  // Entre os itens fica só a divisória.
   return (
-    <ul className="space-y-1.5">
+    <ul className="divide-y divide-border">
       {linhas.map((linha, i) => {
         const ativa = tarefas.find((t) => t.title === tituloDaTarefa(linha));
         return (
           <li
             key={i}
-            className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2"
+            className="flex flex-wrap items-start justify-between gap-2 py-1.5 first:pt-0 last:pb-0"
           >
             <span className="min-w-0 flex-1 whitespace-pre-wrap">{linha}</span>
             {ativa ? (
@@ -308,9 +320,12 @@ export function FollowUpFichaModal({
               />
             </>
           )}
-          <div>
+          {/* A mesma caixa do `Bloco`, com o rótulo dentro: o Plano de Ação é
+              um campo do registro como os outros, e com o rótulo do lado de
+              fora ele parecia uma seção à parte. */}
+          <div className="rounded-lg border border-border bg-secondary/40 px-3 py-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Plano de ação</p>
-            <div className="mt-1.5">
+            <div className="mt-0.5">
               <PlanoDeAcao
                 texto={registro.actionPlan}
                 tarefas={tarefasAtivas}
